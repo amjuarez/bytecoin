@@ -2,7 +2,6 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-
 #include <boost/foreach.hpp>
 #include "include_base_utils.h"
 using namespace epee;
@@ -536,7 +535,7 @@ namespace cryptonote
     if (!have_block)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't get block by height. Height = " + req.height + '.';
+      error_resp.message = "Internal error: can't get block by height. Height = " + std::to_string(req.height) + '.';
       return false;
     }
     bool responce_filled = fill_block_header_responce(blk, false, req.height, block_hash, res.block_header);
