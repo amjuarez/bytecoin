@@ -425,6 +425,7 @@ bool fill_tx_sources(std::vector<tx_source_entry>& sources, const std::vector<te
             ts.amount = oi.amount;
             ts.real_output_in_tx_index = oi.out_no;
             ts.real_out_tx_key = get_tx_pub_key_from_extra(*oi.p_tx); // incoming tx public key
+            
             if (!fill_output_entries(outs[o.first], sender_out, nmix, ts.real_output, ts.outputs))
               continue;
 
