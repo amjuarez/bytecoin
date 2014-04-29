@@ -856,7 +856,7 @@ using namespace std;
       http::url_content u_c;
       bool res = parse_url(url, u_c);
 
-      if(!tr.is_connected() && !u_c.host.empty())
+      if(!tr.is_connected())
       {
         CHECK_AND_ASSERT_MES(res, false, "failed to parse url: " << url);
 

@@ -355,8 +355,7 @@ namespace cryptonote
       return false;
     }
     blobdata block_blob = t_serializable_object_to_blob(b);
-    crypto::public_key tx_pub_key = null_pkey;
-    cryptonote::parse_and_validate_tx_extra(b.miner_tx, tx_pub_key);
+    crypto::public_key tx_pub_key = cryptonote::get_tx_pub_key_from_extra(b.miner_tx);
     if(tx_pub_key == null_pkey)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
