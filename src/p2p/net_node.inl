@@ -278,9 +278,12 @@ namespace nodetool
     m_net_server.add_idle_handler(boost::bind(&node_server<t_payload_net_handler>::idle_worker, this), 1000);
     m_net_server.add_idle_handler(boost::bind(&t_payload_net_handler::on_idle, &m_payload_handler), 1000);
 
+    boost::thread::attributes attrs;
+    attrs.set_stack_size(THREAD_STACK_SIZE);
+
     //go to loop
     LOG_PRINT("Run net_service loop( " << thrds_count << " threads)...", LOG_LEVEL_0);
-    if(!m_net_server.run_server(thrds_count))
+    if(!m_net_server.run_server(thrds_count, true, attrs))
     {
       LOG_ERROR("Failed to run net tcp server!");
     }
@@ -745,7 +748,9 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::get_local_node_data(basic_node_data& node_data)
   {
-    time(&node_data.local_time);
+    time_t local_time;
+    time(&local_time);
+    node_data.local_time = local_time;
     node_data.peer_id = m_config.m_peer_id;
     if(!m_hide_my_port)
       node_data.my_port = m_external_port ? m_external_port : m_listenning_port;
