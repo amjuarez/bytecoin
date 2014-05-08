@@ -80,7 +80,7 @@ namespace cryptonote
 #endif
     block_reward += fee;
 
-    std::vector<size_t> out_amounts;
+    std::vector<uint64_t> out_amounts;
     decompose_amount_into_digits(block_reward, DEFAULT_FEE,
       [&out_amounts](uint64_t a_chunk) { out_amounts.push_back(a_chunk); },
       [&out_amounts](uint64_t a_dust) { out_amounts.push_back(a_dust); });
@@ -92,7 +92,7 @@ namespace cryptonote
       out_amounts.resize(out_amounts.size() - 1);
     }
 
-    size_t summary_amounts = 0;
+    uint64_t summary_amounts = 0;
     for (size_t no = 0; no < out_amounts.size(); no++)
     {
       crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);;
@@ -618,7 +618,6 @@ namespace cryptonote
     //genesis block
     bl = boost::value_initialized<block>();
 
-
     account_public_address ac = boost::value_initialized<account_public_address>();
     std::vector<size_t> sz;
     construct_miner_tx(0, 0, 0, 0, 0, ac, bl.miner_tx); // zero fee in genesis
@@ -626,16 +625,16 @@ namespace cryptonote
     std::string hex_tx_represent = string_tools::buff_to_hex_nodelimer(txb);
 
     //hard code coinbase tx in genesis block, because "tru" generating tx use random, but genesis should be always the same
-    std::string genesis_coinbase_tx_hex = "010a01ff0001ffffffffffff0f029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121013c086a48c15fb637a96991bc6d53caf77068b5ba6eeb3c82357228c49790584a";
+    std::string genesis_coinbase_tx_hex = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1";
 
     blobdata tx_bl;
     string_tools::parse_hexstr_to_binbuff(genesis_coinbase_tx_hex, tx_bl);
     bool r = parse_and_validate_tx_from_blob(tx_bl, bl.miner_tx);
     CHECK_AND_ASSERT_MES(r, false, "failed to parse coinbase tx from hard coded blob");
-    bl.major_version = CURRENT_BLOCK_MAJOR_VERSION;
-    bl.minor_version = CURRENT_BLOCK_MINOR_VERSION;
+    bl.major_version = 1;
+    bl.minor_version = 0;
     bl.timestamp = 0;
-    bl.nonce = 70;
+    bl.nonce = 10000;
     miner::find_nonce_for_given_block(bl, 1, 0);
     return true;
   }

@@ -5,6 +5,10 @@ Release notes 0.8.6
 - UX improvements in simplewallet
 - Win32 compilation
 
+Release notes -> BMR
+
+- forked for Bitmonero project
+
 Release notes 0.8.5
 
 - Port mapping for daemon using UPnP
