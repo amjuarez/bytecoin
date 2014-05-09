@@ -1,3 +1,8 @@
+Release notes 0.8.7
+
+- OSX support
+- Further optimizations
+
 Release notes 0.8.6
 
 - Simplwallet can set extra for transfers
