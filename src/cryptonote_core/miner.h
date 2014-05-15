@@ -4,7 +4,6 @@
 
 #pragma once 
 
-#include <boost/atomic.hpp>
 #include <boost/program_options.hpp>
 #include <atomic>
 #include "cryptonote_basic.h"
