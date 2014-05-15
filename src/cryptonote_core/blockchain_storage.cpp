@@ -1649,3 +1649,20 @@ bool blockchain_storage::add_new_block(const block& bl_, block_verification_cont
 
   return handle_block_to_main_chain(bl, id, bvc);
 }
+//------------------------------------------------------------------
+bool blockchain_storage::get_block_containing_tx(const crypto::hash& tx_id, crypto::hash& block_id, uint64_t& block_height)
+{
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  auto it = m_transactions.find(tx_id);
+  if(it == m_transactions.end())
+  {
+    return false;
+  }
+  else
+  {
+    block_height = it->second.m_keeper_block_height;
+    block_id = get_block_id_by_height(block_height);
+    return true;
+  }
+}
+

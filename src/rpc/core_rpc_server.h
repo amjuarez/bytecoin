@@ -49,6 +49,11 @@ namespace cryptonote
         MAP_JON_RPC_WE("getlastblockheader",     on_get_last_block_header,      COMMAND_RPC_GET_LAST_BLOCK_HEADER)
         MAP_JON_RPC_WE("getblockheaderbyhash",   on_get_block_header_by_hash,   COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH)
         MAP_JON_RPC_WE("getblockheaderbyheight", on_get_block_header_by_height, COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT)
+        MAP_JON_RPC_WE("getlastblock",           on_get_last_block,             COMMAND_RPC_GET_LAST_BLOCK)
+        MAP_JON_RPC_WE("getblockbyhash",         on_get_block_by_hash,          COMMAND_RPC_GET_BLOCK_BY_HASH)
+        MAP_JON_RPC_WE("getblockbyheight",       on_get_block_by_height,        COMMAND_RPC_GET_BLOCK_BY_HEIGHT)
+        MAP_JON_RPC_WE("gettxbyhash",            on_get_tx_by_hash,             COMMAND_RPC_GET_TX_BY_HASH)
+        MAP_JON_RPC_WE("gettxheaderbyhash",      on_get_tx_header_by_hash,      COMMAND_RPC_GET_TX_HEADER_BY_HASH)
       END_JSON_RPC_MAP()
     END_URI_MAP2()
 
@@ -67,16 +72,36 @@ namespace cryptonote
     bool on_getblockhash(const COMMAND_RPC_GETBLOCKHASH::request& req, COMMAND_RPC_GETBLOCKHASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
     bool on_getblocktemplate(const COMMAND_RPC_GETBLOCKTEMPLATE::request& req, COMMAND_RPC_GETBLOCKTEMPLATE::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
     bool on_submitblock(const COMMAND_RPC_SUBMITBLOCK::request& req, COMMAND_RPC_SUBMITBLOCK::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
+    
     bool on_get_last_block_header(const COMMAND_RPC_GET_LAST_BLOCK_HEADER::request& req, COMMAND_RPC_GET_LAST_BLOCK_HEADER::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
     bool on_get_block_header_by_hash(const COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::request& req, COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
     bool on_get_block_header_by_height(const COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::request& req, COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
+    
+    bool on_get_last_block(const COMMAND_RPC_GET_LAST_BLOCK::request& req, COMMAND_RPC_GET_LAST_BLOCK::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
+    bool on_get_block_by_hash(const COMMAND_RPC_GET_BLOCK_BY_HASH::request& req, COMMAND_RPC_GET_BLOCK_BY_HASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
+    bool on_get_block_by_height(const COMMAND_RPC_GET_BLOCK_BY_HEIGHT::request& req, COMMAND_RPC_GET_BLOCK_BY_HEIGHT::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
+    
+    bool on_get_tx_by_hash(const COMMAND_RPC_GET_TX_BY_HASH::request& req, COMMAND_RPC_GET_TX_BY_HASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
+    bool on_get_tx_header_by_hash(const COMMAND_RPC_GET_TX_HEADER_BY_HASH::request& req, COMMAND_RPC_GET_TX_HEADER_BY_HASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx);
     //-----------------------
     bool handle_command_line(const boost::program_options::variables_map& vm);
     bool check_core_ready();
     
     //utils
     uint64_t get_block_reward(const block& blk);
-    bool fill_block_header_responce(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_responce& responce);
+    bool get_block_base_reward(const block& blk, uint64_t reward, uint64_t& base_reward);
+    bool fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response);
+    bool fill_block_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_response& response);
+    bool fill_tx_header_response(const transaction& tx, bool in_blockchain, const crypto::hash& block_hash, uint64_t block_height, tx_header_response& response);
+    bool fill_tx_response(const transaction& tx, bool in_blockchain, const crypto::hash& block_hash, uint64_t block_height, tx_response& response);
+    bool fill_tx_out_responce(const tx_out& tx_output, tx_out_response& response);
+    bool fill_tx_in_responce(const txin_to_key& tx_in, tx_in_response& response);
+    bool get_block_by_hash(const crypto::hash& block_hash, block_response& blk, std::string& error_description);
+    bool get_block_by_height(uint64_t block_height, block_response& blk, std::string& error_description);
+    bool get_last_block(block_response& blk, std::string& error_description);
+    bool get_mixin(const transaction& tx, uint64_t& mixin);
+    bool get_tx_by_hash(const crypto::hash& tx_hash, tx_response& tx_resp, std::string& error_description);
+    bool get_tx_header_by_hash(const crypto::hash& tx_hash, tx_header_response& tx_resp, std::string& error_description);
     
     core& m_core;
     nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> >& m_p2p;
