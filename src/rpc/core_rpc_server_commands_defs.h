@@ -408,8 +408,6 @@ namespace cryptonote
     bool in_blockchain;
     std::string block_hash;
     uint64_t block_height;
-    
-    std::string nullStr = "null";
       
     BEGIN_KV_SERIALIZE_MAP()
       KV_SERIALIZE(hash)
@@ -426,11 +424,6 @@ namespace cryptonote
       {
         KV_SERIALIZE(block_hash)
         KV_SERIALIZE(block_height)
-      }
-      else
-      {
-        KV_SERIALIZE_N(nullStr, "block_hash")
-        KV_SERIALIZE_N(nullStr, "block_height")
       }
     END_KV_SERIALIZE_MAP()
   };
