@@ -10,31 +10,31 @@
 
 #define BEGIN_JSONRPC2_MAP(t_connection_context) \
 bool handle_rpc_request(const std::string& req_data, \
-                              std::string& resp_data, \
+                        std::string& resp_data, \
                         t_connection_context& m_conn_context) \
 { \
-    bool handled = false; \
-    uint64_t ticks = epee::misc_utils::get_tick_count(); \
-    epee::serialization::portable_storage ps; \
-    if (!ps.load_from_json(req_data)) \
-    { \
-       epee::net_utils::jsonrpc2::make_error_resp_json(-32700, "Parse error", resp_data); \
-       return true; \
-    } \
-    epee::serialization::storage_entry id_; \
-    id_ = epee::serialization::storage_entry(std::string()); \
-    if (!ps.get_value("id", id_, nullptr)) \
-    { \
-        epee::net_utils::jsonrpc2::make_error_resp_json(-32600, "Invalid Request", resp_data); \
-        return true; \
-    } \
-    std::string callback_name; \
-    if (!ps.get_value("method", callback_name, nullptr)) \
-    { \
-      epee::net_utils::jsonrpc2::make_error_resp_json(-32600, "Invalid Request", resp_data, id_); \
-      return true; \
-    } \
-    if (false) return true; //just a stub to have "else if"
+  bool handled = false; \
+  uint64_t ticks = epee::misc_utils::get_tick_count(); \
+  epee::serialization::portable_storage ps; \
+  if (!ps.load_from_json(req_data)) \
+  { \
+    epee::net_utils::jsonrpc2::make_error_resp_json(-32700, "Parse error", resp_data); \
+    return true; \
+  } \
+  epee::serialization::storage_entry id_; \
+  id_ = epee::serialization::storage_entry(std::string()); \
+  if (!ps.get_value("id", id_, nullptr)) \
+  { \
+    epee::net_utils::jsonrpc2::make_error_resp_json(-32600, "Invalid Request", resp_data); \
+    return true; \
+  } \
+  std::string callback_name; \
+  if (!ps.get_value("method", callback_name, nullptr)) \
+  { \
+    epee::net_utils::jsonrpc2::make_error_resp_json(-32600, "Invalid Request", resp_data, id_); \
+    return true; \
+  } \
+  if (false) return true; //just a stub to have "else if"
 
 
 
@@ -62,25 +62,25 @@ bool handle_rpc_request(const std::string& req_data, \
 
 
 #define MAP_JSONRPC2_WE(method_name, callback_f, command_type) \
-    else if (callback_name == method_name) \
+  else if (callback_name == method_name) \
+  { \
+    PREPARE_JSONRPC2_OBJECTS_FROM_JSON(command_type) \
+    epee::json_rpc::error_response fail_resp = AUTO_VAL_INIT(fail_resp); \
+    fail_resp.jsonrpc = "2.0"; \
+    fail_resp.id = req.id; \
+    if(!callback_f(req.params, resp.result, fail_resp.error, m_conn_context)) \
     { \
-      PREPARE_JSONRPC2_OBJECTS_FROM_JSON(command_type) \
-      epee::json_rpc::error_response fail_resp = AUTO_VAL_INIT(fail_resp); \
-      fail_resp.jsonrpc = "2.0"; \
-      fail_resp.id = req.id; \
-      if(!callback_f(req.params, resp.result, fail_resp.error, m_conn_context)) \
-      { \
-        epee::serialization::store_t_to_json(static_cast<epee::json_rpc::error_response&>(fail_resp), resp_data, 0, false); \
-        resp_data += "\n"; \
-        return true; \
-      } \
-      FINALIZE_JSONRPC2_OBJECTS_TO_JSON(method_name) \
+      epee::serialization::store_t_to_json(static_cast<epee::json_rpc::error_response&>(fail_resp), resp_data, 0, false); \
+      resp_data += "\n"; \
       return true; \
-    }
+    } \
+    FINALIZE_JSONRPC2_OBJECTS_TO_JSON(method_name) \
+    return true; \
+  }
 
 #define END_JSONRPC2_MAP() \
-    epee::net_utils::jsonrpc2::make_error_resp_json(-32601, "Method not found", resp_data, id_); \
-    return true; \
+  epee::net_utils::jsonrpc2::make_error_resp_json(-32601, "Method not found", resp_data, id_); \
+  return true; \
 }
 
 #endif	/* JSONRPC_SERVER_HANDLERS_MAP_H */
