@@ -1,3 +1,9 @@
+Release notes 0.8.8
+
+- Fixed a bug with checkpoints behavior
+- UI improvements for daemon
+- Various updates from our forks
+
 Release notes 0.8.7
 
 - OSX support

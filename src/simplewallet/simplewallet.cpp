@@ -228,8 +228,8 @@ bool simple_wallet::ask_wallet_create_if_needed()
   wallet_path = string_tools::trim(wallet_path);
 
   bool keys_file_exists;
-  bool wallet_file_exitst;
-  tools::wallet2::wallet_exists(wallet_path, keys_file_exists, wallet_file_exitst);
+  bool wallet_file_exists;
+  tools::wallet2::wallet_exists(wallet_path, keys_file_exists, wallet_file_exists);
 
   bool r;
   if(keys_file_exists)
@@ -238,7 +238,7 @@ bool simple_wallet::ask_wallet_create_if_needed()
     r = true;
   }else
   {
-    if(!wallet_file_exitst)
+    if(!wallet_file_exists)
     {
       std::cout << "The wallet doesn't exist, generating new one" << std::endl;
       m_generate_new = wallet_path;
