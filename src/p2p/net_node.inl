@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "version.h"
 #include "string_tools.h"
 #include "common/command_line.h"
@@ -405,10 +407,10 @@ namespace nodetool
           hsh_result = false;
           return;
         }
-        LOG_PRINT_CCONTEXT_L0(" COMMAND_HANDSHAKE INVOKED OK");
+        LOG_PRINT_CCONTEXT_L1(" COMMAND_HANDSHAKE INVOKED OK");
       }else
       {
-        LOG_PRINT_CCONTEXT_L0(" COMMAND_HANDSHAKE(AND CLOSE) INVOKED OK");
+        LOG_PRINT_CCONTEXT_L1(" COMMAND_HANDSHAKE(AND CLOSE) INVOKED OK");
       }
     }, P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT);
 
@@ -419,7 +421,7 @@ namespace nodetool
 
     if(!hsh_result)
     {
-      LOG_PRINT_CC_L0(context_, "COMMAND_HANDSHAKE Failed");
+      LOG_PRINT_CC_L1(context_, "COMMAND_HANDSHAKE Failed");
       m_net_server.get_config_object().close(context_.m_connection_id);
     }
 
@@ -510,36 +512,53 @@ namespace nodetool
     return connected;
   }
 
-  //-----------------------------------------------------------------------------------
+#define LOG_PRINT_CC_PRIORITY_NODE(priority, con, msg) \
+  do { \
+    if (priority) {\
+      LOG_PRINT_CC_L0(con, msg); \
+    } else {\
+      LOG_PRINT_CC_L1(con, msg); \
+    } \
+  } while(0)
+
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::try_to_connect_and_handshake_with_new_peer(const net_address& na, bool just_take_peerlist, uint64_t last_seen_stamp, bool white)
   {
-    LOG_PRINT_L0("Connecting to " << epee::string_tools::get_ip_string_from_int32(na.ip)  << ":" << epee::string_tools::num_to_string_fast(na.port) << "(white=" << white << ", last_seen: " << (last_seen_stamp ? epee::misc_utils::get_time_interval_string(time(NULL) - last_seen_stamp):"never" ) << ")...");
+    LOG_PRINT_L1("Connecting to " << epee::string_tools::get_ip_string_from_int32(na.ip)  << ":"
+        << epee::string_tools::num_to_string_fast(na.port) << "(white=" << white << ", last_seen: "
+        << (last_seen_stamp ? epee::misc_utils::get_time_interval_string(time(NULL) - last_seen_stamp):"never")
+        << ")...");
 
     typename net_server::t_connection_context con = AUTO_VAL_INIT(con);
     bool res = m_net_server.connect(epee::string_tools::get_ip_string_from_int32(na.ip),
       epee::string_tools::num_to_string_fast(na.port),
       m_config.m_net_config.connection_timeout,
       con);
+
     if(!res)
     {
-      LOG_PRINT_L0("Connect failed to "
+      bool is_priority = is_priority_node(na);
+      LOG_PRINT_CC_PRIORITY_NODE(is_priority, con, "Connect failed to "
         << epee::string_tools::get_ip_string_from_int32(na.ip)
         << ":" << epee::string_tools::num_to_string_fast(na.port)
         /*<< ", try " << try_count*/);
       //m_peerlist.set_peer_unreachable(pe);
       return false;
     }
+
     peerid_type pi = AUTO_VAL_INIT(pi);
     res = do_handshake_with_peer(pi, con, just_take_peerlist);
+
     if(!res)
     {
-      LOG_PRINT_CC_L0(con, "Failed to HANDSHAKE with peer "
+      bool is_priority = is_priority_node(na);
+      LOG_PRINT_CC_PRIORITY_NODE(is_priority, con, "Failed to HANDSHAKE with peer "
         << epee::string_tools::get_ip_string_from_int32(na.ip)
         << ":" << epee::string_tools::num_to_string_fast(na.port)
         /*<< ", try " << try_count*/);
       return false;
     }
+
     if(just_take_peerlist)
     {
       m_net_server.get_config_object().close(con.m_connection_id);
@@ -557,6 +576,9 @@ namespace nodetool
     LOG_PRINT_CC_GREEN(con, "CONNECTION HANDSHAKED OK.", LOG_LEVEL_2);
     return true;
   }
+
+#undef LOG_PRINT_CC_PRIORITY_NODE
+
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::make_new_connection_from_peerlist(bool use_white_list)
@@ -1098,5 +1120,10 @@ namespace nodetool
   {
     LOG_PRINT_L2("["<< epee::net_utils::print_connection_context(context) << "] CLOSE CONNECTION");
   }
-  //-----------------------------------------------------------------------------------
+
+  template<class t_payload_net_handler>
+  bool node_server<t_payload_net_handler>::is_priority_node(const net_address& na)
+  {
+    return std::find(m_priority_peers.begin(), m_priority_peers.end(), na) != m_priority_peers.end();
+  }
 }
