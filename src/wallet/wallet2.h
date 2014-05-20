@@ -144,7 +144,7 @@ namespace tools
       a & m_payments;
     }
 
-    static void wallet_exists(const std::string& file_path, bool& keys_file_exists, bool& wallet_file_exitst);
+    static void wallet_exists(const std::string& file_path, bool& keys_file_exists, bool& wallet_file_exists);
 
   private:
     bool store_keys(const std::string& keys_file_name, const std::string& password);

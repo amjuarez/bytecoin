@@ -146,6 +146,7 @@ namespace nodetool
     template<class t_callback>
     bool try_ping(basic_node_data& node_data, p2p_connection_context& context, t_callback cb);
     bool make_expected_connections_count(bool white_list, size_t expected_connections);
+    bool is_priority_node(const net_address& na);
 
     //debug functions
     std::string print_connections_container();
