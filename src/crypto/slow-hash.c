@@ -54,16 +54,6 @@ static void copy_block(uint8_t* dst, const uint8_t* src) {
   ((uint64_t*)dst)[1] = ((uint64_t*)src)[1];
 }
 
-static void swap_blocks(uint8_t* a, uint8_t* b) {
-  size_t i;
-  uint8_t t;
-  for (i = 0; i < AES_BLOCK_SIZE; i++) {
-    t = a[i];
-    a[i] = b[i];
-    b[i] = t;
-  }
-}
-
 static void xor_blocks(uint8_t* a, const uint8_t* b) {
   ((uint64_t*)a)[0] ^= ((uint64_t*)b)[0];
   ((uint64_t*)a)[1] ^= ((uint64_t*)b)[1];
