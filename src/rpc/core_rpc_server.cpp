@@ -425,19 +425,251 @@ namespace cryptonote
     return reward;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool core_rpc_server::fill_block_header_responce(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_responce& responce)
+  bool core_rpc_server::get_block_base_reward(const block& blk, uint64_t reward, uint64_t& base_reward)
   {
-    responce.major_version = blk.major_version;
-    responce.minor_version = blk.minor_version;
-    responce.timestamp = blk.timestamp;
-    responce.prev_hash = string_tools::pod_to_hex(blk.prev_id);
-    responce.nonce = blk.nonce;
-    responce.orphan_status = orphan_status;
-    responce.height = height;
-    responce.depth = m_core.get_current_blockchain_height() - height - 1;
-    responce.hash = string_tools::pod_to_hex(hash);
-    responce.difficulty = m_core.get_blockchain_storage().block_difficulty(height);
-    responce.reward = get_block_reward(blk);
+    uint64_t fee_summ = 0;
+    BOOST_FOREACH(const crypto::hash& tx_hash, blk.tx_hashes)
+    {
+      CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().have_tx(tx_hash), 0, "Can't find transaction.");
+      transaction tx = *m_core.get_blockchain_storage().get_tx(tx_hash);
+      if (tx.vin.size() > 0 && tx.vin.front().type() == typeid(txin_gen))
+      {
+          //It's gen transaction
+          continue;
+      }
+      uint64_t fee;
+      CHECK_AND_ASSERT_MES(get_tx_fee(tx, fee), 0, "Can't get fee for transaction.");
+      fee_summ += fee;
+    }
+    base_reward = reward - fee_summ;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::fill_block_header_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_response& response)
+  {
+    response.major_version = blk.major_version;
+    response.minor_version = blk.minor_version;
+    response.timestamp = blk.timestamp;
+    response.prev_hash = string_tools::pod_to_hex(blk.prev_id);
+    response.nonce = blk.nonce;
+    response.orphan_status = orphan_status;
+    response.height = height;
+    response.depth = m_core.get_current_blockchain_height() - height - 1;
+    response.hash = string_tools::pod_to_hex(hash);
+    response.difficulty = m_core.get_blockchain_storage().block_difficulty(height);
+    response.reward = get_block_reward(blk);
+    response.tx_count = blk.tx_hashes.size() + 1; //Plus counbase tx.
+    std::vector<size_t> sizes;
+    bool block_size_status = m_core.get_blockchain_storage().get_backward_blocks_sizes(height, sizes, 1);
+    CHECK_AND_ASSERT_MES(block_size_status && 1 == sizes.size(), 0, "Can't get size for block.");
+    response.block_size = sizes.front();
+    CHECK_AND_ASSERT_MES(get_block_base_reward(blk, response.reward, response.base_reward), 0, "Can't get base reward for block.");
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::get_mixin(const transaction& tx, uint64_t& mixin)
+  {
+    mixin = 0;
+    BOOST_FOREACH(const txin_v& txin, tx.vin)
+    {
+      CHECK_AND_ASSERT_MES(txin.type() == typeid(txin_to_key), 0, "Unexpected type id in transaction.");
+      uint64_t current_mixin = boost::get<txin_to_key>(txin).key_offsets.size();
+      if (current_mixin > mixin)
+      {
+        mixin = current_mixin;
+      }
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::fill_tx_out_responce(const tx_out& tx_output, tx_out_response& response)
+  {
+    response.amount = tx_output.amount;
+    if(tx_output.target.type() == typeid(txout_to_key))
+    {
+      response.tx_out_key = string_tools::pod_to_hex(boost::get<txout_to_key>(tx_output.target).key);
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::fill_tx_in_responce(const txin_to_key& tx_in, tx_in_response& response)
+  {
+    response.amount = tx_in.amount;
+    response.key_offsets = tx_in.key_offsets;
+    response.k_image = string_tools::pod_to_hex(tx_in.k_image);
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::fill_tx_response(const transaction& tx, bool in_blockchain, const crypto::hash& block_hash, uint64_t block_height, tx_response& response){
+    CHECK_AND_ASSERT_MES(fill_tx_header_response(tx, in_blockchain, block_hash, block_height, response.header), 0, "Can't fill tx_header_response.");
+    response.extra = tx.extra;
+    response.signatures.reserve(tx.signatures.size());
+    BOOST_FOREACH(const std::vector<crypto::signature>& signatures_v, tx.signatures)
+    {
+      BOOST_FOREACH(const crypto::signature& signature, signatures_v)
+      {
+          response.signatures.emplace_back(string_tools::pod_to_hex(signature));
+      }
+    }
+    response.inputs.reserve(tx.vin.size());
+    BOOST_FOREACH(const txin_v& tx_in, tx.vin)
+    {
+      if(tx_in.type() == typeid(txin_to_key))
+      {
+        tx_in_response tx_in_resp;
+        CHECK_AND_ASSERT_MES(fill_tx_in_responce(boost::get<txin_to_key>(tx_in), tx_in_resp), 0, "Can't fill tx_in_response.");
+        response.inputs.push_back(tx_in_resp);
+      }
+    }
+    response.outputs.reserve(tx.vout.size());
+    BOOST_FOREACH(const tx_out& tx_out, tx.vout)
+    {
+      tx_out_response tx_out_resp;
+      CHECK_AND_ASSERT_MES(fill_tx_out_responce(tx_out, tx_out_resp), 0, "Can't fill tx_out_response.");
+      response.outputs.push_back(tx_out_resp);
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::fill_tx_header_response(const transaction& tx, bool in_blockchain, const crypto::hash& block_hash, uint64_t block_height, tx_header_response& response)
+  {
+    response.hash = string_tools::pod_to_hex(get_transaction_hash(tx));
+    blobdata blob = t_serializable_object_to_blob(tx);
+    response.size = blob.size();
+    response.outputs_count = tx.vout.size();
+    response.unlock_time = tx.unlock_time;
+    response.in_blockchain = in_blockchain;
+    response.block_hash = string_tools::pod_to_hex(block_hash);
+    response.block_height = block_height;
+    response.total_outputs_amount = get_outs_money_amount(tx);
+    if (tx.vin.size() > 0 && tx.vin.front().type() == typeid(txin_gen))
+    {
+      //It's gen transaction
+      response.fee = 0;
+      response.inputs_count = 0;
+      response.total_inputs_amount = 0;
+      response.mixin = 0;
+      return true;
+    }
+    response.inputs_count = tx.vin.size();
+    uint64_t fee;
+    CHECK_AND_ASSERT_MES(get_tx_fee(tx, fee), 0, "Can't get fee for transaction.");
+    response.fee = fee;
+    uint64_t inputs_amount;
+    CHECK_AND_ASSERT_MES(get_inputs_money_amount(tx, inputs_amount), 0, "Can't get inputs_money_amount for transaction.");
+    response.total_inputs_amount = inputs_amount;
+    uint64_t mixin;
+    CHECK_AND_ASSERT_MES(get_mixin(tx, mixin), 0, "Can't get inputs_money_amount for transaction.");
+    response.mixin = mixin;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::fill_block_response(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_response& response)
+  {
+    CHECK_AND_ASSERT_MES(fill_block_header_response(blk, orphan_status, height, hash, response.block_header), 0, "Can't fill block_header_response.");
+    response.txs.reserve(blk.tx_hashes.size() + 1); //Plus miner_tx
+    tx_header_response tx_header;
+    CHECK_AND_ASSERT_MES(fill_tx_header_response(blk.miner_tx, true, hash, height, tx_header), 0, "Can't fill tx_header_response.");
+    response.txs.push_back(tx_header);
+    BOOST_FOREACH(const crypto::hash& tx_hash, blk.tx_hashes)
+    {
+      CHECK_AND_ASSERT_MES(m_core.get_blockchain_storage().have_tx(tx_hash), 0, "Can't find transaction.");
+      tx_header_response tx_info;
+      CHECK_AND_ASSERT_MES(fill_tx_header_response(*m_core.get_blockchain_storage().get_tx(tx_hash), true, hash, height, tx_info), 0, "Can't fill tx_info_response.");
+      response.txs.push_back(tx_info);
+    }
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::get_last_block(block_response& blk_resp, std::string& error_description)
+  {
+    uint64_t last_block_height;
+    crypto::hash last_block_hash;
+    bool have_last_block_hash = m_core.get_blockchain_top(last_block_height, last_block_hash);
+    if (!have_last_block_hash)
+    {
+      error_description = "Internal error: can't get last block hash.";
+      return false;
+    }
+    return get_block_by_hash(last_block_hash, blk_resp, error_description);
+  }
+  
+  bool core_rpc_server::get_block_by_height(uint64_t block_height, block_response& blk_resp, std::string& error_description)
+  {
+      crypto::hash block_hash = m_core.get_block_id_by_height(block_height);
+      if (null_hash == block_hash) {
+          error_description = "Internal error: can't get block by height. Height = " + std::to_string(block_height) + '.';
+          return false;
+      }
+      return get_block_by_hash(block_hash, blk_resp, error_description);
+  }
+  
+  bool core_rpc_server::get_block_by_hash(const crypto::hash& block_hash, block_response& blk_resp, std::string& error_description)
+  {
+    block blk;
+    bool have_block = m_core.get_block_by_hash(block_hash, blk);
+    if (!have_block)
+    {
+      error_description = "Internal error: can't get block by hash. Hash = " + string_tools::pod_to_hex(block_hash) + '.';
+      return false;
+    }
+    if (blk.miner_tx.vin.front().type() != typeid(txin_gen))
+    {
+      error_description = "Internal error: coinbase transaction in the block has the wrong type";
+      return false;
+    }
+    uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
+    bool responce_filled = fill_block_response(blk, false, block_height, block_hash, blk_resp);
+    if (!responce_filled)
+    {
+      error_description = "Internal error: can't produce valid response.";
+      return false;
+    }
+    
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::get_tx_by_hash(const crypto::hash& tx_hash, tx_response& tx_resp, std::string& error_description)
+  {
+    transaction tx;
+    bool have_tx = m_core.get_transaction(tx_hash, tx);
+    if (!have_tx)
+    {
+      error_description = "Internal error: can't get tx by hash. Hash = " + string_tools::pod_to_hex(tx_hash) + '.';
+      return false;
+    }
+    crypto::hash block_hash;
+    uint64_t block_height;
+    bool in_blockchain = m_core.get_blockchain_storage().get_block_containing_tx(tx_hash, block_hash, block_height);
+    bool responce_filled = fill_tx_response(tx, in_blockchain, block_hash, block_height, tx_resp);
+    if (!responce_filled)
+    {
+      error_description = "Internal error: can't produce valid response.";
+      return false;
+    }
+    
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::get_tx_header_by_hash(const crypto::hash& tx_hash, tx_header_response& tx_resp, std::string& error_description)
+  {
+    transaction tx;
+    bool have_tx = m_core.get_transaction(tx_hash, tx);
+    if (!have_tx)
+    {
+      error_description = "Internal error: can't get tx by hash. Hash = " + string_tools::pod_to_hex(tx_hash) + '.';
+      return false;
+    }
+    crypto::hash block_hash;
+    uint64_t block_height;
+    bool in_blockchain = m_core.get_blockchain_storage().get_block_containing_tx(tx_hash, block_hash, block_height);
+    bool responce_filled = fill_tx_header_response(tx, in_blockchain, block_hash, block_height, tx_resp);
+    if (!responce_filled)
+    {
+      error_description = "Internal error: can't produce valid response.";
+      return false;
+    }
+    
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -449,30 +681,20 @@ namespace cryptonote
       error_resp.message = "Core is busy.";
       return false;
     }
-    uint64_t last_block_height;
-    crypto::hash last_block_hash;
-    bool have_last_block_hash = m_core.get_blockchain_top(last_block_height, last_block_hash);
-    if (!have_last_block_hash)
+    
+    block_response blk;
+    std::string error_description;
+    bool got_block = get_last_block(blk, error_description);
+    
+    if (!got_block)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't get last block hash.";
+      error_resp.message = error_description;
       return false;
     }
-    block last_block;
-    bool have_last_block = m_core.get_block_by_hash(last_block_hash, last_block);
-    if (!have_last_block)
-    {
-      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't get last block.";
-      return false;
-    }
-    bool responce_filled = fill_block_header_responce(last_block, false, last_block_height, last_block_hash, res.block_header);
-    if (!responce_filled)
-    {
-      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't produce valid response.";
-      return false;
-    }
+    
+    res.block_header = blk.block_header;
+    
     res.status = CORE_RPC_STATUS_OK;
     return true;
   }
@@ -484,6 +706,7 @@ namespace cryptonote
       error_resp.message = "Core is busy.";
       return false;
     }
+    
     crypto::hash block_hash;
     bool hash_parsed = parse_hash256(req.hash, block_hash);
     if(!hash_parsed)
@@ -492,28 +715,20 @@ namespace cryptonote
       error_resp.message = "Failed to parse hex representation of block hash. Hex = " + req.hash + '.';
       return false;
     }
-    block blk;
-    bool have_block = m_core.get_block_by_hash(block_hash, blk);
-    if (!have_block)
+
+    block_response blk;
+    std::string error_description;
+    bool got_block = get_block_by_hash(block_hash, blk, error_description);
+    
+    if (!got_block)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't get block by hash. Hash = " + req.hash + '.';
+      error_resp.message = error_description;
       return false;
     }
-    if (blk.miner_tx.vin.front().type() != typeid(txin_gen))
-    {
-      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: coinbase transaction in the block has the wrong type";
-      return false;
-    }
-    uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
-    bool responce_filled = fill_block_header_responce(blk, false, block_height, block_hash, res.block_header);
-    if (!responce_filled)
-    {
-      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't produce valid response.";
-      return false;
-    }
+    
+    res.block_header = blk.block_header;
+    
     res.status = CORE_RPC_STATUS_OK;
     return true;
   }
@@ -525,30 +740,174 @@ namespace cryptonote
       error_resp.message = "Core is busy.";
       return false;
     }
+    
+    if(m_core.get_current_blockchain_height() <= req.height)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT;
+      error_resp.message = std::string("Too big height: ") + std::to_string(req.height) + ", current blockchain height = " +  std::to_string(m_core.get_current_blockchain_height());
+      return false;
+    }
+    
+    block_response blk;
+    std::string error_description;
+    bool got_block = get_block_by_height(req.height, blk, error_description);
+    
+    if (!got_block)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = error_description;
+      return false;
+    }
+    
+    res.block_header = blk.block_header;
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+
+  bool core_rpc_server::on_get_last_block(const COMMAND_RPC_GET_LAST_BLOCK::request& req, COMMAND_RPC_GET_LAST_BLOCK::response& res, epee::json_rpc::error& error_resp, connection_context& cntx)
+  {
+    if(!check_core_ready())
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_CORE_BUSY;
+      error_resp.message = "Core is busy.";
+      return false;
+    }
+    
+    std::string error_description;
+    bool got_block = get_last_block(res.block, error_description);
+    
+    if (!got_block)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = error_description;
+      return false;
+    }
+    
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_block_by_hash(const COMMAND_RPC_GET_BLOCK_BY_HASH::request& req, COMMAND_RPC_GET_BLOCK_BY_HASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx){
+    if(!check_core_ready())
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_CORE_BUSY;
+      error_resp.message = "Core is busy.";
+      return false;
+    }
+    
+    crypto::hash block_hash;
+    bool hash_parsed = parse_hash256(req.hash, block_hash);
+    if(!hash_parsed)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Failed to parse hex representation of block hash. Hex = " + req.hash + '.';
+      return false;
+    }
+
+    std::string error_description;
+    bool got_block = get_block_by_hash(block_hash, res.block, error_description);
+    
+    if (!got_block)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = error_description;
+      return false;
+    }
+    
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_block_by_height(const COMMAND_RPC_GET_BLOCK_BY_HEIGHT::request& req, COMMAND_RPC_GET_BLOCK_BY_HEIGHT::response& res, epee::json_rpc::error& error_resp, connection_context& cntx){
+    if(!check_core_ready())
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_CORE_BUSY;
+      error_resp.message = "Core is busy.";
+      return false;
+    }
+    
     if(m_core.get_current_blockchain_height() <= req.height)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT;
       error_resp.message = std::string("To big height: ") + std::to_string(req.height) + ", current blockchain height = " +  std::to_string(m_core.get_current_blockchain_height());
       return false;
     }
-    crypto::hash block_hash = m_core.get_block_id_by_height(req.height);
-    block blk;
-    bool have_block = m_core.get_block_by_hash(block_hash, blk);
-    if (!have_block)
+    
+    std::string error_description;
+    bool got_block = get_block_by_height(req.height, res.block, error_description);
+    
+    if (!got_block)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't get block by height. Height = " + std::to_string(req.height) + '.';
+      error_resp.message = error_description;
       return false;
     }
-    bool responce_filled = fill_block_header_responce(blk, false, req.height, block_hash, res.block_header);
-    if (!responce_filled)
-    {
-      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
-      error_resp.message = "Internal error: can't produce valid response.";
-      return false;
-    }
+    
     res.status = CORE_RPC_STATUS_OK;
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_tx_by_hash(const COMMAND_RPC_GET_TX_BY_HASH::request& req, COMMAND_RPC_GET_TX_BY_HASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx)
+  {
+    if(!check_core_ready())
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_CORE_BUSY;
+      error_resp.message = "Core is busy.";
+      return false;
+    }
+    
+    crypto::hash tx_hash;
+    bool hash_parsed = parse_hash256(req.hash, tx_hash);
+    if(!hash_parsed)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Failed to parse hex representation of tx hash. Hex = " + req.hash + '.';
+      return false;
+    }
+
+    std::string error_description;
+    bool got_tx = get_tx_by_hash(tx_hash, res.tx, error_description);
+    
+    if (!got_tx)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = error_description;
+      return false;
+    }
+    
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_tx_header_by_hash(const COMMAND_RPC_GET_TX_HEADER_BY_HASH::request& req, COMMAND_RPC_GET_TX_HEADER_BY_HASH::response& res, epee::json_rpc::error& error_resp, connection_context& cntx){
+    if(!check_core_ready())
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_CORE_BUSY;
+      error_resp.message = "Core is busy.";
+      return false;
+    }
+    
+    crypto::hash tx_hash;
+    bool hash_parsed = parse_hash256(req.hash, tx_hash);
+    if(!hash_parsed)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
+      error_resp.message = "Failed to parse hex representation of tx hash. Hex = " + req.hash + '.';
+      return false;
+    }
+
+    std::string error_description;
+    bool got_tx = get_tx_header_by_hash(tx_hash, res.tx_header, error_description);
+    
+    if (!got_tx)
+    {
+      error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      error_resp.message = error_description;
+      return false;
+    }
+    
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
 }
