@@ -24,6 +24,7 @@
 #include "p2p_networks.h"
 #include "math_helper.h"
 #include "net_node_common.h"
+#include "common/command_line.h"
 
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
@@ -146,6 +147,12 @@ namespace nodetool
     bool make_expected_connections_count(bool white_list, size_t expected_connections);
     bool is_priority_node(const net_address& na);
 
+    template <class Container>
+    bool connect_to_peerlist(const Container& peers);
+
+    template <class Container>
+    bool parse_peers_and_add_to_container(const boost::program_options::variables_map& vm, const command_line::arg_descriptor<std::vector<std::string> > & arg, Container& container);
+
     //debug functions
     std::string print_connections_container();
 
@@ -190,6 +197,7 @@ namespace nodetool
     uint64_t m_last_stat_request_time;
 #endif
     std::list<net_address>   m_priority_peers;
+    std::vector<net_address> m_exclusive_peers;
     std::vector<net_address> m_seed_nodes;
     std::list<nodetool::peerlist_entry> m_command_line_peers;
     uint64_t m_peer_livetime;

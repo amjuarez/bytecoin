@@ -8,7 +8,6 @@
 
 #include "version.h"
 #include "string_tools.h"
-#include "common/command_line.h"
 #include "common/util.h"
 #include "net/net_helper.h"
 #include "math_helper.h"
@@ -33,8 +32,11 @@ namespace nodetool
     const command_line::arg_descriptor<bool>        arg_p2p_allow_local_ip = {"allow-local-ip", "Allow local ip add to peer list, mostly in debug purposes"};
     const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer   = {"add-peer", "Manually add peer to local peerlist"};
     const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_priority_node   = {"add-priority-node", "Specify list of peers to connect to and attempt to keep the connection open"};
+    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_exclusive_node   = {"add-exclusive-node", "Specify list of peers to connect to only."
+                                                                                                  " If this option is given the options add-priority-node and seed-node are ignored"};
     const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_seed_node   = {"seed-node", "Connect to a node to retrieve peer addresses, and disconnect"};
-    const command_line::arg_descriptor<bool> arg_p2p_hide_my_port   =    {"hide-my-port", "Do not announce yourself as peerlist candidate", false, true};  }
+    const command_line::arg_descriptor<bool> arg_p2p_hide_my_port   =    {"hide-my-port", "Do not announce yourself as peerlist candidate", false, true};
+  }
 
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
@@ -46,6 +48,7 @@ namespace nodetool
     command_line::add_arg(desc, arg_p2p_allow_local_ip);
     command_line::add_arg(desc, arg_p2p_add_peer);
     command_line::add_arg(desc, arg_p2p_add_priority_node);
+    command_line::add_arg(desc, arg_p2p_add_exclusive_node);
     command_line::add_arg(desc, arg_p2p_seed_node);    
     command_line::add_arg(desc, arg_p2p_hide_my_port);   }
   //-----------------------------------------------------------------------------------
@@ -122,30 +125,26 @@ namespace nodetool
       }
     }
 
-    if (command_line::has_arg(vm, arg_p2p_add_priority_node))
-    {       
-      std::vector<std::string> perrs = command_line::get_arg(vm, arg_p2p_add_priority_node);
-      for(const std::string& pr_str: perrs)
-      {
-        nodetool::net_address na = AUTO_VAL_INIT(na);
-        bool r = parse_peer_from_string(na, pr_str);
-        CHECK_AND_ASSERT_MES(r, false, "Failed to parse address from string: " << pr_str);
-        m_priority_peers.push_back(na);
-      }
+    if (command_line::has_arg(vm,arg_p2p_add_exclusive_node))
+    {
+      if (!parse_peers_and_add_to_container(vm, arg_p2p_add_exclusive_node, m_exclusive_peers))
+        return false;
+    }
+    else if (command_line::has_arg(vm, arg_p2p_add_priority_node))
+    {
+      if (!parse_peers_and_add_to_container(vm, arg_p2p_add_priority_node, m_priority_peers))
+        return false;
     }
     if (command_line::has_arg(vm, arg_p2p_seed_node))
     {
-      std::vector<std::string> seed_perrs = command_line::get_arg(vm, arg_p2p_seed_node);
-      for(const std::string& pr_str: seed_perrs)
-      {
-        nodetool::net_address na = AUTO_VAL_INIT(na);
-        bool r = parse_peer_from_string(na, pr_str);
-        CHECK_AND_ASSERT_MES(r, false, "Failed to parse seed address from string: " << pr_str);
-        m_seed_nodes.push_back(na);
-      }
+      if (!parse_peers_and_add_to_container(vm, arg_p2p_seed_node, m_seed_nodes))
+        return false;
     }
+
     if(command_line::has_arg(vm, arg_p2p_hide_my_port))
-      m_hide_my_port = true;    return true;
+      m_hide_my_port = true;
+
+    return true;
   }
   //-----------------------------------------------------------------------------------
   namespace
@@ -628,6 +627,10 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::connections_maker()
   {
+    if (!connect_to_peerlist(m_exclusive_peers)) return false;
+
+    if (!m_exclusive_peers.empty()) return true;
+
     if(!m_peerlist.get_white_peers_count() && m_seed_nodes.size())
     {
       size_t try_count = 0;
@@ -649,15 +652,7 @@ namespace nodetool
       }
     }
 
-    for(const net_address& na: m_priority_peers)
-    {
-      if(m_net_server.is_stop_signal_sent())
-        return false;
-
-      if(is_addr_connected(na))
-        continue;
-      try_to_connect_and_handshake_with_new_peer(na);
-    }
+    if (!connect_to_peerlist(m_priority_peers)) return false;
 
     size_t expected_white_connections = (m_config.m_net_config.connections_count*P2P_DEFAULT_WHITELIST_CONNECTIONS_PERCENT)/100;
 
@@ -1124,6 +1119,39 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::is_priority_node(const net_address& na)
   {
-    return std::find(m_priority_peers.begin(), m_priority_peers.end(), na) != m_priority_peers.end();
+    return (std::find(m_priority_peers.begin(), m_priority_peers.end(), na) != m_priority_peers.end()) || (std::find(m_exclusive_peers.begin(), m_exclusive_peers.end(), na) != m_exclusive_peers.end());
+  }
+
+  template<class t_payload_net_handler> template <class Container>
+  bool node_server<t_payload_net_handler>::connect_to_peerlist(const Container& peers)
+  {
+    for(const net_address& na: peers)
+    {
+      if(m_net_server.is_stop_signal_sent())
+        return false;
+
+      if(is_addr_connected(na))
+        continue;
+
+      try_to_connect_and_handshake_with_new_peer(na);
+    }
+
+    return true;
+  }
+
+  template<class t_payload_net_handler> template <class Container>
+  bool node_server<t_payload_net_handler>::parse_peers_and_add_to_container(const boost::program_options::variables_map& vm, const command_line::arg_descriptor<std::vector<std::string> > & arg, Container& container)
+  {
+    std::vector<std::string> perrs = command_line::get_arg(vm, arg);
+
+    for(const std::string& pr_str: perrs)
+    {
+      nodetool::net_address na = AUTO_VAL_INIT(na);
+      bool r = parse_peer_from_string(na, pr_str);
+      CHECK_AND_ASSERT_MES(r, false, "Failed to parse address from string: " << pr_str);
+      container.push_back(na);
+    }
+
+    return true;
   }
 }
