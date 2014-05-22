@@ -1,3 +1,9 @@
+Release notes 0.8.9
+
+- JSON RPC v2.0 compatibility
+- JSON RPC over TCP added
+- Further optimizations
+
 Release notes 0.8.8
 
 - Fixed a bug with checkpoints behavior
