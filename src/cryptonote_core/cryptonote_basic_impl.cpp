@@ -33,20 +33,26 @@ namespace cryptonote {
     return CRYPTONOTE_MAX_TX_SIZE;
   }
   //-----------------------------------------------------------------------------------------------
-  bool get_block_reward(size_t median_size, size_t current_block_size, uint64_t already_generated_coins, uint64_t &reward) {
-    uint64_t base_reward = (MONEY_SUPPLY - already_generated_coins) >> 18;
+  bool get_block_reward(size_t median_size, size_t current_block_size, uint64_t already_generated_coins, uint64_t height, uint64_t &reward)
+  {
+    uint64_t base_reward = START_BLOCK_REWARD >> (height / REWARD_HALVING_INTERVAL);
+    base_reward = (std::max)(base_reward, MIN_BLOCK_REWARD);
+    base_reward = (std::min)(base_reward, MONEY_SUPPLY - already_generated_coins);
 
     //make it soft
-    if (median_size < CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE) {
+    if (median_size < CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE)
+    {
       median_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
     }
 
-    if (current_block_size <= median_size) {
+    if (current_block_size <= median_size)
+    {
       reward = base_reward;
       return true;
     }
 
-    if(current_block_size > 2 * median_size) {
+    if(current_block_size > 2 * median_size)
+    {
       LOG_PRINT_L4("Block cumulative size is too big: " << current_block_size << ", expected less than " << 2 * median_size);
       return false;
     }

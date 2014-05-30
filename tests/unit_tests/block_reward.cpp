@@ -11,58 +11,93 @@ using namespace cryptonote;
 namespace
 {
   //--------------------------------------------------------------------------------------------------------------------
-  class block_reward_and_already_generated_coins : public ::testing::Test
+  class block_reward_and_height : public ::testing::Test
   {
   protected:
-    static const size_t current_block_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE / 2;
+    void do_test(uint64_t height, uint64_t already_generated_coins = 0)
+    {
+      m_block_not_too_big = get_block_reward(median_block_size, current_block_size, already_generated_coins, height, m_block_reward);
+    }
+
+    static const size_t median_block_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+    static const size_t current_block_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
 
     bool m_block_not_too_big;
     uint64_t m_block_reward;
   };
 
-  #define TEST_ALREADY_GENERATED_COINS(already_generated_coins, expected_reward)                            \
-    m_block_not_too_big = get_block_reward(0, current_block_size, already_generated_coins, m_block_reward); \
-    ASSERT_TRUE(m_block_not_too_big);                                                                       \
-    ASSERT_EQ(m_block_reward, UINT64_C(expected_reward));
-
-  TEST_F(block_reward_and_already_generated_coins, handles_first_values)
+  TEST_F(block_reward_and_height, calculates_correctly)
   {
-    TEST_ALREADY_GENERATED_COINS(0, 70368744177663);
-    TEST_ALREADY_GENERATED_COINS(m_block_reward, 70368475742208);
-    TEST_ALREADY_GENERATED_COINS(UINT64_C(2756434948434199641), 59853779316998);
-  }
+    do_test(0);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD);
 
-  TEST_F(block_reward_and_already_generated_coins, correctly_steps_from_2_to_1)
-  {
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((2 << 18) + 1), 2);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY -  (2 << 18)     , 2);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((2 << 18) - 1), 1);
-  }
+    do_test(1);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD);
 
-  TEST_F(block_reward_and_already_generated_coins, handles_max)
-  {
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((1 << 18) + 1), 1);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY -  (1 << 18)     , 1);
-    TEST_ALREADY_GENERATED_COINS(MONEY_SUPPLY - ((1 << 18) - 1), 0);
-  }
+    do_test(REWARD_HALVING_INTERVAL - 1);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD);
 
+    do_test(REWARD_HALVING_INTERVAL);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD / 2);
+
+    do_test(2 * REWARD_HALVING_INTERVAL - 1);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD / 2);
+
+    do_test(2 * REWARD_HALVING_INTERVAL);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD / 4);
+
+    do_test(2 * REWARD_HALVING_INTERVAL);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD / 4);
+
+    do_test(11 * REWARD_HALVING_INTERVAL - 1);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD / 1024);
+
+    do_test(11 * REWARD_HALVING_INTERVAL);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD / 2048);
+
+    do_test(12 * REWARD_HALVING_INTERVAL - 1);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, START_BLOCK_REWARD / 2048);
+
+    do_test(12 * REWARD_HALVING_INTERVAL);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, MIN_BLOCK_REWARD);
+
+    do_test(60 * 12 * REWARD_HALVING_INTERVAL);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, MIN_BLOCK_REWARD);
+
+    do_test(1, MONEY_SUPPLY - MIN_BLOCK_REWARD * 2 / 3);
+    ASSERT_TRUE(m_block_not_too_big);
+    ASSERT_EQ(m_block_reward, MIN_BLOCK_REWARD * 2 / 3);
+  }
   //--------------------------------------------------------------------------------------------------------------------
   class block_reward_and_current_block_size : public ::testing::Test
   {
   protected:
     virtual void SetUp()
     {
-      m_block_not_too_big = get_block_reward(0, 0, already_generated_coins, m_standard_block_reward);
+      m_block_not_too_big = get_block_reward(0, 0, already_generated_coins, height, m_standard_block_reward);
       ASSERT_TRUE(m_block_not_too_big);
       ASSERT_LT(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
     }
 
     void do_test(size_t median_block_size, size_t current_block_size)
     {
-      m_block_not_too_big = get_block_reward(median_block_size, current_block_size, already_generated_coins, m_block_reward);
+      m_block_not_too_big = get_block_reward(median_block_size, current_block_size, already_generated_coins, height, m_block_reward);
     }
 
     static const uint64_t already_generated_coins = 0;
+    static const uint64_t height = 1;
 
     bool m_block_not_too_big;
     uint64_t m_block_reward;
@@ -141,17 +176,18 @@ namespace
 
       m_last_block_sizes_median = 7 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
 
-      m_block_not_too_big = get_block_reward(epee::misc_utils::median(m_last_block_sizes), 0, already_generated_coins, m_standard_block_reward);
+      m_block_not_too_big = get_block_reward(epee::misc_utils::median(m_last_block_sizes), 0, already_generated_coins, height, m_standard_block_reward);
       ASSERT_TRUE(m_block_not_too_big);
       ASSERT_LT(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
     }
 
     void do_test(size_t current_block_size)
     {
-      m_block_not_too_big = get_block_reward(epee::misc_utils::median(m_last_block_sizes), current_block_size, already_generated_coins, m_block_reward);
+      m_block_not_too_big = get_block_reward(epee::misc_utils::median(m_last_block_sizes), current_block_size, already_generated_coins, height, m_block_reward);
     }
 
     static const uint64_t already_generated_coins = 0;
+    static const uint64_t height = 1;
 
     std::vector<size_t> m_last_block_sizes;
     uint64_t m_last_block_sizes_median;
