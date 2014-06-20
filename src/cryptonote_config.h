@@ -19,6 +19,7 @@
 
 // MONEY_SUPPLY - total number coins to be generated
 #define MONEY_SUPPLY                                    ((uint64_t)(-1))
+#define EMISSION_SPEED_FACTOR                           (18)
 
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                 100
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE       10000 //size of block (bytes) after which reward for block calculated using block size
@@ -27,9 +28,6 @@
 // COIN - number of smallest units in one coin
 #define COIN                                            ((uint64_t)100000000) // pow(10, 8)
 #define DEFAULT_FEE                                     ((uint64_t)1000000) // pow(10, 6)
-
-
-#define ORPHANED_BLOCKS_MAX_COUNT                       100
 
 
 #define DIFFICULTY_TARGET                               120 // seconds

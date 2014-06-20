@@ -591,18 +591,23 @@ namespace cryptonote
     return get_object_hash(t, res, blob_size);
   }
   //---------------------------------------------------------------
-  blobdata get_block_hashing_blob(const block& b)
+  bool get_block_hashing_blob(const block& b, blobdata& blob)
   {
-    blobdata blob = t_serializable_object_to_blob(static_cast<block_header>(b));
+    if(!t_serializable_object_to_blob(static_cast<const block_header&>(b), blob))
+      return false;
     crypto::hash tree_root_hash = get_tx_tree_hash(b);
-    blob.append((const char*)&tree_root_hash, sizeof(tree_root_hash ));
-    blob.append(tools::get_varint_data(b.tx_hashes.size()+1));
-    return blob;
+    blob.append(reinterpret_cast<const char*>(&tree_root_hash), sizeof(tree_root_hash));
+    blob.append(tools::get_varint_data(b.tx_hashes.size() + 1));
+
+    return true;
   }
   //---------------------------------------------------------------
   bool get_block_hash(const block& b, crypto::hash& res)
   {
-    return get_object_hash(get_block_hashing_blob(b), res);
+    blobdata blob;
+    if (!get_block_hashing_blob(b, blob))
+      return false;
+    return get_object_hash(blob, res);
   }
   //---------------------------------------------------------------
   crypto::hash get_block_hash(const block& b)
@@ -641,8 +646,9 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool get_block_longhash(const block& b, crypto::hash& res, uint64_t height)
   {
-    block b_local = b; //workaround to avoid const errors with do_serialize
-    blobdata bd = get_block_hashing_blob(b);
+    blobdata bd;
+    if(!get_block_hashing_blob(b, bd))
+      return false;
     crypto::cn_slow_hash(bd.data(), bd.size(), res);
     return true;
   }

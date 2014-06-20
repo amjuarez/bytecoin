@@ -150,7 +150,6 @@ void cn_slow_hash(const void *data, size_t length, char *hash)
     uint8_t a[AES_BLOCK_SIZE];
     uint8_t b[AES_BLOCK_SIZE];
     uint8_t d[AES_BLOCK_SIZE];
-    uint8_t aes_key[AES_KEY_SIZE];
     RDATA_ALIGN16 uint8_t expandedKey[256];
 
     union cn_slow_hash_state state;
@@ -201,8 +200,8 @@ void cn_slow_hash(const void *data, size_t length, char *hash)
 
     for(i = 0; i < ITER / 2; i++)
     {
-				#define TOTALBLOCKS (MEMORY / AES_BLOCK_SIZE)
-				#define state_index(x) (((*((uint64_t *)x) >> 4) & (TOTALBLOCKS - 1)) << 4)
+        #define TOTALBLOCKS (MEMORY / AES_BLOCK_SIZE)
+        #define state_index(x) (((*((uint64_t *)x) >> 4) & (TOTALBLOCKS - 1)) << 4)
 
         // Iteration 1
         p = &long_state[state_index(a)];

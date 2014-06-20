@@ -3,7 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once 
-
+/*
 namespace boost
 {
   namespace serialization
@@ -31,3 +31,4 @@ namespace boost
 
   }
 }
+*/

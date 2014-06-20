@@ -1,3 +1,8 @@
+Release notes 0.8.10
+
+- Optimized blockchain storage memory usage
+- Various code improvements
+
 Release notes 0.8.9
 
 - JSON RPC v2.0 compatibility

@@ -34,7 +34,7 @@ namespace cryptonote {
   }
   //-----------------------------------------------------------------------------------------------
   bool get_block_reward(size_t median_size, size_t current_block_size, uint64_t already_generated_coins, uint64_t &reward) {
-    uint64_t base_reward = (MONEY_SUPPLY - already_generated_coins) >> 18;
+    uint64_t base_reward = (MONEY_SUPPLY - already_generated_coins) >> EMISSION_SPEED_FACTOR;
 
     //make it soft
     if (median_size < CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE) {
@@ -94,21 +94,14 @@ namespace cryptonote {
     return true;
   }
   //-----------------------------------------------------------------------
-  bool get_account_address_from_str(account_public_address& adr, const std::string& str)
+  bool get_account_address_from_str(uint64_t& prefix, account_public_address& adr, const std::string& str)
   {
     if (2 * sizeof(public_address_outer_blob) != str.size())
     {
       blobdata data;
-      uint64_t prefix;
       if (!tools::base58::decode_addr(str, prefix, data))
       {
         LOG_PRINT_L1("Invalid address format");
-        return false;
-      }
-
-      if (CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX != prefix)
-      {
-        LOG_PRINT_L1("Wrong address prefix: " << prefix << ", expected " << CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
         return false;
       }
 
@@ -127,6 +120,8 @@ namespace cryptonote {
     else
     {
       // Old address format
+      prefix = CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
+
       std::string buff;
       if(!string_tools::parse_hexstr_to_binbuff(str, buff))
         return false;
@@ -158,6 +153,22 @@ namespace cryptonote {
 
     return true;
   }
+  //-----------------------------------------------------------------------
+  bool get_account_address_from_str(account_public_address& adr, const std::string& str)
+  {
+    uint64_t prefix;
+    if(!get_account_address_from_str(prefix, adr, str))
+      return false;
+
+    if(CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX != prefix)
+    {
+      LOG_PRINT_L1("Wrong address prefix: " << prefix << ", expected " << CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+      return false;
+    }
+
+    return true;
+  }
+  //-----------------------------------------------------------------------
 
   bool operator ==(const cryptonote::transaction& a, const cryptonote::transaction& b) {
     return cryptonote::get_transaction_hash(a) == cryptonote::get_transaction_hash(b);

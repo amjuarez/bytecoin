@@ -31,7 +31,7 @@ namespace cryptonote
   {
     const command_line::arg_descriptor<std::string> arg_extra_messages =  {"extra-messages-file", "Specify file for extra messages to include into coinbase transactions", "", true};
     const command_line::arg_descriptor<std::string> arg_start_mining =    {"start-mining", "Specify wallet address to mining for", "", true};
-    const command_line::arg_descriptor<uint32_t>      arg_mining_threads =  {"mining-threads", "Specify mining threads count", 0, true};
+    const command_line::arg_descriptor<uint32_t>    arg_mining_threads =  {"mining-threads", "Specify mining threads count", 0, true};
   }
 
 
@@ -340,7 +340,7 @@ namespace cryptonote
       crypto::hash h;
       get_block_longhash(b, h, height);
 
-      if(check_hash(h, local_diff))
+      if(!m_stop && check_hash(h, local_diff))
       {
         //we lucky!
         ++m_config.current_extra_message_index;
@@ -354,6 +354,7 @@ namespace cryptonote
           epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
         }
       }
+
       nonce+=m_threads_total;
       ++m_hashes;
     }
