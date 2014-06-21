@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
+// Copyright (c) 2011-2014 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -193,16 +193,8 @@ namespace nodetool
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::init(const boost::program_options::variables_map& vm)
   {
-    ADD_HARDCODED_SEED_NODE("seed.bytecoin.org:8080");
-    ADD_HARDCODED_SEED_NODE("85.25.201.95:8080");
-    ADD_HARDCODED_SEED_NODE("85.25.196.145:8080");
-    ADD_HARDCODED_SEED_NODE("85.25.196.146:8080");
-    ADD_HARDCODED_SEED_NODE("85.25.196.144:8080");
-    ADD_HARDCODED_SEED_NODE("5.199.168.138:8080");
-    ADD_HARDCODED_SEED_NODE("62.75.236.152:8080");
-    ADD_HARDCODED_SEED_NODE("85.25.194.245:8080");
-    ADD_HARDCODED_SEED_NODE("95.211.224.160:8080");
-    ADD_HARDCODED_SEED_NODE("144.76.200.44:8080");
+    //TODO add seed for your network
+    //ADD_HARDCODED_SEED_NODE("your_seed_ip.com:8080");
 
     bool res = handle_command_line(vm);
     CHECK_AND_ASSERT_MES(res, false, "Failed to handle command line");
@@ -376,7 +368,7 @@ namespace nodetool
         return;
       }
 
-      if(rsp.node_data.network_id != BYTECOIN_NETWORK)
+      if(rsp.node_data.network_id != CRYPTONOTE_NETWORK)
       {
         LOG_ERROR_CCONTEXT("COMMAND_HANDSHAKE Failed, wrong network!  (" << epee::string_tools::get_str_from_guid_a(rsp.node_data.network_id) << "), closing connection.");
         return;
@@ -784,7 +776,7 @@ namespace nodetool
       node_data.my_port = m_external_port ? m_external_port : m_listenning_port;
     else 
       node_data.my_port = 0;
-    node_data.network_id = BYTECOIN_NETWORK;
+    node_data.network_id = CRYPTONOTE_NETWORK;
     return true;
   }
   //-----------------------------------------------------------------------------------
@@ -1004,7 +996,7 @@ namespace nodetool
   template<class t_payload_net_handler>
   int node_server<t_payload_net_handler>::handle_handshake(int command, typename COMMAND_HANDSHAKE::request& arg, typename COMMAND_HANDSHAKE::response& rsp, p2p_connection_context& context)
   {
-    if(arg.node_data.network_id != BYTECOIN_NETWORK)
+    if(arg.node_data.network_id != CRYPTONOTE_NETWORK)
     {
 
       LOG_PRINT_CCONTEXT_L0("WRONG NETWORK AGENT CONNECTED! id=" << epee::string_tools::get_str_from_guid_a(arg.node_data.network_id));

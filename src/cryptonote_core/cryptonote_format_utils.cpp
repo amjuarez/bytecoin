@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
+// Copyright (c) 2011-2014 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -622,15 +622,20 @@ namespace cryptonote
     //genesis block
     bl = boost::value_initialized<block>();
 
-
+    //TODO Uncomment this code block on teh first network lounch. It will generate and print you genesis block's hash.
+    //TODO Then you must copy it and put to genesis_coinbase_tx_hex variable
+    /*
     account_public_address ac = boost::value_initialized<account_public_address>();
     std::vector<size_t> sz;
     construct_miner_tx(0, 0, 0, 0, 0, ac, bl.miner_tx); // zero fee in genesis
     blobdata txb = tx_to_blob(bl.miner_tx);
     std::string hex_tx_represent = string_tools::buff_to_hex_nodelimer(txb);
+    std::cout << "Genesis block hex: " << hex_to_represent << endl;
+    */
 
     //hard code coinbase tx in genesis block, because "tru" generating tx use random, but genesis should be always the same
-    std::string genesis_coinbase_tx_hex = "010a01ff0001ffffffffffff0f029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121013c086a48c15fb637a96991bc6d53caf77068b5ba6eeb3c82357228c49790584a";
+    //TODO After you obtain hash of the genesis block put it here and recompile sources!
+    std::string genesis_coinbase_tx_hex = "";
 
     blobdata tx_bl;
     string_tools::parse_hexstr_to_binbuff(genesis_coinbase_tx_hex, tx_bl);

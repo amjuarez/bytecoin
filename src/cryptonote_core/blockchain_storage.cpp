@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
+// Copyright (c) 2011-2014 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,18 +16,6 @@
 #include "profile_tools.h"
 #include "file_io_utils.h"
 #include "common/boost_serialization_helper.h"
-
-//namespace {
-//  std::string hashHex(const crypto::hash& hash) {
-//    std::string result;
-//    for (size_t i = 0; i < crypto::HASH_SIZE; ++i) {
-//      result += "0123456789ABCDEF"[static_cast<uint8_t>(hash.data[i]) >> 4];
-//      result += "0123456789ABCDEF"[static_cast<uint8_t>(hash.data[i]) & 15];
-//    }
-//
-//    return result;
-//  }
-//}
 
 namespace {
   std::string appendPath(const std::string& path, const std::string& fileName) {
@@ -61,8 +49,6 @@ namespace cryptonote {
     uint64_t m_keeper_block_height;
     size_t m_blob_size;
     std::vector<uint64_t> m_global_output_indexes;
-
-    template<class archive_t> void serialize(archive_t & ar, unsigned int version);
   };
 
   struct block_extended_info {
@@ -71,124 +57,13 @@ namespace cryptonote {
     size_t block_cumulative_size;
     difficulty_type cumulative_difficulty;
     uint64_t already_generated_coins;
-
-    template<class archive_t> void serialize(archive_t & ar, unsigned int version);
   };
-
-  template<class archive_t> void transaction_chain_entry::serialize(archive_t & ar, unsigned int version) {
-    ar & tx;
-    ar & m_keeper_block_height;
-    ar & m_blob_size;
-    ar & m_global_output_indexes;
-  }
-
-  template<class archive_t> void block_extended_info::serialize(archive_t & ar, unsigned int version) {
-    ar & bl;
-    ar & height;
-    ar & cumulative_difficulty;
-    ar & block_cumulative_size;
-    ar & already_generated_coins;
-  }
-}
-
-template<class Archive> void cryptonote::blockchain_storage::Transaction::serialize(Archive& archive, unsigned int version) {
-  archive & tx;
-}
-
-template<class Archive> void cryptonote::blockchain_storage::Block::serialize(Archive& archive, unsigned int version) {
-  archive & bl;
-  archive & height;
-  archive & block_cumulative_size;
-  archive & cumulative_difficulty;
-  archive & already_generated_coins;
-  archive & transactions;
 }
 
 template<class Archive> void cryptonote::blockchain_storage::TransactionIndex::serialize(Archive& archive, unsigned int version) {
   archive & block;
   archive & transaction;
 }
-
-namespace cryptonote {
-#define CURRENT_BLOCKCHAIN_STORAGE_ARCHIVE_VER    13
-
-  template<class archive_t> void blockchain_storage::serialize(archive_t & ar, const unsigned int version) {
-    CRITICAL_REGION_LOCAL(m_blockchain_lock);
-    if (version < 12) {
-      LOG_PRINT_L0("Detected blockchain of unsupported version, migration is not possible.");
-      return;
-    }
-
-    LOG_PRINT_L0("Blockchain of previous version detected, migrating. This may take several minutes, please be patient...");
-
-    std::vector<block_extended_info> blocks;
-    ar & blocks;
-
-    {
-      std::unordered_map<crypto::hash, size_t> blocks_index;
-      ar & blocks_index;
-    }
-
-    std::unordered_map<crypto::hash, transaction_chain_entry> transactions;
-    ar & transactions;
-
-    {
-      std::unordered_set<crypto::key_image> spent_keys;
-      ar & spent_keys;
-    }
-
-    {
-      std::unordered_map<crypto::hash, block_extended_info> alternative_chains;
-      ar & alternative_chains;
-    }
-
-    {
-      std::map<uint64_t, std::vector<std::pair<crypto::hash, size_t>>> outputs;
-      ar & outputs;
-    }
-
-    {
-      std::unordered_map<crypto::hash, block_extended_info> invalid_blocks;
-      ar & invalid_blocks;
-    }
-
-    size_t current_block_cumul_sz_limit;
-    ar & current_block_cumul_sz_limit;
-    LOG_PRINT_L0("Old blockchain storage:" << ENDL << 
-        "blocks: " << blocks.size() << ENDL  << 
-        "transactions: " << transactions.size() << ENDL  << 
-        "current_block_cumul_sz_limit: " << current_block_cumul_sz_limit);
-
-    Block block;
-    Transaction transaction;
-    for (uint32_t b = 0; b < blocks.size(); ++b) {
-      block.bl = blocks[b].bl;
-      block.height = b;
-      block.block_cumulative_size = blocks[b].block_cumulative_size;
-      block.cumulative_difficulty = blocks[b].cumulative_difficulty;
-      block.already_generated_coins = blocks[b].already_generated_coins;
-      block.transactions.resize(1 + blocks[b].bl.tx_hashes.size());
-      block.transactions[0].tx = blocks[b].bl.miner_tx;
-      TransactionIndex transactionIndex = { b, 0 };
-      pushTransaction(block, get_transaction_hash(blocks[b].bl.miner_tx), transactionIndex);
-      for (uint32_t t = 0; t < blocks[b].bl.tx_hashes.size(); ++t) {
-        block.transactions[1 + t].tx = transactions[blocks[b].bl.tx_hashes[t]].tx;
-        transactionIndex.transaction = 1 + t;
-        pushTransaction(block, blocks[b].bl.tx_hashes[t], transactionIndex);
-      }
-
-      pushBlock(block);
-    }
-
-    update_next_comulative_size_limit();
-    if (m_current_block_cumul_sz_limit != current_block_cumul_sz_limit) {
-      LOG_ERROR("Migration was unsuccessful.");
-    }
-  }
-}
-
-BOOST_CLASS_VERSION(cryptonote::blockchain_storage, CURRENT_BLOCKCHAIN_STORAGE_ARCHIVE_VER)
-
 
 bool blockchain_storage::have_tx(const crypto::hash &id) {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
@@ -209,19 +84,16 @@ bool blockchain_storage::init(const std::string& config_folder) {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   m_config_folder = config_folder;
   LOG_PRINT_L0("Loading blockchain...");
-  if (!m_blocks.open(appendPath(config_folder, "blocks.dat"), appendPath(config_folder, "blockindexes.dat"), 1024)) {
+  if (!m_blocks.open(appendPath(config_folder, CRYPTONOTE_BLOCKS_FILENAME), appendPath(config_folder, CRYPTONOTE_BLOCKINDEXES_FILENAME), 1024)) {
     return false;
   }
 
   if (m_blocks.empty()) {
-    const std::string filename = appendPath(m_config_folder, CRYPTONOTE_BLOCKCHAINDATA_FILENAME);
-    if (!tools::unserialize_obj_from_file(*this, filename)) {
-      LOG_PRINT_L0("Can't load blockchain storage from file.");
-    }
+    LOG_PRINT_L0("Can't load blockchain storage from file.");
   } else {
     bool rebuild = true;
     try {
-      std::ifstream file(appendPath(config_folder, "blockscache.dat"), std::ios::binary);
+      std::ifstream file(appendPath(config_folder, CRYPTONOTE_BLOCKSCACHE_FILENAME), std::ios::binary);
       boost::archive::binary_iarchive archive(file);
       crypto::hash lastBlockHash;
       archive & lastBlockHash;
@@ -282,7 +154,7 @@ bool blockchain_storage::init(const std::string& config_folder) {
 
 bool blockchain_storage::store_blockchain() {
   try {
-    std::ofstream file(appendPath(m_config_folder, "blockscache.dat"), std::ios::binary);
+    std::ofstream file(appendPath(m_config_folder, CRYPTONOTE_BLOCKSCACHE_FILENAME), std::ios::binary);
     boost::archive::binary_oarchive archive(file);
     crypto::hash lastBlockHash = get_block_hash(m_blocks.back().bl);
     archive & lastBlockHash;
@@ -290,73 +162,9 @@ bool blockchain_storage::store_blockchain() {
     archive & m_transactionMap;
     archive & m_spent_keys;
     archive & m_outputs;
+    LOG_PRINT_L0("Saved blockchain cache.");
   } catch (std::exception& e) {
-    LOG_ERROR("Failed to save blockchain, " << e.what());
-  }
-
-  //{
-  //  std::ofstream file(appendPath(m_config_folder, "blockscache2.dat"), std::ios::binary);
-
-  //  crypto::hash lastBlockHash = get_block_hash(m_blocks.back().bl);
-  //  file.write(reinterpret_cast<char*>(&lastBlockHash), sizeof(lastBlockHash));
-
-  //  uint32_t blockMapSize = m_blockMap.size();
-  //  file.write(reinterpret_cast<char*>(&blockMapSize), sizeof(blockMapSize));
-  //  for (auto& i : m_blockMap) {
-  //    crypto::hash blockHash = i.first;
-  //    file.write(reinterpret_cast<char*>(&blockHash), sizeof(blockHash));
-
-  //    uint32_t blockIndex = i.second;
-  //    file.write(reinterpret_cast<char*>(&blockIndex), sizeof(blockIndex));
-  //  }
-
-  //  uint32_t transactionMapSize = m_transactionMap.size();
-  //  file.write(reinterpret_cast<char*>(&transactionMapSize), sizeof(transactionMapSize));
-  //  for (auto& i : m_transactionMap) {
-  //    crypto::hash transactionHash = i.first;
-  //    file.write(reinterpret_cast<char*>(&transactionHash), sizeof(transactionHash));
-
-  //    uint32_t blockIndex = i.second.block;
-  //    file.write(reinterpret_cast<char*>(&blockIndex), sizeof(blockIndex));
-
-  //    uint32_t transactionIndex = i.second.transaction;
-  //    file.write(reinterpret_cast<char*>(&transactionIndex), sizeof(transactionIndex));
-  //  }
-
-  //  uint32_t spentKeysSize = m_spent_keys.size();
-  //  file.write(reinterpret_cast<char*>(&spentKeysSize), sizeof(spentKeysSize));
-  //  for (auto& i : m_spent_keys) {
-  //    crypto::key_image key = i;
-  //    file.write(reinterpret_cast<char*>(&key), sizeof(key));
-  //  }
-
-  //  uint32_t outputsSize = m_outputs.size();
-  //  file.write(reinterpret_cast<char*>(&outputsSize), sizeof(outputsSize));
-  //  for (auto& i : m_outputs) {
-  //    uint32_t indexesSize = i.second.size();
-  //    file.write(reinterpret_cast<char*>(&indexesSize), sizeof(indexesSize));
-  //    for (auto& j : i.second) {
-  //      uint32_t blockIndex = j.first.block;
-  //      file.write(reinterpret_cast<char*>(&blockIndex), sizeof(blockIndex));
-
-  //      uint32_t transactionIndex = j.first.transaction;
-  //      file.write(reinterpret_cast<char*>(&transactionIndex), sizeof(transactionIndex));
-
-  //      uint32_t outputIndex = j.second;
-  //      file.write(reinterpret_cast<char*>(&outputIndex), sizeof(outputIndex));
-  //    }
-  //  }
-  //}
-
-  {
-    //std::ofstream file(appendPath(m_config_folder, "blockscache3.dat"), std::ios::binary);
-    //binary_archive<true> archive(file);
-    //crypto::hash lastBlockHash = get_block_hash(m_blocks.back().bl);
-    //do_serialize(archive, lastBlockHash);
-    //do_serialize(archive, m_blockMap);
-    //do_serialize(archive, m_transactionMap);
-    //do_serialize(archive, m_spent_keys);
-    //do_serialize(archive, m_outputs);
+    LOG_ERROR("Failed to save blockchain cache, " << e.what());
   }
 
   return true;
