@@ -82,6 +82,11 @@ uint64_t blockchain_storage::get_current_blockchain_height() {
 
 bool blockchain_storage::init(const std::string& config_folder) {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  if (!config_folder.empty() && !tools::create_directories_if_necessary(config_folder)) {
+    LOG_ERROR("Failed to create data directory: " << m_config_folder);
+    return false;
+  }
+  
   m_config_folder = config_folder;
   LOG_PRINT_L0("Loading blockchain...");
   if (!m_blocks.open(appendPath(config_folder, CRYPTONOTE_BLOCKS_FILENAME), appendPath(config_folder, CRYPTONOTE_BLOCKINDEXES_FILENAME), 1024)) {

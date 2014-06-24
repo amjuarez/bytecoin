@@ -25,18 +25,21 @@
 #define MONEY_SUPPLY                                   
 #define EMISSION_SPEED_FACTOR                           (18)
 
+//TODO Define number of blocks for block size median calculation
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                 100
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE       10000 //size of block (bytes) after which reward for block calculated using block size
 #define CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE          600
-#define CRYPTONOTE_DISPLAY_DECIMAL_POINT                8
+//TODO Define number of digits
+#define CRYPTONOTE_DISPLAY_DECIMAL_POINT                
 //TODO Define number of smallest units in one coin
 #define COIN                                            
 //TODO Define default fee for transactions
 #define DEFAULT_FEE                                     
 
+//TODO Define preferred block's target time
+#define DIFFICULTY_TARGET                               120 // seconds
 //TODO There are options to tune CryptoNote's difficulty retargeting function. 
 //TODO We recommend not to change it.
-#define DIFFICULTY_TARGET                               120 // seconds
 #define DIFFICULTY_WINDOW                               720 // blocks
 #define DIFFICULTY_LAG                                  15
 #define DIFFICULTY_CUT                                  60  // timestamps to cut after sorting

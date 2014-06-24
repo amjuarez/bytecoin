@@ -622,7 +622,7 @@ namespace cryptonote
     //genesis block
     bl = boost::value_initialized<block>();
 
-    //TODO Uncomment this code block on teh first network lounch. It will generate and print you genesis block's hash.
+    //TODO Uncomment this code block on the first network launch. It will generate and print you genesis block's hash.
     //TODO Then you must copy it and put to genesis_coinbase_tx_hex variable
     /*
     account_public_address ac = boost::value_initialized<account_public_address>();
@@ -630,10 +630,10 @@ namespace cryptonote
     construct_miner_tx(0, 0, 0, 0, 0, ac, bl.miner_tx); // zero fee in genesis
     blobdata txb = tx_to_blob(bl.miner_tx);
     std::string hex_tx_represent = string_tools::buff_to_hex_nodelimer(txb);
-    std::cout << "Genesis block hex: " << hex_to_represent << endl;
+    std::cout << "Genesis coinbase tx hex: " << hex_to_represent << std::endl;
     */
 
-    //hard code coinbase tx in genesis block, because "tru" generating tx use random, but genesis should be always the same
+    //hard code coinbase tx in genesis block, because "true" generating tx use random, but genesis should be always the same
     //TODO After you obtain hash of the genesis block put it here and recompile sources!
     std::string genesis_coinbase_tx_hex = "";
 
