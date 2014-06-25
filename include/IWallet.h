@@ -17,7 +17,7 @@ namespace CryptoNote {
 
 typedef size_t TransactionId;
 typedef size_t TransferId;
-typedef std::array<uint8_t, 32> TransacitonHash;
+typedef std::array<uint8_t, 32> TransactionHash;
 
 struct Transfer {
   std::string address;
@@ -33,7 +33,7 @@ struct Transaction {
   size_t          transferCount;
   int64_t         totalAmount;
   uint64_t        fee;
-  TransacitonHash hash;
+  TransactionHash hash;
   bool            isCoinbase;
   uint64_t        blockHeight;
   uint64_t        timestamp;
@@ -44,7 +44,7 @@ class IWalletObserver {
 public:
   virtual void initCompleted(std::error_code result) {}
   virtual void saveCompleted(std::error_code result) {}
-  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total) {}
+  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total, std::error_code result) {}
   virtual void actualBalanceUpdated(uint64_t actualBalance) {}
   virtual void pendingBalanceUpdated(uint64_t pendingBalance) {}
   virtual void externalTransactionCreated(TransactionId transactionId) {}
@@ -54,7 +54,7 @@ public:
 
 class IWallet {
 public:
-  virtual ~IWallet() = 0;
+  virtual ~IWallet() {} ;
   virtual void addObserver(IWalletObserver* observer) = 0;
   virtual void removeObserver(IWalletObserver* observer) = 0;
 

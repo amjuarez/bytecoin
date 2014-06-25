@@ -43,7 +43,7 @@ namespace cryptonote
 
      miner& get_miner(){return m_miner;}
      static void init_options(boost::program_options::options_description& desc);
-     bool init(const boost::program_options::variables_map& vm);
+     bool init(const boost::program_options::variables_map& vm, bool load_existing);
      bool set_genesis_block(const block& b);
      bool deinit();
      uint64_t get_current_blockchain_height();
@@ -56,8 +56,7 @@ namespace cryptonote
        return m_blockchain_storage.get_blocks(block_ids, blocks, missed_bs);
      }
      crypto::hash get_block_id_by_height(uint64_t height);
-     bool get_transactions(const std::vector<crypto::hash>& txs_ids, std::list<transaction>& txs, std::list<crypto::hash>& missed_txs);
-     bool get_transaction(const crypto::hash &h, transaction &tx);
+     void get_transactions(const std::vector<crypto::hash>& txs_ids, std::list<transaction>& txs, std::list<crypto::hash>& missed_txs);
      bool get_block_by_hash(const crypto::hash &h, block &blk);
      //void get_all_known_block_ids(std::list<crypto::hash> &main, std::list<crypto::hash> &alt, std::list<crypto::hash> &invalid);
 
@@ -67,7 +66,7 @@ namespace cryptonote
      void set_cryptonote_protocol(i_cryptonote_protocol* pprotocol);
      void set_checkpoints(checkpoints&& chk_pts);
 
-     bool get_pool_transactions(std::list<transaction>& txs);
+     void get_pool_transactions(std::list<transaction>& txs);
      size_t get_pool_transactions_count();
      size_t get_blockchain_total_transactions();
      //bool get_outs(uint64_t amount, std::list<crypto::public_key>& pkeys);
@@ -89,6 +88,7 @@ namespace cryptonote
      std::string print_pool(bool short_format);
      void print_blockchain_outs(const std::string& file);
      void on_synchronized();
+     void notify_new_block(const block& b);
 
    private:
      bool add_new_tx(const transaction& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prefix_hash, size_t blob_size, tx_verification_context& tvc, bool keeped_by_block);

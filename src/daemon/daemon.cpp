@@ -160,7 +160,7 @@ int main(int argc, char* argv[])
 
   //initialize core here
   LOG_PRINT_L0("Initializing core...");
-  res = ccore.init(vm);
+  res = ccore.init(vm, true);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core");
   LOG_PRINT_L0("Core initialized OK");
   

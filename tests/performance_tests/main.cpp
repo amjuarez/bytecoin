@@ -4,6 +4,7 @@
 
 #include "performance_tests.h"
 #include "performance_utils.h"
+#include "crypto/hash.h"
 
 // tests
 #include "construct_tx.h"

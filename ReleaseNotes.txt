@@ -1,3 +1,11 @@
+Release notes 0.8.11
+
+- Increased minimum transaction fee
+- Transaction pool optimizations
+- High level API implementation
+- CryptoNight hash function optimization
+- Improvements for wallet JSON RPC API
+
 Release notes 0.8.10
 
 - Optimized blockchain storage memory usage

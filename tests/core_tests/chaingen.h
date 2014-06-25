@@ -461,7 +461,7 @@ inline bool do_replay_events(std::vector<test_event_entry>& events)
 
   cryptonote::cryptonote_protocol_stub pr; //TODO: stub only for this kind of test, make real validation of relayed objects
   cryptonote::core c(&pr);
-  if (!c.init(vm))
+  if (!c.init(vm, false))
   {
     std::cout << concolor::magenta << "Failed to init core" << concolor::normal << std::endl;
     return false;
@@ -643,4 +643,4 @@ inline bool do_replay_file(const std::string& filename)
 #define CHECK_EQ(v1, v2) CHECK_AND_ASSERT_MES(v1 == v2, false, "[" << perr_context << "] failed: \"" << QUOTEME(v1) << " == " << QUOTEME(v2) << "\", " << v1 << " != " << v2)
 #define CHECK_NOT_EQ(v1, v2) CHECK_AND_ASSERT_MES(!(v1 == v2), false, "[" << perr_context << "] failed: \"" << QUOTEME(v1) << " != " << QUOTEME(v2) << "\", " << v1 << " == " << v2)
 #define MK_COINS(amount) (UINT64_C(amount) * COIN)
-#define TESTS_DEFAULT_FEE ((uint64_t)1000000) // pow(10, 6)
+#define TESTS_DEFAULT_FEE (MINIMUM_FEE)

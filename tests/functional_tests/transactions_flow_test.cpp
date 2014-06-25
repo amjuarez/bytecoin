@@ -52,7 +52,7 @@ bool do_send_money(tools::wallet2& w1, tools::wallet2& w2, size_t mix_in_factor,
 
   try
   {
-    w1.transfer(dsts, mix_in_factor, 0, DEFAULT_FEE, std::vector<uint8_t>(), tools::detail::null_split_strategy, tools::tx_dust_policy(DEFAULT_FEE), tx);
+    w1.transfer(dsts, mix_in_factor, 0, MINIMUM_FEE, std::vector<uint8_t>(), tools::detail::null_split_strategy, tools::tx_dust_policy(DEFAULT_DUST_THRESHOLD), tx);
     return true;
   }
   catch (const std::exception&)
@@ -157,7 +157,7 @@ bool transactions_flow_test(std::string& working_folder,
       BOOST_FOREACH(tools::wallet2::transfer_details& td, incoming_transfers)
       {
         cryptonote::transaction tx_s;
-        bool r = do_send_money(w1, w1, 0, td.m_tx.vout[td.m_internal_output_index].amount - DEFAULT_FEE, tx_s, 50);
+        bool r = do_send_money(w1, w1, 0, td.m_tx.vout[td.m_internal_output_index].amount - MINIMUM_FEE, tx_s, 50);
         CHECK_AND_ASSERT_MES(r, false, "Failed to send starter tx " << get_transaction_hash(tx_s));
         LOG_PRINT_GREEN("Starter transaction sent " << get_transaction_hash(tx_s), LOG_LEVEL_0);
         if(++count >= FIRST_N_TRANSFERS)
@@ -185,7 +185,7 @@ bool transactions_flow_test(std::string& working_folder,
   for(i = 0; i != transactions_count; i++)
   {
     uint64_t amount_to_tx = (amount_to_transfer - transfered_money) > transfer_size ? transfer_size: (amount_to_transfer - transfered_money);
-    while(w1.unlocked_balance() < amount_to_tx + DEFAULT_FEE)
+    while(w1.unlocked_balance() < amount_to_tx + MINIMUM_FEE)
     {
       misc_utils::sleep_no_w(1000);
       LOG_PRINT_L0("not enough money, waiting for cashback or mining");

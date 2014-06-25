@@ -75,27 +75,9 @@ namespace cryptonote
   {
     return m_blockchain_storage.get_blocks(start_offset, count, blocks);
   }  //-----------------------------------------------------------------------------------------------
-  bool core::get_transactions(const std::vector<crypto::hash>& txs_ids, std::list<transaction>& txs, std::list<crypto::hash>& missed_txs)
+  void core::get_transactions(const std::vector<crypto::hash>& txs_ids, std::list<transaction>& txs, std::list<crypto::hash>& missed_txs)
   {
-    return m_blockchain_storage.get_transactions(txs_ids, txs, missed_txs);
-  }
-  //-----------------------------------------------------------------------------------------------
-  bool core::get_transaction(const crypto::hash &h, transaction &tx)
-  {
-    std::vector<crypto::hash> ids;
-    ids.push_back(h);
-    std::list<transaction> ltx;
-    std::list<crypto::hash> missing;
-    if (m_blockchain_storage.get_transactions(ids, ltx, missing))
-    {
-      if (ltx.size() > 0)
-      {
-        tx = *ltx.begin();
-        return true;
-      }
-    }
-
-    return false;
+    m_blockchain_storage.get_transactions(txs_ids, txs, missed_txs);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_alternative_blocks(std::list<block>& blocks)
@@ -108,14 +90,14 @@ namespace cryptonote
     return m_blockchain_storage.get_alternative_blocks_count();
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::init(const boost::program_options::variables_map& vm)
+  bool core::init(const boost::program_options::variables_map& vm, bool load_existing)
   {
     bool r = handle_command_line(vm);
 
     r = m_mempool.init(m_config_folder);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize memory pool");
 
-    r = m_blockchain_storage.init(m_config_folder);
+    r = m_blockchain_storage.init(m_config_folder, load_existing);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
 
     r = m_miner.init(vm);
@@ -288,17 +270,17 @@ namespace cryptonote
   //  return m_blockchain_storage.get_outs(amount, pkeys);
   //}
   //-----------------------------------------------------------------------------------------------
-  bool core::add_new_tx(const transaction& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prefix_hash, size_t blob_size, tx_verification_context& tvc, bool keeped_by_block)
-  {
-    if(m_mempool.have_tx(tx_hash))
-    {
-      LOG_PRINT_L2("tx " << tx_hash << "already have transaction in tx_pool");
+  bool core::add_new_tx(const transaction& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prefix_hash, size_t blob_size, tx_verification_context& tvc, bool keeped_by_block) {
+    if (m_blockchain_storage.have_tx(tx_hash)) {
+      LOG_PRINT_L2("tx " << tx_hash << " is already in blockchain");
       return true;
     }
 
-    if(m_blockchain_storage.have_tx(tx_hash))
-    {
-      LOG_PRINT_L2("tx " << tx_hash << " already have transaction in blockchain");
+    // It's not very good to lock on m_mempool here, because it's very hard to understand the order of locking
+    // tx_memory_pool::m_transactions_lock, blockchain_storage::m_blockchain_lock, and core::m_incoming_tx_lock
+    CRITICAL_REGION_LOCAL(m_mempool);
+    if (m_mempool.have_tx(tx_hash)) {
+      LOG_PRINT_L2("tx " << tx_hash << " is already in transaction pool");
       return true;
     }
 
@@ -421,29 +403,32 @@ namespace cryptonote
     }
 
     m_blockchain_storage.add_new_block(b, bvc);
-    if (bvc.m_added_to_main_chain) {
-      cryptonote_connection_context exclude_context = boost::value_initialized<cryptonote_connection_context>();
-      NOTIFY_NEW_BLOCK::request arg = AUTO_VAL_INIT(arg);
-      arg.hop = 0;
-      arg.current_blockchain_height = m_blockchain_storage.get_current_blockchain_height();
-      std::list<crypto::hash> missed_txs;
-      std::list<transaction> txs;
-      m_blockchain_storage.get_transactions(b.tx_hashes, txs, missed_txs);
-      if (missed_txs.size() > 0 && m_blockchain_storage.get_block_id_by_height(get_block_height(b)) != get_block_hash(b)) {
-        LOG_PRINT_L0("Block found but reorganize happened after that, block will not be relayed");
-      } else {
-        CHECK_AND_ASSERT_MES(txs.size() == b.tx_hashes.size() && !missed_txs.size(), false, "cant find some transactions in found block:" << get_block_hash(b) << " txs.size()=" << txs.size() << ", b.tx_hashes.size()=" << b.tx_hashes.size() << ", missed_txs.size()" << missed_txs.size());
-        block_to_blob(b, arg.b.block);
-        BOOST_FOREACH(auto& tx, txs) arg.b.txs.push_back(t_serializable_object_to_blob(tx));
-        m_pprotocol->relay_block(arg, exclude_context);
-      }
-
-      if (update_miner_blocktemplate) {
-        update_miner_block_template();
-      }
+    if (bvc.m_added_to_main_chain && update_miner_blocktemplate) {
+      update_miner_block_template();
     }
 
     return true;
+  }
+
+  void core::notify_new_block(const block& b) {
+    cryptonote_connection_context exclude_context = boost::value_initialized<cryptonote_connection_context>();
+    NOTIFY_NEW_BLOCK::request arg = AUTO_VAL_INIT(arg);
+    arg.hop = 0;
+    arg.current_blockchain_height = m_blockchain_storage.get_current_blockchain_height();
+    std::list<crypto::hash> missed_txs;
+    std::list<transaction> txs;
+    m_blockchain_storage.get_transactions(b.tx_hashes, txs, missed_txs);
+    if (missed_txs.size() > 0 && m_blockchain_storage.get_block_id_by_height(get_block_height(b)) != get_block_hash(b)) {
+      LOG_PRINT_L0("Block found but reorganize happened after that, block will not be relayed");
+    } else {
+      if (txs.size() != b.tx_hashes.size() || missed_txs.size()) {
+        LOG_ERROR("cant find some transactions in found block:" << get_block_hash(b) << " txs.size()=" << txs.size() << ", b.tx_hashes.size()=" << b.tx_hashes.size() << ", missed_txs.size()" << missed_txs.size());
+        return;
+      }
+      block_to_blob(b, arg.b.block);
+      BOOST_FOREACH(auto& tx, txs) arg.b.txs.push_back(t_serializable_object_to_blob(tx));
+      m_pprotocol->relay_block(arg, exclude_context);
+    }
   }
   //-----------------------------------------------------------------------------------------------
   crypto::hash core::get_tail_id()
@@ -471,9 +456,9 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_pool_transactions(std::list<transaction>& txs)
+  void core::get_pool_transactions(std::list<transaction>& txs)
   {
-    return m_mempool.get_transactions(txs);
+    m_mempool.get_transactions(txs);
   }
   //-----------------------------------------------------------------------------------------------
   bool core::get_short_chain_history(std::list<crypto::hash>& ids)

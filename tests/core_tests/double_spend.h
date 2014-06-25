@@ -99,7 +99,7 @@ struct gen_double_spend_in_alt_chain_in_different_blocks : public gen_double_spe
 class gen_double_spend_in_different_chains : public test_chain_unit_base
 {
 public:
-  static const uint64_t send_amount = MK_COINS(17);
+  static const uint64_t send_amount = MK_COINS(31);
   static const size_t expected_blockchain_height = 4 + 2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
 
   gen_double_spend_in_different_chains();

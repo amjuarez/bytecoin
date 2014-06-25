@@ -175,12 +175,7 @@ namespace cryptonote
     }
     std::list<crypto::hash> missed_txs;
     std::list<transaction> txs;
-    bool r = m_core.get_transactions(vh, txs, missed_txs);
-    if(!r)
-    {
-      res.status = "Failed";
-      return true;
-    }
+    m_core.get_transactions(vh, txs, missed_txs);
 
     BOOST_FOREACH(auto& tx, txs)
     {
@@ -415,12 +410,17 @@ namespace cryptonote
     }
     cryptonote::block_verification_context bvc = AUTO_VAL_INIT(bvc);
     m_core.handle_incoming_block(blockblob, bvc);
-    if(!bvc.m_added_to_main_chain)
-    {
+    if (bvc.m_added_to_main_chain){
+      block b = AUTO_VAL_INIT(b);
+      parse_and_validate_block_from_blob(blockblob, b);
+
+      m_core.notify_new_block(b);
+    } else {
       error_resp.code = CORE_RPC_ERROR_CODE_BLOCK_NOT_ACCEPTED;
       error_resp.message = "Block not accepted";
       return false;
     }
+
     res.status = CORE_RPC_STATUS_OK;
     return true;
   }
