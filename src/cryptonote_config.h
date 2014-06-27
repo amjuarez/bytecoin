@@ -8,7 +8,7 @@
 #define CRYPTONOTE_MAX_BLOCK_SIZE                       500000000  // block header blob limit, never used!
 #define CRYPTONOTE_MAX_TX_SIZE                          1000000000
 #define CRYPTONOTE_PUBLIC_ADDRESS_TEXTBLOB_VER          0
-#define CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX         6 // addresses start with "2"
+#define CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX         72
 #define CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW            10
 #define CURRENT_TRANSACTION_VERSION                     1
 #define CURRENT_BLOCK_MAJOR_VERSION                     1
@@ -50,8 +50,8 @@
 #define CRYPTONOTE_PROTOCOL_HOP_RELAX_COUNT             3      //value of hop, after which we use only announce of new block
 
 
-#define P2P_DEFAULT_PORT                                8080
-#define RPC_DEFAULT_PORT                                8081
+#define P2P_DEFAULT_PORT                                29080
+#define RPC_DEFAULT_PORT                                29081
 #define COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT           1000
 
 #define P2P_LOCAL_WHITE_PEERLIST_LIMIT                  1000
@@ -70,7 +70,7 @@
 
 #define ALLOW_DEBUG_COMMANDS
 
-#define CRYPTONOTE_NAME                         "bytecoin"
+#define CRYPTONOTE_NAME                         "dashcoin"
 #define CRYPTONOTE_POOLDATA_FILENAME            "poolstate.bin"
 #define CRYPTONOTE_BLOCKCHAINDATA_FILENAME      "blockchain.bin"
 #define CRYPTONOTE_BLOCKCHAINDATA_TEMP_FILENAME "blockchain.bin.tmp"

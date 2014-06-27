@@ -47,4 +47,4 @@ add_dependencies(simplewallet version)
 
 set_property(TARGET common crypto cryptonote_core rpc wallet node_rpc_proxy PROPERTY FOLDER "libs")
 set_property(TARGET daemon simplewallet connectivity_tool simpleminer PROPERTY FOLDER "prog")
-set_property(TARGET daemon PROPERTY OUTPUT_NAME "bytecoind")
+set_property(TARGET daemon PROPERTY OUTPUT_NAME "dashcoind")
