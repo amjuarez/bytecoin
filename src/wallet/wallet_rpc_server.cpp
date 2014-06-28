@@ -73,13 +73,10 @@ namespace tools
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res, epee::json_rpc::error& er, connection_context& cntx)
   {
-
     std::vector<cryptonote::tx_destination_entry> dsts;
-    for (auto it = req.destinations.begin(); it != req.destinations.end(); it++)
-    {
+    for (auto it = req.destinations.begin(); it != req.destinations.end(); it++) {
       cryptonote::tx_destination_entry de;
-      if(!get_account_address_from_str(de.addr, it->address))
-      {
+      if (!get_account_address_from_str(de.addr, it->address)) {
         er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + it->address;
         return false;
@@ -87,27 +84,41 @@ namespace tools
       de.amount = it->amount;
       dsts.push_back(de);
     }
-    try
-    {
+
+    std::vector<uint8_t> extra;
+    if (!req.payment_id.empty()) {
+      std::string payment_id_str = req.payment_id;
+
+      crypto::hash payment_id;
+      if (!wallet2::parse_payment_id(payment_id_str, payment_id)) {
+        er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
+        er.message = "Payment id has invalid format: \"" + payment_id_str + "\", expected 64-character string";
+        return false;
+      }
+
+      std::string extra_nonce;
+      cryptonote::set_payment_id_to_tx_extra_nonce(extra_nonce, payment_id);
+      if (!cryptonote::add_extra_nonce_to_tx_extra(extra, extra_nonce)) {
+        er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
+        er.message = "Something went wrong with payment_id. Please check its format: \"" + payment_id_str + "\", expected 64-character string";
+        return false;
+      }
+    }
+
+    try {
       cryptonote::transaction tx;
-      m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, std::vector<uint8_t>(), tx);
+      m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, extra, tx);
       res.tx_hash = boost::lexical_cast<std::string>(cryptonote::get_transaction_hash(tx));
       return true;
-    }
-    catch (const tools::error::daemon_busy& e)
-    {
+    } catch (const tools::error::daemon_busy& e) {
       er.code = WALLET_RPC_ERROR_CODE_DAEMON_IS_BUSY;
       er.message = e.what();
       return false;
-    }
-    catch (const std::exception& e)
-    {
+    } catch (const std::exception& e) {
       er.code = WALLET_RPC_ERROR_CODE_GENERIC_TRANSFER_ERROR;
       er.message = e.what();
       return false;
-    }
-    catch (...)
-    {
+    } catch (...) {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = "WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR";
       return false;

@@ -80,70 +80,76 @@ uint64_t blockchain_storage::get_current_blockchain_height() {
   return m_blocks.size();
 }
 
-bool blockchain_storage::init(const std::string& config_folder) {
+bool blockchain_storage::init(const std::string& config_folder, bool load_existing) {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   if (!config_folder.empty() && !tools::create_directories_if_necessary(config_folder)) {
     LOG_ERROR("Failed to create data directory: " << m_config_folder);
     return false;
   }
-  
+
   m_config_folder = config_folder;
-  LOG_PRINT_L0("Loading blockchain...");
+
   if (!m_blocks.open(appendPath(config_folder, CRYPTONOTE_BLOCKS_FILENAME), appendPath(config_folder, CRYPTONOTE_BLOCKINDEXES_FILENAME), 1024)) {
     return false;
   }
 
-  if (m_blocks.empty()) {
-    LOG_PRINT_L0("Can't load blockchain storage from file.");
-  } else {
-    bool rebuild = true;
-    try {
-      std::ifstream file(appendPath(config_folder, CRYPTONOTE_BLOCKSCACHE_FILENAME), std::ios::binary);
-      boost::archive::binary_iarchive archive(file);
-      crypto::hash lastBlockHash;
-      archive & lastBlockHash;
-      if (lastBlockHash == get_block_hash(m_blocks.back().bl)) {
-        archive & m_blockMap;
-        archive & m_transactionMap;
-        archive & m_spent_keys;
-        archive & m_outputs;
-        rebuild = false;
-      }
-    } catch (std::exception&) {
-    }
+  if (load_existing) {
+    LOG_PRINT_L0("Loading blockchain...");
 
-    if (rebuild) {
-      LOG_PRINT_L0("No actual blockchain cache found, rebuilding internal structures...");
-      std::chrono::steady_clock::time_point timePoint = std::chrono::steady_clock::now();
-      for (uint32_t b = 0; b < m_blocks.size(); ++b) {
-        const Block& block = m_blocks[b];
-        crypto::hash blockHash = get_block_hash(block.bl);
-        m_blockMap.insert(std::make_pair(blockHash, b));
-        for (uint16_t t = 0; t < block.transactions.size(); ++t) {
-          const Transaction& transaction = block.transactions[t];
-          crypto::hash transactionHash = get_transaction_hash(transaction.tx);
-          TransactionIndex transactionIndex = { b, t };
-          m_transactionMap.insert(std::make_pair(transactionHash, transactionIndex));
-          for (auto& i : transaction.tx.vin) {
-            if (i.type() == typeid(txin_to_key)) {
-              m_spent_keys.insert(::boost::get<txin_to_key>(i).k_image);
+    if (m_blocks.empty()) {
+      LOG_PRINT_L0("Can't load blockchain storage from file.");
+    } else {
+      bool rebuild = true;
+      try {
+        std::ifstream file(appendPath(config_folder, CRYPTONOTE_BLOCKSCACHE_FILENAME), std::ios::binary);
+        boost::archive::binary_iarchive archive(file);
+        crypto::hash lastBlockHash;
+        archive & lastBlockHash;
+        if (lastBlockHash == get_block_hash(m_blocks.back().bl)) {
+          archive & m_blockMap;
+          archive & m_transactionMap;
+          archive & m_spent_keys;
+          archive & m_outputs;
+          rebuild = false;
+        }
+      } catch (std::exception&) {
+      }
+
+      if (rebuild) {
+        LOG_PRINT_L0("No actual blockchain cache found, rebuilding internal structures...");
+        std::chrono::steady_clock::time_point timePoint = std::chrono::steady_clock::now();
+        for (uint32_t b = 0; b < m_blocks.size(); ++b) {
+          const Block& block = m_blocks[b];
+          crypto::hash blockHash = get_block_hash(block.bl);
+          m_blockMap.insert(std::make_pair(blockHash, b));
+          for (uint16_t t = 0; t < block.transactions.size(); ++t) {
+            const Transaction& transaction = block.transactions[t];
+            crypto::hash transactionHash = get_transaction_hash(transaction.tx);
+            TransactionIndex transactionIndex = { b, t };
+            m_transactionMap.insert(std::make_pair(transactionHash, transactionIndex));
+            for (auto& i : transaction.tx.vin) {
+              if (i.type() == typeid(txin_to_key)) {
+                m_spent_keys.insert(::boost::get<txin_to_key>(i).k_image);
+              }
+            }
+
+            for (uint16_t o = 0; o < transaction.tx.vout.size(); ++o) {
+              m_outputs[transaction.tx.vout[o].amount].push_back(std::make_pair<>(transactionIndex, o));
             }
           }
-
-          for (uint16_t o = 0; o < transaction.tx.vout.size(); ++o) {
-            m_outputs[transaction.tx.vout[o].amount].push_back(std::make_pair<>(transactionIndex, o));
-          }
         }
-      }
 
-      std::chrono::duration<double> duration = std::chrono::steady_clock::now() - timePoint;
-      LOG_PRINT_L0("Rebuilding internal structures took: " << duration.count());
+        std::chrono::duration<double> duration = std::chrono::steady_clock::now() - timePoint;
+        LOG_PRINT_L0("Rebuilding internal structures took: " << duration.count());
+      }
     }
+  } else {
+    m_blocks.clear();
   }
 
   if (m_blocks.empty()) {
     LOG_PRINT_L0("Blockchain not loaded, generating genesis block.");
-    block bl = boost::value_initialized<block>();
+    block bl = ::boost::value_initialized<block>();
     block_verification_context bvc = boost::value_initialized<block_verification_context>();
     generate_genesis_block(bl);
     add_new_block(bl, bvc);
@@ -684,7 +690,7 @@ bool blockchain_storage::handle_alternative_block(const block& b, const crypto::
     difficulty_type current_diff = get_next_difficulty_for_alternative_chain(alt_chain, bei);
     CHECK_AND_ASSERT_MES(current_diff, false, "!!!!!!! DIFFICULTY OVERHEAD !!!!!!!");
     crypto::hash proof_of_work = null_hash;
-    get_block_longhash(bei.bl, proof_of_work, bei.height);
+    get_block_longhash(m_cn_context, bei.bl, proof_of_work, bei.height);
     if (!check_hash(proof_of_work, current_diff)) {
       LOG_PRINT_RED_L0("Block with id: " << id
         << ENDL << " for alternative chain, have not enough proof of work: " << proof_of_work
@@ -1305,7 +1311,7 @@ bool blockchain_storage::pushBlock(const block& blockData, block_verification_co
       return false;
     }
   } else {
-    proof_of_work = get_block_longhash(blockData, m_blocks.size());
+    proof_of_work = get_block_longhash(m_cn_context, blockData, m_blocks.size());
     if (!check_hash(proof_of_work, currentDifficulty)) {
       LOG_PRINT_L0("Block " << blockHash << ", has too weak proof of work: " << proof_of_work << ", expected difficulty: " << currentDifficulty);
       bvc.m_verifivation_failed = true;

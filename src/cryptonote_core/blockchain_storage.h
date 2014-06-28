@@ -17,8 +17,8 @@ namespace cryptonote {
     blockchain_storage(tx_memory_pool& tx_pool):m_tx_pool(tx_pool), m_current_block_cumul_sz_limit(0), m_is_in_checkpoint_zone(false), m_is_blockchain_storing(false)
     {};
 
-    bool init() { return init(tools::get_default_data_dir()); }
-    bool init(const std::string& config_folder);
+    bool init() { return init(tools::get_default_data_dir(), true); }
+    bool init(const std::string& config_folder, bool load_existing);
     bool deinit();
 
     void set_checkpoints(checkpoints&& chk_pts) { m_checkpoints = chk_pts; }
@@ -28,8 +28,6 @@ namespace cryptonote {
     size_t get_alternative_blocks_count();
     crypto::hash get_block_id_by_height(uint64_t height);
     bool get_block_by_hash(const crypto::hash &h, block &blk);
-
-    template<class archive_t> void serialize(archive_t & ar, const unsigned int version);
 
     bool have_tx(const crypto::hash &id);
     bool have_tx_keyimges_as_spent(const transaction &tx);
@@ -75,24 +73,17 @@ namespace cryptonote {
     }
 
     template<class t_ids_container, class t_tx_container, class t_missed_container>
-    bool get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs) {
+    void get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs) {
       CRITICAL_REGION_LOCAL(m_blockchain_lock);
 
       for (const auto& tx_id : txs_ids) {
         auto it = m_transactionMap.find(tx_id);
         if (it == m_transactionMap.end()) {
-          transaction tx;
-          if (!m_tx_pool.get_transaction(tx_id, tx)) {
-            missed_txs.push_back(tx_id);
-          } else {
-            txs.push_back(tx);
-          }
+          missed_txs.push_back(tx_id);
         } else {
           txs.push_back(transactionByIndex(it->second).tx);
         }
       }
-
-      return true;
     }
 
     //debug functions
@@ -142,6 +133,7 @@ namespace cryptonote {
 
     tx_memory_pool& m_tx_pool;
     epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
+    crypto::cn_context m_cn_context;
 
     key_images_container m_spent_keys;
     size_t m_current_block_cumul_sz_limit;

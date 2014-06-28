@@ -16,23 +16,30 @@ using namespace std;
 using namespace crypto;
 typedef crypto::hash chash;
 
+cn_context *context;
+
+extern "C" {
+
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4297)
-extern "C" {
   static void hash_tree(const void *data, size_t length, char *hash) {
     if ((length & 31) != 0) {
       throw ios_base::failure("Invalid input length for tree_hash");
     }
     tree_hash((const char (*)[32]) data, length >> 5, hash);
   }
-}
 POP_WARNINGS
+
+  static void slow_hash(const void *data, size_t length, char *hash) {
+    cn_slow_hash(*context, data, length, *reinterpret_cast<chash *>(hash));
+  }
+}
 
 extern "C" typedef void hash_f(const void *, size_t, char *);
 struct hash_func {
   const string name;
   hash_f &f;
-} hashes[] = {{"fast", cn_fast_hash}, {"slow", cn_slow_hash}, {"tree", hash_tree},
+} hashes[] = {{"fast", cn_fast_hash}, {"slow", slow_hash}, {"tree", hash_tree},
   {"extra-blake", hash_extra_blake}, {"extra-groestl", hash_extra_groestl},
   {"extra-jh", hash_extra_jh}, {"extra-skein", hash_extra_skein}};
 
@@ -57,6 +64,9 @@ int main(int argc, char *argv[]) {
       f = &hf->f;
       break;
     }
+  }
+  if (f == slow_hash) {
+    context = new cn_context();
   }
   input.open(argv[2], ios_base::in);
   for (;;) {

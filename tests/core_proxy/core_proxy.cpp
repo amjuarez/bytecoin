@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
 
 #ifdef WIN32
   _CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
-#endif 
+#endif
 
   TRY_ENTRY();
 
@@ -51,8 +51,8 @@ int main(int argc, char* argv[])
   //set up logging options
   log_space::get_set_log_detalisation_level(true, LOG_LEVEL_2);
   //log_space::log_singletone::add_logger(LOGGER_CONSOLE, NULL, NULL);
-  log_space::log_singletone::add_logger(LOGGER_FILE, 
-    log_space::log_singletone::get_default_log_file().c_str(), 
+  log_space::log_singletone::add_logger(LOGGER_FILE,
+    log_space::log_singletone::get_default_log_file().c_str(),
     log_space::log_singletone::get_default_log_folder().c_str());
 
 
@@ -98,14 +98,14 @@ int main(int argc, char* argv[])
   //initialize core here
   LOG_PRINT_L0("Initializing proxy core...");
   res = pr_core.init(vm);
-  CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core");  
+  CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core");
   LOG_PRINT_L0("Core initialized OK");
 
   LOG_PRINT_L0("Starting p2p net loop...");
   p2psrv.run();
   LOG_PRINT_L0("p2p net loop stopped");
 
-  //deinitialize components  
+  //deinitialize components
   LOG_PRINT_L0("Deinitializing core...");
   pr_core.deinit();
   LOG_PRINT_L0("Deinitializing cryptonote_protocol...");
@@ -172,7 +172,7 @@ bool tests::proxy_core::handle_incoming_block(const cryptonote::blobdata& block_
     crypto::hash lh;
     cout << "BLOCK" << endl << endl;
     cout << (h = get_block_hash(b)) << endl;
-    cout << (lh = get_block_longhash(b, 0)) << endl;
+    cout << (lh = get_block_longhash(m_cn_context, b, 0)) << endl;
     cout << get_transaction_hash(b.miner_tx) << endl;
     cout << ::get_object_blobsize(b.miner_tx) << endl;
     //cout << string_tools::buff_to_hex_nodelimer(block_blob) << endl;
@@ -200,7 +200,7 @@ bool tests::proxy_core::get_blockchain_top(uint64_t& height, crypto::hash& top_i
 bool tests::proxy_core::init(const boost::program_options::variables_map& /*vm*/) {
     generate_genesis_block(m_genesis);
     crypto::hash h = get_block_hash(m_genesis);
-    add_block(h, get_block_longhash(m_genesis, 0), m_genesis, block_to_blob(m_genesis));
+    add_block(h, get_block_longhash(m_cn_context, m_genesis, 0), m_genesis, block_to_blob(m_genesis));
     return true;
 }
 
