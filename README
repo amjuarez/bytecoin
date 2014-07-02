@@ -30,3 +30,10 @@ cmake -G "Visual Studio 11 Win64" ..
 
 And then do Build.
 Good luck!
+
+Startning HTML wallet.
+
+1. First run your ducknoted, wait until it sync...
+2. Than run your simplewallet in JSON-RPC enabled mode on 42082 port: ./simplewallet --wallet-file=WALLETFILE --password=PASSWORD --rpc-bind-port=42082
+3. Wait until it sync
+4. Open wallet.html page in browser and be happy with GUI
