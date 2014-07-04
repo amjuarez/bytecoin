@@ -20,7 +20,7 @@
 #define MONEY_SUPPLY                                    UINT64_C(858986905600000000)
 // COIN - number of smallest units in one coin
 #define COIN                                            ((uint64_t)100000000) // pow(10, 8)
-#define DEFAULT_FEE                                     ((uint64_t)1000000) // pow(10, 6)
+#define DEFAULT_FEE                                     ((uint64_t)10000000) // pow(10, 7)
 
 #define START_BLOCK_REWARD                              (UINT64_C(320000) * COIN)
 #define MIN_BLOCK_REWARD                                (UINT64_C(150) * COIN)
