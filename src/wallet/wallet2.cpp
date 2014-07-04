@@ -12,6 +12,7 @@ using namespace epee;
 
 #include "wallet2.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_protocol/blobdatatype.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "misc_language.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
@@ -463,6 +464,20 @@ void wallet2::wallet_exists(const std::string& file_path, bool& keys_file_exists
   boost::system::error_code ignore;
   keys_file_exists = boost::filesystem::exists(keys_file, ignore);
   wallet_file_exists = boost::filesystem::exists(wallet_file, ignore);
+}
+//----------------------------------------------------------------------------------------------------
+bool wallet2::parse_payment_id(const std::string& payment_id_str, crypto::hash& payment_id) {
+  cryptonote::blobdata payment_id_data;
+  if (!epee::string_tools::parse_hexstr_to_binbuff(payment_id_str, payment_id_data)) {
+    return false;
+  }
+
+  if (sizeof(crypto::hash) != payment_id_data.size()) {
+    return false;
+  }
+
+  payment_id = *reinterpret_cast<const crypto::hash*>(payment_id_data.data());
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::prepare_file_names(const std::string& file_path)

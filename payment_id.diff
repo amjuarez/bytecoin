@@ -1,0 +1,180 @@
+diff --git a/src/simplewallet/simplewallet.cpp b/src/simplewallet/simplewallet.cpp
+index ea3887b..4db01c7 100644
+--- a/src/simplewallet/simplewallet.cpp
++++ b/src/simplewallet/simplewallet.cpp
+@@ -64,19 +64,6 @@ namespace
+     return err;
+   }
+ 
+-  bool parse_payment_id(const std::string& payment_id_str, crypto::hash& payment_id)
+-  {
+-    blobdata payment_id_data;
+-    if(!string_tools::parse_hexstr_to_binbuff(payment_id_str, payment_id_data))
+-      return false;
+-
+-    if(sizeof(crypto::hash) != payment_id_data.size())
+-      return false;
+-
+-    payment_id = *reinterpret_cast<const crypto::hash*>(payment_id_data.data());
+-    return true;
+-  }
+-
+   class message_writer
+   {
+   public:
+@@ -663,7 +650,7 @@ bool simple_wallet::show_payments(const std::vector<std::string> &args)
+   for(std::string arg : args)
+   {
+     crypto::hash payment_id;
+-    if(parse_payment_id(arg, payment_id))
++    if (tools::wallet2::parse_payment_id(arg, payment_id))
+     {
+       std::list<tools::wallet2::payment_details> payments;
+       m_wallet->get_payments(payment_id, payments);
+@@ -746,7 +733,7 @@ bool simple_wallet::transfer(const std::vector<std::string> &args_)
+     local_args.pop_back();
+ 
+     crypto::hash payment_id;
+-    bool r = parse_payment_id(payment_id_str, payment_id);
++    bool r = tools::wallet2::parse_payment_id(payment_id_str, payment_id);
+     if(r)
+     {
+       std::string extra_nonce;
+diff --git a/src/wallet/wallet2.cpp b/src/wallet/wallet2.cpp
+index dcf5d31..a899661 100644
+--- a/src/wallet/wallet2.cpp
++++ b/src/wallet/wallet2.cpp
+@@ -12,6 +12,7 @@ using namespace epee;
+ 
+ #include "wallet2.h"
+ #include "cryptonote_core/cryptonote_format_utils.h"
++#include "cryptonote_protocol/blobdatatype.h"
+ #include "rpc/core_rpc_server_commands_defs.h"
+ #include "misc_language.h"
+ #include "cryptonote_core/cryptonote_basic_impl.h"
+@@ -465,6 +466,20 @@ void wallet2::wallet_exists(const std::string& file_path, bool& keys_file_exists
+   wallet_file_exists = boost::filesystem::exists(wallet_file, ignore);
+ }
+ //----------------------------------------------------------------------------------------------------
++bool wallet2::parse_payment_id(const std::string& payment_id_str, crypto::hash& payment_id) {
++  cryptonote::blobdata payment_id_data;
++  if (!epee::string_tools::parse_hexstr_to_binbuff(payment_id_str, payment_id_data)) {
++    return false;
++  }
++
++  if (sizeof(crypto::hash) != payment_id_data.size()) {
++    return false;
++  }
++
++  payment_id = *reinterpret_cast<const crypto::hash*>(payment_id_data.data());
++  return true;
++}
++//----------------------------------------------------------------------------------------------------
+ bool wallet2::prepare_file_names(const std::string& file_path)
+ {
+   do_prepare_file_names(file_path, m_keys_file, m_wallet_file);
+diff --git a/src/wallet/wallet2.h b/src/wallet/wallet2.h
+index d2016f6..a2c961e 100644
+--- a/src/wallet/wallet2.h
++++ b/src/wallet/wallet2.h
+@@ -145,6 +145,7 @@ namespace tools
+     }
+ 
+     static void wallet_exists(const std::string& file_path, bool& keys_file_exists, bool& wallet_file_exists);
++    static bool parse_payment_id(const std::string& payment_id_str, crypto::hash& payment_id);
+ 
+   private:
+     bool store_keys(const std::string& keys_file_name, const std::string& password);
+diff --git a/src/wallet/wallet_rpc_server.cpp b/src/wallet/wallet_rpc_server.cpp
+index f1766c3..7c4c7e3 100644
+--- a/src/wallet/wallet_rpc_server.cpp
++++ b/src/wallet/wallet_rpc_server.cpp
+@@ -73,13 +73,10 @@ namespace tools
+   //------------------------------------------------------------------------------------------------------------------------------
+   bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res, epee::json_rpc::error& er, connection_context& cntx)
+   {
+-
+     std::vector<cryptonote::tx_destination_entry> dsts;
+-    for (auto it = req.destinations.begin(); it != req.destinations.end(); it++)
+-    {
++    for (auto it = req.destinations.begin(); it != req.destinations.end(); it++) {
+       cryptonote::tx_destination_entry de;
+-      if(!get_account_address_from_str(de.addr, it->address))
+-      {
++      if (!get_account_address_from_str(de.addr, it->address)) {
+         er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
+         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + it->address;
+         return false;
+@@ -87,27 +84,41 @@ namespace tools
+       de.amount = it->amount;
+       dsts.push_back(de);
+     }
+-    try
+-    {
++
++    std::vector<uint8_t> extra;
++    if (!req.payment_id.empty()) {
++      std::string payment_id_str = req.payment_id;
++
++      crypto::hash payment_id;
++      if (!wallet2::parse_payment_id(payment_id_str, payment_id)) {
++        er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
++        er.message = "Payment id has invalid format: \"" + payment_id_str + "\", expected 64-character string";
++        return false;
++      }
++
++      std::string extra_nonce;
++      cryptonote::set_payment_id_to_tx_extra_nonce(extra_nonce, payment_id);
++      if (!cryptonote::add_extra_nonce_to_tx_extra(extra, extra_nonce)) {
++        er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
++        er.message = "Something went wrong with payment_id. Please check its format: \"" + payment_id_str + "\", expected 64-character string";
++        return false;
++      }
++    }
++
++    try {
+       cryptonote::transaction tx;
+-      m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, std::vector<uint8_t>(), tx);
++      m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, extra, tx);
+       res.tx_hash = boost::lexical_cast<std::string>(cryptonote::get_transaction_hash(tx));
+       return true;
+-    }
+-    catch (const tools::error::daemon_busy& e)
+-    {
++    } catch (const tools::error::daemon_busy& e) {
+       er.code = WALLET_RPC_ERROR_CODE_DAEMON_IS_BUSY;
+       er.message = e.what();
+       return false;
+-    }
+-    catch (const std::exception& e)
+-    {
++    } catch (const std::exception& e) {
+       er.code = WALLET_RPC_ERROR_CODE_GENERIC_TRANSFER_ERROR;
+       er.message = e.what();
+       return false;
+-    }
+-    catch (...)
+-    {
++    } catch (...) {
+       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+       er.message = "WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR";
+       return false;
+diff --git a/src/wallet/wallet_rpc_server_commans_defs.h b/src/wallet/wallet_rpc_server_commans_defs.h
+index b99d92c..bd6f282 100644
+--- a/src/wallet/wallet_rpc_server_commans_defs.h
++++ b/src/wallet/wallet_rpc_server_commans_defs.h
+@@ -52,12 +52,14 @@ namespace wallet_rpc
+       uint64_t fee;
+       uint64_t mixin;
+       uint64_t unlock_time;
++      std::string payment_id;
+ 
+       BEGIN_KV_SERIALIZE_MAP()
+         KV_SERIALIZE(destinations)
+         KV_SERIALIZE(fee)
+         KV_SERIALIZE(mixin)
+         KV_SERIALIZE(unlock_time)
++        KV_SERIALIZE(payment_id)
+       END_KV_SERIALIZE_MAP()
+     };
+ 
