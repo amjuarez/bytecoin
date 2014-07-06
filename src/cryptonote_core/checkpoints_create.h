@@ -7,7 +7,8 @@
 #include "checkpoints.h"
 #include "misc_log_ex.h"
 
-#define
+#define ADD_CHECKPOINT(h, hash)  CHECK_AND_ASSERT(checkpoints.add_checkpoint(h,  hash), false);
+
 namespace cryptonote {
   inline bool create_checkpoints(cryptonote::checkpoints& checkpoints)
   {
