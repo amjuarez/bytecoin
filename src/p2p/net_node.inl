@@ -194,6 +194,9 @@ namespace nodetool
   bool node_server<t_payload_net_handler>::init(const boost::program_options::variables_map& vm)
   {
     ADD_HARDCODED_SEED_NODE("162.243.247.45:29080");
+    ADD_HARDCODED_SEED_NODE("146.185.191.90:29080");
+    ADD_HARDCODED_SEED_NODE("104.131.132.129:29080");
+    ADD_HARDCODED_SEED_NODE("128.199.146.243:29080");
 
     bool res = handle_command_line(vm);
     CHECK_AND_ASSERT_MES(res, false, "Failed to handle command line");
