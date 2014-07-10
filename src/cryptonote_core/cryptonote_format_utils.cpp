@@ -617,7 +617,7 @@ namespace cryptonote
     return p;
   }
   //---------------------------------------------------------------
-  bool generate_genesis_block(block& bl)
+  bool generateGenesisBlock(block& bl)
   {
     //genesis block
     bl = boost::value_initialized<block>();
@@ -630,7 +630,7 @@ namespace cryptonote
     construct_miner_tx(0, 0, 0, 0, 0, ac, bl.miner_tx); // zero fee in genesis
     blobdata txb = tx_to_blob(bl.miner_tx);
     std::string hex_tx_represent = string_tools::buff_to_hex_nodelimer(txb);
-    std::cout << "Genesis coinbase tx hex: " << hex_to_represent << std::endl;
+    std::cout << "Genesis coinbase tx hex: " << hex_tx_represent << std::endl;
     */
 
     //hard code coinbase tx in genesis block, because "true" generating tx use random, but genesis should be always the same
@@ -648,6 +648,16 @@ namespace cryptonote
     //miner::find_nonce_for_given_block(bl, 1, 0);
     return true;
   }
+
+  bool generateTestnetGenesisBlock(cryptonote::block& b) {
+    if (!generateGenesisBlock(b)) {
+      return false;
+    }
+
+    b.nonce += 1;
+    return true;
+  }
+
   //---------------------------------------------------------------
   bool get_block_longhash(crypto::cn_context &context, const block& b, crypto::hash& res, uint64_t height)
   {

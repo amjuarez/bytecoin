@@ -53,9 +53,9 @@ namespace tools
 
   class wallet2
   {
-    wallet2(const wallet2&) : m_run(true), m_callback(0) {};
+    wallet2(const wallet2&) : m_run(true), m_callback(0), m_testnet(false) {};
   public:
-    wallet2() : m_run(true), m_callback(0) {};
+    wallet2(bool testnet = false) : m_run(true), m_callback(0), m_testnet(testnet) {};
     struct transfer_details
     {
       uint64_t m_block_height;
@@ -162,6 +162,8 @@ namespace tools
     bool prepare_file_names(const std::string& file_path);
     void process_unconfirmed(const cryptonote::transaction& tx);
     void add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t change_amount);
+    void generateGenesis(cryptonote::block& b);
+    void checkGenesis(const crypto::hash& genesis_hash); //throws
 
     cryptonote::account_base m_account;
     std::string m_daemon_address;
@@ -181,6 +183,7 @@ namespace tools
     std::atomic<bool> m_run;
 
     i_wallet2_callback* m_callback;
+    bool m_testnet;
   };
 }
 BOOST_CLASS_VERSION(tools::wallet2, 7)

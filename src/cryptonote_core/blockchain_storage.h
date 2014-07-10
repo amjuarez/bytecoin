@@ -18,7 +18,7 @@ namespace cryptonote {
     {};
 
     bool init() { return init(tools::get_default_data_dir(), true); }
-    bool init(const std::string& config_folder, bool load_existing);
+    bool init(const std::string& config_folder, bool load_existing, bool testnet = false);
     bool deinit();
 
     void set_checkpoints(checkpoints&& chk_pts) { m_checkpoints = chk_pts; }
@@ -182,6 +182,7 @@ namespace cryptonote {
     bool pushTransaction(Block& block, const crypto::hash& transactionHash, TransactionIndex transactionIndex);
     void popTransaction(const transaction& transaction, const crypto::hash& transactionHash);
     void popTransactions(const Block& block, const crypto::hash& minerTransactionHash);
+    bool storeGenesisBlock(bool testnet);
   };
 
 

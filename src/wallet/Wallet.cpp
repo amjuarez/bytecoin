@@ -106,7 +106,7 @@ void Wallet::initAndGenerate(const std::string& password) {
 
 void Wallet::storeGenesisBlock() {
   cryptonote::block b;
-  cryptonote::generate_genesis_block(b);
+  cryptonote::generateGenesisBlock(b);
   m_blockchain.push_back(get_block_hash(b));
 }
 

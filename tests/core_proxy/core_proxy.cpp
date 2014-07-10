@@ -86,7 +86,7 @@ int main(int argc, char* argv[])
   //initialize objects
 
   LOG_PRINT_L0("Initializing p2p server...");
-  bool res = p2psrv.init(vm);
+  bool res = p2psrv.init(vm, false);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize p2p server.");
   LOG_PRINT_L0("P2p server initialized OK");
 
@@ -198,7 +198,7 @@ bool tests::proxy_core::get_blockchain_top(uint64_t& height, crypto::hash& top_i
 }
 
 bool tests::proxy_core::init(const boost::program_options::variables_map& /*vm*/) {
-    generate_genesis_block(m_genesis);
+    generateGenesisBlock(m_genesis);
     crypto::hash h = get_block_hash(m_genesis);
     add_block(h, get_block_longhash(m_cn_context, m_genesis, 0), m_genesis, block_to_blob(m_genesis));
     return true;

@@ -373,9 +373,6 @@ bool wallet2::clear()
 {
   m_blockchain.clear();
   m_transfers.clear();
-  cryptonote::block b;
-  cryptonote::generate_genesis_block(b);
-  m_blockchain.push_back(get_block_hash(b));
   m_local_bc_height = 1;
   return true;
 }
@@ -455,6 +452,10 @@ void wallet2::generate(const std::string& wallet_, const std::string& password)
   r = file_io_utils::save_string_to_file(m_wallet_file + ".address.txt", m_account.get_public_address_str());
   if(!r) LOG_PRINT_RED_L0("String with address text not saved");
 
+  cryptonote::block b;
+  generateGenesis(b);
+  m_blockchain.push_back(get_block_hash(b));
+
   store();
 }
 //----------------------------------------------------------------------------------------------------
@@ -527,13 +528,23 @@ void wallet2::load(const std::string& wallet_, const std::string& password)
     m_account_public_address.m_view_public_key  != m_account.get_keys().m_account_address.m_view_public_key,
     error::wallet_files_doesnt_correspond, m_keys_file, m_wallet_file);
 
-  if(m_blockchain.empty())
-  {
-    cryptonote::block b;
-    cryptonote::generate_genesis_block(b);
-    m_blockchain.push_back(get_block_hash(b));
+  cryptonote::block genesis;
+  generateGenesis(genesis);
+  crypto::hash genesisHash = get_block_hash(genesis);
+
+  if (m_blockchain.empty()) {
+    m_blockchain.push_back(genesisHash);
+  } else {
+    checkGenesis(genesisHash);
   }
+
   m_local_bc_height = m_blockchain.size();
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::checkGenesis(const crypto::hash& genesisHash) {
+  std::string what("Genesis block missmatch. You probably use wallet without testnet flag with blockchain from test network or vice versa");
+
+  THROW_WALLET_EXCEPTION_IF(genesisHash != m_blockchain[0], error::wallet_internal_error, what);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::store()
@@ -688,6 +699,14 @@ void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts
 {
   cryptonote::transaction tx;
   transfer(dsts, fake_outputs_count, unlock_time, fee, extra, tx);
+}
+//----------------------------------------------------------------------------------------------------
+void wallet2::generateGenesis(cryptonote::block& b) {
+  if (m_testnet) {
+    cryptonote::generateTestnetGenesisBlock(b);
+  } else {
+    cryptonote::generateGenesisBlock(b);
+  }
 }
 //----------------------------------------------------------------------------------------------------
 }

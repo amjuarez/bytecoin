@@ -40,6 +40,7 @@ namespace
   const command_line::arg_descriptor<std::string> arg_password = {"password", "Wallet password", "", true};
   const command_line::arg_descriptor<int> arg_daemon_port = {"daemon-port", "Use daemon instance at port <arg> instead of 8081", 0};
   const command_line::arg_descriptor<uint32_t> arg_log_level = {"set_log", "", 0, true};
+  const command_line::arg_descriptor<bool> arg_testnet = {"testnet", "Used to deploy test nets. The daemon must be launched with --testnet flag", false};
 
   const command_line::arg_descriptor< std::vector<std::string> > arg_command = {"command", ""};
 
@@ -266,6 +267,8 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
   if (m_daemon_address.empty())
     m_daemon_address = std::string("http://") + m_daemon_host + ":" + std::to_string(m_daemon_port);
 
+  bool testnet = command_line::get_arg(vm, arg_testnet);
+
   tools::password_container pwd_container;
   if (command_line::has_arg(vm, arg_password))
   {
@@ -283,12 +286,12 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
 
   if (!m_generate_new.empty())
   {
-    bool r = new_wallet(m_generate_new, pwd_container.password());
+    bool r = new_wallet(m_generate_new, pwd_container.password(), testnet);
     CHECK_AND_ASSERT_MES(r, false, "account creation failed");
   }
   else
   {
-    bool r = open_wallet(m_wallet_file, pwd_container.password());
+    bool r = open_wallet(m_wallet_file, pwd_container.password(), testnet);
     CHECK_AND_ASSERT_MES(r, false, "could not open account");
   }
 
@@ -324,11 +327,11 @@ bool simple_wallet::try_connect_to_daemon()
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::new_wallet(const string &wallet_file, const std::string& password)
+bool simple_wallet::new_wallet(const string &wallet_file, const std::string& password, bool testnet)
 {
   m_wallet_file = wallet_file;
 
-  m_wallet.reset(new tools::wallet2());
+  m_wallet.reset(new tools::wallet2(testnet));
   m_wallet->callback(this);
   try
   {
@@ -355,10 +358,10 @@ bool simple_wallet::new_wallet(const string &wallet_file, const std::string& pas
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::open_wallet(const string &wallet_file, const std::string& password)
+bool simple_wallet::open_wallet(const string &wallet_file, const std::string& password, bool testnet)
 {
   m_wallet_file = wallet_file;
-  m_wallet.reset(new tools::wallet2());
+  m_wallet.reset(new tools::wallet2(testnet));
   m_wallet->callback(this);
 
   try
@@ -899,6 +902,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_params, arg_daemon_port);
   command_line::add_arg(desc_params, arg_command);
   command_line::add_arg(desc_params, arg_log_level);
+  command_line::add_arg(desc_params, arg_testnet);
   tools::wallet_rpc_server::init_options(desc_params);
 
   po::positional_options_description positional_options;
@@ -914,7 +918,7 @@ int main(int argc, char* argv[])
 
     if (command_line::get_arg(vm, command_line::arg_help))
     {
-      success_msg_writer() << "bytecoin wallet v" << PROJECT_VERSION_LONG;
+      success_msg_writer() << CRYPTONOTE_NAME " wallet v" << PROJECT_VERSION_LONG;
       success_msg_writer() << "Usage: simplewallet [--wallet-file=<file>|--generate-new-wallet=<file>] [--daemon-address=<host>:<port>] [<COMMAND>]";
       success_msg_writer() << desc_all << '\n' << w.get_commands_str();
       return false;
@@ -968,6 +972,7 @@ int main(int argc, char* argv[])
       return 1;
     }
 
+    bool testnet = command_line::get_arg(vm, arg_testnet);
     std::string wallet_file     = command_line::get_arg(vm, arg_wallet_file);
     std::string wallet_password = command_line::get_arg(vm, arg_password);
     std::string daemon_address  = command_line::get_arg(vm, arg_daemon_address);
@@ -980,7 +985,7 @@ int main(int argc, char* argv[])
     if (daemon_address.empty())
       daemon_address = std::string("http://") + daemon_host + ":" + std::to_string(daemon_port);
 
-    tools::wallet2 wal;
+    tools::wallet2 wal(testnet);
     try
     {
       LOG_PRINT_L0("Loading wallet...");
