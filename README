@@ -133,28 +133,33 @@ Example:
 
 == Fifth step. Genesis block ==
 
-Now your coin code is almost ready. You need to generate the coinbase transaction for your genesis block. Uncomment the following code in "generate_genesis_block(block& bl)" function in src/cryptonote_core/cryptonote_format_utils.cpp:
+1. Build the binaries with blank genesis tx hex (src/cryptonote_config.h)
 
-    /*
-    account_public_address ac = boost::value_initialized<account_public_address>();
-    std::vector<size_t> sz;
-    construct_miner_tx(0, 0, 0, 0, 0, ac, bl.miner_tx); // zero fee in genesis
-    blobdata txb = tx_to_blob(bl.miner_tx);
-    std::string hex_tx_represent = string_tools::buff_to_hex_nodelimer(txb);
-    std::cout << "Genesis block hex: " << hex_tx_represent << std::endl;
-    */
+You should leave #define GENESIS_COINBASE_TX_HEX blank and compile the binaries without it.
 
-Compile and run the daemon. As soon as it prints line starting with "Genesis coinbase tx hex: " copy the hex representation of the coinbase tx and paste it into generate_genesis_block function:
+Example:
+#define GENESIS_COINBASE_TX_HEX                         ""
 
-Genesis coinbase tx hex: 013c01ff0001ffffffffffff0f029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121012cfb466857c5762cdd97e242b08b7e239ab35807f5024d4785a33d9ebdba68b0
 
-->
+2. Start the daemon to print out the genesis block
 
-std::string genesis_coinbase_tx_hex = "013c01ff0001ffffffffffff0f029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121012cfb466857c5762cdd97e242b08b7e239ab35807f5024d4785a33d9ebdba68b0";
+Run your daemon with --print-genesis-tx argument. It will print out the genesis block coinbase transaction hash.
 
-Comment the coinbase tx generation code back and recompile everything again.
+Example:
+cryptonotecoind --print-genesis-tx
 
-You coin code is ready now. Make an announcement for the potential users and enjoy!
+
+3. Copy the printed transaction hash — (src/cryptonote_config.h)
+
+Copy the tx hash that has been printed by the daemon to GENESIS_COINBASE_TX_HEX in /src/cryptonote_config.h 
+
+Example:
+#define GENESIS_COINBASE_TX_HEX                         "013c01ff0001ffff...785a33d9ebdba68b0"
+
+
+4. Recompile the binaries
+
+Recompile everything again. Your coin code is ready now. Make an announcement for the potential users and enjoy!
 
 
 == Building CryptoNote ==
@@ -182,7 +187,7 @@ http://www.microsoft.com/
 http://www.cmake.org/
 http://www.boost.org/
 
-To build, change to a directory where this file is located, and run this commands: 
+To build, change to a directory where this file is located, and run theas commands: 
 mkdir build
 cd build
 cmake -G "Visual Studio 11 Win64" ..
