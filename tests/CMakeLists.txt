@@ -19,6 +19,8 @@ source_group(unit_tests FILES ${UNIT_TESTS})
 
 # add_subdirectory(daemon_tests)
 
+add_library(coretests_lib ${CORE_TESTS})
+
 add_executable(coretests ${CORE_TESTS})
 add_executable(crypto-tests ${CRYPTO_TESTS})
 add_executable(difficulty-tests difficulty/difficulty.cpp)
@@ -38,16 +40,24 @@ target_link_libraries(functional_tests cryptonote_core wallet common crypto ${Bo
 target_link_libraries(hash-tests crypto)
 target_link_libraries(hash-target-tests crypto cryptonote_core)
 target_link_libraries(performance_tests cryptonote_core common crypto ${Boost_LIBRARIES})
-target_link_libraries(unit_tests cryptonote_core common crypto gtest_main ${Boost_LIBRARIES})
+target_link_libraries(unit_tests cryptonote_core common crypto wallet coretests_lib gtest_main ${Boost_LIBRARIES})
 target_link_libraries(net_load_tests_clt cryptonote_core common crypto gtest_main ${Boost_LIBRARIES})
 target_link_libraries(net_load_tests_srv cryptonote_core common crypto gtest_main ${Boost_LIBRARIES})
+
+
+
+file(GLOB_RECURSE NODE_RPC_PROXY_TEST node_rpc_proxy_test/*)
+source_group(node_rpc_proxy_test FILES ${NODE_RPC_PROXY_TEST})
+add_executable(node_rpc_proxy_test ${NODE_RPC_PROXY_TEST})
+target_link_libraries(node_rpc_proxy_test node_rpc_proxy cryptonote_core common crypto ${Boost_LIBRARIES})
+
 
 if(NOT MSVC)
   set_property(TARGET gtest gtest_main unit_tests net_load_tests_clt net_load_tests_srv APPEND_STRING PROPERTY COMPILE_FLAGS " -Wno-undef -Wno-sign-compare")
 endif()
 
-add_custom_target(tests DEPENDS coretests difficulty hash performance_tests core_proxy unit_tests)
-set_property(TARGET coretests crypto-tests functional_tests difficulty-tests gtest gtest_main hash-tests hash-target-tests performance_tests core_proxy unit_tests tests net_load_tests_clt net_load_tests_srv PROPERTY FOLDER "tests")
+add_custom_target(tests DEPENDS coretests difficulty hash performance_tests core_proxy unit_tests node_rpc_proxy_test)
+set_property(TARGET coretests crypto-tests functional_tests difficulty-tests gtest gtest_main hash-tests hash-target-tests performance_tests core_proxy unit_tests tests net_load_tests_clt net_load_tests_srv node_rpc_proxy_test PROPERTY FOLDER "tests")
 
 add_test(coretests coretests --generate_and_play_test_data)
 add_test(crypto crypto-tests ${CMAKE_CURRENT_SOURCE_DIR}/crypto/tests.txt)

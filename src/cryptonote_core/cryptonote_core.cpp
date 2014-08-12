@@ -430,6 +430,27 @@ namespace cryptonote
        update_miner_block_template();
     return true;
   }
+
+  void core::notify_new_block(const block& b) {
+    cryptonote_connection_context exclude_context = boost::value_initialized<cryptonote_connection_context>();
+    NOTIFY_NEW_BLOCK::request arg = AUTO_VAL_INIT(arg);
+    arg.hop = 0;
+    arg.current_blockchain_height = m_blockchain_storage.get_current_blockchain_height();
+    std::list<crypto::hash> missed_txs;
+    std::list<transaction> txs;
+    m_blockchain_storage.get_transactions(b.tx_hashes, txs, missed_txs);
+    if (missed_txs.size() > 0 && m_blockchain_storage.get_block_id_by_height(get_block_height(b)) != get_block_hash(b)) {
+      LOG_PRINT_L0("Block found but reorganize happened after that, block will not be relayed");
+    } else {
+      if (txs.size() != b.tx_hashes.size() || missed_txs.size()) {
+        LOG_ERROR("cant find some transactions in found block:" << get_block_hash(b) << " txs.size()=" << txs.size() << ", b.tx_hashes.size()=" << b.tx_hashes.size() << ", missed_txs.size()" << missed_txs.size());
+        return;
+      }
+      block_to_blob(b, arg.b.block);
+      BOOST_FOREACH(auto& tx, txs) arg.b.txs.push_back(t_serializable_object_to_blob(tx));
+      m_pprotocol->relay_block(arg, exclude_context);
+    }
+  }
   //-----------------------------------------------------------------------------------------------
   crypto::hash core::get_tail_id()
   {
