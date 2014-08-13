@@ -60,6 +60,24 @@ void runAtomic(std::mutex& mutex, F f) {
 
 namespace CryptoNote {
 
+void Wallet::WalletNodeObserver::postponeRefresh() {
+  std::unique_lock<std::mutex> lock(postponeMutex);
+  postponed = true;
+}
+
+void Wallet::WalletNodeObserver::saveCompleted(std::error_code result) {
+  bool startRefresh = false;
+  {
+    std::unique_lock<std::mutex> lock(postponeMutex);
+    startRefresh = postponed;
+    postponed = false;
+  }
+
+  if (startRefresh) {
+    m_wallet->startRefresh();
+  }
+}
+
 Wallet::Wallet(INode& node) :
     m_state(NOT_INITIALIZED),
     m_node(node),
@@ -89,6 +107,7 @@ void Wallet::initAndGenerate(const std::string& password) {
     }
 
     m_node.addObserver(m_autoRefresher.get());
+    addObserver(m_autoRefresher.get());
 
     m_account.generate();
     m_password = password;
@@ -118,6 +137,7 @@ void Wallet::initAndLoad(std::istream& source, const std::string& password) {
   }
 
   m_node.addObserver(m_autoRefresher.get());
+  addObserver(m_autoRefresher.get());
 
   m_password = password;
   m_state = LOADING;
@@ -214,6 +234,7 @@ void Wallet::shutdown() {
 
   m_asyncContextCounter.waitAsyncContextsFinish();
   m_node.removeObserver(m_autoRefresher.get());
+  removeObserver(m_autoRefresher.get());
 }
 
 void Wallet::save(std::ostream& destination, bool saveDetailed, bool saveCache) {
@@ -460,6 +481,11 @@ void Wallet::refresh() {
   std::shared_ptr<WalletRequest> req;
   {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
+
+    if (m_state == SAVING) {
+      m_autoRefresher->postponeRefresh();
+      return;
+    }
 
     if (m_state != INITIALIZED) {
       return;

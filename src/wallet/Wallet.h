@@ -106,12 +106,17 @@ private:
   WalletTxSendingState m_sendingTxsStates;
   WalletUserTransactionsCache m_transactionsCache;
 
-  struct WalletNodeObserver: public INodeObserver
+  struct WalletNodeObserver: public INodeObserver, public IWalletObserver
   {
-    WalletNodeObserver(Wallet* wallet) : m_wallet(wallet) {}
+    WalletNodeObserver(Wallet* wallet) : m_wallet(wallet), postponed(false) {}
     virtual void lastKnownBlockHeightUpdated(uint64_t height) { m_wallet->startRefresh(); }
+    virtual void saveCompleted(std::error_code result);
+    void postponeRefresh();
 
     Wallet* m_wallet;
+
+    std::mutex postponeMutex;
+    bool postponed;
   };
 
   std::unique_ptr<WalletNodeObserver> m_autoRefresher;

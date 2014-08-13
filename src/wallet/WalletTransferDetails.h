@@ -40,7 +40,7 @@ public:
   uint64_t countPendingBalance() const;
   bool isTransferUnlocked(const TransferDetails& td) const;
 
-  uint64_t selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<size_t>& selectedTransfers);
+  uint64_t selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<TransferDetails>& selectedTransfers);
 
   void detachTransferDetails(size_t height);
 

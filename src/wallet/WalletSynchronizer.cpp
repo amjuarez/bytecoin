@@ -200,6 +200,7 @@ bool WalletSynchronizer::processNewBlocks(ProcessParameters& parameters) {
         fillRequest = true;
 
       ++context->progress.blockIdx;
+      context->progress.minersTxProcessed = false;
       ++currentIndex;
     }
   }
@@ -251,8 +252,9 @@ bool WalletSynchronizer::processNewBlockchainEntry(ProcessParameters& parameters
   throwIf(height != m_blockchain.size(), cryptonote::error::INTERNAL_WALLET_ERROR);
 
   if(b.timestamp + 60*60*24 > m_account.get_createtime()) {
-    if (!processMinersTx(parameters, b.miner_tx, height, b.timestamp))
+    if (!processMinersTx(parameters, b.miner_tx, height, b.timestamp)) {
       return false;
+    }
 
     auto txIt = blockEntry.txs.begin();
     std::advance(txIt, parameters.context->progress.transactionIdx);

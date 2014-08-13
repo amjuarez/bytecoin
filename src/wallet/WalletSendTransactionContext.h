@@ -10,6 +10,7 @@
 #include "cryptonote_core/cryptonote_basic.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "IWallet.h"
+#include "WalletTransferDetails.h"
 
 namespace CryptoNote {
 
@@ -32,7 +33,7 @@ struct SendTransactionContext
   TransactionId transactionId;
   std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount> outs;
   uint64_t foundMoney;
-  std::list<size_t> selectedTransfers;
+  std::list<TransferDetails> selectedTransfers;
   uint64_t unlockTimestamp;
   TxDustPolicy dustPolicy;
   uint64_t mixIn;

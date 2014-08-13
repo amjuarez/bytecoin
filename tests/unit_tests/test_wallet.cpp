@@ -102,6 +102,18 @@ public:
   std::promise<std::error_code> loadPromise;
 };
 
+struct SaveOnInitWalletObserver: public CryptoNote::IWalletObserver {
+  SaveOnInitWalletObserver(CryptoNote::Wallet* wallet) : wallet(wallet) {};
+  virtual ~SaveOnInitWalletObserver() {}
+
+  virtual void initCompleted(std::error_code result) {
+    wallet->save(stream, true, true);
+  }
+
+  CryptoNote::Wallet* wallet;
+  std::stringstream stream;
+};
+
 static const uint64_t TEST_BLOCK_REWARD = 32000000000000;
 
 CryptoNote::TransactionId TransferMoney(CryptoNote::Wallet& from, CryptoNote::Wallet& to, int64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "") {
@@ -286,6 +298,14 @@ void WaitWalletLoad(TrivialWalletObserver* observer, std::error_code& ec) {
   observer->reset();
 
   ASSERT_TRUE(observer->waitForLoadEnd(ec));
+}
+
+TEST_F(WalletApi, initAndSave) {
+  SaveOnInitWalletObserver saveOnInit(alice.get());
+  alice->addObserver(&saveOnInit);
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+  alice->shutdown();
 }
 
 TEST_F(WalletApi, refreshWithMoney) {

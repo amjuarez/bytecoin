@@ -8,6 +8,8 @@
 #include "WalletTransactionSender.h"
 #include "WalletUtils.h"
 
+#include "cryptonote_core/cryptonote_basic_impl.h"
+
 namespace {
 
 uint64_t countNeededMoney(uint64_t fee, const std::vector<CryptoNote::Transfer>& transfers) {
@@ -74,6 +76,19 @@ void WalletTransactionSender::stop() {
   m_isStoping = true;
 }
 
+bool WalletTransactionSender::validateDestinationAddress(const std::string& address) {
+  cryptonote::account_public_address ignore;
+  return cryptonote::get_account_address_from_str(ignore, address);
+}
+
+void WalletTransactionSender::validateTransfersAddresses(const std::vector<Transfer>& transfers) {
+  for (const Transfer& tr: transfers) {
+    if (!validateDestinationAddress(tr.address)) {
+      throw std::system_error(make_error_code(cryptonote::error::BAD_ADDRESS));
+    }
+  }
+}
+
 std::shared_ptr<WalletRequest> WalletTransactionSender::makeSendRequest(TransactionId& transactionId, std::deque<std::shared_ptr<WalletEvent> >& events,
     const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra, uint64_t mixIn, uint64_t unlockTimestamp) {
   if (!m_isInitialized)
@@ -81,12 +96,16 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::makeSendRequest(Transact
 
   using namespace cryptonote;
 
-  std::shared_ptr<SendTransactionContext> context = std::make_shared<SendTransactionContext>();
   throwIf(transfers.empty(), cryptonote::error::ZERO_DESTINATION);
+  validateTransfersAddresses(transfers);
+  uint64_t neededMoney = countNeededMoney(fee, transfers);
+
+  std::shared_ptr<SendTransactionContext> context = std::make_shared<SendTransactionContext>();
+
+  context->foundMoney = m_transferDetails.selectTransfersToSend(neededMoney, 0 == mixIn, context->dustPolicy.dustThreshold, context->selectedTransfers);
+  throwIf(context->foundMoney < neededMoney, cryptonote::error::WRONG_AMOUNT);
 
   TransferId firstTransferId = m_transactionsCache.insertTransfers(transfers);
-
-  uint64_t neededMoney = countNeededMoney(fee, transfers);
 
   Transaction transaction;
   transaction.firstTransferId = firstTransferId;
@@ -106,9 +125,6 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::makeSendRequest(Transact
   context->unlockTimestamp = unlockTimestamp;
   context->mixIn = mixIn;
 
-  context->foundMoney = m_transferDetails.selectTransfersToSend(neededMoney, 0 == mixIn, context->dustPolicy.dustThreshold, context->selectedTransfers);
-  throwIf(context->foundMoney < neededMoney, cryptonote::error::WRONG_AMOUNT);
-
   if(context->mixIn) {
     std::shared_ptr<WalletRequest> request = makeGetRandomOutsRequest(context);
     return request;
@@ -121,8 +137,7 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::makeGetRandomOutsRequest
   uint64_t outsCount = context->mixIn + 1;// add one to make possible (if need) to skip real output key
   std::vector<uint64_t> amounts;
 
-  for (auto idx: context->selectedTransfers) {
-    const TransferDetails& td = m_transferDetails.getTransferDetails(idx);
+  for (const TransferDetails& td: context->selectedTransfers) {
     throwIf(td.tx.vout.size() <= td.internalOutputIndex, cryptonote::error::INTERNAL_WALLET_ERROR);
     amounts.push_back(td.amount());
   }
@@ -197,7 +212,10 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
 
 void WalletTransactionSender::relayTransactionCallback(TransactionId txId, std::deque<std::shared_ptr<WalletEvent> >& events,
                                                         boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec) {
-  if (m_isStoping) return;
+  if (m_isStoping) {
+    events.push_back(std::make_shared<WalletSendTransactionCompletedEvent>(txId, make_error_code(cryptonote::error::TX_CANCELLED)));
+    return;
+  }
 
   if (ec) {
     m_sendingTxsStates.error(txId);
@@ -247,13 +265,12 @@ void WalletTransactionSender::digitSplitStrategy(TransferId firstTransferId, siz
 }
 
 
-void WalletTransactionSender::prepareInputs(const std::list<size_t>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
+void WalletTransactionSender::prepareInputs(std::list<TransferDetails>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
     std::vector<cryptonote::tx_source_entry>& sources, uint64_t mixIn) {
   size_t i = 0;
-  for (size_t idx: selectedTransfers) {
+  for (TransferDetails& td: selectedTransfers) {
     sources.resize(sources.size()+1);
     cryptonote::tx_source_entry& src = sources.back();
-    TransferDetails& td = m_transferDetails.getTransferDetails(idx);
     src.amount = td.amount();
 
     //paste mixin transaction
