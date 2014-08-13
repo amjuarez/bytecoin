@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "WalletUserTransactionsCache.h"
 
@@ -28,7 +41,7 @@ TransactionId WalletUserTransactionsCache::findTransactionByTransferId(TransferI
 {
   TransactionId id;
   for (id = 0; id < m_transactions.size(); ++id) {
-    const Transaction& tx = m_transactions[id];
+    const TransactionInfo& tx = m_transactions[id];
 
     if (tx.firstTransferId == INVALID_TRANSFER_ID || tx.transferCount == 0)
       continue;
@@ -43,7 +56,7 @@ TransactionId WalletUserTransactionsCache::findTransactionByTransferId(TransferI
   return id;
 }
 
-bool WalletUserTransactionsCache::getTransaction(TransactionId transactionId, Transaction& transaction) const
+bool WalletUserTransactionsCache::getTransaction(TransactionId transactionId, TransactionInfo& transaction) const
 {
   if (transactionId >= m_transactions.size())
     return false;
@@ -63,13 +76,13 @@ bool WalletUserTransactionsCache::getTransfer(TransferId transferId, Transfer& t
   return true;
 }
 
-TransactionId WalletUserTransactionsCache::insertTransaction(Transaction&& transaction) {
-  m_transactions.emplace_back(transaction);
+TransactionId WalletUserTransactionsCache::insertTransaction(TransactionInfo&& Transaction) {
+  m_transactions.emplace_back(Transaction);
   return m_transactions.size() - 1;
 }
 
 TransactionId WalletUserTransactionsCache::findTransactionByHash(const crypto::hash& hash) {
-  auto it = std::find_if(m_transactions.begin(), m_transactions.end(), [&hash] (const Transaction& tx) { return hashesEqual(tx.hash, hash); });
+  auto it = std::find_if(m_transactions.begin(), m_transactions.end(), [&hash] (const TransactionInfo& tx) { return hashesEqual(tx.hash, hash); });
 
   if (it == m_transactions.end())
     return CryptoNote::INVALID_TRANSACTION_ID;
@@ -79,7 +92,7 @@ TransactionId WalletUserTransactionsCache::findTransactionByHash(const crypto::h
 
 void WalletUserTransactionsCache::detachTransactions(uint64_t height) {
   for (size_t id = 0; id < m_transactions.size(); ++id) {
-    Transaction& tx = m_transactions[id];
+    TransactionInfo& tx = m_transactions[id];
     if (tx.blockHeight >= height) {
       tx.blockHeight = UNCONFIRMED_TRANSACTION_HEIGHT;
       tx.timestamp = 0;
@@ -87,7 +100,7 @@ void WalletUserTransactionsCache::detachTransactions(uint64_t height) {
   }
 }
 
-Transaction& WalletUserTransactionsCache::getTransaction(TransactionId transactionId) {
+TransactionInfo& WalletUserTransactionsCache::getTransaction(TransactionId transactionId) {
   return m_transactions.at(transactionId);
 }
 
@@ -103,7 +116,7 @@ void WalletUserTransactionsCache::getGoodItems(bool saveDetailed, UserTransactio
     }
     else
     {
-      const Transaction& t = m_transactions[txId];
+      const TransactionInfo& t = m_transactions[txId];
       if (t.firstTransferId != INVALID_TRANSFER_ID)
         offset += t.transferCount;
     }
@@ -112,7 +125,7 @@ void WalletUserTransactionsCache::getGoodItems(bool saveDetailed, UserTransactio
 
 void WalletUserTransactionsCache::getGoodTransaction(TransactionId txId, size_t offset, bool saveDetailed, UserTransactions& transactions, UserTransfers& transfers) {
   transactions.push_back(m_transactions[txId]);
-  Transaction& tx = transactions.back();
+  TransactionInfo& tx = transactions.back();
 
   if (!saveDetailed) {
     tx.firstTransferId = INVALID_TRANSFER_ID;
@@ -144,7 +157,7 @@ void WalletUserTransactionsCache::getGoodTransfers(UserTransfers& transfers) {
 }
 
 void WalletUserTransactionsCache::getTransfersByTx(TransactionId id, UserTransfers& transfers) {
-  const Transaction& tx = m_transactions[id];
+  const TransactionInfo& tx = m_transactions[id];
 
   if (tx.firstTransferId != INVALID_TRANSFER_ID) {
     UserTransfers::const_iterator first = m_transfers.begin() + tx.firstTransferId;
@@ -163,4 +176,3 @@ Transfer& WalletUserTransactionsCache::getTransfer(TransferId transferId) {
 }
 
 } //namespace CryptoNote
-

@@ -1,40 +1,45 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include <boost/program_options.hpp>
 #include <atomic>
-#include "cryptonote_basic.h"
-#include "difficulty.h"
+
+#include <boost/program_options.hpp>
+
+// epee
+#include "serialization/keyvalue_serialization.h"
 #include "math_helper.h"
 
+#include "cryptonote_core/cryptonote_basic.h"
+#include "cryptonote_core/Currency.h"
+#include "cryptonote_core/difficulty.h"
+#include "cryptonote_core/i_miner_handler.h"
 
-namespace cryptonote
-{
-
-  struct i_miner_handler
-  {
-    virtual bool handle_block_found(block& b) = 0;
-    virtual bool get_block_template(block& b, const account_public_address& adr, difficulty_type& diffic, uint64_t& height, const blobdata& ex_nonce) = 0;
-  protected:
-    ~i_miner_handler(){};
-  };
-
-  /************************************************************************/
-  /*                                                                      */
-  /************************************************************************/
-  class miner
-  {
+namespace cryptonote {
+  class miner {
   public:
-    miner(i_miner_handler* phandler);
+    miner(const Currency& currency, i_miner_handler* phandler);
     ~miner();
     bool init(const boost::program_options::variables_map& vm);
     static void init_options(boost::program_options::options_description& desc);
-    bool set_block_template(const block& bl, const difficulty_type& diffic, uint64_t height);
+    bool set_block_template(const Block& bl, const difficulty_type& diffic);
     bool on_block_chain_update();
-    bool start(const account_public_address& adr, size_t threads_count, const boost::thread::attributes& attrs);
+    bool start(const AccountPublicAddress& adr, size_t threads_count, const boost::thread::attributes& attrs);
     uint64_t get_speed();
     void send_stop_signal();
     bool stop();
@@ -42,7 +47,7 @@ namespace cryptonote
     bool on_idle();
     void on_synchronized();
     //synchronous analog (for fast calls)
-    static bool find_nonce_for_given_block(crypto::cn_context &context, block& bl, const difficulty_type& diffic, uint64_t height);
+    static bool find_nonce_for_given_block(crypto::cn_context &context, Block& bl, const difficulty_type& diffic);
     void pause();
     void resume();
     void do_print_hashrate(bool do_hr);
@@ -62,13 +67,13 @@ namespace cryptonote
     };
 
 
+    const Currency& m_currency;
     volatile uint32_t m_stop;
     epee::critical_section m_template_lock;
-    block m_template;
+    Block m_template;
     std::atomic<uint32_t> m_template_no;
     std::atomic<uint32_t> m_starter_nonce;
     difficulty_type m_diffic;
-    uint64_t m_height;
     volatile uint32_t m_thread_index;
     volatile uint32_t m_threads_total;
     std::atomic<int32_t> m_pausers_count;
@@ -77,7 +82,7 @@ namespace cryptonote
     std::list<boost::thread> m_threads;
     epee::critical_section m_threads_lock;
     i_miner_handler* m_phandler;
-    account_public_address m_mine_address;
+    AccountPublicAddress m_mine_address;
     epee::math_helper::once_a_time_seconds<5> m_update_block_template_interval;
     epee::math_helper::once_a_time_seconds<2> m_update_merge_hr_interval;
     std::vector<blobdata> m_extra_messages;
@@ -90,9 +95,5 @@ namespace cryptonote
     std::list<uint64_t> m_last_hash_rates;
     bool m_do_print_hashrate;
     bool m_do_mining;
-
   };
 }
-
-
-

@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "gtest/gtest.h"
 
@@ -441,73 +454,75 @@ namespace
     "\x22\x09\x39\x68\x9e\xdf\x1a\xbd\x5b\xc1\xd0\x31\xf7\x3e\xcd\x6c"
     "\x99\x3a\xdd\x66\xd6\x80\x88\x70\x45\x6a\xfe\xb8\xe7\xee\xb6\x8d");
   std::string test_keys_addr_str = "2AaF4qEmER6dNeM6dfiBFL7kqund3HYGvMBF3ttsNd9SfzgYB6L7ep1Yg1osYJzLdaKAYSLVh6e6jKnAuzj3bw1oGyd1x7Z";
+  const uint64_t TEST_PUBLIC_ADDRESS_BASE58_PREFIX = 6;
 }
 
-TEST(get_account_address_as_str, works_correctly)
+TEST(getAccountAddressAsStr, works_correctly)
 {
-  cryptonote::account_public_address addr;
+  cryptonote::AccountPublicAddress addr;
   ASSERT_TRUE(serialization::parse_binary(test_serialized_keys, addr));
-  std::string addr_str = cryptonote::get_account_address_as_str(addr);
+  std::string addr_str = cryptonote::getAccountAddressAsStr(TEST_PUBLIC_ADDRESS_BASE58_PREFIX, addr);
   ASSERT_EQ(addr_str, test_keys_addr_str);
 }
 
-TEST(get_account_address_from_str, handles_valid_address)
+TEST(parseAccountAddressString, handles_valid_address)
 {
-  cryptonote::account_public_address addr;
-  ASSERT_TRUE(cryptonote::get_account_address_from_str(addr, test_keys_addr_str));
+  uint64_t prefix;
+  cryptonote::AccountPublicAddress addr;
+  ASSERT_TRUE(cryptonote::parseAccountAddressString(prefix, addr, test_keys_addr_str));
+  ASSERT_EQ(TEST_PUBLIC_ADDRESS_BASE58_PREFIX, prefix);
 
   std::string blob;
   ASSERT_TRUE(serialization::dump_binary(addr, blob));
   ASSERT_EQ(blob, test_serialized_keys);
 }
 
-TEST(get_account_address_from_str, fails_on_invalid_address_format)
+TEST(parseAccountAddressString, fails_on_invalid_address_format)
 {
-  cryptonote::account_public_address addr;
   std::string addr_str = test_keys_addr_str;
   addr_str[0] = '0';
 
-  ASSERT_FALSE(cryptonote::get_account_address_from_str(addr, addr_str));
+  uint64_t prefix;
+  cryptonote::AccountPublicAddress addr;
+  ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
 }
 
-TEST(get_account_address_from_str, fails_on_invalid_address_prefix)
+TEST(parseAccountAddressString, fails_on_invalid_address_prefix)
 {
   std::string addr_str = base58::encode_addr(0, test_serialized_keys);
 
-  cryptonote::account_public_address addr;
-  ASSERT_FALSE(cryptonote::get_account_address_from_str(addr, addr_str));
+  uint64_t prefix;
+  cryptonote::AccountPublicAddress addr;
+  ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
 }
 
-TEST(get_account_address_from_str, fails_on_invalid_address_content)
+TEST(parseAccountAddressString, fails_on_invalid_address_content)
 {
-  std::string addr_str = base58::encode_addr(CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX, test_serialized_keys.substr(1));
+  std::string addr_str = base58::encode_addr(TEST_PUBLIC_ADDRESS_BASE58_PREFIX, test_serialized_keys.substr(1));
 
-  cryptonote::account_public_address addr;
-  ASSERT_FALSE(cryptonote::get_account_address_from_str(addr, addr_str));
+  uint64_t prefix;
+  cryptonote::AccountPublicAddress addr;
+  ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
 }
 
-TEST(get_account_address_from_str, fails_on_invalid_address_spend_key)
+TEST(parseAccountAddressString, fails_on_invalid_address_spend_key)
 {
   std::string serialized_keys_copy = test_serialized_keys;
   serialized_keys_copy[0] = '\0';
-  std::string addr_str = base58::encode_addr(CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX, serialized_keys_copy);
+  std::string addr_str = base58::encode_addr(TEST_PUBLIC_ADDRESS_BASE58_PREFIX, serialized_keys_copy);
 
-  cryptonote::account_public_address addr;
-  ASSERT_FALSE(cryptonote::get_account_address_from_str(addr, addr_str));
+  uint64_t prefix;
+  cryptonote::AccountPublicAddress addr;
+  ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
 }
 
-TEST(get_account_address_from_str, fails_on_invalid_address_view_key)
+TEST(parseAccountAddressString, fails_on_invalid_address_view_key)
 {
   std::string serialized_keys_copy = test_serialized_keys;
   serialized_keys_copy.back() = '\x01';
-  std::string addr_str = base58::encode_addr(CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX, serialized_keys_copy);
+  std::string addr_str = base58::encode_addr(TEST_PUBLIC_ADDRESS_BASE58_PREFIX, serialized_keys_copy);
 
-  cryptonote::account_public_address addr;
-  ASSERT_FALSE(cryptonote::get_account_address_from_str(addr, addr_str));
-}
-
-TEST(get_account_address_from_str, parses_old_address_format)
-{
-  cryptonote::account_public_address addr;
-  ASSERT_TRUE(cryptonote::get_account_address_from_str(addr, "002391bbbb24dea6fd95232e97594a27769d0153d053d2102b789c498f57a2b00b69cd6f2f5c529c1660f2f4a2b50178d6640c20ce71fe26373041af97c5b10236fc"));
+  uint64_t prefix;
+  cryptonote::AccountPublicAddress addr;
+  ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
 }

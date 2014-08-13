@@ -1,32 +1,50 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "gtest/gtest.h"
 
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_core/Currency.h"
 
 using namespace cryptonote;
 
 namespace
 {
+  const size_t TEST_NUMBER_OF_DECIMAL_PLACES = 8;
+
   void do_pos_test(uint64_t expected, const std::string& str)
   {
+    cryptonote::Currency currency = cryptonote::CurrencyBuilder().numberOfDecimalPlaces(TEST_NUMBER_OF_DECIMAL_PLACES).currency();
     uint64_t val;
     std::string number_str = str;
     std::replace(number_str.begin(), number_str.end(), '_', '.');
     number_str.erase(std::remove(number_str.begin(), number_str.end(), '~'), number_str.end());
-    ASSERT_TRUE(parse_amount(val, number_str));
+    ASSERT_TRUE(currency.parseAmount(number_str, val));
     ASSERT_EQ(expected, val);
   }
 
   void do_neg_test(const std::string& str)
   {
+    cryptonote::Currency currency = cryptonote::CurrencyBuilder().numberOfDecimalPlaces(TEST_NUMBER_OF_DECIMAL_PLACES).currency();
     uint64_t val;
     std::string number_str = str;
     std::replace(number_str.begin(), number_str.end(), '_', '.');
     number_str.erase(std::remove(number_str.begin(), number_str.end(), '~'), number_str.end());
-    ASSERT_FALSE(parse_amount(val, number_str));
+    ASSERT_FALSE(currency.parseAmount(number_str, val));
   }
 }
 

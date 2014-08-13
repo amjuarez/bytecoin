@@ -1,3 +1,15 @@
+Release notes 1.0.0
+
+- Multi-signatures
+- Updated block reward scheme
+- Further optimization in daemon RAM consumption
+- Faster wallet refresh
+- Transaction priority based on tx fee
+- Transactions are returned from tx pools after 24 hours
+- Dynamic maximum block size limit
+- Reduced default transaction fee 
+- Various network health updates
+
 Release notes 0.8.11
 
 - Increased minimum transaction fee

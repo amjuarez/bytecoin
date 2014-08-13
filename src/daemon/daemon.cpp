@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 // node.cpp : Defines the entry point for the console application.
 //
@@ -13,14 +26,17 @@ using namespace epee;
 
 #include <boost/program_options.hpp>
 
-#include "crypto/hash.h"
+// epee
 #include "console_handler.h"
-#include "p2p/net_node.h"
-#include "cryptonote_core/checkpoints_create.h"
+
+#include "common/SignalHandler.h"
+#include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_core.h"
-#include "rpc/core_rpc_server.h"
+#include "cryptonote_core/Currency.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
-#include "daemon_commands_handler.h"
+#include "daemon/daemon_commands_handler.h"
+#include "p2p/net_node.h"
+#include "rpc/core_rpc_server.h"
 #include "version.h"
 
 #if defined(WIN32)
@@ -31,11 +47,13 @@ namespace po = boost::program_options;
 
 namespace
 {
-  const command_line::arg_descriptor<std::string> arg_config_file = {"config-file", "Specify configuration file", std::string(CRYPTONOTE_NAME ".conf")};
+  const command_line::arg_descriptor<std::string> arg_config_file = {"config-file", "Specify configuration file", std::string(cryptonote::CRYPTONOTE_NAME) + ".conf"};
   const command_line::arg_descriptor<bool>        arg_os_version  = {"os-version", ""};
   const command_line::arg_descriptor<std::string> arg_log_file    = {"log-file", "", ""};
   const command_line::arg_descriptor<int>         arg_log_level   = {"log-level", "", LOG_LEVEL_0};
   const command_line::arg_descriptor<bool>        arg_console     = {"no-console", "Disable daemon console commands"};
+  const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
+    "network id is changed. Use it with --data-dir flag. The wallet must be launched with --testnet flag.", false};
 }
 
 bool command_line_preprocessor(const boost::program_options::variables_map& vm);
@@ -66,7 +84,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, arg_log_file);
   command_line::add_arg(desc_cmd_sett, arg_log_level);
   command_line::add_arg(desc_cmd_sett, arg_console);
-  
+  command_line::add_arg(desc_cmd_sett, arg_testnet_on);
 
   cryptonote::core::init_options(desc_cmd_sett);
   cryptonote::core_rpc_server::init_options(desc_cmd_sett);
@@ -83,7 +101,7 @@ int main(int argc, char* argv[])
 
     if (command_line::get_arg(vm, command_line::arg_help))
     {
-      std::cout << CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL << ENDL;
+      std::cout << cryptonote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL << ENDL;
       std::cout << desc_options << std::endl;
       return false;
     }
@@ -118,7 +136,7 @@ int main(int argc, char* argv[])
   log_dir = log_file_path.has_parent_path() ? log_file_path.parent_path().string() : log_space::log_singletone::get_default_log_folder();
 
   log_space::log_singletone::add_logger(LOGGER_FILE, log_file_path.filename().string().c_str(), log_dir.c_str());
-  LOG_PRINT_L0(CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG);
+  LOG_PRINT_L0(cryptonote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG);
 
   if (command_line_preprocessor(vm))
   {
@@ -127,14 +145,26 @@ int main(int argc, char* argv[])
 
   LOG_PRINT("Module folder: " << argv[0], LOG_LEVEL_0);
 
-  bool res = true;
-  cryptonote::checkpoints checkpoints;
-  res = cryptonote::create_checkpoints(checkpoints);
-  CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize checkpoints");
+  bool testnet_mode = command_line::get_arg(vm, arg_testnet_on);
+  if (testnet_mode) {
+    LOG_PRINT_L0("Starting in testnet mode!");
+  }
 
   //create objects and link them
-  cryptonote::core ccore(NULL);
-  ccore.set_checkpoints(std::move(checkpoints));  
+  cryptonote::CurrencyBuilder currencyBuilder;
+  currencyBuilder.testnet(testnet_mode);
+  cryptonote::Currency currency = currencyBuilder.currency();
+  cryptonote::core ccore(currency, NULL);
+
+  cryptonote::checkpoints checkpoints;
+  for (const auto& cp : cryptonote::CHECKPOINTS) {
+    checkpoints.add_checkpoint(cp.height, cp.blockId);
+  }
+
+  if (!testnet_mode) {
+    ccore.set_checkpoints(std::move(checkpoints));
+  }
+
   cryptonote::t_cryptonote_protocol_handler<cryptonote::core> cprotocol(ccore, NULL);
   nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> > p2psrv(cprotocol);
   cryptonote::core_rpc_server rpc_server(ccore, p2psrv);
@@ -144,7 +174,7 @@ int main(int argc, char* argv[])
 
   //initialize objects
   LOG_PRINT_L0("Initializing p2p server...");
-  res = p2psrv.init(vm);
+  bool res = p2psrv.init(vm, testnet_mode);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize p2p server.");
   LOG_PRINT_L0("P2p server initialized OK");
 
@@ -175,7 +205,7 @@ int main(int argc, char* argv[])
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core rpc server.");
   LOG_PRINT_L0("Core rpc server started ok");
 
-  tools::signal_handler::install([&dch, &p2psrv] {
+  tools::SignalHandler::install([&dch, &p2psrv] {
     dch.stop_handling();
     p2psrv.send_stop_signal();
   });
@@ -214,7 +244,7 @@ bool command_line_preprocessor(const boost::program_options::variables_map& vm)
   bool exit = false;
   if (command_line::get_arg(vm, command_line::arg_version))
   {
-    std::cout << CRYPTONOTE_NAME  << " v" << PROJECT_VERSION_LONG << ENDL;
+    std::cout << cryptonote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL;
     exit = true;
   }
   if (command_line::get_arg(vm, arg_os_version))

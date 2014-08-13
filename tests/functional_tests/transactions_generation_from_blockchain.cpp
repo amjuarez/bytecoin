@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "include_base_utils.h"
 using namespace epee;
@@ -19,7 +32,7 @@ bool transactions_generation_from_blockchain(std::string& blockchain_folder_path
   CHECK_AND_ASSERT_MES(r, false, "failed to load blockchain");
 
   //amount = 3000000000000
-  //key_offsets = 1,2,3,4,5,10,12,27,31,33,34
+  //keyOffsets = 1,2,3,4,5,10,12,27,31,33,34
   //
 }
 
@@ -27,7 +40,7 @@ tx_source_entry::output_entry make_outptu_entr_for_gindex(size_t i, std::map<cry
 {
   tx_source_entry::output_entry oe;
   oe = i;
-  oe.second = txs[v[i].first].boost::get<txout_to_key>(vout[v[i].second].target).key;
+  oe.second = txs[v[i].first].boost::get<TransactionOutputToKey>(vout[v[i].second].target).key;
   return oe;
 }
 
@@ -83,7 +96,7 @@ bool make_tx(blockchain_storage& bch)
     //size_t real_index = src.outputs.size() ? (rand() % src.outputs.size() ):0;
     tx_output_entry real_oe;
     real_oe.first = td.m_global_output_index;
-    real_oe.second = boost::get<txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key;
+    real_oe.second = boost::get<TransactionOutputToKey>(td.m_tx.vout[td.m_internal_output_index].target).key;
     auto interted_it = src.outputs.insert(it_to_insert, real_oe);
     src.real_out_tx_key = td.m_tx.tx_pub_key;
     src.real_output = interted_it - src.outputs.begin();

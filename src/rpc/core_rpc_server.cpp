@@ -1,19 +1,33 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-#include <boost/foreach.hpp>
-#include "include_base_utils.h"
-using namespace epee;
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "core_rpc_server.h"
-#include "common/command_line.h"
-#include "cryptonote_core/cryptonote_format_utils.h"
-#include "cryptonote_core/account.h"
-#include "cryptonote_core/cryptonote_basic_impl.h"
+
+#include "include_base_utils.h"
 #include "misc_language.h"
+
+#include "common/command_line.h"
 #include "crypto/hash.h"
-#include "core_rpc_server_error_codes.h"
+#include "cryptonote_core/cryptonote_basic_impl.h"
+#include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_core/miner.h"
+#include "rpc/core_rpc_server_error_codes.h"
+
+using namespace epee;
 
 namespace cryptonote
 {
@@ -91,19 +105,17 @@ namespace cryptonote
   bool core_rpc_server::on_get_blocks(const COMMAND_RPC_GET_BLOCKS_FAST::request& req, COMMAND_RPC_GET_BLOCKS_FAST::response& res, connection_context& cntx)
   {
     CHECK_CORE_READY();
-    std::list<std::pair<block, std::list<transaction> > > bs;
+    std::list<std::pair<Block, std::list<Transaction> > > bs;
     if(!m_core.find_blockchain_supplement(req.block_ids, bs, res.current_height, res.start_height, COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT))
     {
       res.status = "Failed";
       return false;
     }
 
-    BOOST_FOREACH(auto& b, bs)
-    {
+    for (auto& b : bs) {
       res.blocks.resize(res.blocks.size()+1);
       res.blocks.back().block = block_to_blob(b.first);
-      BOOST_FOREACH(auto& t, b.second)
-      {
+      for (auto& t : b.second) {
         res.blocks.back().txs.push_back(tx_to_blob(t));
       }
     }
@@ -111,6 +123,81 @@ namespace cryptonote
     res.status = CORE_RPC_STATUS_OK;
     return true;
   }
+
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_query_blocks(const COMMAND_RPC_QUERY_BLOCKS::request& req, COMMAND_RPC_QUERY_BLOCKS::response& res, connection_context& cntx)
+  {
+    CHECK_CORE_READY();
+
+    typedef COMMAND_RPC_QUERY_BLOCKS::response_item ResponseItem;
+
+    LockedBlockchainStorage lbs(m_core.get_blockchain_storage());
+
+    uint64_t currentHeight = lbs->get_current_blockchain_height();
+    uint64_t startOffset = 0;
+
+    if (!lbs->find_blockchain_supplement(req.block_ids, startOffset)) {
+      res.status = "Failed to find blockchain supplement";
+      return false;
+    }
+
+    uint64_t startFullOffset = 0;
+
+    if (!lbs->getLowerBound(req.timestamp, startOffset, startFullOffset))
+      startFullOffset = startOffset;
+
+    res.full_offset = startFullOffset;
+
+    if (startOffset != startFullOffset) {
+      std::list<crypto::hash> blockIds;
+      if (!lbs->getBlockIds(startOffset, std::min(uint64_t(BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT), startFullOffset - startOffset), blockIds)) {
+        res.status = "Failed to get block ids";
+        return false;
+      }
+
+      for (const auto& id : blockIds) {
+        res.items.push_back(ResponseItem());
+        res.items.back().block_id = id;
+      }
+    }
+
+    auto blocksLeft = std::min(BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT - res.items.size(), size_t(BLOCKS_SYNCHRONIZING_DEFAULT_COUNT));
+
+    if (blocksLeft) {
+      std::list<Block> blocks;
+      lbs->get_blocks(startFullOffset, blocksLeft, blocks);
+
+      for (auto& b : blocks) {
+
+        ResponseItem item;
+
+        item.block_id = get_block_hash(b);
+
+        if (b.timestamp >= req.timestamp) {
+          // query transactions
+          std::list<Transaction> txs;
+          std::list<crypto::hash> missedTxs;
+          lbs->get_transactions(b.txHashes, txs, missedTxs);
+
+          // fill data
+          block_complete_entry& completeEntry = item;
+          completeEntry.block = block_to_blob(b);
+          for (auto& tx : txs) {
+            completeEntry.txs.push_back(tx_to_blob(tx));
+          }
+        }
+
+        res.items.push_back(std::move(item));
+      }
+    }
+
+    res.current_height = currentHeight;
+    res.start_height = startOffset;
+
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_get_random_outs(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response& res, connection_context& cntx)
   {
@@ -159,8 +246,7 @@ namespace cryptonote
   {
     CHECK_CORE_READY();
     std::vector<crypto::hash> vh;
-    BOOST_FOREACH(const auto& tx_hex_str, req.txs_hashes)
-    {
+    for (const auto& tx_hex_str : req.txs_hashes) {
       blobdata b;
       if(!string_tools::parse_hexstr_to_binbuff(tx_hex_str, b))
       {
@@ -174,17 +260,15 @@ namespace cryptonote
       vh.push_back(*reinterpret_cast<const crypto::hash*>(b.data()));
     }
     std::list<crypto::hash> missed_txs;
-    std::list<transaction> txs;
+    std::list<Transaction> txs;
     m_core.get_transactions(vh, txs, missed_txs);
 
-    BOOST_FOREACH(auto& tx, txs)
-    {
+    for (auto& tx : txs) {
       blobdata blob = t_serializable_object_to_blob(tx);
       res.txs_as_hex.push_back(string_tools::buff_to_hex_nodelimer(blob));
     }
 
-    BOOST_FOREACH(const auto& miss_tx, missed_txs)
-    {
+    for (const auto& miss_tx : missed_txs) {
       res.missed_tx.push_back(string_tools::pod_to_hex(miss_tx));
     }
 
@@ -239,8 +323,8 @@ namespace cryptonote
   bool core_rpc_server::on_start_mining(const COMMAND_RPC_START_MINING::request& req, COMMAND_RPC_START_MINING::response& res, connection_context& cntx)
   {
     CHECK_CORE_READY();
-    account_public_address adr;
-    if(!get_account_address_from_str(adr, req.miner_address))
+    AccountPublicAddress adr;
+    if(!m_core.currency().parseAccountAddressString(req.miner_address, adr))
     {
       res.status = "Failed, wrong address";
       return true;
@@ -333,16 +417,16 @@ namespace cryptonote
       return false;
     }
 
-    cryptonote::account_public_address acc = AUTO_VAL_INIT(acc);
+    cryptonote::AccountPublicAddress acc = AUTO_VAL_INIT(acc);
 
-    if(!req.wallet_address.size() || !cryptonote::get_account_address_from_str(acc, req.wallet_address))
+    if(!req.wallet_address.size() || !m_core.currency().parseAccountAddressString(req.wallet_address, acc))
     {
       error_resp.code = CORE_RPC_ERROR_CODE_WRONG_WALLET_ADDRESS;
       error_resp.message = "Failed to parse wallet address";
       return false;
     }
 
-    block b = AUTO_VAL_INIT(b);
+    Block b = AUTO_VAL_INIT(b);
     cryptonote::blobdata blob_reserve;
     blob_reserve.resize(req.reserve_size, 0);
     if(!m_core.get_block_template(b, acc, res.difficulty, res.height, blob_reserve))
@@ -354,7 +438,7 @@ namespace cryptonote
     }
 
     blobdata block_blob = t_serializable_object_to_blob(b);
-    crypto::public_key tx_pub_key = cryptonote::get_tx_pub_key_from_extra(b.miner_tx);
+    crypto::public_key tx_pub_key = cryptonote::get_tx_pub_key_from_extra(b.minerTx);
     if(tx_pub_key == null_pkey)
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
@@ -389,33 +473,37 @@ namespace cryptonote
 
     res.blocktemplate_blob = string_tools::buff_to_hex_nodelimer(block_blob);
     res.status = CORE_RPC_STATUS_OK;
+
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool core_rpc_server::on_submitblock(const COMMAND_RPC_SUBMITBLOCK::request& req, COMMAND_RPC_SUBMITBLOCK::response& res, epee::json_rpc::error& error_resp, connection_context& cntx)
+  bool core_rpc_server::on_get_currency_id(const COMMAND_RPC_GET_CURRENCY_ID::request& /*req*/, COMMAND_RPC_GET_CURRENCY_ID::response& res, epee::json_rpc::error& error_resp, connection_context& /*cntx*/)
   {
+    crypto::hash currencyId = m_core.currency().genesisBlockHash();
+    blobdata blob = t_serializable_object_to_blob(currencyId);
+    res.currency_id_blob = string_tools::buff_to_hex_nodelimer(blob);
+
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_submitblock(const COMMAND_RPC_SUBMITBLOCK::request& req, COMMAND_RPC_SUBMITBLOCK::response& res, epee::json_rpc::error& error_resp, connection_context& cntx) {
     CHECK_CORE_READY();
-    if(req.size()!=1)
-    {
+    if (req.size() != 1) {
       error_resp.code = CORE_RPC_ERROR_CODE_WRONG_PARAM;
       error_resp.message = "Wrong param";
       return false;
     }
+
     blobdata blockblob;
-    if(!string_tools::parse_hexstr_to_binbuff(req[0], blockblob))
-    {
+    if (!string_tools::parse_hexstr_to_binbuff(req[0], blockblob)) {
       error_resp.code = CORE_RPC_ERROR_CODE_WRONG_BLOCKBLOB;
       error_resp.message = "Wrong block blob";
       return false;
     }
-    cryptonote::block_verification_context bvc = AUTO_VAL_INIT(bvc);
-    m_core.handle_incoming_block(blockblob, bvc);
-    if (bvc.m_added_to_main_chain){
-      block b = AUTO_VAL_INIT(b);
-      parse_and_validate_block_from_blob(blockblob, b);
 
-      m_core.notify_new_block(b);
-    } else {
+    cryptonote::block_verification_context bvc = AUTO_VAL_INIT(bvc);
+    m_core.handle_incoming_block_blob(blockblob, bvc, true, true);
+    if (!bvc.m_added_to_main_chain) {
       error_resp.code = CORE_RPC_ERROR_CODE_BLOCK_NOT_ACCEPTED;
       error_resp.message = "Block not accepted";
       return false;
@@ -425,22 +513,22 @@ namespace cryptonote
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  uint64_t core_rpc_server::get_block_reward(const block& blk)
-  {
-    uint64_t reward = 0;
-    BOOST_FOREACH(const tx_out& out, blk.miner_tx.vout)
-    {
-      reward += out.amount;
+  namespace {
+    uint64_t get_block_reward(const Block& blk) {
+      uint64_t reward = 0;
+      for (const TransactionOutput& out : blk.minerTx.vout) {
+        reward += out.amount;
+      }
+      return reward;
     }
-    return reward;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool core_rpc_server::fill_block_header_responce(const block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_responce& responce)
+  bool core_rpc_server::fill_block_header_responce(const Block& blk, bool orphan_status, uint64_t height, const crypto::hash& hash, block_header_responce& responce)
   {
-    responce.major_version = blk.major_version;
-    responce.minor_version = blk.minor_version;
+    responce.major_version = blk.majorVersion;
+    responce.minor_version = blk.minorVersion;
     responce.timestamp = blk.timestamp;
-    responce.prev_hash = string_tools::pod_to_hex(blk.prev_id);
+    responce.prev_hash = string_tools::pod_to_hex(blk.prevId);
     responce.nonce = blk.nonce;
     responce.orphan_status = orphan_status;
     responce.height = height;
@@ -468,7 +556,7 @@ namespace cryptonote
       error_resp.message = "Internal error: can't get last block hash.";
       return false;
     }
-    block last_block;
+    Block last_block;
     bool have_last_block = m_core.get_block_by_hash(last_block_hash, last_block);
     if (!have_last_block)
     {
@@ -502,7 +590,7 @@ namespace cryptonote
       error_resp.message = "Failed to parse hex representation of block hash. Hex = " + req.hash + '.';
       return false;
     }
-    block blk;
+    Block blk;
     bool have_block = m_core.get_block_by_hash(block_hash, blk);
     if (!have_block)
     {
@@ -510,13 +598,13 @@ namespace cryptonote
       error_resp.message = "Internal error: can't get block by hash. Hash = " + req.hash + '.';
       return false;
     }
-    if (blk.miner_tx.vin.front().type() != typeid(txin_gen))
+    if (blk.minerTx.vin.front().type() != typeid(TransactionInputGenerate))
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
       error_resp.message = "Internal error: coinbase transaction in the block has the wrong type";
       return false;
     }
-    uint64_t block_height = boost::get<txin_gen>(blk.miner_tx.vin.front()).height;
+    uint64_t block_height = boost::get<TransactionInputGenerate>(blk.minerTx.vin.front()).height;
     bool responce_filled = fill_block_header_responce(blk, false, block_height, block_hash, res.block_header);
     if (!responce_filled)
     {
@@ -542,7 +630,7 @@ namespace cryptonote
       return false;
     }
     crypto::hash block_hash = m_core.get_block_id_by_height(req.height);
-    block blk;
+    Block blk;
     bool have_block = m_core.get_block_by_hash(block_hash, blk);
     if (!have_block)
     {

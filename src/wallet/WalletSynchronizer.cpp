@@ -1,10 +1,25 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "WalletSynchronizer.h"
 
 #include <algorithm>
+
+#include "cryptonote_core/account.h"
 
 #include "WalletErrors.h"
 #include "WalletUtils.h"
@@ -16,7 +31,7 @@ void throwIf(bool expr, cryptonote::error::WalletErrorCodes ec) {
     throw std::system_error(make_error_code(ec));
 }
 
-bool getTxPubKey(const cryptonote::transaction& tx, crypto::public_key& key) {
+bool getTxPubKey(const cryptonote::Transaction& tx, crypto::public_key& key) {
   std::vector<cryptonote::tx_extra_field> extraFields;
   cryptonote::parse_tx_extra(tx.extra, extraFields);
 
@@ -30,33 +45,33 @@ bool getTxPubKey(const cryptonote::transaction& tx, crypto::public_key& key) {
   return true;
 }
 
-void findMyOuts(const cryptonote::account_keys& acc, const cryptonote::transaction& tx, const crypto::public_key& txPubKey, std::vector<size_t>& outs, uint64_t& moneyTransfered) {
+void findMyOuts(const cryptonote::account_keys& acc, const cryptonote::Transaction& tx, const crypto::public_key& txPubKey, std::vector<size_t>& outs, uint64_t& moneyTransfered) {
   bool r = cryptonote::lookup_acc_outs(acc, tx, txPubKey, outs, moneyTransfered);
   throwIf(!r, cryptonote::error::INTERNAL_WALLET_ERROR);
 }
 
-uint64_t countOverallTxOutputs(const cryptonote::transaction& tx) {
+uint64_t countOverallTxOutputs(const cryptonote::Transaction& tx) {
   uint64_t amount = 0;
-  for (const cryptonote::tx_out& o: tx.vout) {
+  for (const cryptonote::TransactionOutput& o: tx.vout) {
     amount += o.amount;
   }
 
   return amount;
 }
 
-uint64_t countOverallTxInputs(const cryptonote::transaction& tx) {
+uint64_t countOverallTxInputs(const cryptonote::Transaction& tx) {
   uint64_t amount = 0;
   for (auto& in: tx.vin) {
-    if(in.type() != typeid(cryptonote::txin_to_key))
+    if(in.type() != typeid(cryptonote::TransactionInputToKey))
       continue;
 
-    amount += boost::get<cryptonote::txin_to_key>(in).amount;
+    amount += boost::get<cryptonote::TransactionInputToKey>(in).amount;
   }
 
   return amount;
 }
 
-void fillTransactionHash(const cryptonote::transaction& tx, CryptoNote::TransactionHash& hash) {
+void fillTransactionHash(const cryptonote::Transaction& tx, CryptoNote::TransactionHash& hash) {
   crypto::hash h = cryptonote::get_transaction_hash(tx);
   memcpy(hash.data(), reinterpret_cast<const uint8_t *>(&h), hash.size());
 }
@@ -200,6 +215,7 @@ bool WalletSynchronizer::processNewBlocks(ProcessParameters& parameters) {
         fillRequest = true;
 
       ++context->progress.blockIdx;
+      context->progress.minersTxProcessed = false;
       ++currentIndex;
     }
   }
@@ -212,7 +228,7 @@ bool WalletSynchronizer::processNewBlocks(ProcessParameters& parameters) {
 }
 
 WalletSynchronizer::NextBlockAction WalletSynchronizer::handleNewBlockchainEntry(ProcessParameters& parameters, cryptonote::block_complete_entry& blockEntry, uint64_t height) {
-  cryptonote::block b;
+  cryptonote::Block b;
   bool r = cryptonote::parse_and_validate_block_from_blob(blockEntry.block, b);
   throwIf(!r, cryptonote::error::INTERNAL_WALLET_ERROR);
 
@@ -247,11 +263,11 @@ WalletSynchronizer::NextBlockAction WalletSynchronizer::handleNewBlockchainEntry
   return SKIP;
 }
 
-bool WalletSynchronizer::processNewBlockchainEntry(ProcessParameters& parameters, cryptonote::block_complete_entry& blockEntry, const cryptonote::block& b, crypto::hash& blockId, uint64_t height) {
+bool WalletSynchronizer::processNewBlockchainEntry(ProcessParameters& parameters, cryptonote::block_complete_entry& blockEntry, const cryptonote::Block& b, crypto::hash& blockId, uint64_t height) {
   throwIf(height != m_blockchain.size(), cryptonote::error::INTERNAL_WALLET_ERROR);
 
   if(b.timestamp + 60*60*24 > m_account.get_createtime()) {
-    if (!processMinersTx(parameters, b.miner_tx, height, b.timestamp))
+    if (!processMinersTx(parameters, b.minerTx, height, b.timestamp))
       return false;
 
     auto txIt = blockEntry.txs.begin();
@@ -259,7 +275,7 @@ bool WalletSynchronizer::processNewBlockchainEntry(ProcessParameters& parameters
 
     for (; txIt != blockEntry.txs.end(); ++txIt) {
       auto& txblob = *txIt;
-      cryptonote::transaction tx;
+      cryptonote::Transaction tx;
 
       bool r = parse_and_validate_tx_from_blob(txblob, tx);
       throwIf(!r, cryptonote::error::INTERNAL_WALLET_ERROR);
@@ -277,7 +293,7 @@ bool WalletSynchronizer::processNewBlockchainEntry(ProcessParameters& parameters
   return true;
 }
 
-bool WalletSynchronizer::processMinersTx(ProcessParameters& parameters, const cryptonote::transaction& tx, uint64_t height, uint64_t timestamp) {
+bool WalletSynchronizer::processMinersTx(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t height, uint64_t timestamp) {
   bool r = true;
 
   if (!parameters.context->progress.minersTxProcessed) {
@@ -288,7 +304,7 @@ bool WalletSynchronizer::processMinersTx(ProcessParameters& parameters, const cr
   return r;
 }
 
-bool WalletSynchronizer::processNewTransaction(ProcessParameters& parameters, const cryptonote::transaction& tx, uint64_t height, bool isCoinbase, uint64_t timestamp) {
+bool WalletSynchronizer::processNewTransaction(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t height, bool isCoinbase, uint64_t timestamp) {
   bool res = true;
 
   processUnconfirmed(parameters, tx, height, timestamp);
@@ -316,18 +332,18 @@ bool WalletSynchronizer::processNewTransaction(ProcessParameters& parameters, co
   return res;
 }
 
-uint64_t WalletSynchronizer::processMyInputs(const cryptonote::transaction& tx) {
+uint64_t WalletSynchronizer::processMyInputs(const cryptonote::Transaction& tx) {
   uint64_t money = 0;
   // check all outputs for spending (compare key images)
   for (auto& in: tx.vin) {
-    if(in.type() != typeid(cryptonote::txin_to_key))
+    if(in.type() != typeid(cryptonote::TransactionInputToKey))
       continue;
 
     size_t idx;
-    if (!m_transferDetails.getTransferDetailsIdxByKeyImage(boost::get<cryptonote::txin_to_key>(in).k_image, idx))
+    if (!m_transferDetails.getTransferDetailsIdxByKeyImage(boost::get<cryptonote::TransactionInputToKey>(in).keyImage, idx))
       continue;
 
-    money += boost::get<cryptonote::txin_to_key>(in).amount;
+    money += boost::get<cryptonote::TransactionInputToKey>(in).amount;
 
     TransferDetails& td = m_transferDetails.getTransferDetails(idx);
     td.spent = true;
@@ -336,7 +352,7 @@ uint64_t WalletSynchronizer::processMyInputs(const cryptonote::transaction& tx) 
   return money;
 }
 
-void WalletSynchronizer::fillGetTransactionOutsGlobalIndicesRequest(ProcessParameters& parameters, const cryptonote::transaction& tx,
+void WalletSynchronizer::fillGetTransactionOutsGlobalIndicesRequest(ProcessParameters& parameters, const cryptonote::Transaction& tx,
     const std::vector<size_t>& outs, const crypto::public_key& publicKey, uint64_t height) {
   crypto::hash txid = cryptonote::get_transaction_hash(tx);
 
@@ -350,14 +366,14 @@ void WalletSynchronizer::fillGetTransactionOutsGlobalIndicesRequest(ProcessParam
   postGetTransactionOutsGlobalIndicesRequest(parameters, txid, insert_result.first->second.globalIndices, height);
 }
 
-void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, const cryptonote::transaction& tx, uint64_t myOuts, uint64_t myInputs, uint64_t height, bool isCoinbase, uint64_t timestamp) {
+void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t myOuts, uint64_t myInputs, uint64_t height, bool isCoinbase, uint64_t timestamp) {
 
   uint64_t allOuts = countOverallTxOutputs(tx);
   uint64_t allInputs = countOverallTxInputs(tx);
 
   TransactionId foundTx = m_transactionsCache.findTransactionByHash(cryptonote::get_transaction_hash(tx));
   if (foundTx == INVALID_TRANSACTION_ID) {
-    Transaction transaction;
+    TransactionInfo transaction;
     transaction.firstTransferId = INVALID_TRANSFER_ID;
     transaction.transferCount = 0;
     transaction.totalAmount = myOuts - myInputs;
@@ -373,7 +389,7 @@ void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, 
   }
   else
   {
-    Transaction& transaction = m_transactionsCache.getTransaction(foundTx);
+    TransactionInfo& transaction = m_transactionsCache.getTransaction(foundTx);
     transaction.blockHeight = height;
     transaction.timestamp = timestamp;
     transaction.isCoinbase = isCoinbase;
@@ -382,14 +398,14 @@ void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, 
   }
 }
 
-void WalletSynchronizer::processUnconfirmed(ProcessParameters& parameters, const cryptonote::transaction& tx, uint64_t height, uint64_t timestamp) {
+void WalletSynchronizer::processUnconfirmed(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t height, uint64_t timestamp) {
   TransactionId id;
   crypto::hash hash = get_transaction_hash(tx);
 
   if (!m_unconfirmedTransactions.findTransactionId(hash, id))
     return;
 
-  Transaction& tr = m_transactionsCache.getTransaction(id);
+  TransactionInfo& tr = m_transactionsCache.getTransaction(id);
   tr.blockHeight = height;
   tr.timestamp = timestamp;
 
@@ -417,7 +433,7 @@ void WalletSynchronizer::handleTransactionOutGlobalIndicesResponse(std::shared_p
       return;
     }
 
-    cryptonote::transaction& tx = it->second.transaction;
+    cryptonote::Transaction& tx = it->second.transaction;
     std::vector<size_t>& outs = it->second.requestedOuts;
     crypto::public_key& tx_pub_key = it->second.transactionPubKey;
     std::vector<uint64_t>& global_indices = it->second.globalIndices;
@@ -431,9 +447,9 @@ void WalletSynchronizer::handleTransactionOutGlobalIndicesResponse(std::shared_p
       td.globalOutputIndex = global_indices[o];
       td.tx = tx;
       td.spent = false;
-      cryptonote::keypair in_ephemeral;
+      cryptonote::KeyPair in_ephemeral;
       cryptonote::generate_key_image_helper(m_account.get_keys(), tx_pub_key, o, in_ephemeral, td.keyImage);
-      throwIf(in_ephemeral.pub != boost::get<cryptonote::txout_to_key>(tx.vout[o].target).key, cryptonote::error::INTERNAL_WALLET_ERROR);
+      throwIf(in_ephemeral.pub != boost::get<cryptonote::TransactionOutputToKey>(tx.vout[o].target).key, cryptonote::error::INTERNAL_WALLET_ERROR);
 
       m_transferDetails.addTransferDetails(td);
     }

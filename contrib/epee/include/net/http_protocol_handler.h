@@ -31,6 +31,7 @@
 #define _HTTP_SERVER_H_
 
 #include <string>
+#include "include_base_utils.h"
 #include "net_utils_base.h"
 #include "to_nonconst_iterator.h"
 #include "http_base.h"

@@ -1,79 +1,38 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-#include "chaingen.h"
-#include "chaingen_tests_list.h"
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "block_reward.h"
+
+// epee
+#include "misc_language.h"
 
 using namespace epee;
 using namespace cryptonote;
 
 namespace
 {
-  bool construct_miner_tx_by_size(transaction& miner_tx, uint64_t height, uint64_t already_generated_coins,
-    const account_public_address& miner_address, std::vector<size_t>& block_sizes, size_t target_tx_size,
-    size_t target_block_size, uint64_t fee = 0)
-  {
-    if (!construct_miner_tx(height, misc_utils::median(block_sizes), already_generated_coins, target_block_size, fee, miner_address, miner_tx))
-      return false;
-
-    size_t current_size = get_object_blobsize(miner_tx);
-    size_t try_count = 0;
-    while (target_tx_size != current_size)
-    {
-      ++try_count;
-      if (10 < try_count)
-        return false;
-
-      if (target_tx_size < current_size)
-      {
-        size_t diff = current_size - target_tx_size;
-        if (diff <= miner_tx.extra.size())
-          miner_tx.extra.resize(miner_tx.extra.size() - diff);
-        else
-          return false;
-      }
-      else
-      {
-        size_t diff = target_tx_size - current_size;
-        miner_tx.extra.resize(miner_tx.extra.size() + diff);
-      }
-
-      current_size = get_object_blobsize(miner_tx);
-    }
-
-    return true;
-  }
-
-  bool construct_max_size_block(test_generator& generator, block& blk, const block& blk_prev, const account_base& miner_account,
-    size_t median_block_count = CRYPTONOTE_REWARD_BLOCKS_WINDOW)
-  {
-    std::vector<size_t> block_sizes;
-    generator.get_last_n_block_sizes(block_sizes, get_block_hash(blk_prev), median_block_count);
-
-    size_t median = misc_utils::median(block_sizes);
-    median = std::max(median, static_cast<size_t>(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE));
-
-    transaction miner_tx;
-    bool r = construct_miner_tx_by_size(miner_tx, get_block_height(blk_prev) + 1, generator.get_already_generated_coins(blk_prev),
-      miner_account.get_keys().m_account_address, block_sizes, 2 * median, 2 * median);
-    if (!r)
-      return false;
-
-    return generator.construct_block_manually(blk, blk_prev, miner_account, test_generator::bf_miner_tx, 0, 0, 0,
-      crypto::hash(), 0, miner_tx);
-  }
-
-  bool rewind_blocks(std::vector<test_event_entry>& events, test_generator& generator, block& blk, const block& blk_prev,
+  bool rewind_blocks(std::vector<test_event_entry>& events, test_generator& generator, Block& blk, const Block& blk_prev,
     const account_base& miner_account, size_t block_count)
   {
     blk = blk_prev;
     for (size_t i = 0; i < block_count; ++i)
     {
-      block blk_i;
-      if (!construct_max_size_block(generator, blk_i, blk, miner_account))
+      Block blk_i;
+      if (!generator.constructMaxSizeBlock(blk_i, blk, miner_account))
         return false;
 
       events.push_back(blk_i);
@@ -83,7 +42,7 @@ namespace
     return true;
   }
 
-  uint64_t get_tx_out_amount(const transaction& tx)
+  uint64_t get_tx_out_amount(const Transaction& tx)
   {
     uint64_t amount = 0;
     BOOST_FOREACH(auto& o, tx.vout)
@@ -93,8 +52,11 @@ namespace
 }
 
 gen_block_reward::gen_block_reward()
-  : m_invalid_block_index(0)
-{
+  : m_invalid_block_index(0) {
+  cryptonote::CurrencyBuilder currencyBuilder;
+  currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
+  m_currency = currencyBuilder.currency();
+
   REGISTER_CALLBACK_METHOD(gen_block_reward, mark_invalid_block);
   REGISTER_CALLBACK_METHOD(gen_block_reward, mark_checked_block);
   REGISTER_CALLBACK_METHOD(gen_block_reward, check_block_rewards);
@@ -109,28 +71,34 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
   DO_CALLBACK(events, "mark_checked_block");
   MAKE_ACCOUNT(events, bob_account);
 
-  // Test: miner transactions without outputs (block reward == 0)
-  block blk_0r;
-  if (!rewind_blocks(events, generator, blk_0r, blk_0, miner_account, CRYPTONOTE_REWARD_BLOCKS_WINDOW))
+  // Test case 1: miner transactions without outputs (block reward == 0)
+  Block blk_0r;
+  if (!rewind_blocks(events, generator, blk_0r, blk_0, miner_account, m_currency.rewardBlocksWindow())) {
     return false;
+  }
 
-  // Test: block reward is calculated using median of the latest CRYPTONOTE_REWARD_BLOCKS_WINDOW blocks
+  // Test: block reward is calculated using median of the latest m_currency.rewardBlocksWindow() blocks
   DO_CALLBACK(events, "mark_invalid_block");
-  block blk_1_bad_1;
-  if (!construct_max_size_block(generator, blk_1_bad_1, blk_0r, miner_account, CRYPTONOTE_REWARD_BLOCKS_WINDOW + 1))
+  Block blk_1_bad_1;
+  if (!generator.constructMaxSizeBlock(blk_1_bad_1, blk_0r, miner_account, m_currency.rewardBlocksWindow() + 1)) {
     return false;
+  }
   events.push_back(blk_1_bad_1);
 
   DO_CALLBACK(events, "mark_invalid_block");
-  block blk_1_bad_2;
-  if (!construct_max_size_block(generator, blk_1_bad_2, blk_0r, miner_account, CRYPTONOTE_REWARD_BLOCKS_WINDOW - 1))
+  Block blk_1_bad_2;
+  if (!generator.constructMaxSizeBlock(blk_1_bad_2, blk_0r, miner_account, m_currency.rewardBlocksWindow() - 1)) {
     return false;
+  }
   events.push_back(blk_1_bad_2);
 
-  block blk_1;
-  if (!construct_max_size_block(generator, blk_1, blk_0r, miner_account))
+  // Test 1.2: miner transactions without outputs (block reward == 0)
+  Block blk_1;
+  if (!generator.constructMaxSizeBlock(blk_1, blk_0r, miner_account)) {
     return false;
+  }
   events.push_back(blk_1);
+  // End of Test case 1
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -143,35 +111,35 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
   MAKE_NEXT_BLOCK(events, blk_5, blk_4, miner_account);
   DO_CALLBACK(events, "mark_checked_block");
 
-  block blk_5r;
-  if (!rewind_blocks(events, generator, blk_5r, blk_5, miner_account, CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW))
+  Block blk_5r;
+  if (!rewind_blocks(events, generator, blk_5r, blk_5, miner_account, m_currency.minedMoneyUnlockWindow()))
     return false;
 
   // Test: fee increases block reward
-  transaction tx_0(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 3 * TESTS_DEFAULT_FEE));
+  Transaction tx_0(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 3 * m_currency.minimumFee()));
   MAKE_NEXT_BLOCK_TX1(events, blk_6, blk_5r, miner_account, tx_0);
   DO_CALLBACK(events, "mark_checked_block");
 
   // Test: fee from all block transactions increase block reward
-  std::list<transaction> txs_0;
-  txs_0.push_back(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 5 * TESTS_DEFAULT_FEE));
-  txs_0.push_back(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 7 * TESTS_DEFAULT_FEE));
+  std::list<Transaction> txs_0;
+  txs_0.push_back(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 5 * m_currency.minimumFee()));
+  txs_0.push_back(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 7 * m_currency.minimumFee()));
   MAKE_NEXT_BLOCK_TX_LIST(events, blk_7, blk_6, miner_account, txs_0);
   DO_CALLBACK(events, "mark_checked_block");
 
   // Test: block reward == transactions fee
   {
-    transaction tx_1 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 11 * TESTS_DEFAULT_FEE);
-    transaction tx_2 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 13 * TESTS_DEFAULT_FEE);
+    Transaction tx_1 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 11 * m_currency.minimumFee());
+    Transaction tx_2 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 13 * m_currency.minimumFee());
     size_t txs_1_size = get_object_blobsize(tx_1) + get_object_blobsize(tx_2);
     uint64_t txs_fee = get_tx_fee(tx_1) + get_tx_fee(tx_2);
 
     std::vector<size_t> block_sizes;
-    generator.get_last_n_block_sizes(block_sizes, get_block_hash(blk_7), CRYPTONOTE_REWARD_BLOCKS_WINDOW);
+    generator.getLastNBlockSizes(block_sizes, get_block_hash(blk_7), m_currency.rewardBlocksWindow());
     size_t median = misc_utils::median(block_sizes);
 
-    transaction miner_tx;
-    bool r = construct_miner_tx_by_size(miner_tx, get_block_height(blk_7) + 1, generator.get_already_generated_coins(blk_7),
+    Transaction miner_tx;
+    bool r = constructMinerTxBySize(m_currency, miner_tx, get_block_height(blk_7) + 1, generator.getAlreadyGeneratedCoins(blk_7),
       miner_account.get_keys().m_account_address, block_sizes, 2 * median - txs_1_size, 2 * median, txs_fee);
     if (!r)
       return false;
@@ -180,9 +148,9 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
     txs_1_hashes.push_back(get_transaction_hash(tx_1));
     txs_1_hashes.push_back(get_transaction_hash(tx_2));
 
-    block blk_8;
-    generator.construct_block_manually(blk_8, blk_7, miner_account, test_generator::bf_miner_tx | test_generator::bf_tx_hashes,
-      0, 0, 0, crypto::hash(), 0, miner_tx, txs_1_hashes, txs_1_size);
+    Block blk_8;
+    generator.constructBlockManually(blk_8, blk_7, miner_account, test_generator::bf_miner_tx | test_generator::bf_tx_hashes,
+      0, 0, 0, crypto::hash(), 0, miner_tx, txs_1_hashes, txs_1_size, txs_fee);
 
     events.push_back(blk_8);
     DO_CALLBACK(events, "mark_checked_block");
@@ -193,7 +161,7 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
   return true;
 }
 
-bool gen_block_reward::check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::block& /*blk*/)
+bool gen_block_reward::check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*blk*/)
 {
   if (m_invalid_block_index == event_idx)
   {
@@ -223,28 +191,28 @@ bool gen_block_reward::check_block_rewards(cryptonote::core& /*c*/, size_t /*ev_
   DEFINE_TESTS_ERROR_CONTEXT("gen_block_reward_without_txs::check_block_rewards");
 
   std::array<uint64_t, 7> blk_rewards;
-  blk_rewards[0] = MONEY_SUPPLY >> 18;
+  blk_rewards[0] = m_currency.moneySupply() >> m_currency.emissionSpeedFactor();
   uint64_t cumulative_reward = blk_rewards[0];
   for (size_t i = 1; i < blk_rewards.size(); ++i)
   {
-    blk_rewards[i] = (MONEY_SUPPLY - cumulative_reward) >> 18;
+    blk_rewards[i] = (m_currency.moneySupply() - cumulative_reward) >> m_currency.emissionSpeedFactor();
     cumulative_reward += blk_rewards[i];
   }
 
   for (size_t i = 0; i < 5; ++i)
   {
-    block blk_i = boost::get<block>(events[m_checked_blocks_indices[i]]);
-    CHECK_EQ(blk_rewards[i], get_tx_out_amount(blk_i.miner_tx));
+    Block blk_i = boost::get<Block>(events[m_checked_blocks_indices[i]]);
+    CHECK_EQ(blk_rewards[i], get_tx_out_amount(blk_i.minerTx));
   }
 
-  block blk_n1 = boost::get<block>(events[m_checked_blocks_indices[5]]);
-  CHECK_EQ(blk_rewards[5] + 3 * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n1.miner_tx));
+  Block blk_n1 = boost::get<Block>(events[m_checked_blocks_indices[5]]);
+  CHECK_EQ(blk_rewards[5] + 3 * m_currency.minimumFee(), get_tx_out_amount(blk_n1.minerTx));
 
-  block blk_n2 = boost::get<block>(events[m_checked_blocks_indices[6]]);
-  CHECK_EQ(blk_rewards[6] + (5 + 7) * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n2.miner_tx));
+  Block blk_n2 = boost::get<Block>(events[m_checked_blocks_indices[6]]);
+  CHECK_EQ(blk_rewards[6] + (5 + 7) * m_currency.minimumFee(), get_tx_out_amount(blk_n2.minerTx));
 
-  block blk_n3 = boost::get<block>(events[m_checked_blocks_indices[7]]);
-  CHECK_EQ((11 + 13) * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n3.miner_tx));
+  Block blk_n3 = boost::get<Block>(events[m_checked_blocks_indices[7]]);
+  CHECK_EQ((11 + 13) * m_currency.minimumFee(), get_tx_out_amount(blk_n3.minerTx));
 
   return true;
 }

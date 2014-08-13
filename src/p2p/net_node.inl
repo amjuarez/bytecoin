@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
@@ -27,7 +40,7 @@ namespace nodetool
   namespace
   {
     const command_line::arg_descriptor<std::string> arg_p2p_bind_ip        = {"p2p-bind-ip", "Interface for p2p network protocol", "0.0.0.0"};
-    const command_line::arg_descriptor<std::string> arg_p2p_bind_port      = {"p2p-bind-port", "Port for p2p network protocol", boost::to_string(P2P_DEFAULT_PORT)};
+    const command_line::arg_descriptor<std::string> arg_p2p_bind_port      = {"p2p-bind-port", "Port for p2p network protocol", boost::to_string(cryptonote::P2P_DEFAULT_PORT)};
     const command_line::arg_descriptor<uint32_t>    arg_p2p_external_port  = {"p2p-external-port", "External port for p2p network protocol (if port forwarding used with NAT)", 0};
     const command_line::arg_descriptor<bool>        arg_p2p_allow_local_ip = {"allow-local-ip", "Allow local ip add to peer list, mostly in debug purposes"};
     const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer   = {"add-peer", "Manually add peer to local peerlist"};
@@ -50,14 +63,15 @@ namespace nodetool
     command_line::add_arg(desc, arg_p2p_add_priority_node);
     command_line::add_arg(desc, arg_p2p_add_exclusive_node);
     command_line::add_arg(desc, arg_p2p_seed_node);    
-    command_line::add_arg(desc, arg_p2p_hide_my_port);   }
+    command_line::add_arg(desc, arg_p2p_hide_my_port);
+  }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::init_config()
   {
     //
     TRY_ENTRY();
-    std::string state_file_path = m_config_folder + "/" + P2P_NET_DATA_FILENAME;
+    std::string state_file_path = m_config_folder + "/" + cryptonote::parameters::P2P_NET_DATA_FILENAME;
     std::ifstream p2p_data;
     p2p_data.open( state_file_path , std::ios_base::binary | std::ios_base::in);
     if(!p2p_data.fail())
@@ -70,13 +84,13 @@ namespace nodetool
     }
 
     //at this moment we have hardcoded config
-    m_config.m_net_config.handshake_interval = P2P_DEFAULT_HANDSHAKE_INTERVAL;
-    m_config.m_net_config.connections_count = P2P_DEFAULT_CONNECTIONS_COUNT;
-    m_config.m_net_config.packet_max_size = P2P_DEFAULT_PACKET_MAX_SIZE; //20 MB limit
+    m_config.m_net_config.handshake_interval = cryptonote::P2P_DEFAULT_HANDSHAKE_INTERVAL;
+    m_config.m_net_config.connections_count = cryptonote::P2P_DEFAULT_CONNECTIONS_COUNT;
+    m_config.m_net_config.packet_max_size = cryptonote::P2P_DEFAULT_PACKET_MAX_SIZE; //20 MB limit
     m_config.m_net_config.config_id = 0; // initial config
-    m_config.m_net_config.connection_timeout = P2P_DEFAULT_CONNECTION_TIMEOUT;
-    m_config.m_net_config.ping_connection_timeout = P2P_DEFAULT_PING_CONNECTION_TIMEOUT;
-    m_config.m_net_config.send_peerlist_sz = P2P_DEFAULT_PEERS_IN_HANDSHAKE;
+    m_config.m_net_config.connection_timeout = cryptonote::P2P_DEFAULT_CONNECTION_TIMEOUT;
+    m_config.m_net_config.ping_connection_timeout = cryptonote::P2P_DEFAULT_PING_CONNECTION_TIMEOUT;
+    m_config.m_net_config.send_peerlist_sz = cryptonote::P2P_DEFAULT_PEERS_IN_HANDSHAKE;
 
     m_first_connection_maker_call = true;
     CATCH_ENTRY_L0("node_server::init_config", false);
@@ -188,15 +202,16 @@ namespace nodetool
     }
   }
 
-  #define ADD_HARDCODED_SEED_NODE(addr) append_net_address(m_seed_nodes, addr);
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
-  bool node_server<t_payload_net_handler>::init(const boost::program_options::variables_map& vm)
-  {
-    ADD_HARDCODED_SEED_NODE("162.243.247.45:29080");
-    ADD_HARDCODED_SEED_NODE("146.185.191.90:29080");
-    ADD_HARDCODED_SEED_NODE("104.131.132.129:29080");
-    ADD_HARDCODED_SEED_NODE("128.199.146.243:29080");
+  bool node_server<t_payload_net_handler>::init(const boost::program_options::variables_map& vm, bool testnet) {
+    if (!testnet) {
+      for (auto seed : cryptonote::SEED_NODES) {
+        append_net_address(m_seed_nodes, seed);
+      }
+    } else {
+      m_network_id.data[0] += 1;
+    }
 
     bool res = handle_command_line(vm);
     CHECK_AND_ASSERT_MES(res, false, "Failed to handle command line");
@@ -220,7 +235,7 @@ namespace nodetool
     //configure self
     m_net_server.set_threads_prefix("P2P");
     m_net_server.get_config_object().m_pcommands_handler = this;
-    m_net_server.get_config_object().m_invoke_timeout = P2P_DEFAULT_INVOKE_TIMEOUT;
+    m_net_server.get_config_object().m_invoke_timeout = cryptonote::P2P_DEFAULT_INVOKE_TIMEOUT;
 
     //try to bind
     LOG_PRINT_L0("Binding on " << m_bind_ip << ":" << m_port);
@@ -245,7 +260,8 @@ namespace nodetool
       if (result == 1) {
         std::ostringstream portString;
         portString << m_listenning_port;
-        if (UPNP_AddPortMapping(urls.controlURL, igdData.first.servicetype, portString.str().c_str(), portString.str().c_str(), lanAddress, CRYPTONOTE_NAME, "TCP", 0, "0") != 0) {
+        if (UPNP_AddPortMapping(urls.controlURL, igdData.first.servicetype, portString.str().c_str(),
+            portString.str().c_str(), lanAddress, cryptonote::CRYPTONOTE_NAME, "TCP", 0, "0") != 0) {
           LOG_ERROR("UPNP_AddPortMapping failed.");
         } else {
           LOG_PRINT_GREEN("Added IGD port mapping.", LOG_LEVEL_0);
@@ -282,7 +298,7 @@ namespace nodetool
     m_net_server.add_idle_handler(boost::bind(&t_payload_net_handler::on_idle, &m_payload_handler), 1000);
 
     boost::thread::attributes attrs;
-    attrs.set_stack_size(THREAD_STACK_SIZE);
+    attrs.set_stack_size(cryptonote::THREAD_STACK_SIZE);
 
     //go to loop
     LOG_PRINT("Run net_service loop( " << thrds_count << " threads)...", LOG_LEVEL_0);
@@ -321,7 +337,7 @@ namespace nodetool
       return false;
     }
 
-    std::string state_file_path = m_config_folder + "/" + P2P_NET_DATA_FILENAME;
+    std::string state_file_path = m_config_folder + "/" + cryptonote::parameters::P2P_NET_DATA_FILENAME;
     std::ofstream p2p_data;
     p2p_data.open( state_file_path , std::ios_base::binary | std::ios_base::out| std::ios::trunc);
     if(p2p_data.fail())
@@ -334,8 +350,6 @@ namespace nodetool
     a << *this;
     return true;
     CATCH_ENTRY_L0("blockchain_storage::save", false);
-
-    return true;
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
@@ -370,7 +384,7 @@ namespace nodetool
         return;
       }
 
-      if(rsp.node_data.network_id != BYTECOIN_NETWORK)
+      if(rsp.node_data.network_id != m_network_id)
       {
         LOG_ERROR_CCONTEXT("COMMAND_HANDSHAKE Failed, wrong network!  (" << epee::string_tools::get_str_from_guid_a(rsp.node_data.network_id) << "), closing connection.");
         return;
@@ -405,7 +419,7 @@ namespace nodetool
       {
         LOG_PRINT_CCONTEXT_L1(" COMMAND_HANDSHAKE(AND CLOSE) INVOKED OK");
       }
-    }, P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT);
+    }, cryptonote::P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT);
 
     if(r)
     {
@@ -648,7 +662,7 @@ namespace nodetool
 
     if (!connect_to_peerlist(m_priority_peers)) return false;
 
-    size_t expected_white_connections = (m_config.m_net_config.connections_count*P2P_DEFAULT_WHITELIST_CONNECTIONS_PERCENT)/100;
+    size_t expected_white_connections = (m_config.m_net_config.connections_count * cryptonote::P2P_DEFAULT_WHITELIST_CONNECTIONS_PERCENT) / 100;
 
     size_t conn_count = get_outgoing_connections_count();
     if(conn_count < m_config.m_net_config.connections_count)
@@ -778,7 +792,7 @@ namespace nodetool
       node_data.my_port = m_external_port ? m_external_port : m_listenning_port;
     else 
       node_data.my_port = 0;
-    node_data.network_id = BYTECOIN_NETWORK;
+    node_data.network_id = m_network_id;
     return true;
   }
   //-----------------------------------------------------------------------------------
@@ -804,7 +818,7 @@ namespace nodetool
       return false;
     }
     crypto::public_key pk = AUTO_VAL_INIT(pk);
-    epee::string_tools::hex_to_pod(P2P_STAT_TRUSTED_PUB_KEY, pk);
+    epee::string_tools::hex_to_pod(cryptonote::P2P_STAT_TRUSTED_PUB_KEY, pk);
     crypto::hash h = tools::get_proof_of_trust_hash(tr);
     if(!crypto::check_signature(h, pk, tr.sign))
     {
@@ -998,9 +1012,8 @@ namespace nodetool
   template<class t_payload_net_handler>
   int node_server<t_payload_net_handler>::handle_handshake(int command, typename COMMAND_HANDSHAKE::request& arg, typename COMMAND_HANDSHAKE::response& rsp, p2p_connection_context& context)
   {
-    if(arg.node_data.network_id != BYTECOIN_NETWORK)
+    if(arg.node_data.network_id != m_network_id)
     {
-
       LOG_PRINT_CCONTEXT_L0("WRONG NETWORK AGENT CONNECTED! id=" << epee::string_tools::get_str_from_guid_a(arg.node_data.network_id));
       drop_connection(context);
       return 1;

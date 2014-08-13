@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include <boost/thread.hpp>
@@ -53,13 +66,13 @@ namespace nodetool
   public:
     typedef t_payload_net_handler payload_net_handler;
     // Some code
-    node_server(t_payload_net_handler& payload_handler):m_payload_handler(payload_handler), m_allow_local_ip(false), m_hide_my_port(false)
+    node_server(t_payload_net_handler& payload_handler):m_payload_handler(payload_handler), m_allow_local_ip(false), m_hide_my_port(false), m_network_id(BYTECOIN_NETWORK)
     {}
 
     static void init_options(boost::program_options::options_description& desc);
 
     bool run();
-    bool init(const boost::program_options::variables_map& vm);
+    bool init(const boost::program_options::variables_map& vm, bool testnet);
     bool deinit();
     bool send_stop_signal();
     uint32_t get_this_peer_port(){return m_listenning_port;}
@@ -187,7 +200,7 @@ namespace nodetool
     t_payload_net_handler& m_payload_handler;
     peerlist_manager m_peerlist;
 
-    epee::math_helper::once_a_time_seconds<P2P_DEFAULT_HANDSHAKE_INTERVAL> m_peer_handshake_idle_maker_interval;
+    epee::math_helper::once_a_time_seconds<cryptonote::P2P_DEFAULT_HANDSHAKE_INTERVAL> m_peer_handshake_idle_maker_interval;
     epee::math_helper::once_a_time_seconds<1> m_connections_maker_interval;
     epee::math_helper::once_a_time_seconds<60*30, false> m_peerlist_store_interval;
 
@@ -203,6 +216,7 @@ namespace nodetool
     uint64_t m_peer_livetime;
     //keep connections to initiate some interactions
     net_server m_net_server;
+    boost::uuids::uuid m_network_id;
   };
 }
 

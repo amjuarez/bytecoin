@@ -1,7 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "include_base_utils.h"
 using namespace epee;
@@ -32,7 +44,11 @@ namespace tools
   bool wallet_rpc_server::run()
   {
     m_net_server.add_idle_handler([this](){
-      m_wallet.refresh();
+      try {
+        m_wallet.refresh();
+      } catch (const std::exception& ex) {
+        LOG_ERROR("Exception at while refreshing, what=" << ex.what());
+      }
       return true;
     }, 20000);
 
@@ -76,7 +92,7 @@ namespace tools
     std::vector<cryptonote::tx_destination_entry> dsts;
     for (auto it = req.destinations.begin(); it != req.destinations.end(); it++) {
       cryptonote::tx_destination_entry de;
-      if (!get_account_address_from_str(de.addr, it->address)) {
+      if (!m_wallet.currency().parseAccountAddressString(it->address, de.addr)) {
         er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + it->address;
         return false;
@@ -106,7 +122,7 @@ namespace tools
     }
 
     try {
-      cryptonote::transaction tx;
+      cryptonote::Transaction tx;
       m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, extra, tx);
       res.tx_hash = boost::lexical_cast<std::string>(cryptonote::get_transaction_hash(tx));
       return true;

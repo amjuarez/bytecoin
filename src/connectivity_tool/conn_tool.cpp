@@ -1,28 +1,41 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
-#include "include_base_utils.h"
-#include "version.h"
-
-using namespace epee;
 #include <boost/program_options.hpp>
-#include "p2p/p2p_protocol_defs.h"
+
+// epee
+#include "include_base_utils.h"
+#include "net/http_client.h"
+#include "net/levin_client.h"
+#include "storages/http_abstract_invoke.h"
+#include "storages/levin_abstract_invoke2.h"
+#include "storages/portable_storage_template_helper.h"
+
 #include "common/command_line.h"
+#include "crypto/crypto.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
-#include "net/levin_client.h"
-#include "storages/levin_abstract_invoke2.h"
-#include "cryptonote_core/cryptonote_core.h"
-#include "storages/portable_storage_template_helper.h"
-#include "crypto/crypto.h"
-#include "storages/http_abstract_invoke.h"
-#include "net/http_client.h"
+#include "p2p/p2p_protocol_defs.h"
+#include "rpc/core_rpc_server_commands_defs.h"
+#include "version.h"
 
 namespace po = boost::program_options;
 using namespace cryptonote;
+using namespace epee;
 using namespace nodetool;
 
 namespace
@@ -350,4 +363,3 @@ int main(int argc, char* argv[])
 
   return 1;
 }
-
