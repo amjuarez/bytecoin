@@ -39,12 +39,12 @@ public:
 
   TransactionId findTransactionByTransferId(TransferId transferId) const;
 
-  bool getTransaction(TransactionId transactionId, Transaction& transaction) const;
-  Transaction& getTransaction(TransactionId transactionId);
+  bool getTransaction(TransactionId transactionId, TransactionInfo& transaction) const;
+  TransactionInfo& getTransaction(TransactionId transactionId);
   bool getTransfer(TransferId transferId, Transfer& transfer) const;
   Transfer& getTransfer(TransferId transferId);
 
-  TransactionId insertTransaction(Transaction&& transaction);
+  TransactionId insertTransaction(TransactionInfo&& Transaction);
   TransferId insertTransfers(const std::vector<Transfer>& transfers);
 
   TransactionId findTransactionByHash(const crypto::hash& hash);
@@ -52,7 +52,7 @@ public:
 
 private:
   typedef std::vector<Transfer> UserTransfers;
-  typedef std::vector<Transaction> UserTransactions;
+  typedef std::vector<TransactionInfo> UserTransactions;
 
   void getGoodItems(bool saveDetailed, UserTransactions& transactions, UserTransfers& transfers);
   void getGoodTransaction(TransactionId txId, size_t offset, bool saveDetailed, UserTransactions& transactions, UserTransfers& transfers);

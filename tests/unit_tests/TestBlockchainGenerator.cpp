@@ -31,7 +31,7 @@ public:
     return base_class::init();
   }
 
-  void generate(const cryptonote::account_public_address& address, cryptonote::transaction& tx)
+  void generate(const cryptonote::AccountPublicAddress& address, cryptonote::Transaction& tx)
   {
     cryptonote::tx_destination_entry destination(this->m_source_amount, address);
     std::vector<cryptonote::tx_destination_entry> destinations;
@@ -42,18 +42,20 @@ public:
 };
 
 
-TestBlockchainGenerator::TestBlockchainGenerator()
+TestBlockchainGenerator::TestBlockchainGenerator(const cryptonote::Currency& currency) :
+  m_currency(currency),
+  generator(currency)
 {
   miner_acc.generate();
   addGenesisBlock();
 }
 
-std::vector<cryptonote::block>& TestBlockchainGenerator::getBlockchain()
+std::vector<cryptonote::Block>& TestBlockchainGenerator::getBlockchain()
 {
   return m_blockchain;
 }
 
-bool TestBlockchainGenerator::getTransactionByHash(const crypto::hash& hash, cryptonote::transaction& tx)
+bool TestBlockchainGenerator::getTransactionByHash(const crypto::hash& hash, cryptonote::Transaction& tx)
 {
   auto it = m_txs.find(hash);
   if (it == m_txs.end())
@@ -65,10 +67,10 @@ bool TestBlockchainGenerator::getTransactionByHash(const crypto::hash& hash, cry
 
 void TestBlockchainGenerator::addGenesisBlock()
 {
-  cryptonote::block genesis;
+  cryptonote::Block genesis;
   uint64_t timestamp = time(NULL);
 
-  generator.construct_block(genesis, miner_acc, timestamp);
+  generator.constructBlock(genesis, miner_acc, timestamp);
   m_blockchain.push_back(genesis);
 }
 
@@ -78,47 +80,47 @@ void TestBlockchainGenerator::generateEmptyBlocks(size_t count)
 
   for (size_t i = 0; i < count; ++i)
   {
-    cryptonote::block& prev_block = m_blockchain.back();
-    cryptonote::block block;
-    generator.construct_block(block, prev_block, miner_acc);
+    cryptonote::Block& prev_block = m_blockchain.back();
+    cryptonote::Block block;
+    generator.constructBlock(block, prev_block, miner_acc);
     m_blockchain.push_back(block);
   }
 }
 
-void TestBlockchainGenerator::addTxToBlockchain(const cryptonote::transaction& transaction)
+void TestBlockchainGenerator::addTxToBlockchain(const cryptonote::Transaction& transaction)
 {
   crypto::hash txHash = cryptonote::get_transaction_hash(transaction);
   m_txs[txHash] = transaction;
 
-  std::list<cryptonote::transaction> txs;
+  std::list<cryptonote::Transaction> txs;
   txs.push_back(transaction);
 
-  cryptonote::block& prev_block = m_blockchain.back();
-  cryptonote::block block;
+  cryptonote::Block& prev_block = m_blockchain.back();
+  cryptonote::Block block;
 
-  generator.construct_block(block, prev_block, miner_acc, txs);
+  generator.constructBlock(block, prev_block, miner_acc, txs);
   m_blockchain.push_back(block);
 }
 
-bool TestBlockchainGenerator::getBlockRewardForAddress(const cryptonote::account_public_address& address)
+bool TestBlockchainGenerator::getBlockRewardForAddress(const cryptonote::AccountPublicAddress& address)
 {
   TransactionForAddressCreator creator;
   if (!creator.init())
     return false;
 
-  cryptonote::transaction tx;
+  cryptonote::Transaction tx;
   creator.generate(address, tx);
 
   crypto::hash txHash = cryptonote::get_transaction_hash(tx);
   m_txs[txHash] = tx;
 
-  std::list<cryptonote::transaction> txs;
+  std::list<cryptonote::Transaction> txs;
   txs.push_back(tx);
 
-  cryptonote::block& prev_block = m_blockchain.back();
-  cryptonote::block block;
+  cryptonote::Block& prev_block = m_blockchain.back();
+  cryptonote::Block block;
 
-  generator.construct_block(block, prev_block, miner_acc, txs);
+  generator.constructBlock(block, prev_block, miner_acc, txs);
   m_blockchain.push_back(block);
 
   return true;

@@ -35,7 +35,7 @@ void WalletUnconfirmedTransactions::erase(const crypto::hash& hash) {
   m_unconfirmedTxs.erase(hash);
 }
 
-void WalletUnconfirmedTransactions::add(const cryptonote::transaction& tx,
+void WalletUnconfirmedTransactions::add(const cryptonote::Transaction& tx,
     TransactionId transactionId, uint64_t change_amount) {
   UnconfirmedTransferDetails& utd = m_unconfirmedTxs[cryptonote::get_transaction_hash(tx)];
 

@@ -20,6 +20,7 @@
 #include <unordered_map>
 
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_core/Currency.h"
 #include "IWallet.h"
 
 namespace CryptoNote {
@@ -27,7 +28,7 @@ namespace CryptoNote {
 struct TransferDetails
 {
   uint64_t blockHeight;
-  cryptonote::transaction tx;
+  cryptonote::Transaction tx;
   size_t internalOutputIndex;
   uint64_t globalOutputIndex;
   bool spent;
@@ -42,7 +43,7 @@ struct TransferDetails
 class WalletTransferDetails
 {
 public:
-  WalletTransferDetails(const std::vector<crypto::hash>& blockchain);
+  WalletTransferDetails(const cryptonote::Currency& currency, const std::vector<crypto::hash>& blockchain);
   ~WalletTransferDetails();
 
   TransferDetails& getTransferDetails(size_t idx);
@@ -72,6 +73,7 @@ private:
   typedef std::unordered_map<crypto::key_image, size_t> KeyImagesContainer;
   KeyImagesContainer m_keyImages;
 
+  const cryptonote::Currency& m_currency;
   const std::vector<crypto::hash>& m_blockchain;
 };
 

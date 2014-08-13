@@ -123,7 +123,7 @@ namespace cryptonote
 
     int64_t diff = static_cast<int64_t>(hshd.current_height) - static_cast<int64_t>(m_core.get_current_blockchain_height());
     LOG_PRINT_CCONTEXT_YELLOW("Sync data returned unknown top block: " << m_core.get_current_blockchain_height() << " -> " << hshd.current_height
-      << " [" << std::abs(diff) << " blocks (" << diff / (24 * 60 * 60 / DIFFICULTY_TARGET) << " days) "
+      << " [" << std::abs(diff) << " blocks (" << diff / (24 * 60 * 60 / m_core.currency().difficultyTarget()) << " days) "
       << (0 <= diff ? std::string("behind") : std::string("ahead"))
       << "] " << ENDL << "SYNCHRONIZATION started", (is_inital ? LOG_LEVEL_0:LOG_LEVEL_1));
     LOG_PRINT_L1("Remote top block height: " << hshd.current_height << ", id: " << hshd.top_id);
@@ -153,50 +153,42 @@ namespace cryptonote
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------  
-    template<class t_core> 
-    int t_cryptonote_protocol_handler<t_core>::handle_notify_new_block(int command, NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& context)
-  {
+  template<class t_core> 
+  int t_cryptonote_protocol_handler<t_core>::handle_notify_new_block(int command, NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& context) {
     LOG_PRINT_CCONTEXT_L2("NOTIFY_NEW_BLOCK (hop " << arg.hop << ")");
-    if(context.m_state != cryptonote_connection_context::state_normal)
+    if (context.m_state != cryptonote_connection_context::state_normal) {
       return 1;
+    }
 
-    for(auto tx_blob_it = arg.b.txs.begin(); tx_blob_it!=arg.b.txs.end();tx_blob_it++)
-    {
+    for (auto tx_blob_it = arg.b.txs.begin(); tx_blob_it != arg.b.txs.end(); tx_blob_it++) {
       cryptonote::tx_verification_context tvc = AUTO_VAL_INIT(tvc);
       m_core.handle_incoming_tx(*tx_blob_it, tvc, true);
-      if(tvc.m_verifivation_failed)
-      {
+      if (tvc.m_verifivation_failed) {
         LOG_PRINT_CCONTEXT_L0("Block verification failed: transaction verification failed, dropping connection");
         m_p2p->drop_connection(context);
         return 1;
       }
     }
 
-
     block_verification_context bvc = boost::value_initialized<block_verification_context>();
-    m_core.pause_mine();
-    m_core.handle_incoming_block(arg.b.block, bvc);
-    m_core.resume_mine();
-    if(bvc.m_verifivation_failed)
-    {
+    m_core.handle_incoming_block_blob(arg.b.block, bvc, true, false);
+    if (bvc.m_verifivation_failed) {
       LOG_PRINT_CCONTEXT_L0("Block verification failed, dropping connection");
       m_p2p->drop_connection(context);
       return 1;
     }
-    if(bvc.m_added_to_main_chain)
-    {
+    if (bvc.m_added_to_main_chain) {
       ++arg.hop;
       //TODO: Add here announce protocol usage
       relay_block(arg, context);
-    }else if(bvc.m_marked_as_orphaned)
-    {
+    } else if (bvc.m_marked_as_orphaned) {
       context.m_state = cryptonote_connection_context::state_synchronizing;
       NOTIFY_REQUEST_CHAIN::request r = boost::value_initialized<NOTIFY_REQUEST_CHAIN::request>();
       m_core.get_short_chain_history(r.block_ids);
-      LOG_PRINT_CCONTEXT_L2("-->>NOTIFY_REQUEST_CHAIN: m_block_ids.size()=" << r.block_ids.size() );
+      LOG_PRINT_CCONTEXT_L2("-->>NOTIFY_REQUEST_CHAIN: m_block_ids.size()=" << r.block_ids.size());
       post_notify<NOTIFY_REQUEST_CHAIN>(r, context);
     }
-      
+
     return 1;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -266,14 +258,14 @@ namespace cryptonote
     BOOST_FOREACH(const block_complete_entry& block_entry, arg.blocks)
     {
       ++count;
-      block b;
+      Block b;
       if(!parse_and_validate_block_from_blob(block_entry.block, b))
       {
         LOG_ERROR_CCONTEXT("sent wrong block: failed to parse and validate block: \r\n" 
           << epee::string_tools::buff_to_hex_nodelimer(block_entry.block) << "\r\n dropping connection");
         m_p2p->drop_connection(context);
         return 1;
-      }      
+      }
       //to avoid concurrency in core between connections, suspend connections which delivered block later then first one
       if(count == 2)
       { 
@@ -286,7 +278,7 @@ namespace cryptonote
           return 1;
         }
       }
-      
+
       auto req_it = context.m_requested_objects.find(get_block_hash(b));
       if(req_it == context.m_requested_objects.end())
       {
@@ -295,10 +287,10 @@ namespace cryptonote
         m_p2p->drop_connection(context);
         return 1;
       }
-      if(b.tx_hashes.size() != block_entry.txs.size()) 
+      if (b.txHashes.size() != block_entry.txs.size()) 
       {
         LOG_ERROR_CCONTEXT("sent wrong NOTIFY_RESPONSE_GET_OBJECTS: block with id=" << epee::string_tools::pod_to_hex(get_blob_hash(block_entry.block)) 
-          << ", tx_hashes.size()=" << b.tx_hashes.size() << " mismatch with block_complete_entry.m_txs.size()=" << block_entry.txs.size() << ", dropping connection");
+          << ", txHashes.size()=" << b.txHashes.size() << " mismatch with block_complete_entry.m_txs.size()=" << block_entry.txs.size() << ", dropping connection");
         m_p2p->drop_connection(context);
         return 1;
       }
@@ -315,20 +307,17 @@ namespace cryptonote
     }
 
     {
-      m_core.pause_mine();
+      m_core.pause_mining();
       epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler(
-        boost::bind(&t_core::resume_mine, &m_core));
+        boost::bind(&t_core::update_block_template_and_resume_mining, &m_core));
 
-      BOOST_FOREACH(const block_complete_entry& block_entry, arg.blocks)
-      {
+      for (const block_complete_entry& block_entry : arg.blocks) {
         //process transactions
         TIME_MEASURE_START(transactions_process_time);
-        BOOST_FOREACH(auto& tx_blob, block_entry.txs)
-        {
+        for (auto& tx_blob : block_entry.txs) {
           tx_verification_context tvc = AUTO_VAL_INIT(tvc);
           m_core.handle_incoming_tx(tx_blob, tvc, true);
-          if(tvc.m_verifivation_failed)
-          {
+          if (tvc.m_verifivation_failed) {
             LOG_ERROR_CCONTEXT("transaction verification failed on NOTIFY_RESPONSE_GET_OBJECTS, \r\ntx_id = " 
               << epee::string_tools::pod_to_hex(get_blob_hash(tx_blob)) << ", dropping connection");
             m_p2p->drop_connection(context);
@@ -340,24 +329,21 @@ namespace cryptonote
         //process block
         TIME_MEASURE_START(block_process_time);
         block_verification_context bvc = boost::value_initialized<block_verification_context>();
+        m_core.handle_incoming_block_blob(block_entry.block, bvc, false, false);
 
-        m_core.handle_incoming_block(block_entry.block, bvc, false);
-
-        if(bvc.m_verifivation_failed)
-        {
+        if (bvc.m_verifivation_failed) {
           LOG_PRINT_CCONTEXT_L0("Block verification failed, dropping connection");
           m_p2p->drop_connection(context);
           return 1;
-        }
-        if(bvc.m_marked_as_orphaned)
-        {
+        } else if (bvc.m_marked_as_orphaned) {
           LOG_PRINT_CCONTEXT_L0("Block received at sync phase was marked as orphaned, dropping connection");
           m_p2p->drop_connection(context);
           return 1;
         }
 
         TIME_MEASURE_FINISH(block_process_time);
-        LOG_PRINT_CCONTEXT_L2("Block process time: " << block_process_time + transactions_process_time << "(" << transactions_process_time << "/" << block_process_time << ")ms");
+        LOG_PRINT_CCONTEXT_L2("Block process time: " << block_process_time + transactions_process_time <<
+          " (" << transactions_process_time << " / " << block_process_time << ") ms");
       }
     }
 

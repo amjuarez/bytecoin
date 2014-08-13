@@ -21,8 +21,8 @@
 
 #include <boost/program_options/variables_map.hpp>
 
-#include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
+#include "cryptonote_core/Currency.h"
 #include "wallet/wallet2.h"
 #include "console_handler.h"
 #include "password_container.h"
@@ -38,7 +38,7 @@ namespace cryptonote
   public:
     typedef std::vector<std::string> command_type;
 
-    simple_wallet();
+    simple_wallet(const cryptonote::Currency& currency);
     bool init(const boost::program_options::variables_map& vm);
     bool deinit();
     bool run();
@@ -47,6 +47,9 @@ namespace cryptonote
     //wallet *create_wallet();
     bool process_command(const std::vector<std::string> &args);
     std::string get_commands_str();
+
+    const cryptonote::Currency& currency() const { return m_currency; }
+
   private:
     void handle_command_line(const boost::program_options::variables_map& vm);
 
@@ -74,10 +77,10 @@ namespace cryptonote
     bool ask_wallet_create_if_needed();
 
     //----------------- i_wallet2_callback ---------------------
-    virtual void on_new_block(uint64_t height, const cryptonote::block& block);
-    virtual void on_money_received(uint64_t height, const cryptonote::transaction& tx, size_t out_index);
-    virtual void on_money_spent(uint64_t height, const cryptonote::transaction& in_tx, size_t out_index, const cryptonote::transaction& spend_tx);
-    virtual void on_skip_transaction(uint64_t height, const cryptonote::transaction& tx);
+    virtual void on_new_block(uint64_t height);
+    virtual void on_money_received(uint64_t height, const cryptonote::Transaction& tx, size_t out_index);
+    virtual void on_money_spent(uint64_t height, const cryptonote::Transaction& in_tx, size_t out_index, const cryptonote::Transaction& spend_tx);
+    virtual void on_skip_transaction(uint64_t height, const cryptonote::Transaction& tx);
     //----------------------------------------------------------
 
     friend class refresh_progress_reporter_t;
@@ -96,8 +99,8 @@ namespace cryptonote
       void update(uint64_t height, bool force = false)
       {
         auto current_time = std::chrono::system_clock::now();
-        if (std::chrono::seconds(DIFFICULTY_TARGET / 2) < current_time - m_blockchain_height_update_time || m_blockchain_height <= height)
-        {
+        if (std::chrono::seconds(m_simple_wallet.currency().difficultyTarget() / 2) < current_time - m_blockchain_height_update_time ||
+            m_blockchain_height <= height) {
           update_blockchain_height();
           m_blockchain_height = (std::max)(m_blockchain_height, height);
         }
@@ -143,6 +146,7 @@ namespace cryptonote
 
     epee::console_handlers_binder m_cmd_binder;
 
+    const cryptonote::Currency& m_currency;
     std::unique_ptr<tools::wallet2> m_wallet;
     epee::net_utils::http::http_simple_client m_http_client;
     refresh_progress_reporter_t m_refresh_progress_reporter;

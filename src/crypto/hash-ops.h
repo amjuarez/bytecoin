@@ -76,3 +76,6 @@ void hash_extra_jh(const void *data, size_t length, char *hash);
 void hash_extra_skein(const void *data, size_t length, char *hash);
 
 void tree_hash(const char (*hashes)[HASH_SIZE], size_t count, char *root_hash);
+size_t tree_depth(size_t count);
+void tree_branch(const char (*hashes)[HASH_SIZE], size_t count, char (*branch)[HASH_SIZE]);
+void tree_hash_from_branch(const char (*branch)[HASH_SIZE], size_t depth, const char *leaf, const void *path, char *root_hash);

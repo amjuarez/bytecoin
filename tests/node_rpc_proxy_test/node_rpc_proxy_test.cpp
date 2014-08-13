@@ -119,7 +119,7 @@ int main(int argc, const char** argv) {
     LOG_PRINT_RED_L0("shutdown error");
   }
 
-  cryptonote::transaction tx;
+  cryptonote::Transaction tx;
   nodeProxy.relayTransaction(tx, [](std::error_code ec) {
     if (!ec) {
       LOG_PRINT_L0("relayTransaction called successfully");

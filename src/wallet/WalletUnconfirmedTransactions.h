@@ -29,7 +29,7 @@ namespace CryptoNote {
 
 struct UnconfirmedTransferDetails
 {
-  cryptonote::transaction tx;
+  cryptonote::Transaction tx;
   uint64_t change;
   time_t sentTime;
   TransactionId transactionId;
@@ -46,7 +46,7 @@ public:
 
   bool findTransactionId(const crypto::hash& hash, TransactionId& id);
   void erase(const crypto::hash& hash);
-  void add(const cryptonote::transaction& tx, TransactionId transactionId, uint64_t change_amount);
+  void add(const cryptonote::Transaction& tx, TransactionId transactionId, uint64_t change_amount);
 
   uint64_t countPendingBalance() const;
 

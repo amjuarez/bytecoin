@@ -15,8 +15,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <sstream>
 #include <mutex>
 #include <thread>
+
+#include <boost/lexical_cast.hpp>
 
 #include "include_base_utils.h"
 #include "misc_log_ex.h"

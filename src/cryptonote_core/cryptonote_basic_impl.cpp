@@ -35,158 +35,78 @@ namespace cryptonote {
   /* Cryptonote helper functions                                          */
   /************************************************************************/
   //-----------------------------------------------------------------------------------------------
-  size_t get_max_block_size()
-  {
-    return CRYPTONOTE_MAX_BLOCK_SIZE;
-  }
-  //-----------------------------------------------------------------------------------------------
-  size_t get_max_tx_size()
-  {
-    return CRYPTONOTE_MAX_TX_SIZE;
-  }
-  //-----------------------------------------------------------------------------------------------
-  bool get_block_reward(size_t median_size, size_t current_block_size, uint64_t already_generated_coins, uint64_t &reward) {
-    uint64_t base_reward = (MONEY_SUPPLY - already_generated_coins) >> EMISSION_SPEED_FACTOR;
+  uint64_t getPenalizedAmount(uint64_t amount, size_t medianSize, size_t currentBlockSize) {
+    static_assert(sizeof(size_t) >= sizeof(uint32_t), "size_t is too small");
+    assert(currentBlockSize <= 2 * medianSize);
+    assert(medianSize <= std::numeric_limits<uint32_t>::max());
+    assert(currentBlockSize <= std::numeric_limits<uint32_t>::max());
 
-    //make it soft
-    if (median_size < CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE) {
-      median_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+    if (amount == 0) {
+      return 0;
     }
 
-    if (current_block_size <= median_size) {
-      reward = base_reward;
-      return true;
+    if (currentBlockSize <= medianSize) {
+      return amount;
     }
 
-    if(current_block_size > 2 * median_size) {
-      LOG_PRINT_L4("Block cumulative size is too big: " << current_block_size << ", expected less than " << 2 * median_size);
+    uint64_t productHi;
+    uint64_t productLo = mul128(amount, currentBlockSize * (UINT64_C(2) * medianSize - currentBlockSize), &productHi);
+
+    uint64_t penalizedAmountHi;
+    uint64_t penalizedAmountLo;
+    div128_32(productHi, productLo, static_cast<uint32_t>(medianSize), &penalizedAmountHi, &penalizedAmountLo);
+    div128_32(penalizedAmountHi, penalizedAmountLo, static_cast<uint32_t>(medianSize), &penalizedAmountHi, &penalizedAmountLo);
+
+    assert(0 == penalizedAmountHi);
+    assert(penalizedAmountLo < amount);
+
+    return penalizedAmountLo;
+  }
+  //-----------------------------------------------------------------------
+  std::string getAccountAddressAsStr(uint64_t prefix, const AccountPublicAddress& adr) {
+    blobdata blob;
+    bool r = t_serializable_object_to_blob(adr, blob);
+    assert(r);
+    return tools::base58::encode_addr(prefix, blob);
+  }
+  //-----------------------------------------------------------------------
+  bool is_coinbase(const Transaction& tx) {
+    if(tx.vin.size() != 1) {
       return false;
     }
 
-    assert(median_size < std::numeric_limits<uint32_t>::max());
-    assert(current_block_size < std::numeric_limits<uint32_t>::max());
-
-    uint64_t product_hi;
-    uint64_t product_lo = mul128(base_reward, current_block_size * (2 * median_size - current_block_size), &product_hi);
-
-    uint64_t reward_hi;
-    uint64_t reward_lo;
-    div128_32(product_hi, product_lo, static_cast<uint32_t>(median_size), &reward_hi, &reward_lo);
-    div128_32(reward_hi, reward_lo, static_cast<uint32_t>(median_size), &reward_hi, &reward_lo);
-    assert(0 == reward_hi);
-    assert(reward_lo < base_reward);
-
-    reward = reward_lo;
-    return true;
-  }
-  //------------------------------------------------------------------------------------
-  uint8_t get_account_address_checksum(const public_address_outer_blob& bl)
-  {
-    const unsigned char* pbuf = reinterpret_cast<const unsigned char*>(&bl);
-    uint8_t summ = 0;
-    for(size_t i = 0; i!= sizeof(public_address_outer_blob)-1; i++)
-      summ += pbuf[i];
-
-    return summ;
-  }
-  //-----------------------------------------------------------------------
-  std::string get_account_address_as_str(const account_public_address& adr)
-  {
-    return tools::base58::encode_addr(CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX, t_serializable_object_to_blob(adr));
-  }
-  //-----------------------------------------------------------------------
-  bool is_coinbase(const transaction& tx)
-  {
-    if(tx.vin.size() != 1)
-      return false;
-
-    if(tx.vin[0].type() != typeid(txin_gen))
-      return false;
-
-    return true;
-  }
-  //-----------------------------------------------------------------------
-  bool get_account_address_from_str(uint64_t& prefix, account_public_address& adr, const std::string& str)
-  {
-    if (2 * sizeof(public_address_outer_blob) != str.size())
-    {
-      blobdata data;
-      if (!tools::base58::decode_addr(str, prefix, data))
-      {
-        LOG_PRINT_L1("Invalid address format");
-        return false;
-      }
-
-      if (!::serialization::parse_binary(data, adr))
-      {
-        LOG_PRINT_L1("Account public address keys can't be parsed");
-        return false;
-      }
-
-      if (!crypto::check_key(adr.m_spend_public_key) || !crypto::check_key(adr.m_view_public_key))
-      {
-        LOG_PRINT_L1("Failed to validate address keys");
-        return false;
-      }
-    }
-    else
-    {
-      // Old address format
-      prefix = CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
-
-      std::string buff;
-      if(!string_tools::parse_hexstr_to_binbuff(str, buff))
-        return false;
-
-      if(buff.size()!=sizeof(public_address_outer_blob))
-      {
-        LOG_PRINT_L1("Wrong public address size: " << buff.size() << ", expected size: " << sizeof(public_address_outer_blob));
-        return false;
-      }
-
-      public_address_outer_blob blob = *reinterpret_cast<const public_address_outer_blob*>(buff.data());
-
-
-      if(blob.m_ver > CRYPTONOTE_PUBLIC_ADDRESS_TEXTBLOB_VER)
-      {
-        LOG_PRINT_L1("Unknown version of public address: " << blob.m_ver << ", expected " << CRYPTONOTE_PUBLIC_ADDRESS_TEXTBLOB_VER);
-        return false;
-      }
-
-      if(blob.check_sum != get_account_address_checksum(blob))
-      {
-        LOG_PRINT_L1("Wrong public address checksum");
-        return false;
-      }
-
-      //we success
-      adr = blob.m_address;
-    }
-
-    return true;
-  }
-  //-----------------------------------------------------------------------
-  bool get_account_address_from_str(account_public_address& adr, const std::string& str)
-  {
-    uint64_t prefix;
-    if(!get_account_address_from_str(prefix, adr, str))
-      return false;
-
-    if(CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX != prefix)
-    {
-      LOG_PRINT_L1("Wrong address prefix: " << prefix << ", expected " << CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+    if(tx.vin[0].type() != typeid(TransactionInputGenerate)) {
       return false;
     }
 
     return true;
   }
   //-----------------------------------------------------------------------
+  bool parseAccountAddressString(uint64_t& prefix, AccountPublicAddress& adr, const std::string& str) {
+    blobdata data;
+    if (!tools::base58::decode_addr(str, prefix, data)) {
+      LOG_PRINT_L1("Invalid address format");
+      return false;
+    }
 
-  bool operator ==(const cryptonote::transaction& a, const cryptonote::transaction& b) {
+    if (!::serialization::parse_binary(data, adr)) {
+      LOG_PRINT_L1("Account public address keys can't be parsed");
+      return false;
+    }
+
+    if (!crypto::check_key(adr.m_spendPublicKey) || !crypto::check_key(adr.m_viewPublicKey)) {
+      LOG_PRINT_L1("Failed to validate address keys");
+      return false;
+    }
+
+    return true;
+  }
+  //-----------------------------------------------------------------------
+  bool operator ==(const cryptonote::Transaction& a, const cryptonote::Transaction& b) {
     return cryptonote::get_transaction_hash(a) == cryptonote::get_transaction_hash(b);
   }
-
-  bool operator ==(const cryptonote::block& a, const cryptonote::block& b) {
+  //-----------------------------------------------------------------------
+  bool operator ==(const cryptonote::Block& a, const cryptonote::Block& b) {
     return cryptonote::get_block_hash(a) == cryptonote::get_block_hash(b);
   }
 }

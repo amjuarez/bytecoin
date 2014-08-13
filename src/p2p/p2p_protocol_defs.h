@@ -18,8 +18,12 @@
 #pragma once
 
 #include <boost/uuid/uuid.hpp>
+
 #include "serialization/keyvalue_serialization.h"
 #include "misc_language.h"
+#include "string_tools.h"
+#include "time_helper.h"
+
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 

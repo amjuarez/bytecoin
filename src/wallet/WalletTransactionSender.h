@@ -17,6 +17,9 @@
 
 #pragma once
 
+#include "cryptonote_core/account.h"
+#include "cryptonote_core/Currency.h"
+
 #include "INode.h"
 #include "WalletSendTransactionContext.h"
 #include "WalletUserTransactionsCache.h"
@@ -29,8 +32,8 @@ namespace CryptoNote {
 class WalletTransactionSender
 {
 public:
-  WalletTransactionSender(WalletUserTransactionsCache& transactionsCache, WalletTxSendingState& sendingTxsStates, WalletTransferDetails& transferDetails,
-      WalletUnconfirmedTransactions& unconfirmedTransactions);
+  WalletTransactionSender(const cryptonote::Currency& currency, WalletUserTransactionsCache& transactionsCache,
+      WalletTxSendingState& sendingTxsStates, WalletTransferDetails& transferDetails, WalletUnconfirmedTransactions& unconfirmedTransactions);
 
   void init(cryptonote::account_keys keys);
   void stop();
@@ -52,7 +55,10 @@ private:
   void relayTransactionCallback(TransactionId txId, std::deque<std::shared_ptr<WalletEvent> >& events,
                                 boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec);
   void notifyBalanceChanged(std::deque<std::shared_ptr<WalletEvent> >& events);
+  void validateTransfersAddresses(const std::vector<Transfer>& transfers);
+  bool validateDestinationAddress(const std::string& address);
 
+  const cryptonote::Currency& m_currency;
   cryptonote::account_keys m_keys;
   WalletUserTransactionsCache& m_transactionsCache;
   WalletTxSendingState& m_sendingTxsStates;

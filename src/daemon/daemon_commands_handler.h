@@ -21,6 +21,7 @@
 
 #include "console_handler.h"
 #include "p2p/net_node.h"
+#include "cryptonote_core/miner.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "common/util.h"
 #include "crypto/hash.h"
@@ -47,7 +48,6 @@ public:
     m_cmd_binder.set_handler("print_pool_sh", boost::bind(&daemon_cmmands_handler::print_pool_sh, this, _1), "Print transaction pool (short format)");
     m_cmd_binder.set_handler("show_hr", boost::bind(&daemon_cmmands_handler::show_hr, this, _1), "Start showing hash rate");
     m_cmd_binder.set_handler("hide_hr", boost::bind(&daemon_cmmands_handler::hide_hr, this, _1), "Stop showing hash rate");
-    m_cmd_binder.set_handler("save", boost::bind(&daemon_cmmands_handler::save, this, _1), "Save blockchain");
     m_cmd_binder.set_handler("set_log", boost::bind(&daemon_cmmands_handler::set_log, this, _1), "set_log <level> - Change current log detalization level, <level> is a number 0-4");
   }
 
@@ -69,7 +69,7 @@ private:
   std::string get_commands_str()
   {
     std::stringstream ss;
-    ss << CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL;
+    ss << cryptonote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL;
     ss << "Commands: " << ENDL;
     std::string usage = m_cmd_binder.get_usage();
     boost::replace_all(usage, "\n", "\n  ");
@@ -87,12 +87,6 @@ private:
   bool print_pl(const std::vector<std::string>& args)
   {
     m_srv.log_peerlist();
-    return true;
-  }
-  //--------------------------------------------------------------------------------
-  bool save(const std::vector<std::string>& args)
-  {
-    m_srv.get_payload_object().get_core().get_blockchain_storage().store_blockchain();
     return true;
   }
   //--------------------------------------------------------------------------------
@@ -204,22 +198,20 @@ private:
 
   //--------------------------------------------------------------------------------
   template <typename T>
-  static bool print_as_json(T& obj)
-  {
+  static bool print_as_json(const T& obj) {
     std::cout << cryptonote::obj_to_json_str(obj) << ENDL;
     return true;
   }
   //--------------------------------------------------------------------------------
   bool print_block_by_height(uint64_t height)
   {
-    std::list<cryptonote::block> blocks;
+    std::list<cryptonote::Block> blocks;
     m_srv.get_payload_object().get_core().get_blocks(height, 1, blocks);
 
     if (1 == blocks.size())
     {
-      cryptonote::block& block = blocks.front();
-      std::cout << "block_id: " << get_block_hash(block) << ENDL;
-      print_as_json(block);
+      std::cout << "block_id: " << get_block_hash(blocks.front()) << ENDL;
+      print_as_json(blocks.front());
     }
     else
     {
@@ -243,14 +235,13 @@ private:
 
     std::list<crypto::hash> block_ids;
     block_ids.push_back(block_hash);
-    std::list<cryptonote::block> blocks;
+    std::list<cryptonote::Block> blocks;
     std::list<crypto::hash> missed_ids;
     m_srv.get_payload_object().get_core().get_blocks(block_ids, blocks, missed_ids);
 
     if (1 == blocks.size())
     {
-      cryptonote::block block = blocks.front();
-      print_as_json(block);
+      print_as_json(blocks.front());
     }
     else
     {
@@ -300,14 +291,13 @@ private:
 
     std::vector<crypto::hash> tx_ids;
     tx_ids.push_back(tx_hash);
-    std::list<cryptonote::transaction> txs;
+    std::list<cryptonote::Transaction> txs;
     std::list<crypto::hash> missed_ids;
     m_srv.get_payload_object().get_core().get_transactions(tx_ids, txs, missed_ids);
 
     if (1 == txs.size())
     {
-      cryptonote::transaction tx = txs.front();
-      print_as_json(tx);
+      print_as_json(txs.front());
     }
     else
     {
@@ -336,8 +326,8 @@ private:
       return true;
     }
 
-    cryptonote::account_public_address adr;
-    if(!cryptonote::get_account_address_from_str(adr, args.front()))
+    cryptonote::AccountPublicAddress adr;
+    if(!m_srv.get_payload_object().get_core().currency().parseAccountAddressString(args.front(), adr))
     {
       std::cout << "target account address has wrong format" << std::endl;
       return true;
@@ -350,7 +340,7 @@ private:
     }
 
     boost::thread::attributes attrs;
-    attrs.set_stack_size(THREAD_STACK_SIZE);
+    attrs.set_stack_size(cryptonote::THREAD_STACK_SIZE);
 
     m_srv.get_payload_object().get_core().get_miner().start(adr, threads_count, attrs);
     return true;

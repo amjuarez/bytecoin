@@ -15,8 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "chaingen.h"
-#include "chaingen_tests_list.h"
+#include "chain_switch_1.h"
 
 using namespace epee;
 using namespace cryptonote;
@@ -68,7 +67,7 @@ bool gen_chain_switch_1::generate(std::vector<test_event_entry>& events) const
   MAKE_TX_LIST_START(events, txs_blk_3, miner_account, recipient_account_2, MK_COINS(7), blk_2);  //  8 + 2N
   MAKE_TX_LIST_START(events, txs_blk_4, miner_account, recipient_account_3, MK_COINS(11), blk_2); //  9 + 2N
   MAKE_TX_LIST_START(events, txs_blk_5, miner_account, recipient_account_4, MK_COINS(13), blk_2); // 10 + 2N
-  std::list<transaction> txs_blk_6;
+  std::list<Transaction> txs_blk_6;
   txs_blk_6.push_back(txs_blk_4.front());
 
   // Transactions, that has different order in alt block chains
@@ -115,15 +114,15 @@ bool gen_chain_switch_1::check_split_not_switched(cryptonote::core& c, size_t ev
   m_recipient_account_3 = boost::get<account_base>(events[3]);
   m_recipient_account_4 = boost::get<account_base>(events[4]);
 
-  std::list<block> blocks;
+  std::list<Block> blocks;
   bool r = c.get_blocks(0, 10000, blocks);
   CHECK_TEST_CONDITION(r);
-  CHECK_EQ(5 + 2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, blocks.size());
-  CHECK_TEST_CONDITION(blocks.back() == boost::get<block>(events[20 + 2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW]));  // blk_4
+  CHECK_EQ(5 + 2 * m_currency.minedMoneyUnlockWindow(), blocks.size());
+  CHECK_TEST_CONDITION(blocks.back() == boost::get<Block>(events[20 + 2 * m_currency.minedMoneyUnlockWindow()]));  // blk_4
 
   CHECK_EQ(2, c.get_alternative_blocks_count());
 
-  std::vector<cryptonote::block> chain;
+  std::vector<cryptonote::Block> chain;
   map_hash2tx_t mtx;
   r = find_block_chain(events, chain, mtx, get_block_hash(blocks.back()));
   CHECK_TEST_CONDITION(r);
@@ -132,7 +131,7 @@ bool gen_chain_switch_1::check_split_not_switched(cryptonote::core& c, size_t ev
   CHECK_EQ(MK_COINS(14), get_balance(m_recipient_account_3, chain, mtx));
   CHECK_EQ(MK_COINS(3),  get_balance(m_recipient_account_4, chain, mtx));
 
-  std::list<transaction> tx_pool;
+  std::list<Transaction> tx_pool;
   c.get_pool_transactions(tx_pool);
   CHECK_EQ(1, tx_pool.size());
 
@@ -152,27 +151,27 @@ bool gen_chain_switch_1::check_split_switched(cryptonote::core& c, size_t ev_ind
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_chain_switch_1::check_split_switched");
 
-  std::list<block> blocks;
+  std::list<Block> blocks;
   bool r = c.get_blocks(0, 10000, blocks);
   CHECK_TEST_CONDITION(r);
-  CHECK_EQ(6 + 2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, blocks.size());
+  CHECK_EQ(6 + 2 * m_currency.minedMoneyUnlockWindow(), blocks.size());
   auto it = blocks.end();
   --it; --it; --it;
   CHECK_TEST_CONDITION(std::equal(blocks.begin(), it, m_chain_1.begin()));
-  CHECK_TEST_CONDITION(blocks.back() == boost::get<block>(events[24 + 2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW]));  // blk_7
+  CHECK_TEST_CONDITION(blocks.back() == boost::get<Block>(events[24 + 2 * m_currency.minedMoneyUnlockWindow()]));  // blk_7
 
-  std::list<block> alt_blocks;
+  std::list<Block> alt_blocks;
   r = c.get_alternative_blocks(alt_blocks);
   CHECK_TEST_CONDITION(r);
   CHECK_EQ(2, c.get_alternative_blocks_count());
 
   // Some blocks that were in main chain are in alt chain now
-  BOOST_FOREACH(block b, alt_blocks)
+  BOOST_FOREACH(Block b, alt_blocks)
   {
     CHECK_TEST_CONDITION(m_chain_1.end() != std::find(m_chain_1.begin(), m_chain_1.end(), b));
   }
 
-  std::vector<cryptonote::block> chain;
+  std::vector<cryptonote::Block> chain;
   map_hash2tx_t mtx;
   r = find_block_chain(events, chain, mtx, get_block_hash(blocks.back()));
   CHECK_TEST_CONDITION(r);
@@ -181,7 +180,7 @@ bool gen_chain_switch_1::check_split_switched(cryptonote::core& c, size_t ev_ind
   CHECK_EQ(MK_COINS(14), get_balance(m_recipient_account_3, chain, mtx));
   CHECK_EQ(MK_COINS(16), get_balance(m_recipient_account_4, chain, mtx));
 
-  std::list<transaction> tx_pool;
+  std::list<Transaction> tx_pool;
   c.get_pool_transactions(tx_pool);
   CHECK_EQ(1, tx_pool.size());
   CHECK_TEST_CONDITION(!(tx_pool.front() == m_tx_pool.front()));

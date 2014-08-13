@@ -25,12 +25,119 @@
 #include <map>
 #include <string>
 #include <vector>
-//#include <boost/archive/binary_iarchive.hpp>
-//#include <boost/archive/binary_oarchive.hpp>
 #include "serialization/binary_archive.h"
 
 template<class T> class SwappedVector {
 public:
+  typedef T value_type;
+
+  class const_iterator {
+  public:
+    typedef ptrdiff_t difference_type;
+    typedef std::random_access_iterator_tag iterator_category;
+    typedef const T* pointer;
+    typedef const T& reference;
+    typedef T value_type;
+
+    const_iterator() {
+    }
+
+    const_iterator(SwappedVector* swappedVector, std::size_t index) : m_swappedVector(swappedVector), m_index(index) {
+    }
+
+    bool operator!=(const const_iterator& other) const {
+      return m_index != other.m_index;
+    }
+
+    bool operator<(const const_iterator& other) const {
+      return m_index < other.m_index;
+    }
+
+    bool operator<=(const const_iterator& other) const {
+      return m_index <= other.m_index;
+    }
+
+    bool operator==(const const_iterator& other) const {
+      return m_index == other.m_index;
+    }
+
+    bool operator>(const const_iterator& other) const {
+      return m_index > other.m_index;
+    }
+
+    bool operator>=(const const_iterator& other) const {
+      return m_index >= other.m_index;
+    }
+
+    const_iterator& operator++() {
+      ++m_index;
+      return *this;
+    }
+
+    const_iterator operator++(int) {
+      const_iterator i = *this;
+      ++m_index;
+      return i;
+    }
+
+    const_iterator& operator--() {
+      --m_index;
+      return *this;
+    }
+
+    const_iterator operator--(int) {
+      const_iterator i = *this;
+      --m_index;
+      return i;
+    }
+
+    const_iterator& operator+=(difference_type n) {
+      m_index += n;
+      return *this;
+    }
+
+    const_iterator& operator-=(difference_type n) {
+      m_index -= n;
+      return *this;
+    }
+
+    const_iterator operator+(difference_type n) const {
+      return const_iterator(m_swappedVector, m_index + n);
+    }
+
+    friend const_iterator operator+(difference_type n, const const_iterator& i) {
+      return const_iterator(i.m_swappedVector, n + i.m_index);
+    }
+
+    difference_type operator-(const const_iterator& other) const {
+      return m_index - other.m_index;
+    }
+
+    const_iterator& operator-(difference_type n) const {
+      return const_iterator(m_swappedVector, m_index - n);
+    }
+
+    const T& operator*() const {
+      return (*m_swappedVector)[m_index];
+    }
+
+    const T* operator->() const {
+      return &(*m_swappedVector)[m_index];
+    }
+
+    const T& operator[](difference_type offset) const {
+      return (*m_swappedVector)[m_index + offset];
+    }
+
+    std::size_t index() const {
+      return m_index;
+    }
+
+  private:
+    SwappedVector* m_swappedVector;
+    std::size_t m_index;
+  };
+
   SwappedVector();
   //SwappedVector(const SwappedVector&) = delete;
   ~SwappedVector();
@@ -41,6 +148,8 @@ public:
 
   bool empty() const;
   uint64_t size() const;
+  const_iterator begin();
+  const_iterator end();
   const T& operator[](uint64_t index);
   const T& front();
   const T& back();
@@ -149,6 +258,14 @@ template<class T> uint64_t SwappedVector<T>::size() const {
   return m_offsets.size();
 }
 
+template<class T> typename SwappedVector<T>::const_iterator SwappedVector<T>::begin() {
+  return const_iterator(this, 0);
+}
+
+template<class T> typename SwappedVector<T>::const_iterator SwappedVector<T>::end() {
+  return const_iterator(this, m_offsets.size());
+}
+
 template<class T> const T& SwappedVector<T>::operator[](uint64_t index) {
   auto itemIter = m_items.find(index);
   if (itemIter != m_items.end()) {
@@ -170,13 +287,6 @@ template<class T> const T& SwappedVector<T>::operator[](uint64_t index) {
 
   m_itemsFile.seekg(m_offsets[index]);
   T tempItem;
-  //try {
-    //boost::archive::binary_iarchive archive(m_itemsFile);
-    //archive & tempItem;
-  //} catch (std::exception&) {
-  //  throw std::runtime_error("SwappedVector::operator[]");
-  //}
-
   binary_archive<false> archive(m_itemsFile);
   if (!do_serialize(archive, tempItem)) {
     throw std::runtime_error("SwappedVector::operator[]");
@@ -244,13 +354,6 @@ template<class T> void SwappedVector<T>::push_back(const T& item) {
     }
 
     m_itemsFile.seekp(m_itemsFileSize);
-    //try {
-    //  boost::archive::binary_oarchive archive(m_itemsFile);
-    //  archive & item;
-    //} catch (std::exception&) {
-    //  throw std::runtime_error("SwappedVector::push_back");
-    //}
-
     binary_archive<true> archive(m_itemsFile);
     if (!do_serialize(archive, *const_cast<T*>(&item))) {
       throw std::runtime_error("SwappedVector::push_back");

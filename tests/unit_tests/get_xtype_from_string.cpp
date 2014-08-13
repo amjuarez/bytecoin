@@ -17,6 +17,9 @@
 
 #include "gtest/gtest.h"
 
+#include <boost/lexical_cast.hpp>
+
+// epee
 #include <string_tools.h>
 
 using namespace epee::string_tools;

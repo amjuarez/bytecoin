@@ -16,10 +16,15 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
-#include <unordered_set>
+
 #include <atomic>
+#include <list>
+#include <unordered_set>
+
 #include "net/net_utils_base.h"
 #include "copyable_atomic.h"
+
+#include "crypto/hash.h"
 
 namespace cryptonote
 {

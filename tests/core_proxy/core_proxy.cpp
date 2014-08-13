@@ -33,7 +33,6 @@ using namespace std;
 #include "common/command_line.h"
 #include "console_handler.h"
 #include "p2p/net_node.h"
-//#include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "core_proxy.h"
 #include "version.h"
@@ -89,7 +88,8 @@ int main(int argc, char* argv[])
 
 
   //create objects and link them
-  tests::proxy_core pr_core;
+  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
+  tests::proxy_core pr_core(currency);
   cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> cprotocol(pr_core, NULL);
   nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> > p2psrv(cprotocol);
   cprotocol.set_p2p_endpoint(&p2psrv);
@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
   //initialize objects
 
   LOG_PRINT_L0("Initializing p2p server...");
-  bool res = p2psrv.init(vm);
+  bool res = p2psrv.init(vm, false);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize p2p server.");
   LOG_PRINT_L0("P2p server initialized OK");
 
@@ -143,7 +143,7 @@ string tx2str(const cryptonote::transaction& tx, const cryptonote::hash256& tx_h
 
     ss << "{" << endl;
     ss << "\tversion:" << tx.version << endl;
-    ss << "\tunlock_time:" << tx.unlock_time << endl;
+    ss << "\tunlock_time:" << tx.unlockTime << endl;
     ss << "\t"
 
     return ss.str();
@@ -155,7 +155,7 @@ bool tests::proxy_core::handle_incoming_tx(const cryptonote::blobdata& tx_blob, 
 
     crypto::hash tx_hash = null_hash;
     crypto::hash tx_prefix_hash = null_hash;
-    transaction tx;
+    Transaction tx;
 
     if (!parse_and_validate_tx_from_blob(tx_blob, tx, tx_hash, tx_prefix_hash)) {
         cerr << "WRONG TRANSACTION BLOB, Failed to parse, rejected" << endl;
@@ -173,30 +173,30 @@ bool tests::proxy_core::handle_incoming_tx(const cryptonote::blobdata& tx_blob, 
     return true;
 }
 
-bool tests::proxy_core::handle_incoming_block(const cryptonote::blobdata& block_blob, cryptonote::block_verification_context& bvc, bool update_miner_blocktemplate) {
-    block b = AUTO_VAL_INIT(b);
+bool tests::proxy_core::handle_incoming_block_blob(const cryptonote::blobdata& block_blob, cryptonote::block_verification_context& bvc, bool control_miner, bool relay_block) {
+  Block b = AUTO_VAL_INIT(b);
 
-    if(!parse_and_validate_block_from_blob(block_blob, b)) {
-        cerr << "Failed to parse and validate new block" << endl;
-        return false;
-    }
+  if (!parse_and_validate_block_from_blob(block_blob, b)) {
+    cerr << "Failed to parse and validate new block" << endl;
+    return false;
+  }
 
-    crypto::hash h;
-    crypto::hash lh;
-    cout << "BLOCK" << endl << endl;
-    cout << (h = get_block_hash(b)) << endl;
-    cout << (lh = get_block_longhash(m_cn_context, b, 0)) << endl;
-    cout << get_transaction_hash(b.miner_tx) << endl;
-    cout << ::get_object_blobsize(b.miner_tx) << endl;
-    //cout << string_tools::buff_to_hex_nodelimer(block_blob) << endl;
-    cout << obj_to_json_str(b) << endl;
+  crypto::hash h;
+  crypto::hash lh;
+  if (!get_block_longhash(m_cn_context, b, lh)) {
+    return false;
+  }
 
-    cout << endl << "ENDBLOCK" << endl << endl;
+  cout << "BLOCK" << endl << endl;
+  cout << (h = get_block_hash(b)) << endl;
+  cout << lh << endl;
+  cout << get_transaction_hash(b.minerTx) << endl;
+  cout << ::get_object_blobsize(b.minerTx) << endl;
+  //cout << string_tools::buff_to_hex_nodelimer(block_blob) << endl;
+  cout << obj_to_json_str(b) << endl;
+  cout << endl << "ENDBLOCK" << endl << endl;
 
-    if (!add_block(h, lh, b, block_blob))
-        return false;
-
-    return true;
+  return add_block(h, lh, b, block_to_blob(b));
 }
 
 bool tests::proxy_core::get_short_chain_history(std::list<crypto::hash>& ids) {
@@ -211,9 +211,13 @@ bool tests::proxy_core::get_blockchain_top(uint64_t& height, crypto::hash& top_i
 }
 
 bool tests::proxy_core::init(const boost::program_options::variables_map& /*vm*/) {
-    generate_genesis_block(m_genesis);
-    crypto::hash h = get_block_hash(m_genesis);
-    add_block(h, get_block_longhash(m_cn_context, m_genesis, 0), m_genesis, block_to_blob(m_genesis));
+    m_genesis = m_currency.genesisBlock();
+    crypto::hash h = m_currency.genesisBlockHash();
+    crypto::hash lh;
+    if (!get_block_longhash(m_cn_context, m_genesis, lh)) {
+      return false;
+    }
+    add_block(h, lh, m_genesis, block_to_blob(m_genesis));
     return true;
 }
 
@@ -231,20 +235,20 @@ void tests::proxy_core::build_short_history(std::list<crypto::hash> &m_history, 
         m_history.push_front(cit->first);
 
         size_t n = 1 << m_history.size();
-        while (m_hash2blkidx.end() != cit && cryptonote::null_hash != cit->second.blk.prev_id && n > 0) {
+        while (m_hash2blkidx.end() != cit && cryptonote::null_hash != cit->second.blk.prevId && n > 0) {
             n--;
-            cit = m_hash2blkidx.find(cit->second.blk.prev_id);
+            cit = m_hash2blkidx.find(cit->second.blk.prevId);
         }
     } while (m_hash2blkidx.end() != cit && get_block_hash(cit->second.blk) != cit->first);*/
 }
 
-bool tests::proxy_core::add_block(const crypto::hash &_id, const crypto::hash &_longhash, const cryptonote::block &_blk, const cryptonote::blobdata &_blob) {
+bool tests::proxy_core::add_block(const crypto::hash &_id, const crypto::hash &_longhash, const cryptonote::Block &_blk, const cryptonote::blobdata &_blob) {
     size_t height = 0;
 
-    if (cryptonote::null_hash != _blk.prev_id) {
-        std::unordered_map<crypto::hash, tests::block_index>::const_iterator cit = m_hash2blkidx.find(_blk.prev_id);
+    if (cryptonote::null_hash != _blk.prevId) {
+        std::unordered_map<crypto::hash, tests::block_index>::const_iterator cit = m_hash2blkidx.find(_blk.prevId);
         if (m_hash2blkidx.end() == cit) {
-            cerr << "ERROR: can't find previous block with id \"" << _blk.prev_id << "\"" << endl;
+            cerr << "ERROR: can't find previous block with id \"" << _blk.prevId << "\"" << endl;
             return false;
         }
 

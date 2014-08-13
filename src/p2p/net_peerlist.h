@@ -56,7 +56,7 @@ namespace nodetool
     size_t get_white_peers_count(){CRITICAL_REGION_LOCAL(m_peerlist_lock); return m_peers_white.size();}
     size_t get_gray_peers_count(){CRITICAL_REGION_LOCAL(m_peerlist_lock); return m_peers_gray.size();}
     bool merge_peerlist(const std::list<peerlist_entry>& outer_bs);
-    bool get_peerlist_head(std::list<peerlist_entry>& bs_head, uint32_t depth = P2P_DEFAULT_PEERS_IN_HANDSHAKE);
+    bool get_peerlist_head(std::list<peerlist_entry>& bs_head, uint32_t depth = cryptonote::P2P_DEFAULT_PEERS_IN_HANDSHAKE);
     bool get_peerlist_full(std::list<peerlist_entry>& pl_gray, std::list<peerlist_entry>& pl_white);
     bool get_white_peer_by_index(peerlist_entry& p, size_t i);
     bool get_gray_peer_by_index(peerlist_entry& p, size_t i);
@@ -193,7 +193,7 @@ namespace nodetool
   //--------------------------------------------------------------------------------------------------
   inline void peerlist_manager::trim_white_peerlist()
   {
-    while(m_peers_gray.size() > P2P_LOCAL_GRAY_PEERLIST_LIMIT)
+    while(m_peers_gray.size() > cryptonote::P2P_LOCAL_GRAY_PEERLIST_LIMIT)
     {
       peers_indexed::index<by_time>::type& sorted_index=m_peers_gray.get<by_time>();
       sorted_index.erase(sorted_index.begin());
@@ -202,7 +202,7 @@ namespace nodetool
   //--------------------------------------------------------------------------------------------------
   inline void peerlist_manager::trim_gray_peerlist()
   {
-    while(m_peers_white.size() > P2P_LOCAL_WHITE_PEERLIST_LIMIT)
+    while(m_peers_white.size() > cryptonote::P2P_LOCAL_WHITE_PEERLIST_LIMIT)
     {
       peers_indexed::index<by_time>::type& sorted_index=m_peers_white.get<by_time>();
       sorted_index.erase(sorted_index.begin());

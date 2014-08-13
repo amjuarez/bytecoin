@@ -62,7 +62,7 @@ public:
   virtual uint64_t getLastLocalBlockHeight() const = 0;
   virtual uint64_t getLastKnownBlockHeight() const = 0;
 
-  virtual void relayTransaction(const cryptonote::transaction& transaction, const Callback& callback) = 0;
+  virtual void relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) = 0;
   virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback) = 0;
   virtual void getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback) = 0;
   virtual void getTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback) = 0;

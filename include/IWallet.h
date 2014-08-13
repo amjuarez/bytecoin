@@ -41,7 +41,7 @@ const TransactionId INVALID_TRANSACTION_ID    = std::numeric_limits<TransactionI
 const TransferId INVALID_TRANSFER_ID          = std::numeric_limits<TransferId>::max();
 const uint64_t UNCONFIRMED_TRANSACTION_HEIGHT = std::numeric_limits<uint64_t>::max();
 
-struct Transaction {
+struct TransactionInfo {
   TransferId      firstTransferId;
   size_t          transferCount;
   int64_t         totalAmount;
@@ -89,7 +89,7 @@ public:
 
   virtual TransactionId findTransactionByTransferId(TransferId transferId) = 0;
   
-  virtual bool getTransaction(TransactionId transactionId, Transaction& transaction) = 0;
+  virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction) = 0;
   virtual bool getTransfer(TransferId transferId, Transfer& transfer) = 0;
 
   virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) = 0;

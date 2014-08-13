@@ -28,9 +28,10 @@ public:
   {
     using namespace cryptonote;
 
+    Currency currency = CurrencyBuilder().currency();
     m_bob.generate();
 
-    if (!construct_miner_tx(0, 0, 0, 2, 0, m_bob.get_keys().m_account_address, m_tx))
+    if (!currency.constructMinerTx(0, 0, 0, 2, 0, m_bob.get_keys().m_account_address, m_tx))
       return false;
 
     m_tx_pub_key = get_tx_pub_key_from_extra(m_tx);
@@ -39,6 +40,6 @@ public:
 
 protected:
   cryptonote::account_base m_bob;
-  cryptonote::transaction m_tx;
+  cryptonote::Transaction m_tx;
   crypto::public_key m_tx_pub_key;
 };

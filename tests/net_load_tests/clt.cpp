@@ -22,6 +22,8 @@
 #include <thread>
 #include <vector>
 
+#include <boost/lexical_cast.hpp>
+
 #include "gtest/gtest.h"
 
 #include "include_base_utils.h"

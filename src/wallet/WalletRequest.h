@@ -17,6 +17,10 @@
 
 #pragma once
 
+#include <deque>
+#include <functional>
+#include <memory>
+
 #include "INode.h"
 
 #include "WalletSynchronizationContext.h"
@@ -92,7 +96,7 @@ private:
 class WalletRelayTransactionRequest: public WalletRequest
 {
 public:
-  WalletRelayTransactionRequest(const cryptonote::transaction& tx, Callback cb) : m_tx(tx), m_cb(cb) {};
+  WalletRelayTransactionRequest(const cryptonote::Transaction& tx, Callback cb) : m_tx(tx), m_cb(cb) {};
   virtual ~WalletRelayTransactionRequest() {};
 
   virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
@@ -101,7 +105,7 @@ public:
   }
 
 private:
-  cryptonote::transaction m_tx;
+  cryptonote::Transaction m_tx;
   Callback m_cb;
 };
 

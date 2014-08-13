@@ -15,20 +15,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#pragma once
-
+#pragma once 
 #include "chaingen.h"
-#include "block_reward.h"
-#include "block_validation.h"
-#include "chain_split_1.h"
-#include "chain_switch_1.h"
-#include "double_spend.h"
-#include "integer_overflow.h"
-#include "ring_signature_1.h"
-#include "tx_validation.h"
-/************************************************************************/
-/*                                                                      */
-/************************************************************************/
+
 class gen_simple_chain_001: public test_chain_unit_base 
 {
 public: 

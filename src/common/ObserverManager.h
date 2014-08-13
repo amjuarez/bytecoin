@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <mutex>
 #include <vector>
 

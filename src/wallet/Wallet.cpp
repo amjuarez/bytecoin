@@ -36,6 +36,7 @@
 #include "WalletSerialization.h"
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
+#include <boost/lexical_cast.hpp>
 
 namespace {
 
@@ -73,15 +74,34 @@ void runAtomic(std::mutex& mutex, F f) {
 
 namespace CryptoNote {
 
-Wallet::Wallet(INode& node) :
+void Wallet::WalletNodeObserver::postponeRefresh() {
+  std::unique_lock<std::mutex> lock(postponeMutex);
+  postponed = true;
+}
+
+void Wallet::WalletNodeObserver::saveCompleted(std::error_code result) {
+  bool startRefresh = false;
+  {
+    std::unique_lock<std::mutex> lock(postponeMutex);
+    startRefresh = postponed;
+    postponed = false;
+  }
+
+  if (startRefresh) {
+    m_wallet->startRefresh();
+  }
+}
+
+Wallet::Wallet(const cryptonote::Currency& currency, INode& node) :
     m_state(NOT_INITIALIZED),
+    m_currency(currency),
     m_node(node),
     m_isSynchronizing(false),
     m_isStopping(false),
-    m_transferDetails(m_blockchain),
+    m_transferDetails(currency, m_blockchain),
     m_transactionsCache(m_sendingTxsStates),
     m_synchronizer(m_account, m_node, m_blockchain, m_transferDetails, m_unconfirmedTransactions, m_transactionsCache),
-    m_sender(m_transactionsCache, m_sendingTxsStates, m_transferDetails, m_unconfirmedTransactions) {
+    m_sender(currency, m_transactionsCache, m_sendingTxsStates, m_transferDetails, m_unconfirmedTransactions) {
   m_autoRefresher.reset(new WalletNodeObserver(this));
 }
 
@@ -102,6 +122,7 @@ void Wallet::initAndGenerate(const std::string& password) {
     }
 
     m_node.addObserver(m_autoRefresher.get());
+    addObserver(m_autoRefresher.get());
 
     m_account.generate();
     m_password = password;
@@ -118,9 +139,7 @@ void Wallet::initAndGenerate(const std::string& password) {
 }
 
 void Wallet::storeGenesisBlock() {
-  cryptonote::block b;
-  cryptonote::generate_genesis_block(b);
-  m_blockchain.push_back(get_block_hash(b));
+  m_blockchain.push_back(m_currency.genesisBlockHash());
 }
 
 void Wallet::initAndLoad(std::istream& source, const std::string& password) {
@@ -131,6 +150,7 @@ void Wallet::initAndLoad(std::istream& source, const std::string& password) {
   }
 
   m_node.addObserver(m_autoRefresher.get());
+  addObserver(m_autoRefresher.get());
 
   m_password = password;
   m_state = LOADING;
@@ -167,8 +187,8 @@ void Wallet::doLoad(std::istream& source) {
 
       dataArchive >> m_account;
 
-      throwIfKeysMissmatch(m_account.get_keys().m_view_secret_key, m_account.get_keys().m_account_address.m_view_public_key);
-      throwIfKeysMissmatch(m_account.get_keys().m_spend_secret_key, m_account.get_keys().m_account_address.m_spend_public_key);
+      throwIfKeysMissmatch(m_account.get_keys().m_view_secret_key, m_account.get_keys().m_account_address.m_viewPublicKey);
+      throwIfKeysMissmatch(m_account.get_keys().m_spend_secret_key, m_account.get_keys().m_account_address.m_spendPublicKey);
 
       dataArchive >> m_blockchain;
 
@@ -228,6 +248,7 @@ void Wallet::shutdown() {
 
   m_asyncContextCounter.waitAsyncContextsFinish();
   m_node.removeObserver(m_autoRefresher.get());
+  removeObserver(m_autoRefresher.get());
 }
 
 void Wallet::save(std::ostream& destination, bool saveDetailed, bool saveCache) {
@@ -328,7 +349,7 @@ std::string Wallet::getAddress() {
   std::unique_lock<std::mutex> lock(m_cacheMutex);
   throwIfNotInitialised();
 
-  return m_account.get_public_address_str();
+  return m_currency.accountAddressAsString(m_account);
 }
 
 uint64_t Wallet::actualBalance() {
@@ -374,7 +395,7 @@ TransactionId Wallet::findTransactionByTransferId(TransferId transferId) {
   return m_transactionsCache.findTransactionByTransferId(transferId);
 }
 
-bool Wallet::getTransaction(TransactionId transactionId, Transaction& transaction) {
+bool Wallet::getTransaction(TransactionId transactionId, TransactionInfo& transaction) {
   std::unique_lock<std::mutex> lock(m_cacheMutex);
   throwIfNotInitialised();
 
@@ -475,6 +496,11 @@ void Wallet::refresh() {
   std::shared_ptr<WalletRequest> req;
   {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
+
+    if (m_state == SAVING) {
+      m_autoRefresher->postponeRefresh();
+      return;
+    }
 
     if (m_state != INITIALIZED) {
       return;

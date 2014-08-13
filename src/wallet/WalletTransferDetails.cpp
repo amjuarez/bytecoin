@@ -50,7 +50,8 @@ T popRandomValue(URNG& randomGenerator, std::vector<T>& vec) {
 namespace CryptoNote
 {
 
-WalletTransferDetails::WalletTransferDetails(const std::vector<crypto::hash>& blockchain) : m_blockchain(blockchain) {
+WalletTransferDetails::WalletTransferDetails(const cryptonote::Currency& currency, const std::vector<crypto::hash>& blockchain) :
+  m_currency(currency), m_blockchain(blockchain) {
 }
 
 WalletTransferDetails::~WalletTransferDetails() {
@@ -76,30 +77,21 @@ bool WalletTransferDetails::getTransferDetailsIdxByKeyImage(const crypto::key_im
   return true;
 }
 
-bool WalletTransferDetails::isTxSpendtimeUnlocked(uint64_t unlockTime) const
-{
-  if(unlockTime < CRYPTONOTE_MAX_BLOCK_NUMBER) {
-    //interpret as block index
-    if(m_blockchain.size()-1 + CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS >= unlockTime)
-      return true;
-    else
-      return false;
-  }
-  else
-  {
-    //interpret as time
+bool WalletTransferDetails::isTxSpendtimeUnlocked(uint64_t unlockTime) const {
+  if (unlockTime < m_currency.maxBlockHeight()) {
+    // interpret as block index
+    return m_blockchain.size()-1 + m_currency.lockedTxAllowedDeltaBlocks() >= unlockTime;
+  } else {
+    // interpret as time
     uint64_t current_time = static_cast<uint64_t>(time(NULL));
-    if(current_time + CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS >= unlockTime)
-      return true;
-    else
-      return false;
+    return current_time + m_currency.lockedTxAllowedDeltaSeconds() >= unlockTime;
   }
   return false;
 }
 
 bool WalletTransferDetails::isTransferUnlocked(const TransferDetails& td) const
 {
-  if(!isTxSpendtimeUnlocked(td.tx.unlock_time))
+  if(!isTxSpendtimeUnlocked(td.tx.unlockTime))
     return false;
 
   if(td.blockHeight + DEFAULT_TX_SPENDABLE_AGE > m_blockchain.size())

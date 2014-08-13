@@ -17,9 +17,18 @@
 
 #pragma once
 
+#if defined(WIN32)
+#include <io.h>
+#endif
+
+#include <fstream>
+
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 
+// epee
+#include "include_base_utils.h"
+#include "misc_os_dependent.h"
 
 namespace tools
 {

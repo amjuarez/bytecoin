@@ -29,9 +29,9 @@
 #include "WalletAsyncContextCounter.h"
 #include "WalletTxSendingState.h"
 #include "common/ObserverManager.h"
-#include "cryptonote_core/account.h"
 #include "cryptonote_core/tx_extra.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_core/Currency.h"
 #include "WalletTransferDetails.h"
 #include "WalletUserTransactionsCache.h"
 #include "WalletUnconfirmedTransactions.h"
@@ -43,7 +43,7 @@ namespace CryptoNote {
 
 class Wallet : public IWallet {
 public:
-  Wallet(INode& node);
+  Wallet(const cryptonote::Currency& currency, INode& node);
   ~Wallet() {};
 
   virtual void addObserver(IWalletObserver* observer);
@@ -67,7 +67,7 @@ public:
 
   virtual TransactionId findTransactionByTransferId(TransferId transferId);
 
-  virtual bool getTransaction(TransactionId transactionId, Transaction& transaction);
+  virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction);
   virtual bool getTransfer(TransferId transferId, Transfer& transfer);
 
   virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
@@ -105,6 +105,7 @@ private:
   std::mutex m_cacheMutex;
   cryptonote::account_base m_account;
   std::string m_password;
+  const cryptonote::Currency& m_currency;
   INode& m_node;
   bool m_isSynchronizing;
   bool m_isStopping;
@@ -119,12 +120,17 @@ private:
   WalletTxSendingState m_sendingTxsStates;
   WalletUserTransactionsCache m_transactionsCache;
 
-  struct WalletNodeObserver: public INodeObserver
+  struct WalletNodeObserver: public INodeObserver, public IWalletObserver
   {
-    WalletNodeObserver(Wallet* wallet) : m_wallet(wallet) {}
+    WalletNodeObserver(Wallet* wallet) : m_wallet(wallet), postponed(false) {}
     virtual void lastKnownBlockHeightUpdated(uint64_t height) { m_wallet->startRefresh(); }
+    virtual void saveCompleted(std::error_code result);
+    void postponeRefresh();
 
     Wallet* m_wallet;
+
+    std::mutex postponeMutex;
+    bool postponed;
   };
 
   std::unique_ptr<WalletNodeObserver> m_autoRefresher;

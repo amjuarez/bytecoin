@@ -40,7 +40,7 @@ public:
 
   bool test()
   {
-    cryptonote::keypair in_ephemeral;
+    cryptonote::KeyPair in_ephemeral;
     crypto::derive_secret_key(m_key_derivation, 0, m_spend_secret_key, in_ephemeral.sec);
     return true;
   }

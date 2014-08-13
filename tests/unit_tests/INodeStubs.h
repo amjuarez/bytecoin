@@ -38,7 +38,7 @@ public:
 
   virtual void getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback) {callback(std::error_code());};
 
-  virtual void relayTransaction(const cryptonote::transaction& transaction, const Callback& callback) {callback(std::error_code());};
+  virtual void relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {callback(std::error_code());};
   virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback) {callback(std::error_code());};
   virtual void getTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback) { callback(std::error_code()); };
 };
@@ -53,7 +53,7 @@ public:
 
   virtual void getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback);
 
-  virtual void relayTransaction(const cryptonote::transaction& transaction, const Callback& callback);
+  virtual void relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback);
   virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback);
   virtual void getTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback);
 
@@ -63,7 +63,7 @@ public:
 private:
   void doGetNewBlocks(std::list<crypto::hash> knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback);
   void doGetTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback);
-  void doRelayTransaction(const cryptonote::transaction& transaction, const Callback& callback);
+  void doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback);
   void doGetRandomOutsByAmounts(std::vector<uint64_t> amounts, uint64_t outsCount, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback);
 
   uint64_t m_lastHeight;

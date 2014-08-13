@@ -43,9 +43,9 @@ void INodeTrivialRefreshStub::doGetNewBlocks(std::list<crypto::hash> knownBlockI
     cryptonote::block_complete_entry e;
     e.block = cryptonote::t_serializable_object_to_blob(blockchain[m_lastHeight]);
 
-    for (auto hash: blockchain[m_lastHeight].tx_hashes)
+    for (auto hash : blockchain[m_lastHeight].txHashes)
     {
-      cryptonote::transaction tx;
+      cryptonote::Transaction tx;
       if (!m_blockchainGenerator.getTransactionByHash(hash, tx))
         continue;
 
@@ -72,13 +72,13 @@ void INodeTrivialRefreshStub::doGetTransactionOutsGlobalIndices(const crypto::ha
   callback(std::error_code());
 }
 
-void INodeTrivialRefreshStub::relayTransaction(const cryptonote::transaction& transaction, const Callback& callback)
+void INodeTrivialRefreshStub::relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback)
 {
   std::thread task(&INodeTrivialRefreshStub::doRelayTransaction, this, transaction, callback);
   task.detach();
 }
 
-void INodeTrivialRefreshStub::doRelayTransaction(const cryptonote::transaction& transaction, const Callback& callback)
+void INodeTrivialRefreshStub::doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback)
 {
   if (m_nextTxError)
   {
@@ -122,7 +122,7 @@ void INodeTrivialRefreshStub::doGetRandomOutsByAmounts(std::vector<uint64_t> amo
 
 void INodeTrivialRefreshStub::startAlternativeChain(uint64_t height)
 {
-  std::vector<cryptonote::block>& blockchain = m_blockchainGenerator.getBlockchain();
+  std::vector<cryptonote::Block>& blockchain = m_blockchainGenerator.getBlockchain();
 
   assert(height < blockchain.size());
   assert(height > m_lastHeight);

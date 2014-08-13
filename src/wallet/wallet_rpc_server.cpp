@@ -44,7 +44,11 @@ namespace tools
   bool wallet_rpc_server::run()
   {
     m_net_server.add_idle_handler([this](){
-      m_wallet.refresh();
+      try {
+        m_wallet.refresh();
+      } catch (const std::exception& ex) {
+        LOG_ERROR("Exception at while refreshing, what=" << ex.what());
+      }
       return true;
     }, 20000);
 
@@ -88,7 +92,7 @@ namespace tools
     std::vector<cryptonote::tx_destination_entry> dsts;
     for (auto it = req.destinations.begin(); it != req.destinations.end(); it++) {
       cryptonote::tx_destination_entry de;
-      if (!get_account_address_from_str(de.addr, it->address)) {
+      if (!m_wallet.currency().parseAccountAddressString(it->address, de.addr)) {
         er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + it->address;
         return false;
@@ -118,7 +122,7 @@ namespace tools
     }
 
     try {
-      cryptonote::transaction tx;
+      cryptonote::Transaction tx;
       m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, extra, tx);
       res.tx_hash = boost::lexical_cast<std::string>(cryptonote::get_transaction_hash(tx));
       return true;

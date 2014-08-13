@@ -32,7 +32,7 @@ struct TransactionContextInfo
 {
   std::vector<size_t> requestedOuts;
   std::vector<uint64_t> globalIndices;
-  cryptonote::transaction transaction;
+  cryptonote::Transaction transaction;
   crypto::public_key transactionPubKey;
 };
 

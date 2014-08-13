@@ -61,5 +61,5 @@ public:
 private:
   cryptonote::account_base m_alice;
   std::vector<cryptonote::tx_destination_entry> m_destinations;
-  cryptonote::transaction m_tx;
+  cryptonote::Transaction m_tx;
 };

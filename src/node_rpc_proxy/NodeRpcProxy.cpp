@@ -181,7 +181,7 @@ uint64_t NodeRpcProxy::getLastKnownBlockHeight() const {
   return m_networkHeight;
 }
 
-void NodeRpcProxy::relayTransaction(const cryptonote::transaction& transaction, const Callback& callback) {
+void NodeRpcProxy::relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
   if (!m_initState.initialized()) {
     callback(make_error_code(error::NOT_INITIALIZED));
     return;
@@ -218,7 +218,7 @@ void NodeRpcProxy::getTransactionOutsGlobalIndices(const crypto::hash& transacti
   m_ioService.post(std::bind(&NodeRpcProxy::doGetTransactionOutsGlobalIndices, this, transactionHash, std::ref(outsGlobalIndices), callback));
 }
 
-void NodeRpcProxy::doRelayTransaction(const cryptonote::transaction& transaction, const Callback& callback) {
+void NodeRpcProxy::doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
   COMMAND_RPC_SEND_RAW_TX::request req;
   COMMAND_RPC_SEND_RAW_TX::response rsp;
   req.tx_as_hex = epee::string_tools::buff_to_hex_nodelimer(cryptonote::tx_to_blob(transaction));

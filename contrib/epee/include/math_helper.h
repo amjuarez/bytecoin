@@ -37,6 +37,7 @@
 #include <boost/uuid/random_generator.hpp>
 
 #include "misc_os_dependent.h"
+#include "pragma_comp_defs.h"
 
 namespace epee
 {

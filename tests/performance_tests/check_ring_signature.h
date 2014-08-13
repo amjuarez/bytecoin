@@ -59,12 +59,12 @@ public:
 
   bool test()
   {
-    const cryptonote::txin_to_key& txin = boost::get<cryptonote::txin_to_key>(m_tx.vin[0]);
-    return crypto::check_ring_signature(m_tx_prefix_hash, txin.k_image, this->m_public_key_ptrs, ring_size, m_tx.signatures[0].data());
+    const cryptonote::TransactionInputToKey& txin = boost::get<cryptonote::TransactionInputToKey>(m_tx.vin[0]);
+    return crypto::check_ring_signature(m_tx_prefix_hash, txin.keyImage, this->m_public_key_ptrs, ring_size, m_tx.signatures[0].data());
   }
 
 private:
   cryptonote::account_base m_alice;
-  cryptonote::transaction m_tx;
+  cryptonote::Transaction m_tx;
   crypto::hash m_tx_prefix_hash;
 };

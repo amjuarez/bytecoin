@@ -29,9 +29,9 @@ struct TxDustPolicy
 {
   uint64_t dustThreshold;
   bool addToFee;
-  cryptonote::account_public_address addrForDust;
+  cryptonote::AccountPublicAddress addrForDust;
 
-  TxDustPolicy(uint64_t a_dust_threshold = 0, bool an_add_to_fee = true, cryptonote::account_public_address an_addr_for_dust = cryptonote::account_public_address())
+  TxDustPolicy(uint64_t a_dust_threshold = 0, bool an_add_to_fee = true, cryptonote::AccountPublicAddress an_addr_for_dust = cryptonote::AccountPublicAddress())
   : dustThreshold(a_dust_threshold)
   , addToFee(an_add_to_fee)
   , addrForDust(an_addr_for_dust)

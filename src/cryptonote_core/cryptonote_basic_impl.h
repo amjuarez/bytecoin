@@ -17,9 +17,12 @@
 
 #pragma once
 
-#include "cryptonote_basic.h"
+//epee
+#include "string_tools.h"
+
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
+#include "cryptonote_core/cryptonote_basic.h"
 
 
 namespace cryptonote {
@@ -35,31 +38,16 @@ namespace cryptonote {
     }
   };
 
-
-#pragma pack(push, 1)
-  struct public_address_outer_blob
-  {
-    uint8_t m_ver;
-    account_public_address m_address;
-    uint8_t check_sum;
-  };
-#pragma pack (pop)
-
-
   /************************************************************************/
   /* Cryptonote helper functions                                          */
   /************************************************************************/
-  size_t get_max_block_size();
-  size_t get_max_tx_size();
-  bool get_block_reward(size_t median_size, size_t current_block_size, uint64_t already_generated_coins, uint64_t &reward);
-  uint8_t get_account_address_checksum(const public_address_outer_blob& bl);
-  std::string get_account_address_as_str(const account_public_address& adr);
-  bool get_account_address_from_str(uint64_t& prefix, account_public_address& adr, const std::string& str);
-  bool get_account_address_from_str(account_public_address& adr, const std::string& str);
-  bool is_coinbase(const transaction& tx);
+  uint64_t getPenalizedAmount(uint64_t amount, size_t medianSize, size_t currentBlockSize);
+  std::string getAccountAddressAsStr(uint64_t prefix, const AccountPublicAddress& adr);
+  bool parseAccountAddressString(uint64_t& prefix, AccountPublicAddress& adr, const std::string& str);
+  bool is_coinbase(const Transaction& tx);
 
-  bool operator ==(const cryptonote::transaction& a, const cryptonote::transaction& b);
-  bool operator ==(const cryptonote::block& a, const cryptonote::block& b);
+  bool operator ==(const cryptonote::Transaction& a, const cryptonote::Transaction& b);
+  bool operator ==(const cryptonote::Block& a, const cryptonote::Block& b);
 }
 
 template <class T>

@@ -19,13 +19,13 @@
 
 #include <boost/uuid/uuid.hpp>
 #include "net/net_utils_base.h"
-#include "p2p_protocol_defs.h"
 
 namespace nodetool
 {
 
   typedef boost::uuids::uuid uuid;
   typedef boost::uuids::uuid net_connection_id;
+  typedef uint64_t peerid_type;
 
   template<class t_connection_context>
   struct i_p2p_endpoint

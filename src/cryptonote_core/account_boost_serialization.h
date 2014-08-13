@@ -34,10 +34,10 @@ namespace boost
     }
 
     template <class Archive>
-    inline void serialize(Archive &a, cryptonote::account_public_address &x, const boost::serialization::version_type ver)
+    inline void serialize(Archive &a, cryptonote::AccountPublicAddress &x, const boost::serialization::version_type ver)
     {
-      a & x.m_spend_public_key;
-      a & x.m_view_public_key;
+      a & x.m_spendPublicKey;
+      a & x.m_viewPublicKey;
     }
 
   }

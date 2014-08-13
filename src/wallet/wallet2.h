@@ -23,9 +23,9 @@
 #include <atomic>
 
 #include "include_base_utils.h"
-#include "cryptonote_core/account.h"
 #include "cryptonote_core/account_boost_serialization.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
+#include "cryptonote_core/Currency.h"
 #include "net/http_client.h"
 #include "storages/http_abstract_invoke.h"
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -33,6 +33,7 @@
 #include "common/unordered_containers_boost_serialization.h"
 #include "crypto/chacha8.h"
 #include "crypto/hash.h"
+#include "common/BlockingQueue.h"
 
 #include "wallet_errors.h"
 
@@ -44,19 +45,20 @@ namespace tools
   class i_wallet2_callback
   {
   public:
-    virtual void on_new_block(uint64_t height, const cryptonote::block& block) {}
-    virtual void on_money_received(uint64_t height, const cryptonote::transaction& tx, size_t out_index) {}
-    virtual void on_money_spent(uint64_t height, const cryptonote::transaction& in_tx, size_t out_index, const cryptonote::transaction& spend_tx) {}
-    virtual void on_skip_transaction(uint64_t height, const cryptonote::transaction& tx) {}
+    virtual void on_new_block(uint64_t height) {}
+    virtual void on_money_received(uint64_t height, const cryptonote::Transaction& tx, size_t out_index) {}
+    virtual void on_money_spent(uint64_t height, const cryptonote::Transaction& in_tx, size_t out_index, const cryptonote::Transaction& spend_tx) {}
+    virtual void on_skip_transaction(uint64_t height, const cryptonote::Transaction& tx) {}
   };
 
   struct tx_dust_policy
   {
     uint64_t dust_threshold;
     bool add_to_fee;
-    cryptonote::account_public_address addr_for_dust;
+    cryptonote::AccountPublicAddress addr_for_dust;
 
-    tx_dust_policy(uint64_t a_dust_threshold = 0, bool an_add_to_fee = true, cryptonote::account_public_address an_addr_for_dust = cryptonote::account_public_address())
+    tx_dust_policy(uint64_t a_dust_threshold = 0, bool an_add_to_fee = true,
+                   cryptonote::AccountPublicAddress an_addr_for_dust = cryptonote::AccountPublicAddress())
       : dust_threshold(a_dust_threshold)
       , add_to_fee(an_add_to_fee)
       , addr_for_dust(an_addr_for_dust)
@@ -64,15 +66,24 @@ namespace tools
     }
   };
 
-  class wallet2
-  {
-    wallet2(const wallet2&) : m_run(true), m_callback(0) {};
+  class wallet2 {
+    wallet2(const wallet2& rhs) :
+      m_currency(rhs.m_currency),
+      m_run(true),
+      m_callback(0),
+      m_upper_transaction_size_limit(rhs.m_upper_transaction_size_limit) {
+    };
+
   public:
-    wallet2() : m_run(true), m_callback(0) {};
+    wallet2(const cryptonote::Currency& currency) :
+      m_currency(currency), m_run(true), m_callback(0) {
+      m_upper_transaction_size_limit = (m_currency.blockGrantedFullRewardZone() * 125) / 100 - m_currency.minerTxBlobReservedSize();
+    }
+
     struct transfer_details
     {
       uint64_t m_block_height;
-      cryptonote::transaction m_tx;
+      cryptonote::Transaction m_tx;
       size_t m_internal_output_index;
       uint64_t m_global_output_index;
       bool m_spent;
@@ -91,7 +102,7 @@ namespace tools
 
     struct unconfirmed_transfer_details
     {
-      cryptonote::transaction m_tx;
+      cryptonote::Transaction m_tx;
       uint64_t m_change;
       time_t m_sent_time;
     };
@@ -115,10 +126,12 @@ namespace tools
     void store();
     cryptonote::account_base& get_account(){return m_account;}
 
-    void init(const std::string& daemon_address = "http://localhost:8080", uint64_t upper_transaction_size_limit = ((CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE * 125) / 100) - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE);
+    void init(const std::string& daemon_address = "http://localhost:8080");
     bool deinit();
 
     void stop() { m_run.store(false, std::memory_order_relaxed); }
+
+    const cryptonote::Currency currency() const { return m_currency; }
 
     i_wallet2_callback* callback() const { return m_callback; }
     void callback(i_wallet2_callback* callback) { m_callback = callback; }
@@ -133,10 +146,11 @@ namespace tools
     template<typename T>
     void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy);
     template<typename T>
-    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::transaction &tx);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::Transaction &tx);
     void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra);
-    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::transaction& tx);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::Transaction& tx);
     bool check_connection();
+    bool connectClient(epee::net_utils::http::http_simple_client& client);
     void get_transfers(wallet2::transfer_container& incoming_transfers) const;
     void get_payments(const crypto::hash& payment_id, std::list<wallet2::payment_details>& payments) const;
     uint64_t get_blockchain_current_height() const { return m_local_bc_height; }
@@ -163,19 +177,57 @@ namespace tools
   private:
     bool store_keys(const std::string& keys_file_name, const std::string& password);
     void load_keys(const std::string& keys_file_name, const std::string& password);
-    void process_new_transaction(const cryptonote::transaction& tx, uint64_t height);
-    void process_new_blockchain_entry(const cryptonote::block& b, cryptonote::block_complete_entry& bche, crypto::hash& bl_id, uint64_t height);
+    
+    struct TxItem {
+      cryptonote::Transaction tx;
+      uint64_t height;
+      crypto::hash blockId;
+      crypto::public_key txPubKey;
+      std::vector<cryptonote::tx_extra_field> txExtraFields;
+
+      // resolved
+      std::vector<size_t> outs;
+      uint64_t txMoneyGotInOuts;
+    };
+
+    typedef std::unique_ptr<TxItem> TxQueueItem;
+    typedef BlockingQueue<TxQueueItem> TxQueue;
+
+    bool addNewBlockchainEntry(const crypto::hash& bl_id, uint64_t start_height, uint64_t height);
+    
+    size_t processNewBlockchainEntry(TxQueue& queue, const cryptonote::block_complete_entry& bche, const crypto::hash& bl_id, uint64_t height);
+    bool processNewTransaction(TxQueue& queue, const cryptonote::Transaction& tx, uint64_t height, const crypto::hash& bl_id);
+    void processCheckedTransaction(const TxItem& item);
+
+    // returns number of blocks added
+    size_t updateBlockchain(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res);
+    void processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res);
+    cryptonote::COMMAND_RPC_QUERY_BLOCKS::response queryBlocks(epee::net_utils::http::http_simple_client& client);
+
     void detach_blockchain(uint64_t height);
-    void get_short_chain_history(std::list<crypto::hash>& ids);
+    void get_short_chain_history(std::list<crypto::hash>& ids) const;
     bool is_tx_spendtime_unlocked(uint64_t unlock_time) const;
     bool is_transfer_unlocked(const transfer_details& td) const;
     bool clear();
-    void pull_blocks(size_t& blocks_added);
     uint64_t select_transfers(uint64_t needed_money, bool add_dust, uint64_t dust, std::list<transfer_container::iterator>& selected_transfers);
     bool prepare_file_names(const std::string& file_path);
-    void process_unconfirmed(const cryptonote::transaction& tx);
-    void add_unconfirmed_tx(const cryptonote::transaction& tx, uint64_t change_amount);
+    void process_unconfirmed(const cryptonote::Transaction& tx);
+    void add_unconfirmed_tx(const cryptonote::Transaction& tx, uint64_t change_amount);
+    void checkGenesis(const crypto::hash& genesis_hash); //throws
 
+    inline void print_source_entry(const cryptonote::tx_source_entry& src) {
+      std::string indexes;
+      std::for_each(src.outputs.begin(), src.outputs.end(), [&](const cryptonote::tx_source_entry::output_entry& s_e) {
+          indexes += std::to_string(s_e.first) + " ";
+      });
+      LOG_PRINT_L0("amount=" << m_currency.formatAmount(src.amount) <<
+        ", real_output=" << src.real_output <<
+        ", real_output_in_tx_index=" << src.real_output_in_tx_index <<
+        ", indexes: " << indexes);
+    }
+
+  private:
+    const cryptonote::Currency& m_currency;
     cryptonote::account_base m_account;
     std::string m_daemon_address;
     std::string m_wallet_file;
@@ -188,7 +240,7 @@ namespace tools
     transfer_container m_transfers;
     payment_container m_payments;
     std::unordered_map<crypto::key_image, size_t> m_key_images;
-    cryptonote::account_public_address m_account_public_address;
+    cryptonote::AccountPublicAddress m_account_public_address;
     uint64_t m_upper_transaction_size_limit; //TODO: auto-calc this value or request from daemon, now use some fixed value
 
     std::atomic<bool> m_run;
@@ -288,26 +340,19 @@ namespace tools
       }
     }
     //----------------------------------------------------------------------------------------------------
-    inline void print_source_entry(const cryptonote::tx_source_entry& src)
-    {
-      std::string indexes;
-      std::for_each(src.outputs.begin(), src.outputs.end(), [&](const cryptonote::tx_source_entry::output_entry& s_e) { indexes += boost::to_string(s_e.first) + " "; });
-      LOG_PRINT_L0("amount=" << cryptonote::print_money(src.amount) << ", real_output=" <<src.real_output << ", real_output_in_tx_index=" << src.real_output_in_tx_index << ", indexes: " << indexes);
-    }
-    //----------------------------------------------------------------------------------------------------
   }
   //----------------------------------------------------------------------------------------------------
   template<typename T>
   void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count,
     uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy)
   {
-    cryptonote::transaction tx;
+    cryptonote::Transaction tx;
     transfer(dsts, fake_outputs_count, unlock_time, fee, extra, destination_split_strategy, dust_policy, tx);
   }
 
   template<typename T>
   void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count,
-    uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::transaction &tx)
+    uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::Transaction &tx)
   {
     using namespace cryptonote;
     THROW_WALLET_EXCEPTION_IF(dsts.empty(), error::zero_destination);
@@ -317,7 +362,7 @@ namespace tools
     {
       THROW_WALLET_EXCEPTION_IF(0 == dt.amount, error::zero_destination);
       needed_money += dt.amount;
-      THROW_WALLET_EXCEPTION_IF(needed_money < dt.amount, error::tx_sum_overflow, dsts, fee);
+      THROW_WALLET_EXCEPTION_IF(needed_money < dt.amount, error::tx_sum_overflow, m_currency.publicAddressBase58Prefix(), dsts, fee);
     }
 
     std::list<transfer_container::iterator> selected_transfers;
@@ -393,12 +438,12 @@ namespace tools
       //size_t real_index = src.outputs.size() ? (rand() % src.outputs.size() ):0;
       tx_output_entry real_oe;
       real_oe.first = td.m_global_output_index;
-      real_oe.second = boost::get<txout_to_key>(td.m_tx.vout[td.m_internal_output_index].target).key;
+      real_oe.second = boost::get<TransactionOutputToKey>(td.m_tx.vout[td.m_internal_output_index].target).key;
       auto interted_it = src.outputs.insert(it_to_insert, real_oe);
       src.real_out_tx_key = get_tx_pub_key_from_extra(td.m_tx);
       src.real_output = interted_it - src.outputs.begin();
       src.real_output_in_tx_index = td.m_internal_output_index;
-      detail::print_source_entry(src);
+      print_source_entry(src);
       ++i;
     }
 
@@ -420,14 +465,14 @@ namespace tools
     }
 
     bool r = cryptonote::construct_tx(m_account.get_keys(), sources, splitted_dsts, extra, tx, unlock_time);
-    THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, sources, splitted_dsts, unlock_time);
+    THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, m_currency.publicAddressBase58Prefix(), sources, splitted_dsts, unlock_time);
     THROW_WALLET_EXCEPTION_IF(m_upper_transaction_size_limit <= get_object_blobsize(tx), error::tx_too_big, tx, m_upper_transaction_size_limit);
 
     std::string key_images;
-    bool all_are_txin_to_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const txin_v& s_e) -> bool
+    bool all_are_txin_to_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const TransactionInput& s_e) -> bool
     {
-      CHECKED_GET_SPECIFIC_VARIANT(s_e, const txin_to_key, in, false);
-      key_images += boost::to_string(in.k_image) + " ";
+      CHECKED_GET_SPECIFIC_VARIANT(s_e, const TransactionInputToKey, in, false);
+      key_images += boost::to_string(in.keyImage) + " ";
       return true;
     });
     THROW_WALLET_EXCEPTION_IF(!all_are_txin_to_key, error::unexpected_txin_type, tx);
@@ -448,9 +493,9 @@ namespace tools
       it->m_spent = true;
 
     LOG_PRINT_L0("Transaction successfully sent. <" << get_transaction_hash(tx) << ">" << ENDL
-                  << "Commission: " << print_money(fee+dust) << " (dust: " << print_money(dust) << ")" << ENDL
-                  << "Balance: " << print_money(balance()) << ENDL
-                  << "Unlocked: " << print_money(unlocked_balance()) << ENDL
+                  << "Commission: " << m_currency.formatAmount(fee + dust) << " (dust: " << m_currency.formatAmount(dust) << ")" << ENDL
+                  << "Balance: " << m_currency.formatAmount(balance()) << ENDL
+                  << "Unlocked: " << m_currency.formatAmount(unlocked_balance()) << ENDL
                   << "Please, wait for confirmation for your balance to be unlocked.");
   }
 }

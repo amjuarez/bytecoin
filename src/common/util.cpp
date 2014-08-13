@@ -15,12 +15,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
+#include "util.h"
+
 #include <cstdio>
+
+#include <boost/filesystem.hpp>
 
 #include "include_base_utils.h"
 using namespace epee;
 
-#include "util.h"
+#include "p2p/p2p_protocol_defs.h"
 #include "cryptonote_config.h"
 
 #ifdef WIN32
@@ -34,8 +38,6 @@ using namespace epee;
 
 namespace tools
 {
-  std::function<void(void)> signal_handler::m_handler;
-
 #ifdef WIN32
   std::string get_windows_version_display_string()
   {
@@ -311,7 +313,7 @@ std::string get_nix_version_display_string()
     std::string config_folder;
 #ifdef WIN32
     // Windows
-    config_folder = get_special_folder_path(CSIDL_APPDATA, true) + "/" + CRYPTONOTE_NAME;
+    config_folder = get_special_folder_path(CSIDL_APPDATA, true) + "/" + cryptonote::CRYPTONOTE_NAME;
 #else
     std::string pathRet;
     char* pszHome = getenv("HOME");
@@ -322,10 +324,10 @@ std::string get_nix_version_display_string()
 #ifdef MAC_OSX
     // Mac
     pathRet /= "Library/Application Support";
-    config_folder =  (pathRet + "/" + CRYPTONOTE_NAME);
+    config_folder =  (pathRet + "/" + cryptonote::CRYPTONOTE_NAME);
 #else
     // Unix
-    config_folder = (pathRet + "/." + CRYPTONOTE_NAME);
+    config_folder = (pathRet + "/." + cryptonote::CRYPTONOTE_NAME);
 #endif
 #endif
 
@@ -373,5 +375,13 @@ std::string get_nix_version_display_string()
     code = ok ? 0 : errno;
 #endif
     return std::error_code(code, std::system_category());
+  }
+
+  crypto::hash get_proof_of_trust_hash(const nodetool::proof_of_trust& pot)
+  {
+    std::string s;
+    s.append(reinterpret_cast<const char*>(&pot.peer_id), sizeof(pot.peer_id));
+    s.append(reinterpret_cast<const char*>(&pot.time), sizeof(pot.time));
+    return crypto::cn_fast_hash(s.data(), s.size());
   }
 }

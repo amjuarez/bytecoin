@@ -17,29 +17,32 @@
 
 #pragma once
 
-#include "../core_tests/chaingen.h"
 #include <vector>
 #include <unordered_map>
 
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_basic.h"
+#include "cryptonote_core/Currency.h"
 #include "crypto/hash.h"
+
+#include "../TestGenerator/TestGenerator.h"
 
 class TestBlockchainGenerator
 {
 public:
-  TestBlockchainGenerator();
+  TestBlockchainGenerator(const cryptonote::Currency& currency);
 
-  std::vector<cryptonote::block>& getBlockchain();
+  std::vector<cryptonote::Block>& getBlockchain();
   void addGenesisBlock();
   void generateEmptyBlocks(size_t count);
-  bool getBlockRewardForAddress(const cryptonote::account_public_address& address);
-  void addTxToBlockchain(const cryptonote::transaction& transaction);
-  bool getTransactionByHash(const crypto::hash& hash, cryptonote::transaction& tx);
+  bool getBlockRewardForAddress(const cryptonote::AccountPublicAddress& address);
+  void addTxToBlockchain(const cryptonote::Transaction& transaction);
+  bool getTransactionByHash(const crypto::hash& hash, cryptonote::Transaction& tx);
 
 private:
+  const cryptonote::Currency& m_currency;
   test_generator generator;
   cryptonote::account_base miner_acc;
-  std::vector<cryptonote::block> m_blockchain;
-  std::unordered_map<crypto::hash, cryptonote::transaction> m_txs;
+  std::vector<cryptonote::Block> m_blockchain;
+  std::unordered_map<crypto::hash, cryptonote::Transaction> m_txs;
 };
