@@ -67,32 +67,6 @@ namespace boost
     a & reinterpret_cast<char (&)[sizeof(crypto::hash)]>(x);
   }
 
-<<<<<<< HEAD
-  template <class Archive> void serialize(Archive& archive, cryptonote::TransactionInputMultisignature &output, unsigned int version) {
-    archive & output.amount;
-    archive & output.signatures;
-    archive & output.outputIndex;
-  }
-
-  template <class Archive> void serialize(Archive& archive, cryptonote::TransactionOutputMultisignature &output, unsigned int version) {
-    archive & output.keys;
-    archive & output.requiredSignatures;
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::TransactionOutputToKey &x, const boost::serialization::version_type ver)
-  {
-    a & x.key;
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::TransactionInputGenerate &x, const boost::serialization::version_type ver)
-  {
-    a & x.height;
-  }
-
-  template <class Archive>
-=======
   template <class Archive> void serialize(Archive& archive, cryptonote::TransactionInputToScript&, unsigned int version) {
     assert(false);
   }
@@ -133,7 +107,6 @@ namespace boost
   }
 
   template <class Archive>
->>>>>>> 4363a9f1001893c80ee2435399836cfe43b3014e
   inline void serialize(Archive &a, cryptonote::TransactionInputToKey &x, const boost::serialization::version_type ver)
   {
     a & x.amount;

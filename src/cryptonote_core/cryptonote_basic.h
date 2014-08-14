@@ -49,62 +49,6 @@ namespace cryptonote {
   const static crypto::public_key null_pkey = boost::value_initialized<crypto::public_key>();
 
   /* inputs */
-<<<<<<< HEAD
-
-  struct TransactionInputGenerate {
-    size_t height;
-
-    BEGIN_SERIALIZE_OBJECT()
-      VARINT_FIELD(height);
-    END_SERIALIZE()
-  };
-
-  struct TransactionInputToKey {
-    uint64_t amount;
-    std::vector<uint64_t> keyOffsets;
-    crypto::key_image keyImage;      // double spending protection
-
-    BEGIN_SERIALIZE_OBJECT()
-      VARINT_FIELD(amount);
-      FIELD(keyOffsets);
-      FIELD(keyImage);
-    END_SERIALIZE()
-  };
-
-  struct TransactionInputMultisignature {
-    uint64_t amount;
-    uint32_t signatures;
-    uint64_t outputIndex;
-
-    BEGIN_SERIALIZE_OBJECT()
-      VARINT_FIELD(amount);
-      VARINT_FIELD(signatures);
-      VARINT_FIELD(outputIndex);
-    END_SERIALIZE()
-  };
-
-  /* outputs */
-
-  struct TransactionOutputToKey {
-    TransactionOutputToKey() { }
-    TransactionOutputToKey(const crypto::public_key &_key) : key(_key) { }
-    crypto::public_key key;
-  };
-
-  struct TransactionOutputMultisignature {
-    std::vector<crypto::public_key> keys;
-    uint32_t requiredSignatures;
-
-    BEGIN_SERIALIZE_OBJECT()
-      FIELD(keys);
-      VARINT_FIELD(requiredSignatures);
-    END_SERIALIZE()
-  };
-
-  typedef boost::variant<TransactionInputGenerate, TransactionInputToKey, TransactionInputMultisignature> TransactionInput;
-  typedef boost::variant<TransactionOutputToKey, TransactionOutputMultisignature> TransactionOutputTarget;
-
-=======
 
   struct TransactionInputGenerate {
     size_t height;
@@ -189,7 +133,6 @@ namespace cryptonote {
     TransactionOutputToKey,
     TransactionOutputMultisignature> TransactionOutputTarget;
 
->>>>>>> 4363a9f1001893c80ee2435399836cfe43b3014e
   struct TransactionOutput {
     uint64_t amount;
     TransactionOutputTarget target;
@@ -279,17 +222,11 @@ namespace cryptonote {
   private:
     static size_t getSignatureSize(const TransactionInput& input) {
       struct txin_signature_size_visitor : public boost::static_visitor<size_t> {
-<<<<<<< HEAD
-        size_t operator()(const TransactionInputGenerate& txin) const{return 0;}
-        size_t operator()(const TransactionInputToKey& txin) const {return txin.keyOffsets.size();}
-        size_t operator()(const TransactionInputMultisignature& input) const { return input.signatures; }
-=======
         size_t operator()(const TransactionInputGenerate&       txin) const { return 0; }
         size_t operator()(const TransactionInputToScript&       txin) const { assert(false); return 0; }
         size_t operator()(const TransactionInputToScriptHash&   txin) const { assert(false); return 0; }
         size_t operator()(const TransactionInputToKey&          txin) const { return txin.keyOffsets.size();}
         size_t operator()(const TransactionInputMultisignature& txin) const { return txin.signatures; }
->>>>>>> 4363a9f1001893c80ee2435399836cfe43b3014e
       };
 
       return boost::apply_visitor(txin_signature_size_visitor(), input);
@@ -464,51 +401,36 @@ namespace cryptonote {
 BLOB_SERIALIZER(cryptonote::TransactionOutputToKey);
 
 VARIANT_TAG(binary_archive, cryptonote::TransactionInputGenerate, 0xff);
-<<<<<<< HEAD
-VARIANT_TAG(binary_archive, cryptonote::TransactionInputToKey, 0x2);
-VARIANT_TAG(binary_archive, cryptonote::TransactionInputMultisignature, 0x3);
-=======
 VARIANT_TAG(binary_archive, cryptonote::TransactionInputToScript, 0x0);
 VARIANT_TAG(binary_archive, cryptonote::TransactionInputToScriptHash, 0x1);
 VARIANT_TAG(binary_archive, cryptonote::TransactionInputToKey, 0x2);
 VARIANT_TAG(binary_archive, cryptonote::TransactionInputMultisignature, 0x3);
 VARIANT_TAG(binary_archive, cryptonote::TransactionOutputToScript, 0x0);
 VARIANT_TAG(binary_archive, cryptonote::TransactionOutputToScriptHash, 0x1);
->>>>>>> 4363a9f1001893c80ee2435399836cfe43b3014e
 VARIANT_TAG(binary_archive, cryptonote::TransactionOutputToKey, 0x2);
 VARIANT_TAG(binary_archive, cryptonote::TransactionOutputMultisignature, 0x3);
 VARIANT_TAG(binary_archive, cryptonote::Transaction, 0xcc);
 VARIANT_TAG(binary_archive, cryptonote::Block, 0xbb);
 
 VARIANT_TAG(json_archive, cryptonote::TransactionInputGenerate, "generate");
-<<<<<<< HEAD
-VARIANT_TAG(json_archive, cryptonote::TransactionInputToKey, "key");
-VARIANT_TAG(json_archive, cryptonote::TransactionInputMultisignature, "multisignature");
-=======
 VARIANT_TAG(json_archive, cryptonote::TransactionInputToScript, "script");
 VARIANT_TAG(json_archive, cryptonote::TransactionInputToScriptHash, "scripthash");
 VARIANT_TAG(json_archive, cryptonote::TransactionInputToKey, "key");
 VARIANT_TAG(json_archive, cryptonote::TransactionInputMultisignature, "multisignature");
 VARIANT_TAG(json_archive, cryptonote::TransactionOutputToScript, "script");
 VARIANT_TAG(json_archive, cryptonote::TransactionOutputToScriptHash, "scripthash");
->>>>>>> 4363a9f1001893c80ee2435399836cfe43b3014e
 VARIANT_TAG(json_archive, cryptonote::TransactionOutputToKey, "key");
 VARIANT_TAG(json_archive, cryptonote::TransactionOutputMultisignature, "multisignature");
 VARIANT_TAG(json_archive, cryptonote::Transaction, "Transaction");
 VARIANT_TAG(json_archive, cryptonote::Block, "Block");
 
 VARIANT_TAG(debug_archive, cryptonote::TransactionInputGenerate, "generate");
-<<<<<<< HEAD
-VARIANT_TAG(debug_archive, cryptonote::TransactionInputToKey, "key");
-VARIANT_TAG(debug_archive, cryptonote::TransactionInputMultisignature, "multisignature");
-=======
 VARIANT_TAG(debug_archive, cryptonote::TransactionInputToScript, "script");
 VARIANT_TAG(debug_archive, cryptonote::TransactionInputToScriptHash, "scripthash");
 VARIANT_TAG(debug_archive, cryptonote::TransactionInputToKey, "key");
 VARIANT_TAG(debug_archive, cryptonote::TransactionInputMultisignature, "multisignature");
 VARIANT_TAG(debug_archive, cryptonote::TransactionOutputToScript, "script");
 VARIANT_TAG(debug_archive, cryptonote::TransactionOutputToScriptHash, "scripthash");
->>>>>>> 4363a9f1001893c80ee2435399836cfe43b3014e
 VARIANT_TAG(debug_archive, cryptonote::TransactionOutputToKey, "key");
 VARIANT_TAG(debug_archive, cryptonote::TransactionOutputMultisignature, "multisignature");
 VARIANT_TAG(debug_archive, cryptonote::Transaction, "Transaction");
