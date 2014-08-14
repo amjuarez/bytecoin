@@ -110,7 +110,7 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::makeSendRequest(Transact
   Transaction transaction;
   transaction.firstTransferId = firstTransferId;
   transaction.transferCount = transfers.size();
-  transaction.totalAmount = neededMoney;
+  transaction.totalAmount = -neededMoney;
   transaction.fee = fee;
   transaction.isCoinbase = false;
   transaction.timestamp = 0;
@@ -184,7 +184,8 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
     prepareInputs(context->selectedTransfers, context->outs, sources, context->mixIn);
 
     cryptonote::tx_destination_entry changeDts = AUTO_VAL_INIT(changeDts);
-    createChangeDestinations(m_keys.m_account_address, transaction.totalAmount, context->foundMoney, changeDts);
+    uint64_t totalAmount = -transaction.totalAmount;
+    createChangeDestinations(m_keys.m_account_address, totalAmount, context->foundMoney, changeDts);
 
     std::vector<cryptonote::tx_destination_entry> splittedDests;
     splitDestinations(transaction.firstTransferId, transaction.transferCount, changeDts, context->dustPolicy, splittedDests);
@@ -195,6 +196,7 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
     fillTransactionHash(tx, transaction.hash);
 
     m_unconfirmedTransactions.add(tx, context->transactionId, changeDts.amount);
+
     notifyBalanceChanged(events);
 
     return std::make_shared<WalletRelayTransactionRequest>(tx, std::bind(&WalletTransactionSender::relayTransactionCallback, this, context->transactionId,

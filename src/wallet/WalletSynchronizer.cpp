@@ -18,7 +18,9 @@ void throwIf(bool expr, cryptonote::error::WalletErrorCodes ec) {
 
 bool getTxPubKey(const cryptonote::transaction& tx, crypto::public_key& key) {
   std::vector<cryptonote::tx_extra_field> extraFields;
-  cryptonote::parse_tx_extra(tx.extra, extraFields);
+  if (!cryptonote::parse_tx_extra(tx.extra, extraFields)) {
+    return false;
+  }
 
   cryptonote::tx_extra_pub_key pubKeyField;
   if(!cryptonote::find_tx_extra_field_by_type(extraFields, pubKeyField)) {
@@ -368,6 +370,8 @@ void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, 
     transaction.blockHeight = height;
     transaction.isCoinbase = isCoinbase;
     transaction.timestamp = timestamp;
+
+    std::copy(tx.extra.begin(), tx.extra.end(), std::back_inserter(transaction.extra));
 
     TransactionId newId = m_transactionsCache.insertTransaction(std::move(transaction));
 

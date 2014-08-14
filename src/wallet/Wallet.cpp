@@ -187,6 +187,9 @@ void Wallet::doLoad(std::istream& source) {
       throw std::system_error(make_error_code(cryptonote::error::WRONG_PASSWORD));
     }
 
+    if (m_blockchain.empty()) {
+      storeGenesisBlock();
+    }
     m_sender.init(m_account.get_keys());
   }
   catch (std::system_error& e) {
