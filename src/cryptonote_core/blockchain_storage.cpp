@@ -271,7 +271,7 @@ BOOST_CLASS_VERSION(cryptonote::BlockCacheSerializer, CURRENT_BLOCKCACHE_STORAGE
 blockchain_storage::blockchain_storage(const Currency& currency, tx_memory_pool& tx_pool):
       m_currency(currency),
       m_tx_pool(tx_pool),
-      m_current_block_cumul_sz_limit(currency.blockGrantedFullRewardZone() * 2),
+      m_current_block_cumul_sz_limit(0),
       m_is_in_checkpoint_zone(false),
       m_is_blockchain_storing(false),
       m_upgradeDetector(currency, m_blocks, BLOCK_MAJOR_VERSION_2) {
@@ -420,6 +420,8 @@ bool blockchain_storage::init(const std::string& config_folder, bool load_existi
     LOG_ERROR("Failed to initialize upgrade detector");
     return false;
   }
+
+  update_next_comulative_size_limit();
 
   uint64_t timestamp_diff = time(NULL) - m_blocks.back().bl.timestamp;
   if (!m_blocks.back().bl.timestamp) {
@@ -1575,13 +1577,20 @@ bool blockchain_storage::getBlockCumulativeSize(const Block& block, size_t& cumu
   return missedTxs.empty();
 }
 
+// Precondition: m_blockchain_lock is locked.
 bool blockchain_storage::update_next_comulative_size_limit() {
+  uint8_t nextBlockMajorVersion = get_block_major_version_for_height(m_blocks.size());
+  size_t nextBlockGrantedFullRewardZone = nextBlockMajorVersion == BLOCK_MAJOR_VERSION_1 ?
+    parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 :
+    m_currency.blockGrantedFullRewardZone();
+
   std::vector<size_t> sz;
   get_last_n_blocks_sizes(sz, m_currency.rewardBlocksWindow());
 
   uint64_t median = epee::misc_utils::median(sz);
-  if (median <= m_currency.blockGrantedFullRewardZone())
-    median = m_currency.blockGrantedFullRewardZone();
+  if (median <= nextBlockGrantedFullRewardZone) {
+    median = nextBlockGrantedFullRewardZone;
+  }
 
   m_current_block_cumul_sz_limit = median * 2;
   return true;
@@ -1752,7 +1761,6 @@ bool blockchain_storage::pushBlock(const Block& blockData, block_verification_co
   }
 
   pushBlock(block);
-  update_next_comulative_size_limit();
   TIME_MEASURE_FINISH(block_processing_time);
   LOG_PRINT_L1("+++++ BLOCK SUCCESSFULLY ADDED" << ENDL << "id:\t" << blockHash
     << ENDL << "PoW:\t" << proof_of_work
@@ -1764,6 +1772,7 @@ bool blockchain_storage::pushBlock(const Block& blockData, block_verification_co
   bvc.m_added_to_main_chain = true;
 
   m_upgradeDetector.blockPushed();
+  update_next_comulative_size_limit();
 
   return true;
 }

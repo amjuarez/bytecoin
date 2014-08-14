@@ -84,7 +84,10 @@ namespace cryptonote {
 
       uint64_t baseReward = (m_moneySupply - alreadyGeneratedCoins) >> m_emissionSpeedFactor;
 
-      medianSize = std::max(medianSize, m_blockGrantedFullRewardZone);
+      size_t blockGrantedFullRewardZone = penalizeFee ?
+        m_blockGrantedFullRewardZone :
+        cryptonote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
+      medianSize = std::max(medianSize, blockGrantedFullRewardZone);
       if (currentBlockSize > UINT64_C(2) * medianSize) {
         LOG_PRINT_L4("Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize);
         return false;

@@ -163,8 +163,8 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 1, true));
     GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(2, 2, true));
     GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(3, 2, true));
-    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(0, 0, false));
-    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 0, false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(0, 0, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 0, true));
     GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(0, 1, false));
     GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 2, false));
     GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(2, 3, false));

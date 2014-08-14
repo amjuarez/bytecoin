@@ -76,6 +76,7 @@ public:
     std::unique_lock<std::mutex> lk(m_mutex);
     m_closed = true;
     m_haveData.notify_all(); // wake up threads in pop()
+    m_haveSpace.notify_all();
 
     if (wait) {
       while (!m_queue.empty()) {

@@ -258,7 +258,10 @@ bool test_generator::constructMaxSizeBlock(cryptonote::Block& blk, const crypton
   getLastNBlockSizes(blockSizes, get_block_hash(blkPrev), medianBlockCount);
 
   size_t median = misc_utils::median(blockSizes);
-  median = std::max(median, m_currency.blockGrantedFullRewardZone());
+  size_t blockGrantedFullRewardZone = defaultMajorVersion <= BLOCK_MAJOR_VERSION_1 ?
+    cryptonote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 :
+    m_currency.blockGrantedFullRewardZone();
+  median = std::max(median, blockGrantedFullRewardZone);
 
   uint64_t totalFee = 0;
   size_t txsSize = 0;

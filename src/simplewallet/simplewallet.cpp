@@ -1097,7 +1097,6 @@ int main(int argc, char* argv[])
 
     tools::SignalHandler::install([&wrpc, &wal] {
       wrpc.send_stop_signal();
-      wal.store();
     });
     LOG_PRINT_L0("Starting wallet rpc server");
     wrpc.run();

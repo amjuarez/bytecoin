@@ -44,7 +44,11 @@ namespace {
 }
 
 gen_upgrade::gen_upgrade() : m_invalidBlockIndex(0), m_checkBlockTemplateVersionCallCounter(0),
-  m_coinsInCirculationBeforeUpgrade(0), m_coinsInCirculationAfterUpgrade(0) {
+    m_coinsInCirculationBeforeUpgrade(0), m_coinsInCirculationAfterUpgrade(0) {
+  cryptonote::CurrencyBuilder currencyBuilder;
+  currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
+  m_currency = currencyBuilder.currency();
+
   REGISTER_CALLBACK_METHOD(gen_upgrade, markInvalidBlock);
   REGISTER_CALLBACK_METHOD(gen_upgrade, checkBlockTemplateVersionIsV1);
   REGISTER_CALLBACK_METHOD(gen_upgrade, checkBlockTemplateVersionIsV2);

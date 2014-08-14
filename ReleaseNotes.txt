@@ -1,3 +1,7 @@
+Release notes 1.0.1
+
+- Fix transfers in simplewallet
+
 Release notes 1.0.0
 
 - Multi-signatures
