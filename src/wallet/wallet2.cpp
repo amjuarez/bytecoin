@@ -131,7 +131,9 @@ void wallet2::processCheckedTransaction(const TxItem& item) {
       THROW_WALLET_EXCEPTION_IF(in_ephemeral.pub != boost::get<cryptonote::TransactionOutputToKey>(tx.vout[o].target).key,
         error::wallet_internal_error, "key_image generated ephemeral public key not matched with output_key");
 
-      m_key_images[td.m_key_image] = m_transfers.size() - 1;
+      auto insertResult = m_key_images.insert(std::make_pair(td.m_key_image, m_transfers.size() - 1));
+      THROW_WALLET_EXCEPTION_IF(!insertResult.second, error::wallet_internal_error, "Key image already exists");
+
       LOG_PRINT_L0("Received money: " << m_currency.formatAmount(td.amount()) << ", with tx: " << get_transaction_hash(tx));
       if (0 != m_callback) {
         m_callback->on_money_received(height, td.m_tx, td.m_internal_output_index);
@@ -286,15 +288,18 @@ void wallet2::get_short_chain_history(std::list<crypto::hash>& ids) const
 }
 
 //----------------------------------------------------------------------------------------------------
-size_t wallet2::updateBlockchain(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res)
-{
+size_t wallet2::updateBlockchain(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res, std::unordered_set<crypto::hash>& newBlocks) {
   size_t blocks_added = 0;
   size_t current_index = res.start_height;
 
   // update local blockchain
   for (const auto& item : res.items) {
-    if (addNewBlockchainEntry(item.block_id, res.start_height, current_index))
+    if (addNewBlockchainEntry(item.block_id, res.start_height, current_index)) {
+      if (!item.block.empty()) { 
+        newBlocks.insert(item.block_id);
+      }
       ++blocks_added;
+    }
     ++current_index;
   }
 
@@ -302,7 +307,7 @@ size_t wallet2::updateBlockchain(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::res
 }
 
 //----------------------------------------------------------------------------------------------------
-void wallet2::processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res)
+void wallet2::processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res, const std::unordered_set<crypto::hash>& newBlocks)
 {
   size_t checkingThreads = std::thread::hardware_concurrency();
 
@@ -315,13 +320,14 @@ void wallet2::processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::re
   TxQueue checkedQueue(checkingThreads * 2);
 
   std::atomic<size_t> inputTx(0);
-  std::atomic<size_t> checkedTx(0);
 
   futures.push_back(std::async(std::launch::async, [&] {
     try {
       size_t current_index = res.start_height;
       for (const auto& item : res.items) {
-        inputTx += processNewBlockchainEntry(incomingQueue, item, item.block_id, current_index);
+        if (newBlocks.count(item.block_id)) {
+          inputTx += processNewBlockchainEntry(incomingQueue, item, item.block_id, current_index);
+        }
         ++current_index;
       }
       incomingQueue.close();
@@ -338,7 +344,6 @@ void wallet2::processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::re
     futures.push_back(std::async(std::launch::async, [&] {
       TxQueueItem item;
       while (incomingQueue.pop(item)) {
-        ++checkedTx;
         lookup_acc_outs(m_account.get_keys(), item->tx, item->txPubKey, item->outs, item->txMoneyGotInOuts);
         checkedQueue.push(std::move(item));
       }
@@ -348,10 +353,18 @@ void wallet2::processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::re
 
   size_t txCount = 0;
 
-  TxQueueItem item;
-  while (checkedQueue.pop(item)) {
-    processCheckedTransaction(*item);
-    ++txCount;
+  try {
+    TxQueueItem item;
+    while (checkedQueue.pop(item)) {
+      processCheckedTransaction(*item);
+      ++txCount;
+    }
+  } catch (...) {
+    checkedQueue.close();
+    for (auto& f : futures) {
+      f.wait();
+    }
+    throw;
   }
 
   for (auto& f : futures) {
@@ -404,11 +417,8 @@ void wallet2::refresh(size_t & blocks_fetched, bool& received_money)
 {
   received_money = false;
   blocks_fetched = 0;
-  size_t added_blocks = 0;
   size_t try_count = 0;
   crypto::hash last_tx_hash_id = m_transfers.size() ? get_transaction_hash(m_transfers.back().m_tx) : null_hash;
-
-  std::future<void> processingTask;
 
   epee::net_utils::http::http_simple_client queryClient;
 
@@ -417,48 +427,45 @@ void wallet2::refresh(size_t & blocks_fetched, bool& received_money)
 
   auto startTime = std::chrono::high_resolution_clock::now();
 
-  while(m_run.load(std::memory_order_relaxed))
-  {
-    try
-    {
-      auto res = std::make_shared<cryptonote::COMMAND_RPC_QUERY_BLOCKS::response>(queryBlocks(queryClient));
-      
-      if (processingTask.valid())
-        processingTask.get(); // sync with transaction processing
+  cryptonote::COMMAND_RPC_QUERY_BLOCKS::response res;
+  std::unordered_set<crypto::hash> newBlocks;
+  
+  size_t lastHeight = m_blockchain.size();
+  size_t added_blocks = 0;
 
-      added_blocks = updateBlockchain(*res);
-      
-      if (!added_blocks) {
+  while (m_run.load(std::memory_order_relaxed)) {
+    try {
+      std::future<void> processingTask;
+      if (!newBlocks.empty()) {
+        processingTask = std::async(std::launch::async, [&res, &newBlocks, this] { processTransactions(res, newBlocks); });
+      }
+
+      cryptonote::COMMAND_RPC_QUERY_BLOCKS::response tempRes = queryBlocks(queryClient);
+      if (!newBlocks.empty()) {
+        processingTask.get();
+        lastHeight = m_blockchain.size();
+        newBlocks.clear();
+      }
+
+      added_blocks = updateBlockchain(tempRes, newBlocks);
+      if (added_blocks == 0) {
         break;
       }
 
+      res = std::move(tempRes);
       blocks_fetched += added_blocks;
-
-      bool hasFullBlocks = std::any_of(res->items.begin(), res->items.end(), 
-        [](const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response_item& ri) { return !ri.block.empty(); });
-
-      if (hasFullBlocks) {
-        processingTask = std::async(std::launch::async, [res, this] { processTransactions(*res); });
-      }
-    }
-    catch (const std::exception&)
-    {
-      blocks_fetched += added_blocks;
-      if(try_count < 3)
-      {
+    } catch (const std::exception&) {
+      newBlocks.clear();
+      blocks_fetched -= detach_blockchain(lastHeight);
+      if (try_count < 3) {
         LOG_PRINT_L1("Another try pull_blocks (try_count=" << try_count << ")...");
         ++try_count;
-      }
-      else
-      {
+      } else {
         LOG_ERROR("pull_blocks failed, try_count=" << try_count);
         throw;
       }
     }
   }
-
-  if (processingTask.valid())
-    processingTask.get();
 
   auto duration = std::chrono::high_resolution_clock::now() - startTime;
 
@@ -485,22 +492,23 @@ bool wallet2::refresh(size_t & blocks_fetched, bool& received_money, bool& ok)
   return ok;
 }
 //----------------------------------------------------------------------------------------------------
-void wallet2::detach_blockchain(uint64_t height)
+size_t wallet2::detach_blockchain(uint64_t height)
 {
   LOG_PRINT_L0("Detaching blockchain on height " << height);
   size_t transfers_detached = 0;
 
-  auto it = std::find_if(m_transfers.begin(), m_transfers.end(), [&](const transfer_details& td){return td.m_block_height >= height;});
-  size_t i_start = it - m_transfers.begin();
-
-  for(size_t i = i_start; i!= m_transfers.size();i++)
-  {
-    auto it_ki = m_key_images.find(m_transfers[i].m_key_image);
-    THROW_WALLET_EXCEPTION_IF(it_ki == m_key_images.end(), error::wallet_internal_error, "key image not found");
-    m_key_images.erase(it_ki);
-    ++transfers_detached;
+  // do not rely on ordering by height in transfers
+  for (auto it = m_transfers.begin(); it != m_transfers.end();) {
+    if (it->m_block_height >= height) {
+      auto it_ki = m_key_images.find(it->m_key_image);
+      THROW_WALLET_EXCEPTION_IF(it_ki == m_key_images.end(), error::wallet_internal_error, "key image not found");
+      m_key_images.erase(it_ki);
+      it = m_transfers.erase(it);
+      ++transfers_detached;
+    } else {
+      ++it;
+    }
   }
-  m_transfers.erase(it, m_transfers.end());
 
   size_t blocks_detached = m_blockchain.end() - (m_blockchain.begin()+height);
   m_blockchain.erase(m_blockchain.begin()+height, m_blockchain.end());
@@ -515,6 +523,7 @@ void wallet2::detach_blockchain(uint64_t height)
   }
 
   LOG_PRINT_L0("Detached blockchain on height " << height << ", transfers detached " << transfers_detached << ", blocks detached " << blocks_detached);
+  return blocks_detached;
 }
 //----------------------------------------------------------------------------------------------------
 bool wallet2::deinit()

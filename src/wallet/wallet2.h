@@ -77,7 +77,7 @@ namespace tools
   public:
     wallet2(const cryptonote::Currency& currency) :
       m_currency(currency), m_run(true), m_callback(0) {
-      m_upper_transaction_size_limit = (m_currency.blockGrantedFullRewardZone() * 125) / 100 - m_currency.minerTxBlobReservedSize();
+      m_upper_transaction_size_limit = (cryptonote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 * 125) / 100 - m_currency.minerTxBlobReservedSize();
     }
 
     struct transfer_details
@@ -200,11 +200,11 @@ namespace tools
     void processCheckedTransaction(const TxItem& item);
 
     // returns number of blocks added
-    size_t updateBlockchain(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res);
-    void processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res);
+    size_t updateBlockchain(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res, std::unordered_set<crypto::hash>& newBlocks);
+    void processTransactions(const cryptonote::COMMAND_RPC_QUERY_BLOCKS::response& res, const std::unordered_set<crypto::hash>& newBlocks);
     cryptonote::COMMAND_RPC_QUERY_BLOCKS::response queryBlocks(epee::net_utils::http::http_simple_client& client);
 
-    void detach_blockchain(uint64_t height);
+    size_t detach_blockchain(uint64_t height);
     void get_short_chain_history(std::list<crypto::hash>& ids) const;
     bool is_tx_spendtime_unlocked(uint64_t unlock_time) const;
     bool is_transfer_unlocked(const transfer_details& td) const;
