@@ -33,7 +33,7 @@ struct SendTransactionContext
   TransactionId transactionId;
   std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount> outs;
   uint64_t foundMoney;
-  std::list<TransferDetails> selectedTransfers;
+  std::list<crypto::key_image> selectedTransfers;
   uint64_t unlockTimestamp;
   TxDustPolicy dustPolicy;
   uint64_t mixIn;

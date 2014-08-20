@@ -4,6 +4,7 @@
 
 #include <time.h>
 #include "TestBlockchainGenerator.h"
+#include "cryptonote_core/cryptonote_format_utils.h"
 
 #include "../performance_tests/multi_tx_test_base.h"
 
@@ -20,9 +21,11 @@ public:
 
   void generate(const cryptonote::account_public_address& address, cryptonote::transaction& tx)
   {
-    cryptonote::tx_destination_entry destination(this->m_source_amount, address);
     std::vector<cryptonote::tx_destination_entry> destinations;
-    destinations.push_back(destination);
+
+    cryptonote::decompose_amount_into_digits(this->m_source_amount, 0,
+      [&](uint64_t chunk) { destinations.push_back(cryptonote::tx_destination_entry(chunk, address)); },
+      [&](uint64_t a_dust) { destinations.push_back(cryptonote::tx_destination_entry(a_dust, address)); } );
 
     cryptonote::construct_tx(this->m_miners[this->real_source_idx].get_keys(), this->m_sources, destinations, std::vector<uint8_t>(), tx, 0);
   }

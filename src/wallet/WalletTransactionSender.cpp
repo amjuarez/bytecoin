@@ -137,7 +137,12 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::makeGetRandomOutsRequest
   uint64_t outsCount = context->mixIn + 1;// add one to make possible (if need) to skip real output key
   std::vector<uint64_t> amounts;
 
-  for (const TransferDetails& td: context->selectedTransfers) {
+  for (auto ki: context->selectedTransfers) {
+    size_t idx;
+    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
+    throwIf(!found, cryptonote::error::INTERNAL_WALLET_ERROR);
+
+    const TransferDetails& td = m_transferDetails.getTransferDetails(idx);
     throwIf(td.tx.vout.size() <= td.internalOutputIndex, cryptonote::error::INTERNAL_WALLET_ERROR);
     amounts.push_back(td.amount());
   }
@@ -199,7 +204,9 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
 
     notifyBalanceChanged(events);
 
-    return std::make_shared<WalletRelayTransactionRequest>(tx, std::bind(&WalletTransactionSender::relayTransactionCallback, this, context->transactionId,
+    markOutputsSpent(context->selectedTransfers);
+
+    return std::make_shared<WalletRelayTransactionRequest>(tx, std::bind(&WalletTransactionSender::relayTransactionCallback, this, context,
           std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
   }
   catch(std::system_error& ec) {
@@ -212,15 +219,17 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
   return std::shared_ptr<WalletRequest>();
 }
 
-void WalletTransactionSender::relayTransactionCallback(TransactionId txId, std::deque<std::shared_ptr<WalletEvent> >& events,
+void WalletTransactionSender::relayTransactionCallback(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events,
                                                         boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec) {
+  TransactionId txId = context->transactionId;
+
   if (m_isStoping) {
-    events.push_back(std::make_shared<WalletSendTransactionCompletedEvent>(txId, make_error_code(cryptonote::error::TX_CANCELLED)));
     return;
   }
 
   if (ec) {
     m_sendingTxsStates.error(txId);
+    makeOutputsNotSpent(context->selectedTransfers);
   } else {
     m_sendingTxsStates.sent(txId);
   }
@@ -267,12 +276,18 @@ void WalletTransactionSender::digitSplitStrategy(TransferId firstTransferId, siz
 }
 
 
-void WalletTransactionSender::prepareInputs(std::list<TransferDetails>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
+void WalletTransactionSender::prepareInputs(const std::list<crypto::key_image>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
     std::vector<cryptonote::tx_source_entry>& sources, uint64_t mixIn) {
   size_t i = 0;
-  for (TransferDetails& td: selectedTransfers) {
+  for (const crypto::key_image& ki: selectedTransfers) {
     sources.resize(sources.size()+1);
     cryptonote::tx_source_entry& src = sources.back();
+
+    size_t idx;
+    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
+    throwIf(!found, cryptonote::error::TX_TRANSFER_IMPOSSIBLE);
+    TransferDetails& td = m_transferDetails.getTransferDetails(idx);
+
     src.amount = td.amount();
 
     //paste mixin transaction
@@ -313,6 +328,30 @@ void WalletTransactionSender::notifyBalanceChanged(std::deque<std::shared_ptr<Wa
 
   events.push_back(std::make_shared<WalletActualBalanceUpdatedEvent>(actualBalance));
   events.push_back(std::make_shared<WalletPendingBalanceUpdatedEvent>(pendingBalance));
+}
+
+void WalletTransactionSender::markOutputsSpent(const std::list<crypto::key_image>& selectedTransfers) {
+  for (const crypto::key_image& ki: selectedTransfers) {
+    size_t idx;
+    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
+    if (!found) {
+      throw std::runtime_error("The output is not found");
+    }
+    TransferDetails& td = m_transferDetails.getTransferDetails(idx);
+    td.spent = true;
+  }
+}
+
+void WalletTransactionSender::makeOutputsNotSpent(const std::list<crypto::key_image>& selectedTransfers) {
+  for (const crypto::key_image& ki: selectedTransfers) {
+    size_t idx;
+    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
+    if (!found) {
+      continue; //what to do better?
+    }
+    TransferDetails& td = m_transferDetails.getTransferDetails(idx);
+    td.spent = false;
+  }
 }
 
 } /* namespace CryptoNote */

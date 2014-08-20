@@ -366,6 +366,10 @@ TEST_F(WalletApi, TransactionsAndTransfersAfterSend) {
   int64_t amount2 = 1234500;
   ASSERT_NO_FATAL_FAILURE(TransferMoney(*alice, *bob, amount2, fee, 0));
   ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+ 
+  generator.generateEmptyBlocks(10);
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
   int64_t amount3 = 1234567;
   ASSERT_NO_FATAL_FAILURE(TransferMoney(*alice, *bob, amount3, fee, 0));
@@ -798,5 +802,54 @@ TEST_F(WalletApi, mineSaveNoCacheNoDetailsRefresh) {
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
   ASSERT_EQ(TEST_BLOCK_REWARD*3, alice->pendingBalance());
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, sendMoneyToMyself) {
+  alice->initAndGenerate("pass");
+
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  cryptonote::account_public_address address;
+  ASSERT_TRUE(cryptonote::get_account_address_from_str(address, alice->getAddress()));
+  generator.getBlockRewardForAddress(address);
+  generator.generateEmptyBlocks(10);
+
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  CryptoNote::TransactionId txId = TransferMoney(*alice, *alice, 100000000, 100);
+  ASSERT_NE(txId, CryptoNote::INVALID_TRANSACTION_ID);
+  generator.generateEmptyBlocks(10);
+
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD - 100, alice->pendingBalance());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, checkPendingBalanceAfterSend) {
+  alice->initAndGenerate("pass");
+
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  cryptonote::account_public_address address;
+  ASSERT_TRUE(cryptonote::get_account_address_from_str(address, alice->getAddress()));
+  generator.getBlockRewardForAddress(address);
+  generator.generateEmptyBlocks(10);
+
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  const uint64_t sendAmount = 100000000;
+  const uint64_t fee = 100;
+  CryptoNote::TransactionId txId = TransferMoney(*alice, *alice, sendAmount, fee);
+  ASSERT_NE(txId, CryptoNote::INVALID_TRANSACTION_ID);
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD - sendAmount - fee, alice->pendingBalance());
+
   alice->shutdown();
 }
