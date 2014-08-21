@@ -29,6 +29,21 @@
 namespace cryptonote
 {
 
+  struct block_info {
+    uint64_t height;
+    crypto::hash id;
+
+    void clear() {
+      height = 0;
+      id = null_hash;
+    }
+
+    bool empty() const {
+      return id == null_hash;
+    }
+  };
+
+
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
@@ -104,7 +119,7 @@ namespace cryptonote
     bool check_tx_input(const txin_to_key& txin, const crypto::hash& tx_prefix_hash, const std::vector<crypto::signature>& sig, uint64_t* pmax_related_block_height = NULL);
     bool check_tx_inputs(const transaction& tx, const crypto::hash& tx_prefix_hash, uint64_t* pmax_used_block_height = NULL);
     bool check_tx_inputs(const transaction& tx, uint64_t* pmax_used_block_height = NULL);
-    bool check_tx_inputs(const transaction& tx, uint64_t& pmax_used_block_height, crypto::hash& max_used_block_id);
+    bool check_tx_inputs(const transaction& tx, uint64_t& pmax_used_block_height, crypto::hash& max_used_block_id, block_info* tail = 0);
     uint64_t get_current_comulative_blocksize_limit();
     bool is_storing_blockchain(){return m_is_blockchain_storing;}
     uint64_t block_difficulty(size_t i);
@@ -166,6 +181,7 @@ namespace cryptonote
 
     tx_memory_pool& m_tx_pool;
     epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
+    crypto::cn_context m_cn_context;
 
     // main chain
     blocks_container m_blocks;               // height  -> block_extended_info

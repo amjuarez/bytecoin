@@ -33,6 +33,7 @@ namespace tests
 
       crypto::hash m_lastblk;
       std::list<cryptonote::transaction> txes;
+      crypto::cn_context m_cn_context;
 
       bool add_block(const crypto::hash &_id, const crypto::hash &_longhash, const cryptonote::block &_blk, const cryptonote::blobdata &_blob);
       void build_short_history(std::list<crypto::hash> &m_history, const crypto::hash &m_start);

@@ -77,8 +77,8 @@ namespace cryptonote
   blobdata get_block_hashing_blob(const block& b);
   bool get_block_hash(const block& b, crypto::hash& res);
   crypto::hash get_block_hash(const block& b);
-  bool get_block_longhash(const block& b, crypto::hash& res, uint64_t height);
-  crypto::hash get_block_longhash(const block& b, uint64_t height);
+  bool get_block_longhash(crypto::cn_context& context, const block& b, crypto::hash& res, uint64_t height);
+  crypto::hash get_block_longhash(crypto::cn_context& context, const block& b, uint64_t height);
   bool generate_genesis_block(block& bl);
   bool parse_and_validate_block_from_blob(const blobdata& b_blob, block& b);
   bool get_inputs_money_amount(const transaction& tx, uint64_t& money);

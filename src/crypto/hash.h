@@ -37,8 +37,24 @@ namespace crypto {
     return h;
   }
 
-  inline void cn_slow_hash(const void *data, std::size_t length, hash &hash) {
-    cn_slow_hash(data, length, reinterpret_cast<char *>(&hash));
+  class cn_context {
+  public:
+
+    cn_context();
+    ~cn_context();
+#if !defined(_MSC_VER) || _MSC_VER >= 1800
+    cn_context(const cn_context &) = delete;
+    void operator=(const cn_context &) = delete;
+#endif
+
+  private:
+
+    void *data;
+    friend inline void cn_slow_hash(cn_context &, const void *, std::size_t, hash &);
+  };
+
+  inline void cn_slow_hash(cn_context &context, const void *data, std::size_t length, hash &hash) {
+    (*cn_slow_hash_f)(context.data, data, length, reinterpret_cast<void *>(&hash));
   }
 
   inline void tree_hash(const hash *hashes, std::size_t count, hash &root_hash) {

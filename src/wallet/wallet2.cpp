@@ -388,7 +388,8 @@ bool wallet2::store_keys(const std::string& keys_file_name, const std::string& p
   wallet2::keys_file_data keys_file_data = boost::value_initialized<wallet2::keys_file_data>();
 
   crypto::chacha8_key key;
-  crypto::generate_chacha8_key(password, key);
+  crypto::cn_context cn_context;
+  crypto::generate_chacha8_key(cn_context, password, key);
   std::string cipher;
   cipher.resize(account_data.size());
   keys_file_data.iv = crypto::rand<crypto::chacha8_iv>();
@@ -423,7 +424,8 @@ void wallet2::load_keys(const std::string& keys_file_name, const std::string& pa
   THROW_WALLET_EXCEPTION_IF(!r, error::wallet_internal_error, "internal error: failed to deserialize \"" + keys_file_name + '\"');
 
   crypto::chacha8_key key;
-  crypto::generate_chacha8_key(password, key);
+  crypto::cn_context cn_context;
+  crypto::generate_chacha8_key(cn_context, password, key);
   std::string account_data;
   account_data.resize(keys_file_data.account_data.size());
   crypto::chacha8(keys_file_data.account_data.data(), keys_file_data.account_data.size(), key, keys_file_data.iv, &account_data[0]);

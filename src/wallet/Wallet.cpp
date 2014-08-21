@@ -212,7 +212,8 @@ void Wallet::doLoad(std::istream& source) {
 
 void Wallet::decrypt(const std::string& cipher, std::string& plain, crypto::chacha8_iv iv, const std::string& password) {
   crypto::chacha8_key key;
-  crypto::generate_chacha8_key(password, key);
+  crypto::cn_context cn_context;
+  crypto::generate_chacha8_key(cn_context, password, key);
 
   plain.resize(cipher.size());
 
@@ -309,7 +310,8 @@ void Wallet::doSave(std::ostream& destination, bool saveDetailed, bool saveCache
 
 crypto::chacha8_iv Wallet::encrypt(const std::string& plain, std::string& cipher) {
   crypto::chacha8_key key;
-  crypto::generate_chacha8_key(m_password, key);
+  crypto::cn_context cn_context;
+  crypto::generate_chacha8_key(cn_context, m_password, key);
 
   cipher.resize(plain.size());
 

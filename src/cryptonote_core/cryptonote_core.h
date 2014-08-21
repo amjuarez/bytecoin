@@ -67,7 +67,7 @@ namespace cryptonote
      void set_cryptonote_protocol(i_cryptonote_protocol* pprotocol);
      void set_checkpoints(checkpoints&& chk_pts);
 
-     bool get_pool_transactions(std::list<transaction>& txs);
+     void get_pool_transactions(std::list<transaction>& txs);
      size_t get_pool_transactions_count();
      size_t get_blockchain_total_transactions();
      bool get_outs(uint64_t amount, std::list<crypto::public_key>& pkeys);

@@ -21,6 +21,7 @@
 // COIN - number of smallest units in one coin
 #define COIN                                            ((uint64_t)100000000) // pow(10, 8)
 #define DEFAULT_FEE                                     ((uint64_t)10000000) // pow(10, 7)
+#define MINIMUM_FEE                                     ((uint64_t)10000000) // pow(10, 7)
 
 #define START_BLOCK_REWARD                              (UINT64_C(320000) * COIN)
 #define MIN_BLOCK_REWARD                                (UINT64_C(150) * COIN)
@@ -41,6 +42,8 @@
 #define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS      DIFFICULTY_TARGET * CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS
 #define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS       1
 
+#define CRYPTONOTE_MEMPOOL_TX_LIVETIME                  (60*60*24) //seconds, one day
+#define CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME   (60*60*24*7) //seconds, one week
 
 #define DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN             DIFFICULTY_TARGET //just alias
 

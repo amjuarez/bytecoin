@@ -779,7 +779,7 @@ bool blockchain_storage::handle_alternative_block(const block& b, const crypto::
     difficulty_type current_diff = get_next_difficulty_for_alternative_chain(alt_chain, bei);
     CHECK_AND_ASSERT_MES(current_diff, false, "!!!!!!! DIFFICULTY OVERHEAD !!!!!!!");
     crypto::hash proof_of_work = null_hash;
-    get_block_longhash(bei.bl, proof_of_work, bei.height);
+    get_block_longhash(m_cn_context, bei.bl, proof_of_work, bei.height);
     if(!check_hash(proof_of_work, current_diff))
     {
       LOG_PRINT_RED_L0("Block with id: " << id
@@ -1310,9 +1310,13 @@ bool blockchain_storage::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::
   return true;
 }
 //------------------------------------------------------------------
-bool blockchain_storage::check_tx_inputs(const transaction& tx, uint64_t& max_used_block_height, crypto::hash& max_used_block_id)
+bool blockchain_storage::check_tx_inputs(const transaction& tx, uint64_t& max_used_block_height, crypto::hash& max_used_block_id, block_info* tail)
 {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
+
+  if (tail)
+    tail->id = get_tail_id(tail->height);
+
   bool res = check_tx_inputs(tx, &max_used_block_height);
   if(!res) return false;
   CHECK_AND_ASSERT_MES(max_used_block_height < m_blocks.size(), false,  "internal error: max used block index=" << max_used_block_height << " is not less then blockchain size = " << m_blocks.size());
@@ -1508,7 +1512,7 @@ bool blockchain_storage::handle_block_to_main_chain(const block& bl, const crypt
   crypto::hash proof_of_work = null_hash;
   if(!m_checkpoints.is_in_checkpoint_zone(get_current_blockchain_height()))
   {
-    proof_of_work = get_block_longhash(bl, m_blocks.size());
+    get_block_longhash(m_cn_context, bl, proof_of_work, m_blocks.size());
 
     if(!check_hash(proof_of_work, current_diffic))
     {
