@@ -297,7 +297,12 @@ struct gen_block_has_invalid_tx : public CheckBlockPurged
 struct gen_block_is_too_big : public CheckBlockPurged
 {
   gen_block_is_too_big(uint8_t blockMajorVersion)
-    : CheckBlockPurged(1, blockMajorVersion) {}
+      : CheckBlockPurged(1, blockMajorVersion) {
+    cryptonote::CurrencyBuilder currencyBuilder;
+    currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
+    m_currency = currencyBuilder.currency();
+  }
 
   bool generate(std::vector<test_event_entry>& events) const;
 };

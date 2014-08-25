@@ -591,37 +591,14 @@ bool gen_block_has_invalid_tx::generate(std::vector<test_event_entry>& events) c
 bool gen_block_is_too_big::generate(std::vector<test_event_entry>& events) const
 {
   BLOCK_VALIDATION_INIT_GENERATE();
+  generator.defaultMajorVersion = m_blockMajorVersion;
 
-  // Creating a huge miner_tx, it will have a lot of outs
-  MAKE_MINER_TX_MANUALLY(miner_tx, blk_0);
-  static const size_t tx_out_count = m_currency.blockGrantedFullRewardZone() / 2;
-  uint64_t amount = get_outs_money_amount(miner_tx);
-  uint64_t portion = amount / tx_out_count;
-  uint64_t remainder = amount % tx_out_count;
-  TransactionOutputTarget target = miner_tx.vout[0].target;
-  miner_tx.vout.clear();
-  for (size_t i = 0; i < tx_out_count; ++i)
-  {
-    TransactionOutput o;
-    o.amount = portion;
-    o.target = target;
-    miner_tx.vout.push_back(o);
-  }
-  if (0 < remainder)
-  {
-    TransactionOutput o;
-    o.amount = remainder;
-    o.target = target;
-    miner_tx.vout.push_back(o);
-  }
-
-  // Block reward will be incorrect, as it must be reduced if cumulative block size is very big,
-  // but in this test it doesn't matter
   Block blk_1;
-  if (!generator.constructBlockManually(blk_1, blk_0, miner_account, 
-    test_generator::bf_major_ver | test_generator::bf_miner_tx, m_blockMajorVersion, 0, 0, crypto::hash(), 0, miner_tx))
+  if (!generator.constructMaxSizeBlock(blk_1, blk_0, miner_account)) {
     return false;
+  }
 
+  blk_1.minerTx.extra.resize(blk_1.minerTx.extra.size() + 1);
   events.push_back(blk_1);
 
   DO_CALLBACK(events, "check_block_purged");

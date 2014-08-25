@@ -40,6 +40,7 @@ namespace cryptonote {
     CHECK_AND_ASSERT_MES(r, false, "Failed to get genesis block hash");
 
     if (isTestnet()) {
+      m_upgradeHeight = 0;
       m_blocksFileName       = "testnet_" + m_blocksFileName;
       m_blocksCacheFileName  = "testnet_" + m_blocksCacheFileName;
       m_blockIndexesFileName = "testnet_" + m_blockIndexesFileName;
@@ -380,7 +381,7 @@ namespace cryptonote {
     mempoolTxLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_LIVETIME);
     mempoolTxFromAltBlockLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME);
 
-    upgradeHeight(UpgradeDetectorBase::UNDEF_HEIGHT);
+    upgradeHeight(parameters::UPGRADE_HEIGHT);
     upgradeVotingThreshold(parameters::UPGRADE_VOTING_THRESHOLD);
     upgradeVotingWindow(parameters::UPGRADE_VOTING_WINDOW);
     upgradeWindow(parameters::UPGRADE_WINDOW);

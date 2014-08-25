@@ -46,9 +46,16 @@ namespace tools
     m_net_server.add_idle_handler([this](){
       try {
         m_wallet.refresh();
-      } catch (const std::exception& ex) {
-        LOG_ERROR("Exception at while refreshing, what=" << ex.what());
+      } catch (const std::exception& e) {
+        LOG_ERROR("Exception while refreshing, what=" << e.what());
       }
+
+      try {
+        m_wallet.store();
+      } catch (const std::exception& e) {
+        LOG_ERROR("Exception while storing, what=" << e.what());
+      }
+
       return true;
     }, 20000);
 
@@ -192,5 +199,34 @@ namespace tools
 
     return true;
   }
-  //------------------------------------------------------------------------------------------------------------------------------
+
+  bool wallet_rpc_server::on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANSFERS::request& req, wallet_rpc::COMMAND_RPC_GET_TRANSFERS::response& res, epee::json_rpc::error& er, connection_context& cntx) {
+    res.transfers.clear();
+    const std::vector<wallet2::Transfer>& transfers = m_wallet.getTransfers();
+    for (const tools::wallet2::Transfer& transfer : transfers) {
+      wallet_rpc::Transfer transfer2;
+      transfer2.time = transfer.time;
+      transfer2.output = transfer.output;
+      transfer2.transactionHash = epee::string_tools::pod_to_hex(transfer.transactionHash);
+      transfer2.amount = transfer.amount;
+      transfer2.fee = transfer.fee;
+      transfer2.paymentId = transfer.paymentId == cryptonote::null_hash ? "" : epee::string_tools::pod_to_hex(transfer.paymentId);
+      transfer2.address = transfer.hasAddress ? getAccountAddressAsStr(m_wallet.currency().publicAddressBase58Prefix(), transfer.address) : "";
+      transfer2.blockIndex = transfer.blockIndex;
+      transfer2.unlockTime = transfer.unlockTime;
+      res.transfers.push_back(transfer2);
+    }
+
+    return true;
+  }
+
+  bool wallet_rpc_server::on_get_height(const wallet_rpc::COMMAND_RPC_GET_HEIGHT::request& req, wallet_rpc::COMMAND_RPC_GET_HEIGHT::response& res, epee::json_rpc::error& er, connection_context& cntx) {
+    res.height = m_wallet.get_blockchain_current_height();
+    return true;
+  }
+
+  bool wallet_rpc_server::on_reset(const wallet_rpc::COMMAND_RPC_RESET::request& req, wallet_rpc::COMMAND_RPC_RESET::response& res, epee::json_rpc::error& er, connection_context& cntx) {
+    m_wallet.reset();
+    return true;
+  }
 }

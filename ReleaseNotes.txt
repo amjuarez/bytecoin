@@ -1,3 +1,9 @@
+Release notes 1.0.2
+
+- Transaction history for simplewallet
+- Reset command for simplewallet
+- Various simplewallet improvements
+
 Release notes 1.0.1
 
 - Fix transfers in simplewallet

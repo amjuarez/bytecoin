@@ -74,7 +74,7 @@ WalletTransactionSender::WalletTransactionSender(const cryptonote::Currency& cur
       m_unconfirmedTransactions(unconfirmedTransactions),
       m_isInitialized(false),
       m_isStoping(false) {
-  m_upperTransactionSizeLimit = (cryptonote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 * 125) / 100 - m_currency.minerTxBlobReservedSize();
+  m_upperTransactionSizeLimit = m_currency.blockGrantedFullRewardZone() * 125 / 100 - m_currency.minerTxBlobReservedSize();
 }
 
 void WalletTransactionSender::init(cryptonote::account_keys keys) {

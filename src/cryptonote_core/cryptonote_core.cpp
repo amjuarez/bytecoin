@@ -257,7 +257,7 @@ namespace cryptonote
 
     if(!keeped_by_block && get_object_blobsize(tx) >= m_blockchain_storage.get_current_comulative_blocksize_limit() - m_currency.minerTxBlobReservedSize())
     {
-      LOG_PRINT_RED_L0("tx have to big size " << get_object_blobsize(tx) << ", expected not bigger than " <<
+      LOG_PRINT_RED_L0("transaction is too big " << get_object_blobsize(tx) << ", maximum allowed size is " <<
         (m_blockchain_storage.get_current_comulative_blocksize_limit() - m_currency.minerTxBlobReservedSize()));
       return false;
     }

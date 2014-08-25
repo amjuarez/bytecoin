@@ -230,7 +230,7 @@ namespace
               }
 
               if (!r) {
-                fail_msg_writer() << "payment id has invalid format: \"" << value << "\", expected 64-character string";
+                fail_msg_writer() << "payment ID has invalid format: \"" << value << "\", expected 64-character string";
                 return false;
               }
             } else if (arg == "-f") {
@@ -249,7 +249,13 @@ namespace
             cryptonote::tx_destination_entry de;
 
             if (!m_currency.parseAccountAddressString(arg, de.addr)) {
-              fail_msg_writer() << "wrong address: " << arg;
+              crypto::hash paymentId;
+              if (tools::wallet2::parse_payment_id(arg, paymentId)) {
+                fail_msg_writer() << "Invalid payment ID usage. Please, use -p <payment_id>. See help for details.";
+              } else {
+                fail_msg_writer() << "Wrong address: " << arg;
+              }
+
               return false;
             }
 
@@ -307,6 +313,7 @@ simple_wallet::simple_wallet(const cryptonote::Currency& currency)
   m_cmd_binder.set_handler("refresh", boost::bind(&simple_wallet::refresh, this, _1), "Resynchronize transactions and balance");
   m_cmd_binder.set_handler("balance", boost::bind(&simple_wallet::show_balance, this, _1), "Show current wallet balance");
   m_cmd_binder.set_handler("incoming_transfers", boost::bind(&simple_wallet::show_incoming_transfers, this, _1), "incoming_transfers [available|unavailable] - Show incoming transfers - all of them or filter them by availability");
+  m_cmd_binder.set_handler("list_transfers", boost::bind(&simple_wallet::listTransfers, this, _1), "Show all known transfers");
   m_cmd_binder.set_handler("payments", boost::bind(&simple_wallet::show_payments, this, _1), "payments <payment_id_1> [<payment_id_2> ... <payment_id_N>] - Show payments <payment_id_1>, ... <payment_id_N>");
   m_cmd_binder.set_handler("bc_height", boost::bind(&simple_wallet::show_blockchain_height, this, _1), "Show blockchain height");
   m_cmd_binder.set_handler("transfer", boost::bind(&simple_wallet::transfer, this, _1), 
@@ -316,6 +323,7 @@ simple_wallet::simple_wallet(const cryptonote::Currency& currency)
   m_cmd_binder.set_handler("set_log", boost::bind(&simple_wallet::set_log, this, _1), "set_log <level> - Change current log detalization level, <level> is a number 0-4");
   m_cmd_binder.set_handler("address", boost::bind(&simple_wallet::print_address, this, _1), "Show current wallet public address");
   m_cmd_binder.set_handler("save", boost::bind(&simple_wallet::save, this, _1), "Save wallet synchronized data");
+  m_cmd_binder.set_handler("reset", boost::bind(&simple_wallet::reset, this, _1), "Discard cache data and start synchronizing from the start");
   m_cmd_binder.set_handler("help", boost::bind(&simple_wallet::help, this, _1), "Show this help");
 }
 //----------------------------------------------------------------------------------------------------
@@ -560,7 +568,14 @@ bool simple_wallet::save(const std::vector<std::string> &args)
 
   return true;
 }
-//----------------------------------------------------------------------------------------------------
+
+bool simple_wallet::reset(const std::vector<std::string> &args) {
+  m_wallet->reset();
+  success_msg_writer(true) << "Reset is complete successfully";
+  refresh();
+  return true;
+}
+
 bool simple_wallet::start_mining(const std::vector<std::string>& args)
 {
   if (!try_connect_to_daemon())
@@ -652,7 +667,7 @@ void simple_wallet::on_skip_transaction(uint64_t height, const cryptonote::Trans
   m_refresh_progress_reporter.update(height, true);
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::refresh(const std::vector<std::string>& args)
+bool simple_wallet::refresh(const std::vector<std::string>& args/* = std::vector<std::string>()*/)
 {
   if (!try_connect_to_daemon())
     return true;
@@ -776,12 +791,35 @@ bool simple_wallet::show_incoming_transfers(const std::vector<std::string>& args
 
   return true;
 }
-//----------------------------------------------------------------------------------------------------
+
+bool simple_wallet::listTransfers(const std::vector<std::string>& args) {
+  const std::vector<tools::wallet2::Transfer>& transfers = m_wallet->getTransfers();
+  for (const tools::wallet2::Transfer& transfer : transfers) {
+    std::string address = "UNKNOWN";
+    if (transfer.hasAddress) {
+      address = getAccountAddressAsStr(m_currency.publicAddressBase58Prefix(), transfer.address);
+    }
+
+    message_writer(transfer.output ? epee::log_space::console_color_magenta : epee::log_space::console_color_green, false)
+      << transfer.time
+      << ", " << (transfer.output ? "OUTPUT" : "INPUT")
+      << ", " << transfer.transactionHash
+      << ", " << m_currency.formatAmount(transfer.amount)
+      << ", " << m_currency.formatAmount(transfer.fee)
+      << ", " << transfer.paymentId
+      << ", " << address
+      << ", " << transfer.blockIndex
+      << ", " << transfer.unlockTime;
+  }
+
+  return true;
+}
+
 bool simple_wallet::show_payments(const std::vector<std::string> &args)
 {
   if(args.empty())
   {
-    fail_msg_writer() << "expected at least one payment_id";
+    fail_msg_writer() << "expected at least one payment ID";
     return true;
   }
 
@@ -819,7 +857,7 @@ bool simple_wallet::show_payments(const std::vector<std::string> &args)
     }
     else
     {
-      fail_msg_writer() << "payment id has invalid format: \"" << arg << "\", expected 64-character string";
+      fail_msg_writer() << "payment ID has invalid format: \"" << arg << "\", expected 64-character string";
     }
   }
 
@@ -864,6 +902,13 @@ bool simple_wallet::transfer(const std::vector<std::string> &args)
     cryptonote::Transaction tx;
     m_wallet->transfer(cmd.dsts, cmd.fake_outs_count, 0, cmd.fee, cmd.extra, tx);
     success_msg_writer(true) << "Money successfully sent, transaction " << get_transaction_hash(tx);
+
+    try {
+      m_wallet->store();
+    } catch (const std::exception& e) {
+      fail_msg_writer() << e.what();
+      return false;
+    }
   }
   catch (const tools::error::daemon_busy&)
   {

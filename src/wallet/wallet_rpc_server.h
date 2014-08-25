@@ -48,10 +48,13 @@ namespace tools
 
     BEGIN_URI_MAP2()
       BEGIN_JSON_RPC_MAP("/json_rpc")
-        MAP_JON_RPC_WE("getbalance",   on_getbalance,   wallet_rpc::COMMAND_RPC_GET_BALANCE)
-        MAP_JON_RPC_WE("transfer",     on_transfer,     wallet_rpc::COMMAND_RPC_TRANSFER)
-        MAP_JON_RPC_WE("store",        on_store,        wallet_rpc::COMMAND_RPC_STORE)
-        MAP_JON_RPC_WE("get_payments", on_get_payments, wallet_rpc::COMMAND_RPC_GET_PAYMENTS)
+        MAP_JON_RPC_WE("getbalance",    on_getbalance,    wallet_rpc::COMMAND_RPC_GET_BALANCE)
+        MAP_JON_RPC_WE("transfer",      on_transfer,      wallet_rpc::COMMAND_RPC_TRANSFER)
+        MAP_JON_RPC_WE("store",         on_store,         wallet_rpc::COMMAND_RPC_STORE)
+        MAP_JON_RPC_WE("get_payments",  on_get_payments,  wallet_rpc::COMMAND_RPC_GET_PAYMENTS)
+        MAP_JON_RPC_WE("get_transfers", on_get_transfers, wallet_rpc::COMMAND_RPC_GET_TRANSFERS)
+        MAP_JON_RPC_WE("get_height", on_get_height, wallet_rpc::COMMAND_RPC_GET_HEIGHT)
+        MAP_JON_RPC_WE("reset", on_reset, wallet_rpc::COMMAND_RPC_RESET)
       END_JSON_RPC_MAP()
     END_URI_MAP2()
 
@@ -60,6 +63,9 @@ namespace tools
       bool on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res, epee::json_rpc::error& er, connection_context& cntx);
       bool on_store(const wallet_rpc::COMMAND_RPC_STORE::request& req, wallet_rpc::COMMAND_RPC_STORE::response& res, epee::json_rpc::error& er, connection_context& cntx);
       bool on_get_payments(const wallet_rpc::COMMAND_RPC_GET_PAYMENTS::request& req, wallet_rpc::COMMAND_RPC_GET_PAYMENTS::response& res, epee::json_rpc::error& er, connection_context& cntx);
+      bool on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANSFERS::request& req, wallet_rpc::COMMAND_RPC_GET_TRANSFERS::response& res, epee::json_rpc::error& er, connection_context& cntx);
+      bool on_get_height(const wallet_rpc::COMMAND_RPC_GET_HEIGHT::request& req, wallet_rpc::COMMAND_RPC_GET_HEIGHT::response& res, epee::json_rpc::error& er, connection_context& cntx);
+      bool on_reset(const wallet_rpc::COMMAND_RPC_RESET::request& req, wallet_rpc::COMMAND_RPC_RESET::response& res, epee::json_rpc::error& er, connection_context& cntx);
 
       bool handle_command_line(const boost::program_options::variables_map& vm);
 

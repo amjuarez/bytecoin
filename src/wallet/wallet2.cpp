@@ -65,7 +65,7 @@ void wallet2::init(const std::string& daemon_address)
   m_daemon_address = daemon_address;
 }
 //----------------------------------------------------------------------------------------------------
-bool wallet2::processNewTransaction(TxQueue& queue, const cryptonote::Transaction& tx, uint64_t height, const crypto::hash& bl_id) {
+bool wallet2::processNewTransaction(TxQueue& queue, const cryptonote::Transaction& tx, uint64_t height, uint64_t time, const crypto::hash& bl_id) {
   process_unconfirmed(tx);
 
   std::vector<tx_extra_field> tx_extra_fields;
@@ -84,7 +84,7 @@ bool wallet2::processNewTransaction(TxQueue& queue, const cryptonote::Transactio
     return false;
   }
 
-  TxItem txItem = { tx, height, bl_id, pub_key_field.pub_key, std::move(tx_extra_fields) };
+  TxItem txItem = { tx, time, height, bl_id, pub_key_field.pub_key, std::move(tx_extra_fields) };
   queue.push(std::unique_ptr<TxItem>(new TxItem(std::move(txItem))));
   return true;
 }
@@ -159,26 +159,59 @@ void wallet2::processCheckedTransaction(const TxItem& item) {
     }
   }
 
-  tx_extra_nonce extra_nonce;
-  if (find_tx_extra_field_by_type(tx_extra_fields, extra_nonce))
-  {
-    crypto::hash payment_id;
-    if (get_payment_id_from_tx_extra_nonce(extra_nonce.nonce, payment_id))
-    {
-      uint64_t received = (tx_money_spent_in_ins < tx_money_got_in_outs) ? tx_money_got_in_outs - tx_money_spent_in_ins : 0;
-      if (0 < received && null_hash != payment_id)
-      {
-        payment_details payment;
-        payment.m_tx_hash = cryptonote::get_transaction_hash(tx);
-        payment.m_amount = received;
-        payment.m_block_height = height;
-        payment.m_unlock_time = tx.unlockTime;
-        m_payments.emplace(payment_id, payment);
-        LOG_PRINT_L2("Payment found: " << payment_id << " / " << payment.m_tx_hash << " / " << payment.m_amount);
-      }
+  crypto::hash transactionHash = get_transaction_hash(tx);
+
+  bool ownTransfer = false;
+  for (Transfer& transfer : transfers) {
+    if (transfer.transactionHash == transactionHash) {
+      transfer.blockIndex = height;
+      ownTransfer = true;
     }
   }
 
+  if (!ownTransfer) {
+    crypto::hash paymentId = null_hash;
+    tx_extra_nonce extraNonce;
+    if (find_tx_extra_field_by_type(tx_extra_fields, extraNonce)) {
+      get_payment_id_from_tx_extra_nonce(extraNonce.nonce, paymentId);
+    }
+
+    if (tx_money_spent_in_ins < tx_money_got_in_outs) {
+      if (paymentId != null_hash) {
+        payment_details payment;
+        payment.m_tx_hash = transactionHash;
+        payment.m_amount = tx_money_got_in_outs - tx_money_spent_in_ins;
+        payment.m_block_height = height;
+        payment.m_unlock_time = tx.unlockTime;
+        m_payments.emplace(paymentId, payment);
+        LOG_PRINT_L2("Payment found: " << paymentId << " / " << payment.m_tx_hash << " / " << payment.m_amount);
+      }
+
+      Transfer transfer;
+      transfer.time = item.time;
+      transfer.output = false;
+      transfer.transactionHash = transactionHash;
+      transfer.amount = tx_money_got_in_outs - tx_money_spent_in_ins;
+      transfer.fee = 0;
+      transfer.paymentId = paymentId;
+      transfer.hasAddress = false;
+      transfer.blockIndex = height;
+      transfer.unlockTime = tx.unlockTime;
+      transfers.push_back(transfer);
+    } else if (tx_money_got_in_outs < tx_money_spent_in_ins) {
+      Transfer transfer;
+      transfer.time = item.time;
+      transfer.output = true;
+      transfer.transactionHash = transactionHash;
+      transfer.amount = tx_money_spent_in_ins - tx_money_got_in_outs;
+      transfer.fee = 0;
+      transfer.paymentId = paymentId;
+      transfer.hasAddress = false;
+      transfer.blockIndex = height;
+      transfer.unlockTime = tx.unlockTime;
+      transfers.push_back(transfer);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -211,7 +244,6 @@ bool wallet2::addNewBlockchainEntry(const crypto::hash& bl_id, uint64_t start_he
     "current_index=" + std::to_string(current_index) + ", m_blockchain.size()=" + std::to_string(m_blockchain.size()));
 
   m_blockchain.push_back(bl_id);
-  ++m_local_bc_height;
 
   if (0 != m_callback) {
     m_callback->on_new_block(current_index);
@@ -234,7 +266,7 @@ size_t wallet2::processNewBlockchainEntry(TxQueue& queue, const cryptonote::bloc
     if (b.timestamp + 60 * 60 * 24 > m_account.get_createtime())
     {
       TIME_MEASURE_START(miner_tx_handle_time);
-      if(processNewTransaction(queue, b.minerTx, height, bl_id))
+      if(processNewTransaction(queue, b.minerTx, height, b.timestamp, bl_id))
         ++processedTransactions;
       TIME_MEASURE_FINISH(miner_tx_handle_time);
 
@@ -244,7 +276,7 @@ size_t wallet2::processNewBlockchainEntry(TxQueue& queue, const cryptonote::bloc
         cryptonote::Transaction tx;
         bool r = parse_and_validate_tx_from_blob(txblob, tx);
         THROW_WALLET_EXCEPTION_IF(!r, error::tx_parse_error, txblob);
-        if(processNewTransaction(queue, tx, height, bl_id))
+        if(processNewTransaction(queue, tx, height, b.timestamp, bl_id))
           ++processedTransactions;
       }
       TIME_MEASURE_FINISH(txs_handle_time);
@@ -512,7 +544,6 @@ size_t wallet2::detach_blockchain(uint64_t height)
 
   size_t blocks_detached = m_blockchain.end() - (m_blockchain.begin()+height);
   m_blockchain.erase(m_blockchain.begin()+height, m_blockchain.end());
-  m_local_bc_height -= blocks_detached;
 
   for (auto it = m_payments.begin(); it != m_payments.end(); )
   {
@@ -520,6 +551,14 @@ size_t wallet2::detach_blockchain(uint64_t height)
       it = m_payments.erase(it);
     else
       ++it;
+  }
+
+  for (std::size_t transferIndex = 0; transferIndex < transfers.size();) {
+    if (transfers[transferIndex].blockIndex != 0 && transfers[transferIndex].blockIndex >= height) {
+      transfers.erase(transfers.begin() + transferIndex);
+    } else {
+      ++transferIndex;
+    }
   }
 
   LOG_PRINT_L0("Detached blockchain on height " << height << ", transfers detached " << transfers_detached << ", blocks detached " << blocks_detached);
@@ -536,7 +575,6 @@ bool wallet2::clear()
   m_blockchain.clear();
   m_transfers.clear();
   m_blockchain.push_back(m_currency.genesisBlockHash());
-  m_local_bc_height = 1;
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -702,8 +740,6 @@ void wallet2::load(const std::string& wallet_, const std::string& password)
     THROW_WALLET_EXCEPTION_IF(m_blockchain[0] != m_currency.genesisBlockHash(), error::wallet_internal_error,
       "Genesis block missmatch. You probably use wallet without testnet flag with blockchain from test network or vice versa");
   }
-
-  m_local_bc_height = m_blockchain.size();
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::store()
@@ -852,4 +888,23 @@ void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts
   transfer(dsts, fake_outputs_count, unlock_time, fee, extra, tx);
 }
 //----------------------------------------------------------------------------------------------------
+const std::vector<wallet2::Transfer>& wallet2::getTransfers() {
+  return transfers;
+}
+
+void wallet2::reset() {
+  clear();
+  m_unconfirmed_txs.clear();
+  m_payments.clear();
+  m_key_images.clear();
+  for (std::size_t transferIndex = 0; transferIndex < transfers.size();) {
+    if (transfers[transferIndex].hasAddress) {
+      transfers[transferIndex].blockIndex = 0;
+      ++transferIndex;
+    } else {
+      transfers.erase(transfers.begin() + transferIndex);
+    }
+  }
+}
+
 }
