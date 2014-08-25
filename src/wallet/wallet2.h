@@ -70,14 +70,12 @@ namespace tools
     wallet2(const wallet2& rhs) :
       m_currency(rhs.m_currency),
       m_run(true),
-      m_callback(0),
-      m_upper_transaction_size_limit(rhs.m_upper_transaction_size_limit) {
+      m_callback(0) {
     };
 
   public:
     wallet2(const cryptonote::Currency& currency) :
       m_currency(currency), m_run(true), m_callback(0) {
-      m_upper_transaction_size_limit = (cryptonote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 * 125) / 100 - m_currency.minerTxBlobReservedSize();
     }
 
     struct transfer_details
@@ -121,6 +119,37 @@ namespace tools
       END_SERIALIZE()
     };
 
+    struct Transfer {
+      uint64_t time;
+      bool output;
+      crypto::hash transactionHash;
+      uint64_t amount;
+      uint64_t fee;
+      crypto::hash paymentId;
+      bool hasAddress;
+      cryptonote::AccountPublicAddress address;
+      uint64_t blockIndex;
+      uint64_t unlockTime;
+
+      template <class Archive> void serialize(Archive& archive, unsigned int version) {
+        archive & time;
+        archive & output;
+        archive & transactionHash;
+        archive & amount;
+        archive & fee;
+        archive & paymentId;
+        archive & hasAddress;
+        if (hasAddress) {
+          archive & address;
+        }
+
+        archive & blockIndex;
+        archive & unlockTime;
+      }
+    };
+
+    typedef std::vector<Transfer> Transfers;
+
     void generate(const std::string& wallet, const std::string& password);
     void load(const std::string& wallet, const std::string& password);
     void store();
@@ -153,7 +182,10 @@ namespace tools
     bool connectClient(epee::net_utils::http::http_simple_client& client);
     void get_transfers(wallet2::transfer_container& incoming_transfers) const;
     void get_payments(const crypto::hash& payment_id, std::list<wallet2::payment_details>& payments) const;
-    uint64_t get_blockchain_current_height() const { return m_local_bc_height; }
+    uint64_t get_blockchain_current_height() const { return m_blockchain.size(); }
+    const std::vector<Transfer>& getTransfers();
+    void reset();
+
     template <class t_archive>
     inline void serialize(t_archive &a, const unsigned int ver)
     {
@@ -169,6 +201,9 @@ namespace tools
       if(ver < 7)
         return;
       a & m_payments;
+      if (ver >= 8) {
+        a & transfers;
+      }
     }
 
     static void wallet_exists(const std::string& file_path, bool& keys_file_exists, bool& wallet_file_exists);
@@ -180,6 +215,7 @@ namespace tools
     
     struct TxItem {
       cryptonote::Transaction tx;
+      uint64_t time;
       uint64_t height;
       crypto::hash blockId;
       crypto::public_key txPubKey;
@@ -196,7 +232,7 @@ namespace tools
     bool addNewBlockchainEntry(const crypto::hash& bl_id, uint64_t start_height, uint64_t height);
     
     size_t processNewBlockchainEntry(TxQueue& queue, const cryptonote::block_complete_entry& bche, const crypto::hash& bl_id, uint64_t height);
-    bool processNewTransaction(TxQueue& queue, const cryptonote::Transaction& tx, uint64_t height, const crypto::hash& bl_id);
+    bool processNewTransaction(TxQueue& queue, const cryptonote::Transaction& tx, uint64_t height, uint64_t time, const crypto::hash& bl_id);
     void processCheckedTransaction(const TxItem& item);
 
     // returns number of blocks added
@@ -234,21 +270,21 @@ namespace tools
     std::string m_keys_file;
     epee::net_utils::http::http_simple_client m_http_client;
     std::vector<crypto::hash> m_blockchain;
-    std::atomic<uint64_t> m_local_bc_height; //temporary workaround
     std::unordered_map<crypto::hash, unconfirmed_transfer_details> m_unconfirmed_txs;
 
     transfer_container m_transfers;
     payment_container m_payments;
     std::unordered_map<crypto::key_image, size_t> m_key_images;
     cryptonote::AccountPublicAddress m_account_public_address;
-    uint64_t m_upper_transaction_size_limit; //TODO: auto-calc this value or request from daemon, now use some fixed value
 
     std::atomic<bool> m_run;
 
     i_wallet2_callback* m_callback;
+
+    Transfers transfers;
   };
 }
-BOOST_CLASS_VERSION(tools::wallet2, 7)
+BOOST_CLASS_VERSION(tools::wallet2, 8)
 
 namespace boost
 {
@@ -466,7 +502,8 @@ namespace tools
 
     bool r = cryptonote::construct_tx(m_account.get_keys(), sources, splitted_dsts, extra, tx, unlock_time);
     THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, m_currency.publicAddressBase58Prefix(), sources, splitted_dsts, unlock_time);
-    THROW_WALLET_EXCEPTION_IF(m_upper_transaction_size_limit <= get_object_blobsize(tx), error::tx_too_big, tx, m_upper_transaction_size_limit);
+    uint64_t transactionSizeLimit = m_currency.blockGrantedFullRewardZone() * 125 / 100 - m_currency.minerTxBlobReservedSize();
+    THROW_WALLET_EXCEPTION_IF(get_object_blobsize(tx) > transactionSizeLimit, error::tx_too_big, tx, transactionSizeLimit);
 
     std::string key_images;
     bool all_are_txin_to_key = std::all_of(tx.vin.begin(), tx.vin.end(), [&](const TransactionInput& s_e) -> bool
@@ -487,13 +524,38 @@ namespace tools
 
     add_unconfirmed_tx(tx, change_dts.amount);
 
-    LOG_PRINT_L2("transaction " << get_transaction_hash(tx) << " generated ok and sent to daemon, key_images: [" << key_images << "]");
+    crypto::hash transactionHash = get_transaction_hash(tx);
+    LOG_PRINT_L2("transaction " << transactionHash << " generated ok and sent to daemon, key_images: [" << key_images << "]");
 
     BOOST_FOREACH(transfer_container::iterator it, selected_transfers)
       it->m_spent = true;
 
-    LOG_PRINT_L0("Transaction successfully sent. <" << get_transaction_hash(tx) << ">" << ENDL
-                  << "Commission: " << m_currency.formatAmount(fee + dust) << " (dust: " << m_currency.formatAmount(dust) << ")" << ENDL
+    crypto::hash paymentId = null_hash;
+    std::vector<tx_extra_field> transactionExtras;
+    if (parse_tx_extra(tx.extra, transactionExtras)) {
+      tx_extra_nonce extraNonce;
+      if (find_tx_extra_field_by_type(transactionExtras, extraNonce)) {
+        get_payment_id_from_tx_extra_nonce(extraNonce.nonce, paymentId);
+      }
+    }
+
+    for (auto& destination : dsts) {
+      Transfer transfer;
+      transfer.time = static_cast<uint64_t>(time(NULL));
+      transfer.output = true;
+      transfer.transactionHash = transactionHash;
+      transfer.amount = destination.amount;
+      transfer.fee = fee;
+      transfer.paymentId = paymentId;
+      transfer.hasAddress = true;
+      transfer.address = destination.addr;
+      transfer.blockIndex = 0;
+      transfer.unlockTime = unlock_time;
+      transfers.push_back(transfer);
+    }
+
+    LOG_PRINT_L0("Transaction successfully sent. <" << transactionHash << ">" << ENDL
+                  << "Commission: " << m_currency.formatAmount(fee+dust) << " (dust: " << m_currency.formatAmount(dust) << ")" << ENDL
                   << "Balance: " << m_currency.formatAmount(balance()) << ENDL
                   << "Unlocked: " << m_currency.formatAmount(unlocked_balance()) << ENDL
                   << "Please, wait for confirmation for your balance to be unlocked.");

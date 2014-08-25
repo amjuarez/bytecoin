@@ -136,5 +136,71 @@ namespace wallet_rpc
       END_KV_SERIALIZE_MAP()
     };
   };
+
+  struct Transfer {
+    uint64_t time;
+    bool output;
+    std::string transactionHash;
+    uint64_t amount;
+    uint64_t fee;
+    std::string paymentId;
+    std::string address;
+    uint64_t blockIndex;
+    uint64_t unlockTime;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(time)
+      KV_SERIALIZE(output)
+      KV_SERIALIZE(transactionHash)
+      KV_SERIALIZE(amount)
+      KV_SERIALIZE(fee)
+      KV_SERIALIZE(paymentId)
+      KV_SERIALIZE(address)
+      KV_SERIALIZE(blockIndex)
+      KV_SERIALIZE(unlockTime)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct COMMAND_RPC_GET_TRANSFERS {
+    struct request {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response {
+      std::list<Transfer> transfers;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(transfers)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_GET_HEIGHT {
+    struct request {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response {
+      uint64_t height;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(height)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_RESET {
+    struct request {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+  };
 }
 }

@@ -232,7 +232,6 @@ namespace cryptonote
         return;
 
       if (Archive::is_loading::value) {
-
         crypto::hash blockHash;
         ar & blockHash;
 
@@ -244,10 +243,29 @@ namespace cryptonote
         ar & m_lastBlockHash;
       }
 
+      if (Archive::is_loading::value) {
+        LOG_PRINT_L0("- loading block index...");
+      }
       ar & m_bs.m_blockIndex;
+
+      if (Archive::is_loading::value) {
+        LOG_PRINT_L0("- loading transaction map...");
+      }
       ar & m_bs.m_transactionMap;
+
+      if (Archive::is_loading::value) {
+        LOG_PRINT_L0("- loading spend keys...");
+      }
       ar & m_bs.m_spent_keys;
+
+      if (Archive::is_loading::value) {
+        LOG_PRINT_L0("- loading outputs...");
+      }
       ar & m_bs.m_outputs;
+
+      if (Archive::is_loading::value) {
+        LOG_PRINT_L0("- loading multi-signature outputs...");
+      }
       ar & m_bs.m_multisignatureOutputs;
 
       m_loaded = true;
@@ -377,6 +395,9 @@ bool blockchain_storage::init(const std::string& config_folder, bool load_existi
         m_outputs.clear();
         m_multisignatureOutputs.clear();
         for (uint32_t b = 0; b < m_blocks.size(); ++b) {
+          if (b % 1000 == 0) {
+            std::cout << "Height " << b << " of " << m_blocks.size() << '\r';
+          }
           const BlockEntry& block = m_blocks[b];
           crypto::hash blockHash = get_block_hash(block.bl);
           m_blockIndex.push(blockHash);
@@ -900,9 +921,9 @@ bool blockchain_storage::handle_alternative_block(const Block& b, const crypto::
   }
 
   if (!m_checkpoints.is_alternative_block_allowed(get_current_blockchain_height(), block_height)) {
-    LOG_PRINT_RED_L0("Block with id: " << id
-      << ENDL << " can't be accepted for alternative chain, block height: " << block_height
-      << ENDL << " blockchain height: " << get_current_blockchain_height());
+    LOG_PRINT_L2("Block with id: " << id << std::endl <<
+      " can't be accepted for alternative chain, block height: " << block_height << std::endl <<
+      " blockchain height: " << get_current_blockchain_height());
     bvc.m_verifivation_failed = true;
     return false;
   }
@@ -1525,8 +1546,9 @@ bool blockchain_storage::checkBlockVersion(const Block& b, const crypto::hash& b
   uint64_t height = get_block_height(b);
   const uint8_t expectedBlockVersion = get_block_major_version_for_height(height);
   if (b.majorVersion != expectedBlockVersion) {
-    LOG_PRINT_L0("Block " << blockHash << " has wrong major version: " << static_cast<int>(b.majorVersion) <<
+    LOG_PRINT_L2("Block " << blockHash << " has wrong major version: " << static_cast<int>(b.majorVersion) <<
       ", at height " << height << " expected version is " << static_cast<int>(expectedBlockVersion));
+    LOG_PRINT_GREEN("SYNCHRONIZED OK", LOG_LEVEL_0);
     return false;
   }
 

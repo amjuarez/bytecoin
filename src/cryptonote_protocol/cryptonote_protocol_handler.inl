@@ -123,8 +123,8 @@ namespace cryptonote
 
     int64_t diff = static_cast<int64_t>(hshd.current_height) - static_cast<int64_t>(m_core.get_current_blockchain_height());
     LOG_PRINT_CCONTEXT_YELLOW("Sync data returned unknown top block: " << m_core.get_current_blockchain_height() << " -> " << hshd.current_height
-      << " [" << std::abs(diff) << " blocks (" << diff / (24 * 60 * 60 / m_core.currency().difficultyTarget()) << " days) "
-      << (0 <= diff ? std::string("behind") : std::string("ahead"))
+      << " [" << std::abs(diff) << " blocks (" << std::abs(diff) / (24 * 60 * 60 / m_core.currency().difficultyTarget()) << " days) "
+      << (diff >= 0 ? std::string("behind") : std::string("ahead"))
       << "] " << ENDL << "SYNCHRONIZATION started", (is_inital ? LOG_LEVEL_0:LOG_LEVEL_1));
     LOG_PRINT_L1("Remote top block height: " << hshd.current_height << ", id: " << hshd.top_id);
     context.m_state = cryptonote_connection_context::state_synchronizing;
@@ -173,7 +173,7 @@ namespace cryptonote
     block_verification_context bvc = boost::value_initialized<block_verification_context>();
     m_core.handle_incoming_block_blob(arg.b.block, bvc, true, false);
     if (bvc.m_verifivation_failed) {
-      LOG_PRINT_CCONTEXT_L0("Block verification failed, dropping connection");
+      LOG_PRINT_CCONTEXT_L1("Block verification failed, dropping connection");
       m_p2p->drop_connection(context);
       return 1;
     }
@@ -332,7 +332,7 @@ namespace cryptonote
         m_core.handle_incoming_block_blob(block_entry.block, bvc, false, false);
 
         if (bvc.m_verifivation_failed) {
-          LOG_PRINT_CCONTEXT_L0("Block verification failed, dropping connection");
+          LOG_PRINT_CCONTEXT_L1("Block verification failed, dropping connection");
           m_p2p->drop_connection(context);
           return 1;
         } else if (bvc.m_marked_as_orphaned) {
