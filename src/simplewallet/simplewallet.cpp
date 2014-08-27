@@ -251,11 +251,7 @@ namespace
             if (!m_currency.parseAccountAddressString(arg, de.addr)) {
               crypto::hash paymentId;
               if (tools::wallet2::parse_payment_id(arg, paymentId)) {
-<<<<<<< HEAD
-                fail_msg_writer() << "Attempted to use payment ID in place of destination address, please use -p for payment ID. See help for details.";
-=======
                 fail_msg_writer() << "Invalid payment ID usage. Please, use -p <payment_id>. See help for details.";
->>>>>>> 9df3a81801af2a8d02add6ef27b5af73df71ef16
               } else {
                 fail_msg_writer() << "Wrong address: " << arg;
               }
@@ -575,11 +571,8 @@ bool simple_wallet::save(const std::vector<std::string> &args)
 
 bool simple_wallet::reset(const std::vector<std::string> &args) {
   m_wallet->reset();
-<<<<<<< HEAD
-=======
   success_msg_writer(true) << "Reset is complete successfully";
   refresh();
->>>>>>> 9df3a81801af2a8d02add6ef27b5af73df71ef16
   return true;
 }
 

@@ -233,10 +233,7 @@ namespace cryptonote
 
       std::string operation;
       if (Archive::is_loading::value) {
-<<<<<<< HEAD
-=======
         operation = "- loading ";
->>>>>>> 9df3a81801af2a8d02add6ef27b5af73df71ef16
         crypto::hash blockHash;
         ar & blockHash;
 
@@ -249,31 +246,6 @@ namespace cryptonote
         ar & m_lastBlockHash;
       }
 
-<<<<<<< HEAD
-      if (Archive::is_loading::value) {
-        LOG_PRINT_L0("- loading block index...");
-      }
-      ar & m_bs.m_blockIndex;
-
-      if (Archive::is_loading::value) {
-        LOG_PRINT_L0("- loading transaction map...");
-      }
-      ar & m_bs.m_transactionMap;
-
-      if (Archive::is_loading::value) {
-        LOG_PRINT_L0("- loading spend keys...");
-      }
-      ar & m_bs.m_spent_keys;
-
-      if (Archive::is_loading::value) {
-        LOG_PRINT_L0("- loading outputs...");
-      }
-      ar & m_bs.m_outputs;
-
-      if (Archive::is_loading::value) {
-        LOG_PRINT_L0("- loading multi-signature outputs...");
-      }
-=======
       LOG_PRINT_L0(operation << "block index...");
       ar & m_bs.m_blockIndex;
 
@@ -287,7 +259,6 @@ namespace cryptonote
       ar & m_bs.m_outputs;
 
       LOG_PRINT_L0(operation << "multi-signature outputs...");
->>>>>>> 9df3a81801af2a8d02add6ef27b5af73df71ef16
       ar & m_bs.m_multisignatureOutputs;
 
       m_loaded = true;
@@ -1571,7 +1542,6 @@ bool blockchain_storage::checkBlockVersion(const Block& b, const crypto::hash& b
   if (b.majorVersion != expectedBlockVersion) {
     LOG_PRINT_L2("Block " << blockHash << " has wrong major version: " << static_cast<int>(b.majorVersion) <<
       ", at height " << height << " expected version is " << static_cast<int>(expectedBlockVersion));
-    LOG_PRINT_GREEN("SYNCHRONIZED OK", LOG_LEVEL_0);
     return false;
   }
 
