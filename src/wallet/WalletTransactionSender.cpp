@@ -1,14 +1,27 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
-// node.cpp : Defines the entry point for the console application.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
 //
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+
+// epee
+#include "misc_language.h"
+
+#include "cryptonote_core/account.h"
 
 #include "WalletTransactionSender.h"
 #include "WalletUtils.h"
-
-#include "cryptonote_core/cryptonote_basic_impl.h"
 
 namespace {
 
@@ -25,7 +38,7 @@ uint64_t countNeededMoney(uint64_t fee, const std::vector<CryptoNote::Transfer>&
   return needed_money;
 }
 
-void createChangeDestinations(const cryptonote::account_public_address& address, uint64_t neededMoney, uint64_t foundMoney, cryptonote::tx_destination_entry& changeDts) {
+void createChangeDestinations(const cryptonote::AccountPublicAddress& address, uint64_t neededMoney, uint64_t foundMoney, cryptonote::tx_destination_entry& changeDts) {
   if (neededMoney < foundMoney) {
     changeDts.addr = address;
     changeDts.amount = foundMoney - neededMoney;
@@ -33,7 +46,7 @@ void createChangeDestinations(const cryptonote::account_public_address& address,
 }
 
 void constructTx(const cryptonote::account_keys keys, const std::vector<cryptonote::tx_source_entry>& sources, const std::vector<cryptonote::tx_destination_entry>& splittedDests,
-    const std::string& extra, uint64_t unlockTimestamp, uint64_t sizeLimit, cryptonote::transaction& tx) {
+    const std::string& extra, uint64_t unlockTimestamp, uint64_t sizeLimit, cryptonote::Transaction& tx) {
   std::vector<uint8_t> extraVec;
   extraVec.reserve(extra.size());
   std::for_each(extra.begin(), extra.end(), [&extraVec] (const char el) { extraVec.push_back(el);});
@@ -43,7 +56,7 @@ void constructTx(const cryptonote::account_keys keys, const std::vector<cryptono
   CryptoNote::throwIf(cryptonote::get_object_blobsize(tx) >= sizeLimit, cryptonote::error::TRANSACTION_SIZE_TOO_BIG);
 }
 
-void fillTransactionHash(const cryptonote::transaction& tx, CryptoNote::TransactionHash& hash) {
+void fillTransactionHash(const cryptonote::Transaction& tx, CryptoNote::TransactionHash& hash) {
   crypto::hash h = cryptonote::get_transaction_hash(tx);
   memcpy(hash.data(), reinterpret_cast<const uint8_t *>(&h), hash.size());
 }
@@ -52,15 +65,16 @@ void fillTransactionHash(const cryptonote::transaction& tx, CryptoNote::Transact
 
 namespace CryptoNote {
 
-WalletTransactionSender::WalletTransactionSender(WalletUserTransactionsCache& transactionsCache, WalletTxSendingState& sendingTxsStates,
-    WalletTransferDetails& transferDetails, WalletUnconfirmedTransactions& unconfirmedTransactions):
+WalletTransactionSender::WalletTransactionSender(const cryptonote::Currency& currency, WalletUserTransactionsCache& transactionsCache,
+    WalletTxSendingState& sendingTxsStates, WalletTransferDetails& transferDetails, WalletUnconfirmedTransactions& unconfirmedTransactions):
+      m_currency(currency),
       m_transactionsCache(transactionsCache),
       m_sendingTxsStates(sendingTxsStates),
       m_transferDetails(transferDetails),
       m_unconfirmedTransactions(unconfirmedTransactions),
       m_isInitialized(false),
       m_isStoping(false) {
-  m_upperTransactionSizeLimit = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE*2 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+  m_upperTransactionSizeLimit = m_currency.blockGrantedFullRewardZone() * 125 / 100 - m_currency.minerTxBlobReservedSize();
 }
 
 void WalletTransactionSender::init(cryptonote::account_keys keys) {
@@ -77,8 +91,8 @@ void WalletTransactionSender::stop() {
 }
 
 bool WalletTransactionSender::validateDestinationAddress(const std::string& address) {
-  cryptonote::account_public_address ignore;
-  return cryptonote::get_account_address_from_str(ignore, address);
+  cryptonote::AccountPublicAddress ignore;
+  return m_currency.parseAccountAddressString(address, ignore);
 }
 
 void WalletTransactionSender::validateTransfersAddresses(const std::vector<Transfer>& transfers) {
@@ -107,10 +121,10 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::makeSendRequest(Transact
 
   TransferId firstTransferId = m_transactionsCache.insertTransfers(transfers);
 
-  Transaction transaction;
+  TransactionInfo transaction;
   transaction.firstTransferId = firstTransferId;
   transaction.transferCount = transfers.size();
-  transaction.totalAmount = -neededMoney;
+  transaction.totalAmount = neededMoney;
   transaction.fee = fee;
   transaction.isCoinbase = false;
   transaction.timestamp = 0;
@@ -137,11 +151,7 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::makeGetRandomOutsRequest
   uint64_t outsCount = context->mixIn + 1;// add one to make possible (if need) to skip real output key
   std::vector<uint64_t> amounts;
 
-  for (auto ki: context->selectedTransfers) {
-    size_t idx;
-    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
-    throwIf(!found, cryptonote::error::INTERNAL_WALLET_ERROR);
-
+  for (auto idx: context->selectedTransfers) {
     const TransferDetails& td = m_transferDetails.getTransferDetails(idx);
     throwIf(td.tx.vout.size() <= td.internalOutputIndex, cryptonote::error::INTERNAL_WALLET_ERROR);
     amounts.push_back(td.amount());
@@ -183,30 +193,26 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
 
   try
   {
-    Transaction& transaction = m_transactionsCache.getTransaction(context->transactionId);
+    TransactionInfo& transaction = m_transactionsCache.getTransaction(context->transactionId);
 
     std::vector<cryptonote::tx_source_entry> sources;
     prepareInputs(context->selectedTransfers, context->outs, sources, context->mixIn);
 
     cryptonote::tx_destination_entry changeDts = AUTO_VAL_INIT(changeDts);
-    uint64_t totalAmount = -transaction.totalAmount;
-    createChangeDestinations(m_keys.m_account_address, totalAmount, context->foundMoney, changeDts);
+    createChangeDestinations(m_keys.m_account_address, transaction.totalAmount, context->foundMoney, changeDts);
 
     std::vector<cryptonote::tx_destination_entry> splittedDests;
     splitDestinations(transaction.firstTransferId, transaction.transferCount, changeDts, context->dustPolicy, splittedDests);
 
-    cryptonote::transaction tx;
+    cryptonote::Transaction tx;
     constructTx(m_keys, sources, splittedDests, transaction.extra, context->unlockTimestamp, m_upperTransactionSizeLimit, tx);
 
     fillTransactionHash(tx, transaction.hash);
 
     m_unconfirmedTransactions.add(tx, context->transactionId, changeDts.amount);
-
     notifyBalanceChanged(events);
 
-    markOutputsSpent(context->selectedTransfers);
-
-    return std::make_shared<WalletRelayTransactionRequest>(tx, std::bind(&WalletTransactionSender::relayTransactionCallback, this, context,
+    return std::make_shared<WalletRelayTransactionRequest>(tx, std::bind(&WalletTransactionSender::relayTransactionCallback, this, context->transactionId,
           std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
   }
   catch(std::system_error& ec) {
@@ -219,17 +225,12 @@ std::shared_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
   return std::shared_ptr<WalletRequest>();
 }
 
-void WalletTransactionSender::relayTransactionCallback(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events,
+void WalletTransactionSender::relayTransactionCallback(TransactionId txId, std::deque<std::shared_ptr<WalletEvent> >& events,
                                                         boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec) {
-  TransactionId txId = context->transactionId;
-
-  if (m_isStoping) {
-    return;
-  }
+  if (m_isStoping) return;
 
   if (ec) {
     m_sendingTxsStates.error(txId);
-    makeOutputsNotSpent(context->selectedTransfers);
   } else {
     m_sendingTxsStates.sent(txId);
   }
@@ -260,8 +261,8 @@ void WalletTransactionSender::digitSplitStrategy(TransferId firstTransferId, siz
   for (TransferId idx = firstTransferId; idx < firstTransferId + transfersCount; ++idx) {
     Transfer& de = m_transactionsCache.getTransfer(idx);
 
-    cryptonote::account_public_address addr;
-    if (!cryptonote::get_account_address_from_str(addr, de.address)) {
+    cryptonote::AccountPublicAddress addr;
+    if (!m_currency.parseAccountAddressString(de.address, addr)) {
       throw std::system_error(make_error_code(cryptonote::error::BAD_ADDRESS));
     }
 
@@ -276,18 +277,13 @@ void WalletTransactionSender::digitSplitStrategy(TransferId firstTransferId, siz
 }
 
 
-void WalletTransactionSender::prepareInputs(const std::list<crypto::key_image>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
+void WalletTransactionSender::prepareInputs(const std::list<size_t>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
     std::vector<cryptonote::tx_source_entry>& sources, uint64_t mixIn) {
   size_t i = 0;
-  for (const crypto::key_image& ki: selectedTransfers) {
+  for (size_t idx: selectedTransfers) {
     sources.resize(sources.size()+1);
     cryptonote::tx_source_entry& src = sources.back();
-
-    size_t idx;
-    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
-    throwIf(!found, cryptonote::error::TX_TRANSFER_IMPOSSIBLE);
     TransferDetails& td = m_transferDetails.getTransferDetails(idx);
-
     src.amount = td.amount();
 
     //paste mixin transaction
@@ -310,7 +306,7 @@ void WalletTransactionSender::prepareInputs(const std::list<crypto::key_image>& 
 
     cryptonote::tx_source_entry::output_entry real_oe;
     real_oe.first = td.globalOutputIndex;
-    real_oe.second = boost::get<cryptonote::txout_to_key>(td.tx.vout[td.internalOutputIndex].target).key;
+    real_oe.second = boost::get<cryptonote::TransactionOutputToKey>(td.tx.vout[td.internalOutputIndex].target).key;
 
     auto interted_it = src.outputs.insert(it_to_insert, real_oe);
 
@@ -328,30 +324,6 @@ void WalletTransactionSender::notifyBalanceChanged(std::deque<std::shared_ptr<Wa
 
   events.push_back(std::make_shared<WalletActualBalanceUpdatedEvent>(actualBalance));
   events.push_back(std::make_shared<WalletPendingBalanceUpdatedEvent>(pendingBalance));
-}
-
-void WalletTransactionSender::markOutputsSpent(const std::list<crypto::key_image>& selectedTransfers) {
-  for (const crypto::key_image& ki: selectedTransfers) {
-    size_t idx;
-    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
-    if (!found) {
-      throw std::runtime_error("The output is not found");
-    }
-    TransferDetails& td = m_transferDetails.getTransferDetails(idx);
-    td.spent = true;
-  }
-}
-
-void WalletTransactionSender::makeOutputsNotSpent(const std::list<crypto::key_image>& selectedTransfers) {
-  for (const crypto::key_image& ki: selectedTransfers) {
-    size_t idx;
-    bool found = m_transferDetails.getTransferDetailsIdxByKeyImage(ki, idx);
-    if (!found) {
-      continue; //what to do better?
-    }
-    TransferDetails& td = m_transferDetails.getTransferDetails(idx);
-    td.spent = false;
-  }
 }
 
 } /* namespace CryptoNote */

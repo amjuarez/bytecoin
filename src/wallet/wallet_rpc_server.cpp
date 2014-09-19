@@ -1,7 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "include_base_utils.h"
 using namespace epee;
@@ -34,9 +46,16 @@ namespace tools
     m_net_server.add_idle_handler([this](){
       try {
         m_wallet.refresh();
-      } catch (const std::exception& ex) {
-        LOG_ERROR("Exception at while refreshing, what=" << ex.what());
+      } catch (const std::exception& e) {
+        LOG_ERROR("Exception while refreshing, what=" << e.what());
       }
+
+      try {
+        m_wallet.store();
+      } catch (const std::exception& e) {
+        LOG_ERROR("Exception while storing, what=" << e.what());
+      }
+
       return true;
     }, 20000);
 
@@ -80,7 +99,7 @@ namespace tools
     std::vector<cryptonote::tx_destination_entry> dsts;
     for (auto it = req.destinations.begin(); it != req.destinations.end(); it++) {
       cryptonote::tx_destination_entry de;
-      if (!get_account_address_from_str(de.addr, it->address)) {
+      if (!m_wallet.currency().parseAccountAddressString(it->address, de.addr)) {
         er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
         er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + it->address;
         return false;
@@ -110,7 +129,7 @@ namespace tools
     }
 
     try {
-      cryptonote::transaction tx;
+      cryptonote::Transaction tx;
       m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, extra, tx);
       res.tx_hash = boost::lexical_cast<std::string>(cryptonote::get_transaction_hash(tx));
       return true;
@@ -180,5 +199,34 @@ namespace tools
 
     return true;
   }
-  //------------------------------------------------------------------------------------------------------------------------------
+
+  bool wallet_rpc_server::on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANSFERS::request& req, wallet_rpc::COMMAND_RPC_GET_TRANSFERS::response& res, epee::json_rpc::error& er, connection_context& cntx) {
+    res.transfers.clear();
+    const std::vector<wallet2::Transfer>& transfers = m_wallet.getTransfers();
+    for (const tools::wallet2::Transfer& transfer : transfers) {
+      wallet_rpc::Transfer transfer2;
+      transfer2.time = transfer.time;
+      transfer2.output = transfer.output;
+      transfer2.transactionHash = epee::string_tools::pod_to_hex(transfer.transactionHash);
+      transfer2.amount = transfer.amount;
+      transfer2.fee = transfer.fee;
+      transfer2.paymentId = transfer.paymentId == cryptonote::null_hash ? "" : epee::string_tools::pod_to_hex(transfer.paymentId);
+      transfer2.address = transfer.hasAddress ? getAccountAddressAsStr(m_wallet.currency().publicAddressBase58Prefix(), transfer.address) : "";
+      transfer2.blockIndex = transfer.blockIndex;
+      transfer2.unlockTime = transfer.unlockTime;
+      res.transfers.push_back(transfer2);
+    }
+
+    return true;
+  }
+
+  bool wallet_rpc_server::on_get_height(const wallet_rpc::COMMAND_RPC_GET_HEIGHT::request& req, wallet_rpc::COMMAND_RPC_GET_HEIGHT::response& res, epee::json_rpc::error& er, connection_context& cntx) {
+    res.height = m_wallet.get_blockchain_current_height();
+    return true;
+  }
+
+  bool wallet_rpc_server::on_reset(const wallet_rpc::COMMAND_RPC_RESET::request& req, wallet_rpc::COMMAND_RPC_RESET::response& res, epee::json_rpc::error& er, connection_context& cntx) {
+    m_wallet.reset();
+    return true;
+  }
 }

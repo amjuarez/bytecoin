@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
@@ -54,59 +67,44 @@ namespace boost
     a & reinterpret_cast<char (&)[sizeof(crypto::hash)]>(x);
   }
 
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txout_to_script &x, const boost::serialization::version_type ver)
-  {
-    a & x.keys;
-    a & x.script;
+  template <class Archive> void serialize(Archive& archive, cryptonote::TransactionInputToScript&, unsigned int version) {
+    assert(false);
   }
 
+  template <class Archive> void serialize(Archive& archive, cryptonote::TransactionInputToScriptHash&, unsigned int version) {
+    assert(false);
+  }
+
+  template <class Archive> void serialize(Archive& archive, cryptonote::TransactionOutputToScript&, unsigned int version) {
+    assert(false);
+  }
+
+  template <class Archive> void serialize(Archive& archive, cryptonote::TransactionOutputToScriptHash&, unsigned int version) {
+    assert(false);
+  }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txout_to_key &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::TransactionOutputToKey &x, const boost::serialization::version_type ver)
   {
     a & x.key;
   }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txout_to_scripthash &x, const boost::serialization::version_type ver)
-  {
-    a & x.hash;
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txin_gen &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::TransactionInputGenerate &x, const boost::serialization::version_type ver)
   {
     a & x.height;
   }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txin_to_script &x, const boost::serialization::version_type ver)
-  {
-    a & x.prev;
-    a & x.prevout;
-    a & x.sigset;
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txin_to_scripthash &x, const boost::serialization::version_type ver)
-  {
-    a & x.prev;
-    a & x.prevout;
-    a & x.script;
-    a & x.sigset;
-  }
-
-  template <class Archive>
-  inline void serialize(Archive &a, cryptonote::txin_to_key &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::TransactionInputToKey &x, const boost::serialization::version_type ver)
   {
     a & x.amount;
-    a & x.key_offsets;
-    a & x.k_image;
+    a & x.keyOffsets;
+    a & x.keyImage;
   }
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::tx_out &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::TransactionOutput &x, const boost::serialization::version_type ver)
   {
     a & x.amount;
     a & x.target;
@@ -114,10 +112,10 @@ namespace boost
 
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::transaction &x, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::Transaction &x, const boost::serialization::version_type ver)
   {
     a & x.version;
-    a & x.unlock_time;
+    a & x.unlockTime;
     a & x.vin;
     a & x.vout;
     a & x.extra;
@@ -126,16 +124,16 @@ namespace boost
 
 
   template <class Archive>
-  inline void serialize(Archive &a, cryptonote::block &b, const boost::serialization::version_type ver)
+  inline void serialize(Archive &a, cryptonote::Block &b, const boost::serialization::version_type ver)
   {
-    a & b.major_version;
-    a & b.minor_version;
+    a & b.majorVersion;
+    a & b.minorVersion;
     a & b.timestamp;
-    a & b.prev_id;
+    a & b.prevId;
     a & b.nonce;
     //------------------
-    a & b.miner_tx;
-    a & b.tx_hashes;
+    a & b.minerTx;
+    a & b.txHashes;
   }
 }
 }

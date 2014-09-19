@@ -1,10 +1,22 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <time.h>
 #include "TestBlockchainGenerator.h"
-#include "cryptonote_core/cryptonote_format_utils.h"
 
 #include "../performance_tests/multi_tx_test_base.h"
 
@@ -19,31 +31,31 @@ public:
     return base_class::init();
   }
 
-  void generate(const cryptonote::account_public_address& address, cryptonote::transaction& tx)
+  void generate(const cryptonote::AccountPublicAddress& address, cryptonote::Transaction& tx)
   {
+    cryptonote::tx_destination_entry destination(this->m_source_amount, address);
     std::vector<cryptonote::tx_destination_entry> destinations;
-
-    cryptonote::decompose_amount_into_digits(this->m_source_amount, 0,
-      [&](uint64_t chunk) { destinations.push_back(cryptonote::tx_destination_entry(chunk, address)); },
-      [&](uint64_t a_dust) { destinations.push_back(cryptonote::tx_destination_entry(a_dust, address)); } );
+    destinations.push_back(destination);
 
     cryptonote::construct_tx(this->m_miners[this->real_source_idx].get_keys(), this->m_sources, destinations, std::vector<uint8_t>(), tx, 0);
   }
 };
 
 
-TestBlockchainGenerator::TestBlockchainGenerator()
+TestBlockchainGenerator::TestBlockchainGenerator(const cryptonote::Currency& currency) :
+  m_currency(currency),
+  generator(currency)
 {
   miner_acc.generate();
   addGenesisBlock();
 }
 
-std::vector<cryptonote::block>& TestBlockchainGenerator::getBlockchain()
+std::vector<cryptonote::Block>& TestBlockchainGenerator::getBlockchain()
 {
   return m_blockchain;
 }
 
-bool TestBlockchainGenerator::getTransactionByHash(const crypto::hash& hash, cryptonote::transaction& tx)
+bool TestBlockchainGenerator::getTransactionByHash(const crypto::hash& hash, cryptonote::Transaction& tx)
 {
   auto it = m_txs.find(hash);
   if (it == m_txs.end())
@@ -55,10 +67,10 @@ bool TestBlockchainGenerator::getTransactionByHash(const crypto::hash& hash, cry
 
 void TestBlockchainGenerator::addGenesisBlock()
 {
-  cryptonote::block genesis;
+  cryptonote::Block genesis;
   uint64_t timestamp = time(NULL);
 
-  generator.construct_block(genesis, miner_acc, timestamp);
+  generator.constructBlock(genesis, miner_acc, timestamp);
   m_blockchain.push_back(genesis);
 }
 
@@ -68,49 +80,48 @@ void TestBlockchainGenerator::generateEmptyBlocks(size_t count)
 
   for (size_t i = 0; i < count; ++i)
   {
-    cryptonote::block& prev_block = m_blockchain.back();
-    cryptonote::block block;
-    generator.construct_block(block, prev_block, miner_acc);
+    cryptonote::Block& prev_block = m_blockchain.back();
+    cryptonote::Block block;
+    generator.constructBlock(block, prev_block, miner_acc);
     m_blockchain.push_back(block);
   }
 }
 
-void TestBlockchainGenerator::addTxToBlockchain(const cryptonote::transaction& transaction)
+void TestBlockchainGenerator::addTxToBlockchain(const cryptonote::Transaction& transaction)
 {
   crypto::hash txHash = cryptonote::get_transaction_hash(transaction);
   m_txs[txHash] = transaction;
 
-  std::list<cryptonote::transaction> txs;
+  std::list<cryptonote::Transaction> txs;
   txs.push_back(transaction);
 
-  cryptonote::block& prev_block = m_blockchain.back();
-  cryptonote::block block;
+  cryptonote::Block& prev_block = m_blockchain.back();
+  cryptonote::Block block;
 
-  generator.construct_block(block, prev_block, miner_acc, txs);
+  generator.constructBlock(block, prev_block, miner_acc, txs);
   m_blockchain.push_back(block);
 }
 
-bool TestBlockchainGenerator::getBlockRewardForAddress(const cryptonote::account_public_address& address)
+bool TestBlockchainGenerator::getBlockRewardForAddress(const cryptonote::AccountPublicAddress& address)
 {
   TransactionForAddressCreator creator;
   if (!creator.init())
     return false;
 
-  cryptonote::transaction tx;
+  cryptonote::Transaction tx;
   creator.generate(address, tx);
 
   crypto::hash txHash = cryptonote::get_transaction_hash(tx);
   m_txs[txHash] = tx;
 
-  std::list<cryptonote::transaction> txs;
+  std::list<cryptonote::Transaction> txs;
   txs.push_back(tx);
 
-  cryptonote::block& prev_block = m_blockchain.back();
-  cryptonote::block block;
+  cryptonote::Block& prev_block = m_blockchain.back();
+  cryptonote::Block block;
 
-  generator.construct_block(block, prev_block, miner_acc, txs);
+  generator.constructBlock(block, prev_block, miner_acc, txs);
   m_blockchain.push_back(block);
 
   return true;
 }
-

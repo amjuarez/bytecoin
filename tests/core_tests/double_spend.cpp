@@ -1,18 +1,32 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "chaingen.h"
-#include "chaingen_tests_list.h"
+#include "double_spend.h"
+#include "TestGenerator.h"
 
 using namespace epee;
 using namespace cryptonote;
-
 
 //======================================================================================================================
 
 gen_double_spend_in_different_chains::gen_double_spend_in_different_chains()
 {
+  expected_blockchain_height = 4 + 2 * m_currency.minedMoneyUnlockWindow();
+
   REGISTER_CALLBACK_METHOD(gen_double_spend_in_different_chains, check_double_spend);
 }
 
@@ -21,9 +35,9 @@ bool gen_double_spend_in_different_chains::generate(std::vector<test_event_entry
   INIT_DOUBLE_SPEND_TEST();
 
   SET_EVENT_VISITOR_SETT(events, event_visitor_settings::set_txs_keeped_by_block, true);
-  MAKE_TX(events, tx_1, bob_account, alice_account, send_amount / 2 - TESTS_DEFAULT_FEE, blk_1);
+  MAKE_TX(events, tx_1, bob_account, alice_account, send_amount / 2 - m_currency.minimumFee(), blk_1);
   events.pop_back();
-  MAKE_TX(events, tx_2, bob_account, alice_account, send_amount - TESTS_DEFAULT_FEE, blk_1);
+  MAKE_TX(events, tx_2, bob_account, alice_account, send_amount - m_currency.minimumFee(), blk_1);
   events.pop_back();
 
   // Main chain
@@ -46,11 +60,11 @@ bool gen_double_spend_in_different_chains::check_double_spend(cryptonote::core& 
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_double_spend_in_different_chains::check_double_spend");
 
-  std::list<block> block_list;
-  bool r = c.get_blocks(0, 100 + 2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW, block_list);
+  std::list<Block> block_list;
+  bool r = c.get_blocks(0, 100 + 2 * m_currency.minedMoneyUnlockWindow(), block_list);
   CHECK_TEST_CONDITION(r);
 
-  std::vector<block> blocks(block_list.begin(), block_list.end());
+  std::vector<Block> blocks(block_list.begin(), block_list.end());
   CHECK_EQ(expected_blockchain_height, blocks.size());
 
   CHECK_EQ(1, c.get_pool_transactions_count());
@@ -59,12 +73,13 @@ bool gen_double_spend_in_different_chains::check_double_spend(cryptonote::core& 
   cryptonote::account_base bob_account = boost::get<cryptonote::account_base>(events[1]);
   cryptonote::account_base alice_account = boost::get<cryptonote::account_base>(events[2]);
 
-  std::vector<cryptonote::block> chain;
+  std::vector<cryptonote::Block> chain;
   map_hash2tx_t mtx;
   r = find_block_chain(events, chain, mtx, get_block_hash(blocks.back()));
   CHECK_TEST_CONDITION(r);
   CHECK_EQ(0, get_balance(bob_account, blocks, mtx));
-  CHECK_EQ(send_amount - TESTS_DEFAULT_FEE, get_balance(alice_account, blocks, mtx));
+  CHECK_EQ(send_amount - m_currency.minimumFee(), get_balance(alice_account, blocks, mtx));
 
   return true;
 }
+

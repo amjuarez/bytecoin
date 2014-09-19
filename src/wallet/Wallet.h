@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
@@ -16,9 +29,9 @@
 #include "WalletAsyncContextCounter.h"
 #include "WalletTxSendingState.h"
 #include "common/ObserverManager.h"
-#include "cryptonote_core/account.h"
 #include "cryptonote_core/tx_extra.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_core/Currency.h"
 #include "WalletTransferDetails.h"
 #include "WalletUserTransactionsCache.h"
 #include "WalletUnconfirmedTransactions.h"
@@ -30,7 +43,7 @@ namespace CryptoNote {
 
 class Wallet : public IWallet {
 public:
-  Wallet(INode& node);
+  Wallet(const cryptonote::Currency& currency, INode& node);
   ~Wallet() {};
 
   virtual void addObserver(IWalletObserver* observer);
@@ -54,7 +67,7 @@ public:
 
   virtual TransactionId findTransactionByTransferId(TransferId transferId);
 
-  virtual bool getTransaction(TransactionId transactionId, Transaction& transaction);
+  virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction);
   virtual bool getTransfer(TransferId transferId, Transfer& transfer);
 
   virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
@@ -92,6 +105,7 @@ private:
   std::mutex m_cacheMutex;
   cryptonote::account_base m_account;
   std::string m_password;
+  const cryptonote::Currency& m_currency;
   INode& m_node;
   bool m_isSynchronizing;
   bool m_isStopping;

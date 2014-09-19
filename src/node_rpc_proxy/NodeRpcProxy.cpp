@@ -1,13 +1,25 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "NodeRpcProxy.h"
 
 #include <atomic>
 #include <system_error>
 #include <thread>
-#include <algorithm>
 
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -169,7 +181,7 @@ uint64_t NodeRpcProxy::getLastKnownBlockHeight() const {
   return m_networkHeight;
 }
 
-void NodeRpcProxy::relayTransaction(const cryptonote::transaction& transaction, const Callback& callback) {
+void NodeRpcProxy::relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
   if (!m_initState.initialized()) {
     callback(make_error_code(error::NOT_INITIALIZED));
     return;
@@ -206,7 +218,7 @@ void NodeRpcProxy::getTransactionOutsGlobalIndices(const crypto::hash& transacti
   m_ioService.post(std::bind(&NodeRpcProxy::doGetTransactionOutsGlobalIndices, this, transactionHash, std::ref(outsGlobalIndices), callback));
 }
 
-void NodeRpcProxy::doRelayTransaction(const cryptonote::transaction& transaction, const Callback& callback) {
+void NodeRpcProxy::doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
   COMMAND_RPC_SEND_RAW_TX::request req;
   COMMAND_RPC_SEND_RAW_TX::response rsp;
   req.tx_as_hex = epee::string_tools::buff_to_hex_nodelimer(cryptonote::tx_to_blob(transaction));
@@ -218,13 +230,7 @@ void NodeRpcProxy::doRelayTransaction(const cryptonote::transaction& transaction
 void NodeRpcProxy::doGetRandomOutsByAmounts(std::vector<uint64_t>& amounts, uint64_t outsCount, std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs, const Callback& callback) {
   COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request req = AUTO_VAL_INIT(req);
   COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response rsp = AUTO_VAL_INIT(rsp);
-  
-  req.amounts.clear();
-  for (std::size_t i = 0; i < amounts.size(); ++i) {
-   req.amounts.push_back(amounts[i]);
-  }
-  amounts.clear();
-
+  req.amounts = std::move(amounts);
   req.outs_count = outsCount;
   bool r = epee::net_utils::invoke_http_bin_remote_command2(m_nodeAddress + "/getrandom_outs.bin", req, rsp, m_httpClient, m_rpcTimeout);
   std::error_code ec = interpretJsonRpcResponse(r, rsp.status);

@@ -30,10 +30,12 @@
 #include <boost/lambda/bind.hpp>
 #include <boost/foreach.hpp>
 #include <boost/lambda/lambda.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/chrono.hpp>
 #include <boost/utility/value_init.hpp>
 #include <boost/asio/deadline_timer.hpp>
+#include "include_base_utils.h"
 #include "misc_language.h"
 #include "pragma_comp_defs.h"
 
@@ -304,7 +306,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
     if(m_send_que.size() > ABSTRACT_SERVER_SEND_QUE_MAX_COUNT)
     {
       send_guard.unlock();
-      LOG_ERROR("send que size is more than ABSTRACT_SERVER_SEND_QUE_MAX_COUNT(" << ABSTRACT_SERVER_SEND_QUE_MAX_COUNT << "), shutting down connection");
+      LOG_WARNING("send que size is more than ABSTRACT_SERVER_SEND_QUE_MAX_COUNT(" << ABSTRACT_SERVER_SEND_QUE_MAX_COUNT << "), shutting down connection", LOG_LEVEL_2);
       close();
       return false;
     }

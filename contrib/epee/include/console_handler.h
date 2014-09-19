@@ -32,6 +32,11 @@
 #include <mutex>
 #include <thread>
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+
+#include "string_tools.h"
+
 namespace epee
 {
   class async_stdin_reader
@@ -294,7 +299,7 @@ namespace epee
   bool start_default_console(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
   {
     std::shared_ptr<async_console_handler> console_handler = std::make_shared<async_console_handler>();
-    boost::thread([=](){console_handler->run<t_server, t_handler>(ptsrv, handlr, prompt, usage);}).detach();
+    std::thread([=](){console_handler->run<t_server, t_handler>(ptsrv, handlr, prompt, usage);}).detach();
     return true;
   }
 
@@ -314,46 +319,24 @@ namespace epee
   bool run_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
   {
     async_console_handler console_handler;
-    return console_handler.run(ptsrv, boost::bind<bool>(no_srv_param_adapter<t_server, t_handler>, _1, _2, handlr), prompt, usage);
+    return console_handler.run(ptsrv, std::bind<bool>(no_srv_param_adapter<t_server, t_handler>, std::placeholders::_1, std::placeholders::_2, handlr), prompt, usage);
   }
 
   template<class t_server, class t_handler>
   bool start_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
   {
-    boost::thread( boost::bind(run_default_console_handler_no_srv_param<t_server, t_handler>, ptsrv, handlr, prompt, usage) );
+    std::thread( std::bind(run_default_console_handler_no_srv_param<t_server, t_handler>, ptsrv, handlr, prompt, usage) );
     return true;
   }
-
-  /*template<class a>
-  bool f(int i, a l)
-  {
-    return true;
-  }*/
-  /*
-  template<class chain_handler>
-  bool default_console_handler2(chain_handler ch_handler, const std::string usage)
-  */
-
-
-  /*template<class t_handler>
-  bool start_default_console2(t_handler handlr, const std::string& usage = "")
-  {
-    //std::string usage_local = usage;
-    boost::thread( boost::bind(default_console_handler2<t_handler>, handlr, usage) );
-    //boost::function<bool ()> p__ = boost::bind(f<t_handler>, 1, handlr);
-    //boost::function<bool ()> p__ = boost::bind(default_console_handler2<t_handler>, handlr, usage);
-    //boost::thread tr(p__);
-    return true;
-  }*/
 
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
   class console_handlers_binder
   {
-    typedef boost::function<bool (const std::vector<std::string> &)> console_command_handler;
+    typedef std::function<bool (const std::vector<std::string> &)> console_command_handler;
     typedef std::map<std::string, std::pair<console_command_handler, std::string> > command_handlers_map;
-    std::unique_ptr<boost::thread> m_console_thread;
+    std::unique_ptr<std::thread> m_console_thread;
     command_handlers_map m_command_handlers;
     async_console_handler m_console_handler;
   public:
@@ -396,16 +379,9 @@ namespace epee
       return process_command_vec(cmd_v);
     }
 
-    /*template<class t_srv>
-    bool start_handling(t_srv& srv, const std::string& usage_string = "")
-    {
-      start_default_console_handler_no_srv_param(&srv, boost::bind(&console_handlers_binder::process_command_str, this, _1));
-      return true;
-    }*/
-
     bool start_handling(const std::string& prompt, const std::string& usage_string = "")
     {
-      m_console_thread.reset(new boost::thread(boost::bind(&console_handlers_binder::run_handling, this, prompt, usage_string)));
+      m_console_thread.reset(new std::thread(std::bind(&console_handlers_binder::run_handling, this, prompt, usage_string)));
       m_console_thread->detach();
       return true;
     }
@@ -417,14 +393,8 @@ namespace epee
 
     bool run_handling(const std::string& prompt, const std::string& usage_string)
     {
-      return m_console_handler.run(boost::bind(&console_handlers_binder::process_command_str, this, _1), prompt, usage_string);
+      return m_console_handler.run(std::bind(&console_handlers_binder::process_command_str, this, std::placeholders::_1), prompt, usage_string);
     }
-
-    /*template<class t_srv>
-    bool run_handling(t_srv& srv, const std::string& usage_string)
-    {
-      return run_default_console_handler_no_srv_param(&srv, boost::bind<bool>(&console_handlers_binder::process_command_str, this, _1), usage_string);
-    }*/
   };
 
   /* work around because of broken boost bind */
@@ -438,13 +408,14 @@ namespace epee
   public:
     bool start_handling(t_server* psrv, const std::string& prompt, const std::string& usage_string = "")
     {
-      boost::thread(boost::bind(&srv_console_handlers_binder<t_server>::run_handling, this, psrv, prompt, usage_string)).detach();
+      std::thread(std::bind(&srv_console_handlers_binder<t_server>::run_handling, this, psrv, prompt, usage_string)).detach();
       return true;
     }
 
     bool run_handling(t_server* psrv, const std::string& prompt, const std::string& usage_string)
     {
-      return m_console_handler.run(psrv, boost::bind(&srv_console_handlers_binder<t_server>::process_command_str, this, _1, _2), prompt, usage_string);
+      return m_console_handler.run(psrv, std::bind(&srv_console_handlers_binder<t_server>::process_command_str, this,
+        std::placeholders::_1, std::placeholders::_2), prompt, usage_string);
     }
 
     void stop_handling()

@@ -1,51 +1,7 @@
+Release notes 1.0.0
+
+- DarkNote
+
 Release notes 0.8.9
 
-- JSON RPC v2.0 compatibility
-- JSON RPC over TCP added
-- Further optimizations
-
-Release notes 0.8.8
-
-- Fixed a bug with checkpoints behavior
-- UI improvements for daemon
-- Various updates from our forks
-
-Release notes 0.8.7
-
-- OSX support
-- Further optimizations
-
-Release notes 0.8.6
-
-- Simplwallet can set extra for transfers
-- Improvements in JSON RPC for wallet
-- UX improvements in simplewallet
-- Win32 compilation
-
-Release notes 0.8.5
-
-- Port mapping for daemon using UPnP
-- Improvements for daemon JSON RPC API
-
-Release notes 0.8.4
-
-- Formalization of high level API
-- Improvements for wallet JSON RPC API
-
-Release notes 0.8.3
-
-- JSON RPC for wallet
-- fixed bug with blockchain storing
-- fixed bug with correct display of transfer's change 
-- bug fix in simple wallet
-
-Release notes 0.8.2
-
-- now wallet is still working when daemon stores blockchain and can't serve clients; 
-- no-console option for a daemon; 
-- fixed problem with network synchronization; 
-- major bug fix in simple wallet. 
-
-Release notes 0.8.1
-
-Bytecoin project is moved to GitHub
+- duckNote

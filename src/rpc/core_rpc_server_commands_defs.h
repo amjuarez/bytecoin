@@ -1,6 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
@@ -111,46 +124,52 @@ namespace cryptonote
     };
   };
   //-----------------------------------------------
-  struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS
+  struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request
   {
-    struct request
-    {
-      std::list<uint64_t> amounts;
-      uint64_t            outs_count;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(amounts)
-        KV_SERIALIZE(outs_count)
-      END_KV_SERIALIZE_MAP()
-    };
+    std::vector<uint64_t> amounts;
+    uint64_t              outs_count;
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(amounts)
+      KV_SERIALIZE(outs_count)
+    END_KV_SERIALIZE_MAP()
+  };
 
 #pragma pack (push, 1)
-    struct out_entry
-    {
-      uint64_t global_amount_index;
-      crypto::public_key out_key;
-    };
+  struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_out_entry
+  {
+    uint64_t global_amount_index;
+    crypto::public_key out_key;
+  };
 #pragma pack(pop)
 
-    struct outs_for_amount
-    {
-      uint64_t amount;
-      std::list<out_entry> outs;
+  struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount
+  {
+    uint64_t amount;
+    std::list<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_out_entry> outs;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(amount)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(outs)
-      END_KV_SERIALIZE_MAP()
-    };
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(amount)
+      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(outs)
+    END_KV_SERIALIZE_MAP()
+  };
 
-    struct response
-    {
-      std::vector<outs_for_amount> outs;
-      std::string status;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(outs)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
+  struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response
+  {
+    std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount> outs;
+    std::string status;
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(outs)
+      KV_SERIALIZE(status)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS
+  {
+    typedef COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request request;
+    typedef COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response response;
+
+    typedef COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_out_entry out_entry;
+    typedef COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount outs_for_amount;
   };
   //-----------------------------------------------
   struct COMMAND_RPC_SEND_RAW_TX
@@ -160,7 +179,7 @@ namespace cryptonote
       std::string tx_as_hex;
 
       request() {}
-      explicit request(const transaction &);
+      explicit request(const Transaction &);
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(tx_as_hex)
@@ -318,6 +337,24 @@ namespace cryptonote
     };
   };
 
+  struct COMMAND_RPC_GET_CURRENCY_ID
+  {
+    struct request
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::string currency_id_blob;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(currency_id_blob)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
   struct COMMAND_RPC_SUBMITBLOCK
   {
     typedef std::vector<std::string> request;
@@ -363,7 +400,11 @@ namespace cryptonote
   
   struct COMMAND_RPC_GET_LAST_BLOCK_HEADER
   {
-    typedef std::list<std::string> request;
+    struct request
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
 
     struct response
     {
@@ -426,5 +467,47 @@ namespace cryptonote
 
   };
 
-}
+  struct COMMAND_RPC_QUERY_BLOCKS
+  {
+    struct request
+    {
+      std::list<crypto::hash> block_ids; //*first 10 blocks id goes sequential, next goes in pow(2,n) offset, like 2, 4, 8, 16, 32, 64 and so on, and the last one is always genesis block */
+      uint64_t timestamp;
 
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(block_ids)
+        KV_SERIALIZE(timestamp)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response_item : public block_complete_entry
+    {
+      crypto::hash block_id;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_VAL_POD_AS_BLOB(block_id)
+        KV_SERIALIZE(block)
+        KV_SERIALIZE(txs)
+      END_KV_SERIALIZE_MAP()
+
+    };
+
+    struct response
+    {     
+      std::string status;
+      uint64_t start_height;
+      uint64_t current_height;
+      uint64_t full_offset;
+
+      std::list<response_item> items;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+        KV_SERIALIZE(start_height)
+        KV_SERIALIZE(current_height)
+        KV_SERIALIZE(full_offset)
+        KV_SERIALIZE(items)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+}

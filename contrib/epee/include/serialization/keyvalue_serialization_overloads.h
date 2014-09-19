@@ -26,6 +26,11 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <boost/mpl/contains.hpp>
+#include <boost/mpl/vector.hpp>
+
 namespace epee
 {
   namespace serialization

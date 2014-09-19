@@ -1,13 +1,29 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <unordered_map>
 
 #include "include_base_utils.h"
 using namespace epee;
+
+#include "cryptonote_core/Currency.h"
 #include "wallet/wallet2.h"
 using namespace cryptonote;
 
@@ -25,7 +41,7 @@ inline uint64_t random(const uint64_t max_value) {
           (uint64_t(rand())<<48)) % max_value;
 }
 
-bool do_send_money(tools::wallet2& w1, tools::wallet2& w2, size_t mix_in_factor, uint64_t amount_to_transfer, transaction& tx, size_t parts=1)
+bool do_send_money(tools::wallet2& w1, tools::wallet2& w2, size_t mix_in_factor, uint64_t amount_to_transfer, Transaction& tx, size_t parts=1)
 {
   CHECK_AND_ASSERT_MES(parts > 0, false, "parts must be > 0");
 
@@ -52,7 +68,8 @@ bool do_send_money(tools::wallet2& w1, tools::wallet2& w2, size_t mix_in_factor,
 
   try
   {
-    w1.transfer(dsts, mix_in_factor, 0, DEFAULT_FEE, std::vector<uint8_t>(), tools::detail::null_split_strategy, tools::tx_dust_policy(DEFAULT_FEE), tx);
+    w1.transfer(dsts, mix_in_factor, 0, w1.currency().minimumFee(), std::vector<uint8_t>(),
+      tools::detail::null_split_strategy, tools::tx_dust_policy(w1.currency().defaultDustThreshold()), tx);
     return true;
   }
   catch (const std::exception&)
@@ -84,7 +101,8 @@ bool transactions_flow_test(std::string& working_folder,
   uint64_t amount_to_transfer, size_t mix_in_factor, size_t transactions_count, size_t transactions_per_second)
 {
   LOG_PRINT_L0("-----------------------STARTING TRANSACTIONS FLOW TEST-----------------------");
-  tools::wallet2 w1, w2;
+  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
+  tools::wallet2 w1(currency), w2(currency);
   if(path_source_wallet.empty())
     path_source_wallet = generate_random_wallet_name();
 
@@ -117,8 +135,8 @@ bool transactions_flow_test(std::string& working_folder,
   w2.init(daemon_addr_b);
 
   LOG_PRINT_GREEN("Using wallets: " << ENDL
-    << "Source:  " << w1.get_account().get_public_address_str() << ENDL << "Path: " << working_folder + "/" + path_source_wallet << ENDL
-    << "Target:  " << w2.get_account().get_public_address_str() << ENDL << "Path: " << working_folder + "/" + path_terget_wallet, LOG_LEVEL_1);
+    << "Source:  " << currency.accountAddressAsString(w1.get_account()) << ENDL << "Path: " << working_folder + "/" + path_source_wallet << ENDL
+    << "Target:  " << currency.accountAddressAsString(w2.get_account()) << ENDL << "Path: " << working_folder + "/" + path_terget_wallet, LOG_LEVEL_1);
 
   //lets do some money
   epee::net_utils::http::http_simple_client http_client;
@@ -129,7 +147,7 @@ bool transactions_flow_test(std::string& working_folder,
 
   COMMAND_RPC_START_MINING::request daemon_req = AUTO_VAL_INIT(daemon_req);
   COMMAND_RPC_START_MINING::response daemon_rsp = AUTO_VAL_INIT(daemon_rsp);
-  daemon_req.miner_address = w1.get_account().get_public_address_str();
+  daemon_req.miner_address = currency.accountAddressAsString(w1.get_account());
   daemon_req.threads_count = 9;
   r = net_utils::invoke_http_json_remote_command2(daemon_addr_a + "/start_mining", daemon_req, daemon_rsp, http_client, 10000);
   CHECK_AND_ASSERT_MES(r, false, "failed to get getrandom_outs");
@@ -156,8 +174,8 @@ bool transactions_flow_test(std::string& working_folder,
       size_t count = 0;
       BOOST_FOREACH(tools::wallet2::transfer_details& td, incoming_transfers)
       {
-        cryptonote::transaction tx_s;
-        bool r = do_send_money(w1, w1, 0, td.m_tx.vout[td.m_internal_output_index].amount - DEFAULT_FEE, tx_s, 50);
+        cryptonote::Transaction tx_s;
+        bool r = do_send_money(w1, w1, 0, td.m_tx.vout[td.m_internal_output_index].amount - currency.minimumFee(), tx_s, 50);
         CHECK_AND_ASSERT_MES(r, false, "Failed to send starter tx " << get_transaction_hash(tx_s));
         LOG_PRINT_GREEN("Starter transaction sent " << get_transaction_hash(tx_s), LOG_LEVEL_0);
         if(++count >= FIRST_N_TRANSFERS)
@@ -176,7 +194,7 @@ bool transactions_flow_test(std::string& working_folder,
   size_t i = 0;
   struct tx_test_entry
   {
-    transaction tx;
+    Transaction tx;
     size_t m_received_count;
     uint64_t amount_transfered;
   };
@@ -185,14 +203,14 @@ bool transactions_flow_test(std::string& working_folder,
   for(i = 0; i != transactions_count; i++)
   {
     uint64_t amount_to_tx = (amount_to_transfer - transfered_money) > transfer_size ? transfer_size: (amount_to_transfer - transfered_money);
-    while(w1.unlocked_balance() < amount_to_tx + DEFAULT_FEE)
+    while(w1.unlocked_balance() < amount_to_tx + currency.minimumFee())
     {
       misc_utils::sleep_no_w(1000);
       LOG_PRINT_L0("not enough money, waiting for cashback or mining");
       w1.refresh(blocks_fetched, received_money, ok);
     }
 
-    transaction tx;
+    Transaction tx;
     /*size_t n_attempts = 0;
     while (!do_send_money(w1, w2, mix_in_factor, amount_to_tx, tx)) {
         n_attempts++;
@@ -212,7 +230,7 @@ bool transactions_flow_test(std::string& working_folder,
         return false;
       }
     }
-    lst_sent_ki = boost::get<txin_to_key>(tx.vin[0]).k_image;
+    lst_sent_ki = boost::get<TransactionInputToKey>(tx.vin[0]).keyImage;
 
     transfered_money += amount_to_tx;
 
@@ -226,19 +244,21 @@ bool transactions_flow_test(std::string& working_folder,
 
 
   LOG_PRINT_L0( "waiting some new blocks...");
-  misc_utils::sleep_no_w(DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN*20*1000);//wait two blocks before sync on another wallet on another daemon
+  //wait two blocks before sync on another wallet on another daemon
+  misc_utils::sleep_no_w(static_cast<long>(currency.difficultyTarget() * 20 * 1000));
   LOG_PRINT_L0( "refreshing...");
   bool recvd_money = false;
   while(w2.refresh(blocks_fetched, recvd_money, ok) && ( (blocks_fetched && recvd_money) || !blocks_fetched  ) )
   {
-    misc_utils::sleep_no_w(DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN*1000);//wait two blocks before sync on another wallet on another daemon
+    //wait two blocks before sync on another wallet on another daemon
+    misc_utils::sleep_no_w(static_cast<long>(currency.difficultyTarget() * 1000));
   }
 
   uint64_t money_2 = w2.balance();
   if(money_2 == transfered_money)
   {
     LOG_PRINT_GREEN("-----------------------FINISHING TRANSACTIONS FLOW TEST OK-----------------------", LOG_LEVEL_0);
-    LOG_PRINT_GREEN("transferred " << print_money(transfered_money) << " via " << i << " transactions" , LOG_LEVEL_0);
+    LOG_PRINT_GREEN("transferred " << currency.formatAmount(transfered_money) << " via " << i << " transactions" , LOG_LEVEL_0);
     return true;
   }else
   {
@@ -261,11 +281,11 @@ bool transactions_flow_test(std::string& working_folder,
     }
 
     LOG_PRINT_RED_L0("-----------------------FINISHING TRANSACTIONS FLOW TEST FAILED-----------------------" );
-    LOG_PRINT_RED_L0("income " << print_money(money_2) << " via " << i << " transactions, expected money = " << print_money(transfered_money) );
+    LOG_PRINT_RED_L0("income " << currency.formatAmount(money_2) << " via " << i <<
+      " transactions, expected money = " << currency.formatAmount(transfered_money) );
     LOCAL_ASSERT(false);
     return false;
   }
 
   return true;
 }
-

@@ -1,22 +1,45 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "gtest/gtest.h"
 
 #include "cryptonote_core/cryptonote_basic_impl.h"
+#include "cryptonote_core/Currency.h"
+#include <misc_language.h>
 
 using namespace cryptonote;
 
 namespace
 {
+  using cryptonote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+
   //--------------------------------------------------------------------------------------------------------------------
   class block_reward_and_height : public ::testing::Test
   {
   protected:
+
+    block_reward_and_height() : 
+      m_currency(CurrencyBuilder().currency()) {}
+
     void do_test(uint64_t height, uint64_t already_generated_coins = 0)
     {
-      m_block_not_too_big = get_block_reward(median_block_size, current_block_size, already_generated_coins, height, m_block_reward);
+      int64_t emissionChange;
+      m_block_not_too_big = m_currency.getBlockReward(median_block_size, current_block_size, 
+        already_generated_coins, 0, height, m_block_reward, emissionChange);
     }
 
     static const size_t median_block_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
@@ -24,6 +47,7 @@ namespace
 
     bool m_block_not_too_big;
     uint64_t m_block_reward;
+    Currency m_currency;
   };
 
   TEST_F(block_reward_and_height, calculates_correctly)
@@ -76,7 +100,7 @@ namespace
     ASSERT_TRUE(m_block_not_too_big);
     ASSERT_EQ(m_block_reward, MIN_BLOCK_REWARD);
 
-    do_test(1, MONEY_SUPPLY - MIN_BLOCK_REWARD * 2 / 3);
+    do_test(1, parameters::MONEY_SUPPLY - MIN_BLOCK_REWARD * 2 / 3);
     ASSERT_TRUE(m_block_not_too_big);
     ASSERT_EQ(m_block_reward, MIN_BLOCK_REWARD * 2 / 3);
   }
@@ -84,16 +108,24 @@ namespace
   class block_reward_and_current_block_size : public ::testing::Test
   {
   protected:
+
+    block_reward_and_current_block_size() :
+      m_currency(CurrencyBuilder().currency()) {}
+
     virtual void SetUp()
     {
-      m_block_not_too_big = get_block_reward(0, 0, already_generated_coins, height, m_standard_block_reward);
+      int64_t emissionChange;
+      m_block_not_too_big = m_currency.getBlockReward(0, 0, 
+        already_generated_coins, 0, height, m_standard_block_reward, emissionChange);
       ASSERT_TRUE(m_block_not_too_big);
       ASSERT_LT(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
     }
 
     void do_test(size_t median_block_size, size_t current_block_size)
     {
-      m_block_not_too_big = get_block_reward(median_block_size, current_block_size, already_generated_coins, height, m_block_reward);
+      int64_t emissionChange;
+      m_block_not_too_big = m_currency.getBlockReward(median_block_size, current_block_size, 
+        already_generated_coins, 0, height, m_block_reward, emissionChange);
     }
 
     static const uint64_t already_generated_coins = 0;
@@ -102,6 +134,7 @@ namespace
     bool m_block_not_too_big;
     uint64_t m_block_reward;
     uint64_t m_standard_block_reward;
+    Currency m_currency;
   };
 
   TEST_F(block_reward_and_current_block_size, handles_block_size_less_relevance_level)
@@ -166,8 +199,14 @@ namespace
   class block_reward_and_last_block_sizes : public ::testing::Test
   {
   protected:
+
+    block_reward_and_last_block_sizes() :
+      m_currency(CurrencyBuilder().currency()) {}
+
     virtual void SetUp()
     {
+      int64_t emissionChange;
+
       m_last_block_sizes.push_back(3  * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
       m_last_block_sizes.push_back(5  * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
       m_last_block_sizes.push_back(7  * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
@@ -176,14 +215,18 @@ namespace
 
       m_last_block_sizes_median = 7 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
 
-      m_block_not_too_big = get_block_reward(epee::misc_utils::median(m_last_block_sizes), 0, already_generated_coins, height, m_standard_block_reward);
+      m_block_not_too_big = m_currency.getBlockReward(epee::misc_utils::median(m_last_block_sizes), 0, 
+        already_generated_coins, 0, height, m_standard_block_reward, emissionChange);
+
       ASSERT_TRUE(m_block_not_too_big);
       ASSERT_LT(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
     }
 
     void do_test(size_t current_block_size)
     {
-      m_block_not_too_big = get_block_reward(epee::misc_utils::median(m_last_block_sizes), current_block_size, already_generated_coins, height, m_block_reward);
+      int64_t emissionChange;
+      m_block_not_too_big = m_currency.getBlockReward(epee::misc_utils::median(m_last_block_sizes), current_block_size, 
+        already_generated_coins, 0, height, m_block_reward, emissionChange);
     }
 
     static const uint64_t already_generated_coins = 0;
@@ -194,6 +237,7 @@ namespace
     bool m_block_not_too_big;
     uint64_t m_block_reward;
     uint64_t m_standard_block_reward;
+    Currency m_currency;
   };
 
   TEST_F(block_reward_and_last_block_sizes, handles_block_size_less_median)

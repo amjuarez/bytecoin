@@ -29,6 +29,7 @@
 
 #pragma once 
 #include "http_base.h"
+#include "include_base_utils.h"
 #include "reg_exp_definer.h"
 
 

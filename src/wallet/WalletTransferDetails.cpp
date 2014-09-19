@@ -1,7 +1,19 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
-// Distributed under the MIT/X11 software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
+// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+//
+// This file is part of Bytecoin.
+//
+// Bytecoin is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Bytecoin is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "WalletTransferDetails.h"
 
@@ -38,7 +50,8 @@ T popRandomValue(URNG& randomGenerator, std::vector<T>& vec) {
 namespace CryptoNote
 {
 
-WalletTransferDetails::WalletTransferDetails(const std::vector<crypto::hash>& blockchain) : m_blockchain(blockchain) {
+WalletTransferDetails::WalletTransferDetails(const cryptonote::Currency& currency, const std::vector<crypto::hash>& blockchain) :
+  m_currency(currency), m_blockchain(blockchain) {
 }
 
 WalletTransferDetails::~WalletTransferDetails() {
@@ -64,30 +77,21 @@ bool WalletTransferDetails::getTransferDetailsIdxByKeyImage(const crypto::key_im
   return true;
 }
 
-bool WalletTransferDetails::isTxSpendtimeUnlocked(uint64_t unlockTime) const
-{
-  if(unlockTime < CRYPTONOTE_MAX_BLOCK_NUMBER) {
-    //interpret as block index
-    if(m_blockchain.size()-1 + CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS >= unlockTime)
-      return true;
-    else
-      return false;
-  }
-  else
-  {
-    //interpret as time
+bool WalletTransferDetails::isTxSpendtimeUnlocked(uint64_t unlockTime) const {
+  if (unlockTime < m_currency.maxBlockHeight()) {
+    // interpret as block index
+    return m_blockchain.size()-1 + m_currency.lockedTxAllowedDeltaBlocks() >= unlockTime;
+  } else {
+    // interpret as time
     uint64_t current_time = static_cast<uint64_t>(time(NULL));
-    if(current_time + CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS >= unlockTime)
-      return true;
-    else
-      return false;
+    return current_time + m_currency.lockedTxAllowedDeltaSeconds() >= unlockTime;
   }
   return false;
 }
 
 bool WalletTransferDetails::isTransferUnlocked(const TransferDetails& td) const
 {
-  if(!isTxSpendtimeUnlocked(td.tx.unlock_time))
+  if(!isTxSpendtimeUnlocked(td.tx.unlockTime))
     return false;
 
   if(td.blockHeight + DEFAULT_TX_SPENDABLE_AGE > m_blockchain.size())
@@ -118,7 +122,7 @@ uint64_t WalletTransferDetails::countPendingBalance() const
   return amount;
 }
 
-uint64_t WalletTransferDetails::selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<crypto::key_image>& selectedTransfers) {
+uint64_t WalletTransferDetails::selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<size_t>& selectedTransfers) {
   std::vector<size_t> unusedTransfers;
   std::vector<size_t> unusedDust;
 
@@ -146,7 +150,7 @@ uint64_t WalletTransferDetails::selectTransfersToSend(uint64_t neededMoney, bool
       idx = !unusedTransfers.empty() ? popRandomValue(randomGenerator, unusedTransfers) : popRandomValue(randomGenerator, unusedDust);
     }
 
-    selectedTransfers.push_back(m_transfers[idx].keyImage);
+    selectedTransfers.push_back(idx);
     foundMoney += m_transfers[idx].amount();
   }
 

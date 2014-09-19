@@ -24,9 +24,9 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-
-
 #pragma once
+
+#include <boost/numeric/conversion/bounds.hpp>
 
 #include "misc_language.h"
 #include "portable_storage_base.h"
