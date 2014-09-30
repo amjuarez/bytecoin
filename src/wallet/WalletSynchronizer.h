@@ -71,7 +71,7 @@ private:
   void processUnconfirmed(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t height, uint64_t timestamp);
   uint64_t processMyInputs(const cryptonote::Transaction& tx);
   void updateTransactionsCache(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t myOuts, uint64_t myInputs, uint64_t height,
-      bool isCoinbase, uint64_t timestamp);
+      bool isCoinbase, uint64_t timestamp, const crypto::public_key& publicKey);
   void detachBlockchain(uint64_t height);
   void refreshBalance(std::deque<std::shared_ptr<WalletEvent> >& events);
 

@@ -51,6 +51,7 @@ public:
 
   virtual void initAndGenerate(const std::string& password);
   virtual void initAndLoad(std::istream& source, const std::string& password);
+  virtual void initWithKeys(const AccountKeys& accountKeys, const std::string& password);
   virtual void shutdown();
 
   virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true);
@@ -70,9 +71,11 @@ public:
   virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction);
   virtual bool getTransfer(TransferId transferId, Transfer& transfer);
 
-  virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
-  virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
+  virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
+  virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
   virtual std::error_code cancelTransaction(size_t transactionId);
+
+  virtual void getAccountKeys(AccountKeys& keys);
 
   void startRefresh();
 
@@ -84,8 +87,8 @@ private:
   void doSave(std::ostream& destination, bool saveDetailed, bool saveCache);
   void doLoad(std::istream& source);
 
-  crypto::chacha8_iv encrypt(const std::string& plain, std::string& cipher);
-  void decrypt(const std::string& cipher, std::string& plain, crypto::chacha8_iv iv, const std::string& password);
+  crypto::chacha_iv encrypt(const std::string& plain, std::string& cipher);
+  void decrypt(const std::string& cipher, std::string& plain, crypto::chacha_iv iv, const std::string& password);
 
   void synchronizationCallback(WalletRequest::Callback callback, std::error_code ec);
   void sendTransactionCallback(WalletRequest::Callback callback, std::error_code ec);

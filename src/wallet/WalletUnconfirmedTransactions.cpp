@@ -17,6 +17,7 @@
 
 #include "WalletUnconfirmedTransactions.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "WalletUserTransactionsCache.h"
 
 namespace CryptoNote {
 
@@ -53,6 +54,27 @@ uint64_t WalletUnconfirmedTransactions::countPendingBalance() const
     amount+= utx.second.change;
 
   return amount;
+}
+
+void WalletUnconfirmedTransactions::synchronizeTransactionIds(const WalletUserTransactionsCache& transactionCache) {
+  size_t txCount = transactionCache.getTransactionCount();
+
+  for (size_t txId = 0; txId < txCount; ++txId) {
+    TransactionInfo txInfo;
+    if (!transactionCache.getTransaction(txId, txInfo)) {
+      continue;
+    }
+
+    crypto::hash hash;
+    std::copy(txInfo.hash.begin(), txInfo.hash.end(), reinterpret_cast<uint8_t *>(&hash));
+
+    auto it = m_unconfirmedTxs.find(hash);
+    if(it == m_unconfirmedTxs.end()) {
+      continue;
+    }
+
+    it->second.transactionId = txId;
+  }
 }
 
 } /* namespace CryptoNote */

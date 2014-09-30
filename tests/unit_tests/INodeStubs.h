@@ -46,7 +46,9 @@ public:
 class INodeTrivialRefreshStub : public INodeDummyStub
 {
 public:
-  INodeTrivialRefreshStub(TestBlockchainGenerator& generator) : m_lastHeight(1), m_blockchainGenerator(generator), m_nextTxError(false) {};
+  INodeTrivialRefreshStub(TestBlockchainGenerator& generator) : m_lastHeight(1), m_blockchainGenerator(generator), m_nextTxError(false), m_threadsCount(0) {};
+  INodeTrivialRefreshStub(const INodeTrivialRefreshStub&) = delete;
+  ~INodeTrivialRefreshStub();
 
   virtual uint64_t getLastLocalBlockHeight() const { return m_blockchainGenerator.getBlockchain().size() - 1; };
   virtual uint64_t getLastKnownBlockHeight() const { return m_blockchainGenerator.getBlockchain().size() - 1; };
@@ -59,14 +61,24 @@ public:
 
   virtual void startAlternativeChain(uint64_t height);
   virtual void setNextTransactionError();
+  virtual bool waitForThreadsFinish();
 
 private:
   void doGetNewBlocks(std::list<crypto::hash> knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback);
   void doGetTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback);
   void doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback);
   void doGetRandomOutsByAmounts(std::vector<uint64_t> amounts, uint64_t outsCount, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback);
+  cryptonote::block_complete_entry makeCompleteBlockEntry(cryptonote::Block const &block);
 
   uint64_t m_lastHeight;
   TestBlockchainGenerator& m_blockchainGenerator;
   bool m_nextTxError;
+
+  std::mutex m_mutex;
+  std::condition_variable m_cv;
+  uint32_t m_threadsCount;
+
+  void incThreadsCount();
+
+  void decThreadsCount();
 };

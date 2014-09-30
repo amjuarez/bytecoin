@@ -33,7 +33,9 @@ void throwIf(bool expr, cryptonote::error::WalletErrorCodes ec) {
 
 bool getTxPubKey(const cryptonote::Transaction& tx, crypto::public_key& key) {
   std::vector<cryptonote::tx_extra_field> extraFields;
-  cryptonote::parse_tx_extra(tx.extra, extraFields);
+  if (!cryptonote::parse_tx_extra(tx.extra, extraFields)) {
+    return false;
+  }
 
   cryptonote::tx_extra_pub_key pubKeyField;
   if(!cryptonote::find_tx_extra_field_by_type(extraFields, pubKeyField)) {
@@ -327,7 +329,7 @@ bool WalletSynchronizer::processNewTransaction(ProcessParameters& parameters, co
   if (!moneyInMyOuts && !moneyInMyInputs)
     return res; //There's nothing related to our account, skip it
 
-  updateTransactionsCache(parameters, tx, moneyInMyOuts, moneyInMyInputs, height, isCoinbase, timestamp);
+  updateTransactionsCache(parameters, tx, moneyInMyOuts, moneyInMyInputs, height, isCoinbase, timestamp, publicKey);
 
   return res;
 }
@@ -366,7 +368,7 @@ void WalletSynchronizer::fillGetTransactionOutsGlobalIndicesRequest(ProcessParam
   postGetTransactionOutsGlobalIndicesRequest(parameters, txid, insert_result.first->second.globalIndices, height);
 }
 
-void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t myOuts, uint64_t myInputs, uint64_t height, bool isCoinbase, uint64_t timestamp) {
+void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, const cryptonote::Transaction& tx, uint64_t myOuts, uint64_t myInputs, uint64_t height, bool isCoinbase, uint64_t timestamp, const crypto::public_key& publicKey) {
 
   uint64_t allOuts = countOverallTxOutputs(tx);
   uint64_t allInputs = countOverallTxInputs(tx);
@@ -382,6 +384,10 @@ void WalletSynchronizer::updateTransactionsCache(ProcessParameters& parameters, 
     transaction.blockHeight = height;
     transaction.isCoinbase = isCoinbase;
     transaction.timestamp = timestamp;
+    transaction.extra.assign(tx.extra.begin(), tx.extra.end());
+
+    const cryptonote::account_keys& keys = m_account.get_keys();
+    transaction.messages = cryptonote::get_messages_from_extra(tx.extra, publicKey, &keys);
 
     TransactionId newId = m_transactionsCache.insertTransaction(std::move(transaction));
 

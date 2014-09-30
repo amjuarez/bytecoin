@@ -238,7 +238,7 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, std::vector<uint8_t> extra, Transaction& tx, uint64_t unlock_time)
+  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const std::vector<tx_message_entry>& messages, const std::vector<uint8_t>& extra, uint64_t unlock_time, Transaction& tx)
   {
     tx.vin.clear();
     tx.vout.clear();
@@ -331,6 +331,22 @@ namespace cryptonote
     {
       LOG_ERROR("Transaction inputs money ("<< summary_inputs_money << ") less than outputs money (" << summary_outs_money << ")");
       return false;
+    }
+
+    for (size_t i = 0; i < messages.size(); i++) {
+      const tx_message_entry &msg = messages[i];
+      tx_extra_message tag;
+      if (!tag.encrypt(i, msg.message, msg.encrypt ? &msg.addr : NULL, txkey)) {
+        return false;
+      }
+      std::ostringstream oss;
+      binary_archive<true> ar(oss);
+      if (!::do_serialize(ar, tag)) {
+        return false;
+      }
+      std::string s = oss.str();
+      tx.extra.push_back(TX_EXTRA_MESSAGE_TAG);
+      tx.extra.insert(tx.extra.end(), s.begin(), s.end());
     }
 
 
@@ -670,4 +686,23 @@ namespace cryptonote
     return get_tx_tree_hash(txs_ids);
   }
   //---------------------------------------------------------------
+  std::vector<std::string> get_messages_from_extra(const std::vector<uint8_t> &extra, const crypto::public_key &txkey, const account_keys *recipient) {
+    std::vector<tx_extra_field> tx_extra_fields;
+    std::vector<std::string> result;
+    if (!parse_tx_extra(extra, tx_extra_fields)) {
+      return result;
+    }
+    size_t i = 0;
+    for (const tx_extra_field &f: tx_extra_fields) {
+      if (f.type() != typeid(tx_extra_message)) {
+        continue;
+      }
+      std::string res;
+      if (boost::get<tx_extra_message>(f).decrypt(i, txkey, recipient, res)) {
+        result.push_back(res);
+      }
+      ++i;
+    }
+    return result;
+  }
 }

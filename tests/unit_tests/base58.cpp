@@ -487,13 +487,14 @@ TEST(parseAccountAddressString, fails_on_invalid_address_format)
   ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
 }
 
-TEST(parseAccountAddressString, fails_on_invalid_address_prefix)
+TEST(parseAccountAddressString, handles_other_address_prefix)
 {
   std::string addr_str = base58::encode_addr(0, test_serialized_keys);
 
   uint64_t prefix;
   cryptonote::AccountPublicAddress addr;
-  ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
+  ASSERT_TRUE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
+  ASSERT_EQ(0, prefix);
 }
 
 TEST(parseAccountAddressString, fails_on_invalid_address_content)

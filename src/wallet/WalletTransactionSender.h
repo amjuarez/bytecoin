@@ -38,13 +38,12 @@ public:
   void init(cryptonote::account_keys keys);
   void stop();
 
-  std::shared_ptr<WalletRequest> makeSendRequest(TransactionId& transactionId, std::deque<std::shared_ptr<WalletEvent> >& events, const std::vector<Transfer>& transfers,
-      uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
+  std::shared_ptr<WalletRequest> makeSendRequest(TransactionId& transactionId, std::deque<std::shared_ptr<WalletEvent> >& events, const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
 
 private:
   std::shared_ptr<WalletRequest> makeGetRandomOutsRequest(std::shared_ptr<SendTransactionContext> context);
   std::shared_ptr<WalletRequest> doSendTransaction(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events);
-  void prepareInputs(const std::list<size_t>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
+  void prepareInputs(const std::list<crypto::key_image>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
       std::vector<cryptonote::tx_source_entry>& sources, uint64_t mixIn);
   void splitDestinations(TransferId firstTransferId, size_t transfersCount, const cryptonote::tx_destination_entry& changeDts,
       const TxDustPolicy& dustPolicy, std::vector<cryptonote::tx_destination_entry>& splittedDests);
@@ -52,9 +51,11 @@ private:
     std::vector<cryptonote::tx_destination_entry>& splitted_dsts, uint64_t& dust);
   void sendTransactionRandomOutsByAmount(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events,
       boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec);
-  void relayTransactionCallback(TransactionId txId, std::deque<std::shared_ptr<WalletEvent> >& events,
+  void relayTransactionCallback(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events,
                                 boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec);
   void notifyBalanceChanged(std::deque<std::shared_ptr<WalletEvent> >& events);
+  void markOutputsSpent(const std::list<crypto::key_image>& selectedTransfers);
+  void makeOutputsNotSpent(const std::list<crypto::key_image>& selectedTransfers);
   void validateTransfersAddresses(const std::vector<Transfer>& transfers);
   bool validateDestinationAddress(const std::string& address);
 
@@ -68,6 +69,8 @@ private:
 
   bool m_isInitialized;
   bool m_isStoping;
+
+  void removeUnconfirmedTx(TransactionId txId);
 };
 
 } /* namespace CryptoNote */

@@ -21,7 +21,7 @@
 
 #include "serialization.h"
 #include "debug_archive.h"
-#include "crypto/chacha8.h"
+#include "crypto/chacha.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 
@@ -64,7 +64,7 @@ bool do_serialize(Archive<true> &ar, std::vector<crypto::signature> &v)
   return true;
 }
 
-BLOB_SERIALIZER(crypto::chacha8_iv);
+BLOB_SERIALIZER(crypto::chacha_iv);
 BLOB_SERIALIZER(crypto::hash);
 BLOB_SERIALIZER(crypto::public_key);
 BLOB_SERIALIZER(crypto::secret_key);

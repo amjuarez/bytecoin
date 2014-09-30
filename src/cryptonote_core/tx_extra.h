@@ -31,6 +31,7 @@
 #define TX_EXTRA_TAG_PUBKEY                 0x01
 #define TX_EXTRA_NONCE                      0x02
 #define TX_EXTRA_MERGE_MINING_TAG           0x03
+#define TX_EXTRA_MESSAGE_TAG                0x04
 
 #define TX_EXTRA_NONCE_PAYMENT_ID           0x00
 
@@ -150,14 +151,31 @@ namespace cryptonote
     }
   };
 
+  struct AccountPublicAddress;
+  struct KeyPair;
+  struct account_keys;
+
+  struct tx_extra_message {
+
+    std::string data;
+
+    bool encrypt(std::size_t index, const std::string &message, const AccountPublicAddress* recipient, const KeyPair &txkey);
+    bool decrypt(std::size_t index, const crypto::public_key &txkey, const account_keys *recipient, std::string &message) const;
+
+    BEGIN_SERIALIZE()
+      FIELD(data)
+    END_SERIALIZE()
+  };
+
   // tx_extra_field format, except tx_extra_padding and tx_extra_pub_key:
   //   varint tag;
   //   varint size;
   //   varint data[];
-  typedef boost::variant<tx_extra_padding, tx_extra_pub_key, tx_extra_nonce, tx_extra_merge_mining_tag> tx_extra_field;
+  typedef boost::variant<tx_extra_padding, tx_extra_pub_key, tx_extra_nonce, tx_extra_merge_mining_tag, tx_extra_message> tx_extra_field;
 }
 
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_padding, TX_EXTRA_TAG_PADDING);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_pub_key, TX_EXTRA_TAG_PUBKEY);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_nonce, TX_EXTRA_NONCE);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_merge_mining_tag, TX_EXTRA_MERGE_MINING_TAG);
+VARIANT_TAG(binary_archive, cryptonote::tx_extra_message, TX_EXTRA_MESSAGE_TAG);

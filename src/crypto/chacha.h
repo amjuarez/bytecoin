@@ -20,8 +20,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define CHACHA8_KEY_SIZE 32
-#define CHACHA8_IV_SIZE 8
+#define CHACHA_KEY_SIZE 32
+#define CHACHA_IV_SIZE 8
 
 #if defined(__cplusplus)
 #include <memory.h>
@@ -31,34 +31,34 @@
 namespace crypto {
   extern "C" {
 #endif
-    void chacha8(const void* data, size_t length, const uint8_t* key, const uint8_t* iv, char* cipher);
+    void chacha(size_t doubleRounds, const void* data, size_t length, const uint8_t* key, const uint8_t* iv, char* cipher);
 #if defined(__cplusplus)
   }
 
 #pragma pack(push, 1)
-  struct chacha8_key {
-    uint8_t data[CHACHA8_KEY_SIZE];
+  struct chacha_key {
+    uint8_t data[CHACHA_KEY_SIZE];
 
-    ~chacha8_key()
+    ~chacha_key()
     {
       memset(data, 0, sizeof(data));
     }
   };
 
-  // MS VC 2012 doesn't interpret `class chacha8_iv` as POD in spite of [9.0.10], so it is a struct
-  struct chacha8_iv {
-    uint8_t data[CHACHA8_IV_SIZE];
+  // MS VC 2012 doesn't interpret `class chacha_iv` as POD in spite of [9.0.10], so it is a struct
+  struct chacha_iv {
+    uint8_t data[CHACHA_IV_SIZE];
   };
 #pragma pack(pop)
 
-  static_assert(sizeof(chacha8_key) == CHACHA8_KEY_SIZE && sizeof(chacha8_iv) == CHACHA8_IV_SIZE, "Invalid structure size");
+  static_assert(sizeof(chacha_key) == CHACHA_KEY_SIZE && sizeof(chacha_iv) == CHACHA_IV_SIZE, "Invalid structure size");
 
-  inline void chacha8(const void* data, std::size_t length, const chacha8_key& key, const chacha8_iv& iv, char* cipher) {
-    chacha8(data, length, reinterpret_cast<const uint8_t*>(&key), reinterpret_cast<const uint8_t*>(&iv), cipher);
+  inline void chacha8(const void* data, std::size_t length, const chacha_key& key, const chacha_iv& iv, char* cipher) {
+    chacha(4, data, length, reinterpret_cast<const uint8_t*>(&key), reinterpret_cast<const uint8_t*>(&iv), cipher);
   }
 
-  inline void generate_chacha8_key(crypto::cn_context &context, std::string password, chacha8_key& key) {
-    static_assert(sizeof(chacha8_key) <= sizeof(hash), "Size of hash must be at least that of chacha8_key");
+  inline void generate_chacha8_key(crypto::cn_context &context, std::string password, chacha_key& key) {
+    static_assert(sizeof(chacha_key) <= sizeof(hash), "Size of hash must be at least that of chacha_key");
     crypto::hash pwd_hash;
     crypto::cn_slow_hash(context, password.data(), password.size(), pwd_hash);
     memcpy(&key, &pwd_hash, sizeof(key));

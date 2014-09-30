@@ -122,7 +122,7 @@ uint64_t WalletTransferDetails::countPendingBalance() const
   return amount;
 }
 
-uint64_t WalletTransferDetails::selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<size_t>& selectedTransfers) {
+uint64_t WalletTransferDetails::selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<crypto::key_image>& selectedTransfers) {
   std::vector<size_t> unusedTransfers;
   std::vector<size_t> unusedDust;
 
@@ -150,7 +150,7 @@ uint64_t WalletTransferDetails::selectTransfersToSend(uint64_t neededMoney, bool
       idx = !unusedTransfers.empty() ? popRandomValue(randomGenerator, unusedTransfers) : popRandomValue(randomGenerator, unusedDust);
     }
 
-    selectedTransfers.push_back(idx);
+    selectedTransfers.push_back(m_transfers[idx].keyImage);
     foundMoney += m_transfers[idx].amount();
   }
 

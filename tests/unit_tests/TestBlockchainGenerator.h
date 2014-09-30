@@ -38,6 +38,7 @@ public:
   bool getBlockRewardForAddress(const cryptonote::AccountPublicAddress& address);
   void addTxToBlockchain(const cryptonote::Transaction& transaction);
   bool getTransactionByHash(const crypto::hash& hash, cryptonote::Transaction& tx);
+  void startAlternativeChain(uint64_t height);
 
 private:
   const cryptonote::Currency& m_currency;
@@ -45,4 +46,5 @@ private:
   cryptonote::account_base miner_acc;
   std::vector<cryptonote::Block> m_blockchain;
   std::unordered_map<crypto::hash, cryptonote::Transaction> m_txs;
+  std::mutex mutex;
 };

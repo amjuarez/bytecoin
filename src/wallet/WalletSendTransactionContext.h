@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "cryptonote_core/cryptonote_basic.h"
+#include "cryptonote_core/cryptonote_format_utils.h"
 #include "IWallet.h"
 
 namespace CryptoNote {
@@ -44,10 +45,11 @@ struct SendTransactionContext
   TransactionId transactionId;
   std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount> outs;
   uint64_t foundMoney;
-  std::list<size_t> selectedTransfers;
+  std::list<crypto::key_image> selectedTransfers;
   uint64_t unlockTimestamp;
   TxDustPolicy dustPolicy;
   uint64_t mixIn;
+  std::vector<cryptonote::tx_message_entry> messages;
 };
 
 } //namespace CryptoNote

@@ -1,3 +1,7 @@
+Release notes 1.0.1
+
+- Encrypted messages implementation
+
 Release notes 1.0.0
 
 - DarkNote

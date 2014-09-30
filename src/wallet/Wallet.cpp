@@ -118,13 +118,58 @@ void Wallet::initAndGenerate(const std::string& password) {
     std::unique_lock<std::mutex> stateLock(m_cacheMutex);
 
     if (m_state != NOT_INITIALIZED) {
-      throw std::system_error(make_error_code(cryptonote::error::NOT_INITIALIZED));
+      throw std::system_error(make_error_code(cryptonote::error::ALREADY_INITIALIZED));
     }
 
     m_node.addObserver(m_autoRefresher.get());
     addObserver(m_autoRefresher.get());
 
     m_account.generate();
+    m_password = password;
+
+    m_sender.init(m_account.get_keys());
+
+    storeGenesisBlock();
+
+    m_state = INITIALIZED;
+  }
+
+  m_observerManager.notify(&IWalletObserver::initCompleted, std::error_code());
+  refresh();
+}
+
+void Wallet::initWithKeys(const AccountKeys& accountKeys, const std::string& password) {
+  {
+    std::unique_lock<std::mutex> stateLock(m_cacheMutex);
+
+    if (m_state != NOT_INITIALIZED) {
+      throw std::system_error(make_error_code(cryptonote::error::ALREADY_INITIALIZED));
+    }
+
+    m_node.addObserver(m_autoRefresher.get());
+    addObserver(m_autoRefresher.get());
+
+    cryptonote::account_keys keys;
+
+    std::copy(accountKeys.spendPublicKey.begin(),
+        accountKeys.spendPublicKey.end(),
+        reinterpret_cast<uint8_t *>(&keys.m_account_address.m_spendPublicKey));
+
+    std::copy(accountKeys.viewPublicKey.begin(),
+        accountKeys.viewPublicKey.end(),
+        reinterpret_cast<uint8_t *>(&keys.m_account_address.m_viewPublicKey));
+
+    std::copy(accountKeys.spendSecretKey.begin(),
+        accountKeys.spendSecretKey.end(),
+        reinterpret_cast<uint8_t *>(&keys.m_spend_secret_key));
+
+    std::copy(accountKeys.viewSecretKey.begin(),
+        accountKeys.viewSecretKey.end(),
+        reinterpret_cast<uint8_t *>(&keys.m_view_secret_key));
+
+    m_account.set_keys(keys);
+    m_account.set_createtime(0);
+
     m_password = password;
 
     m_sender.init(m_account.get_keys());
@@ -166,7 +211,7 @@ void Wallet::doLoad(std::istream& source) {
 
     boost::archive::binary_iarchive ar(source);
 
-    crypto::chacha8_iv iv;
+    crypto::chacha_iv iv;
     std::string chacha_str;;
     ar >> chacha_str;
 
@@ -195,11 +240,16 @@ void Wallet::doLoad(std::istream& source) {
       m_transferDetails.load(dataArchive);
       m_unconfirmedTransactions.load(dataArchive);
       m_transactionsCache.load(dataArchive);
+
+      m_unconfirmedTransactions.synchronizeTransactionIds(m_transactionsCache);
     }
     catch (std::exception&) {
       throw std::system_error(make_error_code(cryptonote::error::WRONG_PASSWORD));
     }
 
+    if (m_blockchain.empty()) {
+      storeGenesisBlock();
+    }
     m_sender.init(m_account.get_keys());
   }
   catch (std::system_error& e) {
@@ -220,8 +270,8 @@ void Wallet::doLoad(std::istream& source) {
   refresh();
 }
 
-void Wallet::decrypt(const std::string& cipher, std::string& plain, crypto::chacha8_iv iv, const std::string& password) {
-  crypto::chacha8_key key;
+void Wallet::decrypt(const std::string& cipher, std::string& plain, crypto::chacha_iv iv, const std::string& password) {
+  crypto::chacha_key key;
   crypto::cn_context context;
   crypto::generate_chacha8_key(context, password, key);
 
@@ -295,7 +345,7 @@ void Wallet::doSave(std::ostream& destination, bool saveDetailed, bool saveCache
     std::string plain = original.str();
     std::string cipher;
 
-    crypto::chacha8_iv iv = encrypt(plain, cipher);
+    crypto::chacha_iv iv = encrypt(plain, cipher);
 
     std::string chacha_str;
     ::serialization::dump_binary(iv, chacha_str);
@@ -318,14 +368,14 @@ void Wallet::doSave(std::ostream& destination, bool saveDetailed, bool saveCache
   m_observerManager.notify(&IWalletObserver::saveCompleted, std::error_code());
 }
 
-crypto::chacha8_iv Wallet::encrypt(const std::string& plain, std::string& cipher) {
-  crypto::chacha8_key key;
+crypto::chacha_iv Wallet::encrypt(const std::string& plain, std::string& cipher) {
+  crypto::chacha_key key;
   crypto::cn_context context;
   crypto::generate_chacha8_key(context, m_password, key);
 
   cipher.resize(plain.size());
 
-  crypto::chacha8_iv iv = crypto::rand<crypto::chacha8_iv>();
+  crypto::chacha_iv iv = crypto::rand<crypto::chacha_iv>();
   crypto::chacha8(plain.data(), plain.size(), key, iv, &cipher[0]);
 
   return iv;
@@ -409,21 +459,21 @@ bool Wallet::getTransfer(TransferId transferId, Transfer& transfer) {
   return m_transactionsCache.getTransfer(transferId, transfer);
 }
 
-TransactionId Wallet::sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra, uint64_t mixIn, uint64_t unlockTimestamp) {
+TransactionId Wallet::sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra, uint64_t mixIn, uint64_t unlockTimestamp, const std::vector<TransactionMessage>& messages) {
   std::vector<Transfer> transfers;
   transfers.push_back(transfer);
 
-  return sendTransaction(transfers, fee, extra, mixIn, unlockTimestamp);
+  return sendTransaction(transfers, fee, extra, mixIn, unlockTimestamp, messages);
 }
 
-TransactionId Wallet::sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra, uint64_t mixIn, uint64_t unlockTimestamp) {
+TransactionId Wallet::sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra, uint64_t mixIn, uint64_t unlockTimestamp, const std::vector<TransactionMessage>& messages) {
   TransactionId txId = 0;
   std::shared_ptr<WalletRequest> request;
   std::deque<std::shared_ptr<WalletEvent> > events;
 
   {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
-    request = m_sender.makeSendRequest(txId, events, transfers, fee, extra, mixIn, unlockTimestamp);
+    request = m_sender.makeSendRequest(txId, events, transfers, fee, extra, mixIn, unlockTimestamp, messages);
   }
 
   notifyClients(events);
@@ -525,6 +575,29 @@ void Wallet::notifyClients(std::deque<std::shared_ptr<WalletEvent> >& events) {
     event->notify(m_observerManager);
     events.pop_front();
   }
+}
+
+void Wallet::getAccountKeys(AccountKeys& keys) {
+  if (m_state == NOT_INITIALIZED) {
+    throw std::system_error(make_error_code(cryptonote::error::NOT_INITIALIZED));
+  }
+
+  const cryptonote::account_keys& accountKeys = m_account.get_keys();
+  std::copy(reinterpret_cast<const uint8_t*>(&accountKeys.m_account_address.m_spendPublicKey),
+      reinterpret_cast<const uint8_t*>(&accountKeys.m_account_address.m_spendPublicKey) + sizeof(crypto::public_key),
+      keys.spendPublicKey.begin());
+
+  std::copy(reinterpret_cast<const uint8_t*>(&accountKeys.m_spend_secret_key),
+      reinterpret_cast<const uint8_t*>(&accountKeys.m_spend_secret_key) + sizeof(crypto::secret_key),
+      keys.spendSecretKey.begin());
+
+  std::copy(reinterpret_cast<const uint8_t*>(&accountKeys.m_account_address.m_viewPublicKey),
+      reinterpret_cast<const uint8_t*>(&accountKeys.m_account_address.m_viewPublicKey) + sizeof(crypto::public_key),
+      keys.viewPublicKey.begin());
+
+  std::copy(reinterpret_cast<const uint8_t*>(&accountKeys.m_view_secret_key),
+      reinterpret_cast<const uint8_t*>(&accountKeys.m_view_secret_key) + sizeof(crypto::secret_key),
+      keys.viewSecretKey.begin());
 }
 
 } //namespace CryptoNote

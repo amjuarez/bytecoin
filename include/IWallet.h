@@ -41,6 +41,12 @@ const TransactionId INVALID_TRANSACTION_ID    = std::numeric_limits<TransactionI
 const TransferId INVALID_TRANSFER_ID          = std::numeric_limits<TransferId>::max();
 const uint64_t UNCONFIRMED_TRANSACTION_HEIGHT = std::numeric_limits<uint64_t>::max();
 
+struct TransactionMessage
+{
+  std::string message;
+  std::string address;
+};
+
 struct TransactionInfo {
   TransferId      firstTransferId;
   size_t          transferCount;
@@ -51,6 +57,17 @@ struct TransactionInfo {
   uint64_t        blockHeight;
   uint64_t        timestamp;
   std::string     extra;
+  std::vector<std::string> messages;
+};
+
+typedef std::array<uint8_t, 32> PublicKey;
+typedef std::array<uint8_t, 32> SecretKey;
+
+struct AccountKeys {
+  PublicKey viewPublicKey;
+  SecretKey viewSecretKey;
+  PublicKey spendPublicKey;
+  SecretKey spendSecretKey;
 };
 
 class IWalletObserver {
@@ -73,6 +90,7 @@ public:
 
   virtual void initAndGenerate(const std::string& password) = 0;
   virtual void initAndLoad(std::istream& source, const std::string& password) = 0;
+  virtual void initWithKeys(const AccountKeys& accountKeys, const std::string& password) = 0;
   virtual void shutdown() = 0;
 
   virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true) = 0;
@@ -92,9 +110,11 @@ public:
   virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction) = 0;
   virtual bool getTransfer(TransferId transferId, Transfer& transfer) = 0;
 
-  virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) = 0;
-  virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) = 0;
+  virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) = 0;
+  virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) = 0;
   virtual std::error_code cancelTransaction(size_t transferId) = 0;
+
+  virtual void getAccountKeys(AccountKeys& keys) = 0;
 };
 
 }

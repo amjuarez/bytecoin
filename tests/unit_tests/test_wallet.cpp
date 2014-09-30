@@ -29,91 +29,109 @@
 #include "INodeStubs.h"
 #include "TestBlockchainGenerator.h"
 
+namespace {
+class Event {
+private:
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool available;
+
+public:
+  Event() : available(false) {}
+
+  void notify() {
+    std::unique_lock<std::mutex> lck(mtx);
+    available = true;
+    cv.notify_one();
+  }
+
+  void wait() {
+    std::unique_lock<std::mutex> lck(mtx);
+    cv.wait(lck, [this]() { return available; });
+    available = false;
+  }
+
+  bool wait_for(const std::chrono::milliseconds& rel_time) {
+    std::unique_lock<std::mutex> lck(mtx);
+    auto result = cv.wait_for(lck, rel_time, [this]() { return available; });
+    available = false;
+    return result;
+  }
+};
+}
+
+
 class TrivialWalletObserver : public CryptoNote::IWalletObserver
 {
 public:
   TrivialWalletObserver() {}
 
-  bool waitForSyncEnd() {
-    auto future = syncPromise.get_future();
-    return future.wait_for(std::chrono::seconds(3)) == std::future_status::ready;
+  bool waitForSyncEnd(std::error_code& ec) {
+    if (!synced.wait_for(std::chrono::milliseconds(3000))) return false;
+    ec = syncResult;
+    return true;
   }
 
   bool waitForSendEnd(std::error_code& ec) {
-    auto future = sendPromise.get_future();
-
-    if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
-      return false;
-    }
-
-    ec = future.get();
+    if (!sent.wait_for(std::chrono::milliseconds(5000))) return false;
+    ec = sendResult;
     return true;
-
   }
 
   bool waitForSaveEnd(std::error_code& ec) {
-    auto future = savePromise.get_future();
-
-    if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
-      return false;
-    }
-
-    ec = future.get();
+    if (!saved.wait_for(std::chrono::milliseconds(5000))) return false;
+    ec = saveResult;
     return true;
   }
 
   bool waitForLoadEnd(std::error_code& ec) {
-    auto future = loadPromise.get_future();
-
-    if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
-      return false;
-    }
-
-    ec = future.get();
+    if (!loaded.wait_for(std::chrono::milliseconds(5000))) return false;
+    ec = loadResult;
     return true;
-  }
-
-  void reset() {
-    syncPromise = std::promise<void>();
-    sendPromise = std::promise<std::error_code>();
-    savePromise = std::promise<std::error_code>();
-    loadPromise = std::promise<std::error_code>();
   }
 
   virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total, std::error_code result) {
     if (result) {
-      syncPromise.set_value();
+      syncResult = result;
+      synced.notify();
       return;
     }
 
     if (current == total) {
-      syncPromise.set_value();
+      syncResult = result;
+      synced.notify();
     }
   }
 
   virtual void sendTransactionCompleted(CryptoNote::TransactionId transactionId, std::error_code result) {
-    sendPromise.set_value(result);
+    sendResult = result;
+    sent.notify();
   }
 
   virtual void saveCompleted(std::error_code result) {
-    savePromise.set_value(result);
+    saveResult = result;
+    saved.notify();
   }
 
   virtual void initCompleted(std::error_code result) {
-    loadPromise.set_value(result);
+    loadResult = result;
+    loaded.notify();
   }
 
   virtual void actualBalanceUpdated(uint64_t actualBalance) {
-//    std::cout << "actual balance: " << actualBalance << std::endl;
   }
   virtual void pendingBalanceUpdated(uint64_t pendingBalance) {
-//    std::cout << "pending balance: " << pendingBalance << std::endl;
   }
 
-  std::promise<void> syncPromise;
-  std::promise<std::error_code> sendPromise;
-  std::promise<std::error_code> savePromise;
-  std::promise<std::error_code> loadPromise;
+  std::error_code sendResult;
+  std::error_code saveResult;
+  std::error_code loadResult;
+  std::error_code syncResult;
+
+  Event synced;
+  Event saved;
+  Event loaded;
+  Event sent;
 };
 
 struct SaveOnInitWalletObserver: public CryptoNote::IWalletObserver {
@@ -130,35 +148,42 @@ struct SaveOnInitWalletObserver: public CryptoNote::IWalletObserver {
 
 static const uint64_t TEST_BLOCK_REWARD = cryptonote::START_BLOCK_REWARD;
 
-CryptoNote::TransactionId TransferMoney(CryptoNote::Wallet& from, CryptoNote::Wallet& to, int64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "") {
+CryptoNote::TransactionId TransferMoney(CryptoNote::Wallet& from, CryptoNote::Wallet& to, int64_t amount, uint64_t fee,
+    uint64_t mixIn = 0, const std::string& extra = "", const std::vector<CryptoNote::TransactionMessage>& messages = std::vector<CryptoNote::TransactionMessage>()) {
   CryptoNote::Transfer transfer;
   transfer.amount = amount;
   transfer.address = to.getAddress();
 
-  return from.sendTransaction(transfer, fee, extra, mixIn);
+  return from.sendTransaction(transfer, fee, extra, mixIn, 0, messages);
 }
 
 void WaitWalletSync(TrivialWalletObserver* observer) {
-  observer->reset();
-  ASSERT_TRUE(observer->waitForSyncEnd());
+  std::error_code ec;
+  ASSERT_TRUE(observer->waitForSyncEnd(ec));
+  ASSERT_FALSE(ec);
 }
 
 void WaitWalletSend(TrivialWalletObserver* observer) {
   std::error_code ec;
-  observer->reset();
   ASSERT_TRUE(observer->waitForSendEnd(ec));
+  ASSERT_FALSE(ec);
 }
 
 void WaitWalletSend(TrivialWalletObserver* observer, std::error_code& ec) {
-  observer->reset();
   ASSERT_TRUE(observer->waitForSendEnd(ec));
 }
 
 void WaitWalletSave(TrivialWalletObserver* observer) {
-  observer->reset();
   std::error_code ec;
 
   ASSERT_TRUE(observer->waitForSaveEnd(ec));
+  EXPECT_FALSE(ec);
+}
+
+void WaitWalletLoad(TrivialWalletObserver* observer) {
+  std::error_code ec;
+
+  ASSERT_TRUE(observer->waitForLoadEnd(ec));
   EXPECT_FALSE(ec);
 }
 
@@ -176,6 +201,7 @@ protected:
   void prepareCarolWallet();
 
   void GetOneBlockReward(CryptoNote::Wallet& wallet);
+  void GenerateOneBlockRewardAndUnlock();
 
   void TestSendMoney(int64_t transferAmount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "");
   void performTransferWithErrorTx(const std::array<int64_t, 5>& amounts, uint64_t fee);
@@ -230,6 +256,14 @@ void WalletApi::GetOneBlockReward(CryptoNote::Wallet& wallet) {
   cryptonote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(wallet.getAddress(), address));
   generator.getBlockRewardForAddress(address);
+}
+
+//may be called only after prepareAliceWallet and alice->initAndGenerate
+void WalletApi::GenerateOneBlockRewardAndUnlock() {
+  ASSERT_NO_FATAL_FAILURE(GetOneBlockReward(*alice));
+  generator.generateEmptyBlocks(10);
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 }
 
 void WalletApi::performTransferWithErrorTx(const std::array<int64_t, 5>& amounts, uint64_t fee) {
@@ -314,8 +348,6 @@ void WalletApi::TestSendMoney(int64_t transferAmount, uint64_t fee, uint64_t mix
 }
 
 void WaitWalletLoad(TrivialWalletObserver* observer, std::error_code& ec) {
-  observer->reset();
-
   ASSERT_TRUE(observer->waitForLoadEnd(ec));
 }
 
@@ -341,34 +373,6 @@ TEST_F(WalletApi, refreshWithMoney) {
 
   alice->startRefresh();
 
-  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
-
-  EXPECT_EQ(alice->actualBalance(), 0);
-  EXPECT_EQ(alice->pendingBalance(), TEST_BLOCK_REWARD);
-
-  alice->shutdown();
-}
-
-TEST_F(WalletApi, initWithMoney) {
-  std::stringstream archive;
-
-  alice->initAndGenerate("pass");
-  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
-  alice->save(archive, true, true);
-  ASSERT_NO_FATAL_FAILURE(WaitWalletSave(aliceWalletObserver.get()));
-
-  ASSERT_EQ(alice->actualBalance(), 0);
-  ASSERT_EQ(alice->pendingBalance(), 0);
-
-  cryptonote::AccountPublicAddress address;
-  ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
-
-  alice->shutdown();
-
-  generator.getBlockRewardForAddress(address);
-
-  prepareAliceWallet();
-  alice->initAndLoad(archive, "pass");
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
   EXPECT_EQ(alice->actualBalance(), 0);
@@ -405,6 +409,10 @@ TEST_F(WalletApi, TransactionsAndTransfersAfterSend) {
   int64_t amount2 = 1234500;
   ASSERT_NO_FATAL_FAILURE(TransferMoney(*alice, *bob, amount2, fee, 0));
   ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+ 
+  generator.generateEmptyBlocks(10);
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
   int64_t amount3 = 1234567;
   ASSERT_NO_FATAL_FAILURE(TransferMoney(*alice, *bob, amount3, fee, 0));
@@ -423,28 +431,28 @@ TEST_F(WalletApi, TransactionsAndTransfersAfterSend) {
 
   //Transaction with id = 0 is tested in getTransactionSuccess
   ASSERT_TRUE(alice->getTransaction(1, tx));
-  EXPECT_EQ(tx.totalAmount, amount1 + fee);
+  EXPECT_EQ(tx.totalAmount, -(amount1 + fee));
   EXPECT_EQ(tx.fee, fee);
   EXPECT_EQ(tx.isCoinbase, false);
   EXPECT_EQ(tx.firstTransferId, 0);
   EXPECT_EQ(tx.transferCount, 1);
 
   ASSERT_TRUE(alice->getTransaction(2, tx));
-  EXPECT_EQ(tx.totalAmount, amount2 + fee);
+  EXPECT_EQ(tx.totalAmount, -(amount2 + fee));
   EXPECT_EQ(tx.fee, fee);
   EXPECT_EQ(tx.isCoinbase, false);
   EXPECT_EQ(tx.firstTransferId, 1);
   EXPECT_EQ(tx.transferCount, 1);
 
   ASSERT_TRUE(alice->getTransaction(3, tx));
-  EXPECT_EQ(tx.totalAmount, amount3 + fee);
+  EXPECT_EQ(tx.totalAmount, -(amount3 + fee));
   EXPECT_EQ(tx.fee, fee);
   EXPECT_EQ(tx.isCoinbase, false);
   EXPECT_EQ(tx.firstTransferId, 2);
   EXPECT_EQ(tx.transferCount, 1);
 
   ASSERT_TRUE(alice->getTransaction(4, tx));
-  EXPECT_EQ(tx.totalAmount, amount4 + fee);
+  EXPECT_EQ(tx.totalAmount, -(amount4 + fee));
   EXPECT_EQ(tx.fee, fee);
   EXPECT_EQ(tx.isCoinbase, false);
   EXPECT_EQ(tx.firstTransferId, 3);
@@ -538,13 +546,13 @@ TEST_F(WalletApi, saveAndLoadCacheDetails) {
 
   CryptoNote::TransactionInfo tx;
   ASSERT_TRUE(alice->getTransaction(1, tx));
-  EXPECT_EQ(tx.totalAmount, amount1 + amount2 + fee);
+  EXPECT_EQ(tx.totalAmount, -(amount1 + amount2 + fee));
   EXPECT_EQ(tx.fee, fee);
   EXPECT_EQ(tx.firstTransferId, 0);
   EXPECT_EQ(tx.transferCount, 2);
 
   ASSERT_TRUE(alice->getTransaction(2, tx));
-  EXPECT_EQ(tx.totalAmount, amount3 + fee);
+  EXPECT_EQ(tx.totalAmount, -(amount3 + fee));
   EXPECT_EQ(tx.fee, fee);
   EXPECT_EQ(tx.firstTransferId, 2);
   EXPECT_EQ(tx.transferCount, 1);
@@ -684,13 +692,15 @@ TEST_F(WalletApi, detachBlockchain) {
   alice->startRefresh();
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
+  ASSERT_TRUE(aliceNode->waitForThreadsFinish());
+
   aliceNode->startAlternativeChain(3);
   generator.generateEmptyBlocks(10);
   alice->startRefresh();
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
-  EXPECT_EQ(alice->actualBalance(), 0);
-  EXPECT_EQ(alice->pendingBalance(), 0);
+  EXPECT_EQ(0, alice->actualBalance());
+  EXPECT_EQ(0, alice->pendingBalance());
 
   alice->shutdown();
 }
@@ -741,7 +751,7 @@ TEST_F(WalletApi, saveAndLoadErroneousTxsCacheDetails) {
 
   CryptoNote::TransactionInfo tx;
   ASSERT_TRUE(alice->getTransaction(1, tx));
-  EXPECT_EQ(tx.totalAmount, amounts[3] + amounts[4] + fee);
+  EXPECT_EQ(tx.totalAmount, -(amounts[3] + amounts[4] + fee));
   EXPECT_EQ(tx.firstTransferId, 0);
   EXPECT_EQ(tx.transferCount, 2);
 
@@ -803,9 +813,225 @@ TEST_F(WalletApi, saveAndLoadErroneousTxsCacheNoDetails) {
 
   CryptoNote::TransactionInfo tx;
   ASSERT_TRUE(alice->getTransaction(1, tx));
-  EXPECT_EQ(tx.totalAmount, amounts[3] + amounts[4] + fee);
+  EXPECT_EQ(tx.totalAmount, -(amounts[3] + amounts[4] + fee));
   EXPECT_EQ(tx.firstTransferId, CryptoNote::INVALID_TRANSFER_ID);
+
   EXPECT_EQ(tx.transferCount, 0);
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, mineSaveNoCacheNoDetailsRefresh) {
+  alice->initAndGenerate("pass");
+
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  cryptonote::AccountPublicAddress address;
+  ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
+  generator.getBlockRewardForAddress(address);
+  generator.getBlockRewardForAddress(address);
+  generator.getBlockRewardForAddress(address);
+
+  alice->startRefresh();
+
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  std::stringstream archive;
+  alice->save(archive, false, false);
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSave(aliceWalletObserver.get()));
+
+  alice->shutdown();
+
+  prepareAliceWallet();
+  alice->initAndLoad(archive, "pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletLoad(aliceWalletObserver.get()));
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD*3, alice->pendingBalance());
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, sendMoneyToMyself) {
+  alice->initAndGenerate("pass");
+
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  cryptonote::AccountPublicAddress address;
+  ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
+  generator.getBlockRewardForAddress(address);
+  generator.generateEmptyBlocks(10);
+
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  CryptoNote::TransactionId txId = TransferMoney(*alice, *alice, 100000000, 100);
+  ASSERT_NE(txId, CryptoNote::INVALID_TRANSACTION_ID);
+  generator.generateEmptyBlocks(10);
+
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD - 100, alice->pendingBalance());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, checkPendingBalanceAfterSend) {
+  alice->initAndGenerate("pass");
+
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  cryptonote::AccountPublicAddress address;
+  ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
+  generator.getBlockRewardForAddress(address);
+  generator.generateEmptyBlocks(10);
+
+  alice->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  const uint64_t sendAmount = 100000000;
+  const uint64_t fee = 100;
+  CryptoNote::TransactionId txId = TransferMoney(*alice, *alice, sendAmount, fee);
+  ASSERT_NE(txId, CryptoNote::INVALID_TRANSACTION_ID);
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD - sendAmount - fee, alice->pendingBalance());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, sendMessage) {
+  prepareBobWallet();
+
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GenerateOneBlockRewardAndUnlock();
+
+  bob->initAndGenerate("pass2");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+
+  std::string text = "darkwing duck!";
+  std::vector<CryptoNote::TransactionMessage> messages;
+  messages.push_back( { text, bob->getAddress() } );
+  TransferMoney(*alice, *bob, 100, 10, 0, std::string(), messages);
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+
+  generator.generateEmptyBlocks(1);
+  bob->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+
+  ASSERT_EQ(1, bob->getTransactionCount());
+  CryptoNote::TransactionInfo tx;
+  ASSERT_TRUE(bob->getTransaction(0, tx));
+  ASSERT_EQ(1, tx.messages.size());
+  ASSERT_EQ(text, tx.messages[0]);
+
+  alice->shutdown();
+  bob->shutdown();
+}
+
+TEST_F(WalletApi, sendBulkOfMessages) {
+  prepareBobWallet();
+  prepareCarolWallet();
+
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GenerateOneBlockRewardAndUnlock();
+
+  bob->initAndGenerate("pass2");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+
+  carol->initAndGenerate("pass3");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(carolWalletObserver.get()));
+
+  std::string verse1 = "Daring duck of mystery, \n"
+      "Champion of right, \n"
+      "Swoops out of the shadows, \n"
+      "Darkwing owns the night. \n"
+      "Somewhere some villain schemes, \n"
+      "But his number's up. \n"
+      "source: http://www.lyricsondemand.com/";
+
+  std::string chorus = "(3-2-1) Darkwing Duck (When there's trouble you call DW) \n"
+      "Darkwing Duck (Let's get dangerous) \n"
+      "Darkwing Duck (Darkwing, Darkwing Duck!) \n"
+      "source: http://www.lyricsondemand.com/";
+
+  std::string verse2 = "Cloud of smoke and he appears, \n"
+      "Master of surprise. \n"
+      "Who's that cunning mind behind \n"
+      "That shadowy disguise? \n"
+      "Nobody knows for sure, \n"
+      "But bad guys are out of luck. \n"
+      "source: http://www.lyricsondemand.com/";
+
+  std::string verse3 = "'Cause here comes (Darkwing Duck) \n"
+      "Look out! (When there's trouble you call DW) \n"
+      "Darkwing Duck (Let's get dangerous) \n"
+      "Darkwing Duck (Better watch out, you bad boys) \n"
+      "Darkwing Duck!\n"
+      "source: http://www.lyricsondemand.com/";
+
+  std::vector<CryptoNote::TransactionMessage> messages;
+  messages.push_back( { verse1, bob->getAddress() } );
+  messages.push_back( { chorus, bob->getAddress() } );
+  messages.push_back( { verse2, bob->getAddress() } );
+  messages.push_back( { verse3, bob->getAddress() } );
+
+  std::vector<CryptoNote::Transfer> transfers;
+  transfers.push_back( { bob->getAddress(), 100 } );
+  transfers.push_back( { carol->getAddress(), 100 } );
+
+  alice->sendTransaction(transfers, 10, std::string(), 0, 0, messages);
+
+  generator.generateEmptyBlocks(1);
+  bob->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+
+  carol->startRefresh();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(carolWalletObserver.get()));
+
+  CryptoNote::TransactionInfo bobTx;
+  ASSERT_EQ(1, bob->getTransactionCount());
+  ASSERT_TRUE(bob->getTransaction(0, bobTx));
+  ASSERT_EQ(4, bobTx.messages.size());
+  //there's no guarantee of any particular order
+  ASSERT_NE(bobTx.messages.end(), std::find(bobTx.messages.begin(), bobTx.messages.end(), verse1));
+  ASSERT_NE(bobTx.messages.end(), std::find(bobTx.messages.begin(), bobTx.messages.end(), chorus));
+  ASSERT_NE(bobTx.messages.end(), std::find(bobTx.messages.begin(), bobTx.messages.end(), verse2));
+  ASSERT_NE(bobTx.messages.end(), std::find(bobTx.messages.begin(), bobTx.messages.end(), verse3));
+  
+  CryptoNote::TransactionInfo carolTx;
+  ASSERT_EQ(1, carol->getTransactionCount());
+  ASSERT_TRUE(carol->getTransaction(0, carolTx));
+  ASSERT_EQ(0, carolTx.messages.size());
+
+  alice->shutdown();
+  bob->shutdown();
+  carol->shutdown();
+}
+
+TEST_F(WalletApi, initWithKeys) {
+  CryptoNote::AccountKeys accountKeys;
+
+  uint8_t byte = 0;
+
+  std::generate(accountKeys.spendPublicKey.begin(), accountKeys.spendPublicKey.end(), [&byte] () { return byte++; });
+  std::generate(accountKeys.spendSecretKey.begin(), accountKeys.spendSecretKey.end(), [&byte] () { return byte++; });
+  std::generate(accountKeys.viewPublicKey.begin(), accountKeys.viewPublicKey.end(), [&byte] () { return byte++; });
+  std::generate(accountKeys.viewSecretKey.begin(), accountKeys.viewSecretKey.end(), [&byte] () { return byte++; });
+
+  alice->initWithKeys(accountKeys, "pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletLoad(aliceWalletObserver.get()));
+
+  CryptoNote::AccountKeys keys;
+  alice->getAccountKeys(keys);
+
+  EXPECT_TRUE(std::equal(accountKeys.spendPublicKey.begin(), accountKeys.spendPublicKey.end(), keys.spendPublicKey.begin()));
+  EXPECT_TRUE(std::equal(accountKeys.spendSecretKey.begin(), accountKeys.spendSecretKey.end(), keys.spendSecretKey.begin()));
+  EXPECT_TRUE(std::equal(accountKeys.viewPublicKey.begin(), accountKeys.viewPublicKey.end(), keys.viewPublicKey.begin()));
+  EXPECT_TRUE(std::equal(accountKeys.viewSecretKey.begin(), accountKeys.viewSecretKey.end(), keys.viewSecretKey.begin()));
 
   alice->shutdown();
 }

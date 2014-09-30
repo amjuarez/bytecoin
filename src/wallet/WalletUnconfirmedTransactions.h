@@ -27,6 +27,8 @@
 
 namespace CryptoNote {
 
+class WalletUserTransactionsCache;
+
 struct UnconfirmedTransferDetails
 {
   cryptonote::Transaction tx;
@@ -49,6 +51,9 @@ public:
   void add(const cryptonote::Transaction& tx, TransactionId transactionId, uint64_t change_amount);
 
   uint64_t countPendingBalance() const;
+
+  //quirk. after wallet load transactions' ids may be changed, we need to resynchronize it
+  void synchronizeTransactionIds(const WalletUserTransactionsCache& transactionCache);
 
 private:
   typedef std::unordered_map<crypto::hash, UnconfirmedTransferDetails> UnconfirmedTxsContainer;

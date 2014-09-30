@@ -58,8 +58,19 @@ namespace cryptonote
     tx_destination_entry(uint64_t a, const AccountPublicAddress &ad) : amount(a), addr(ad) { }
   };
 
+  struct tx_message_entry
+  {
+    std::string message;
+    bool encrypt;
+    AccountPublicAddress addr;
+  };
+
   //---------------------------------------------------------------
-  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, std::vector<uint8_t> extra, Transaction& tx, uint64_t unlock_time);
+  bool construct_tx(const account_keys &sender_account_keys, const std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry> &destinations, const std::vector<tx_message_entry> &messages, const std::vector<uint8_t>& extra, uint64_t unlock_time, Transaction &tx);
+
+  inline bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, std::vector<uint8_t> extra, Transaction& tx, uint64_t unlock_time) {
+    return construct_tx(sender_account_keys, sources, destinations, std::vector<tx_message_entry>(), extra, unlock_time, tx);
+  }
 
   template<typename T>
   bool find_tx_extra_field_by_type(const std::vector<tx_extra_field>& tx_extra_fields, T& field)
@@ -223,6 +234,7 @@ namespace cryptonote
   void get_tx_tree_hash(const std::vector<crypto::hash>& tx_hashes, crypto::hash& h);
   crypto::hash get_tx_tree_hash(const std::vector<crypto::hash>& tx_hashes);
   crypto::hash get_tx_tree_hash(const Block& b);
+  std::vector<std::string> get_messages_from_extra(const std::vector<uint8_t> &extra, const crypto::public_key &txkey, const account_keys *recipient);
 
 #define CHECKED_GET_SPECIFIC_VARIANT(variant_var, specific_type, variable_name, fail_return_val) \
   CHECK_AND_ASSERT_MES(variant_var.type() == typeid(specific_type), fail_return_val, "wrong variant type: " << variant_var.type().name() << ", expected " << typeid(specific_type).name()); \

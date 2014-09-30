@@ -31,7 +31,7 @@
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "common/unordered_containers_boost_serialization.h"
-#include "crypto/chacha8.h"
+#include "crypto/chacha.h"
 #include "crypto/hash.h"
 #include "common/BlockingQueue.h"
 
@@ -110,7 +110,7 @@ namespace tools
 
     struct keys_file_data
     {
-      crypto::chacha8_iv iv;
+      crypto::chacha_iv iv;
       std::string account_data;
 
       BEGIN_SERIALIZE_OBJECT()

@@ -29,6 +29,7 @@
 #include "storages/portable_storage_template_helper.h"
 
 BOOST_SERIALIZATION_SPLIT_FREE(cryptonote::account_base);
+BOOST_CLASS_VERSION(CryptoNote::TransactionInfo, 1);
 
 namespace boost {
 namespace serialization {
@@ -63,6 +64,9 @@ inline void serialize(Archive & ar, CryptoNote::TransactionInfo& tx, const unsig
   ar & tx.blockHeight;
   ar & tx.timestamp;
   ar & tx.extra;
+  if (version > 0) {
+    ar & tx.messages;
+  }
 }
 
 template<class Archive>
