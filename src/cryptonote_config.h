@@ -63,7 +63,7 @@ const uint64_t CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS    = DIFFICULTY_TARGET
 const uint64_t CRYPTONOTE_MEMPOOL_TX_LIVETIME                = 60 * 60 * 24;     //seconds, one day
 const uint64_t CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME = 60 * 60 * 24 * 7; //seconds, one week
 
-const uint64_t UPGRADE_HEIGHT       = 99999999999;
+const uint64_t UPGRADE_HEIGHT       = 91452;
 const unsigned UPGRADE_VOTING_THRESHOLD                      = 90;               // percent
 const size_t   UPGRADE_VOTING_WINDOW                         = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
 const size_t   UPGRADE_WINDOW                                = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
@@ -111,10 +111,7 @@ const size_t   P2P_DEFAULT_WHITELIST_CONNECTIONS_PERCENT     = 70;
 const unsigned THREAD_STACK_SIZE                             = 5 * 1024 * 1024;
 
 const char* const SEED_NODES[] = {
-  "162.243.247.45:29080",
-  "146.185.191.90:29080",
-  "104.131.132.129:29080",
-  "128.199.146.243:29080"
+  "162.243.247.45:29080", "146.185.191.90:29080", "104.131.132.129:29080", "128.199.146.243:29080"
 };
 
 struct CheckpointData {
@@ -123,7 +120,7 @@ struct CheckpointData {
 };
 
 const CheckpointData CHECKPOINTS[] = {
-  {28000,  "70d2531151529ac00bf875281e15f51324934bc85e5733dcd92e1ccb1a665ff8"}
+  {28000,  "70d2531151529ac00bf875281e15f51324934bc85e5733dcd92e1ccb1a665ff8"}, {40000, "c181ec9223a91fef8658c7aa364c093c41c28d250870ca1ed829bf74f0abf038"}, {55000, "5289fe9f2dce8f51441019b9fbc85c70ad85ff49a666ef0109f3269890c6af6d"}, {70000, "193e335f34b8b8f1fab3857111cb668c2720340e80176a25155071e573481acb"}, {87500, "cce8a035f34457ec1098ab41e5949cac3db00ebff3503e26f36bfa057543095a"}
 };
 } // cryptonote
 
