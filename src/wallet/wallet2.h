@@ -173,11 +173,11 @@ namespace tools
     uint64_t balance();
     uint64_t unlocked_balance();
     template<typename T>
-    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy);
     template<typename T>
-    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::Transaction &tx);
-    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra);
-    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::Transaction& tx);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::Transaction &tx);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra);
+    void transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count, uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra, cryptonote::Transaction& tx);
     bool check_connection();
     bool connectClient(epee::net_utils::http::http_simple_client& client);
     void get_transfers(wallet2::transfer_container& incoming_transfers) const;
@@ -380,7 +380,7 @@ namespace tools
   //----------------------------------------------------------------------------------------------------
   template<typename T>
   void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count,
-    uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy)
+    uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy)
   {
     cryptonote::Transaction tx;
     transfer(dsts, fake_outputs_count, unlock_time, fee, extra, destination_split_strategy, dust_policy, tx);
@@ -388,7 +388,7 @@ namespace tools
 
   template<typename T>
   void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count,
-    uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::Transaction &tx)
+    uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra, T destination_split_strategy, const tx_dust_policy& dust_policy, cryptonote::Transaction &tx)
   {
     using namespace cryptonote;
     THROW_WALLET_EXCEPTION_IF(dsts.empty(), error::zero_destination);
@@ -500,7 +500,7 @@ namespace tools
       splitted_dsts.push_back(cryptonote::tx_destination_entry(dust, dust_policy.addr_for_dust));
     }
 
-    bool r = cryptonote::construct_tx(m_account.get_keys(), sources, splitted_dsts, extra, tx, unlock_time);
+    bool r = cryptonote::construct_tx(m_account.get_keys(), sources, splitted_dsts, messages, extra, unlock_time, tx);
     THROW_WALLET_EXCEPTION_IF(!r, error::tx_not_constructed, m_currency.publicAddressBase58Prefix(), sources, splitted_dsts, unlock_time);
     uint64_t transactionSizeLimit = m_currency.blockGrantedFullRewardZone() * 125 / 100 - m_currency.minerTxBlobReservedSize();
     THROW_WALLET_EXCEPTION_IF(get_object_blobsize(tx) > transactionSizeLimit, error::tx_too_big, tx, transactionSizeLimit);

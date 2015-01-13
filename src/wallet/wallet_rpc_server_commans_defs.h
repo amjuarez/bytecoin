@@ -57,6 +57,15 @@ namespace wallet_rpc
     END_KV_SERIALIZE_MAP()
   };
 
+  struct TransferMessage {
+    std::string address;
+    std::string message;
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(address)
+      KV_SERIALIZE(message)
+    END_KV_SERIALIZE_MAP()
+  };
+
   struct COMMAND_RPC_TRANSFER
   {
     struct request
@@ -66,6 +75,7 @@ namespace wallet_rpc
       uint64_t mixin;
       uint64_t unlock_time;
       std::string payment_id;
+      std::list<TransferMessage> messages;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(destinations)
@@ -73,6 +83,7 @@ namespace wallet_rpc
         KV_SERIALIZE(mixin)
         KV_SERIALIZE(unlock_time)
         KV_SERIALIZE(payment_id)
+        KV_SERIALIZE(messages)
       END_KV_SERIALIZE_MAP()
     };
 

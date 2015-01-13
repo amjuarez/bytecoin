@@ -128,9 +128,23 @@ namespace tools
       }
     }
 
+    std::vector<cryptonote::tx_message_entry> messages;
+    for (auto& rpc_message : req.messages) {
+      cryptonote::tx_message_entry message;
+      if (!m_wallet.currency().parseAccountAddressString(rpc_message.address, message.addr)) {
+        er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
+        er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + rpc_message.address;
+        return false;
+      }
+
+      message.message = rpc_message.message;
+      message.encrypt = true;
+      messages.emplace_back(std::move(message));
+    }
+
     try {
       cryptonote::Transaction tx;
-      m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, extra, tx);
+      m_wallet.transfer(dsts, req.mixin, req.unlock_time, req.fee, messages, extra, tx);
       res.tx_hash = boost::lexical_cast<std::string>(cryptonote::get_transaction_hash(tx));
       return true;
     } catch (const tools::error::daemon_busy& e) {

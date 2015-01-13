@@ -875,17 +875,17 @@ void wallet2::add_unconfirmed_tx(const cryptonote::Transaction& tx, uint64_t cha
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count,
-                       uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra, cryptonote::Transaction& tx)
+  uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra, cryptonote::Transaction& tx)
 {
-  transfer(dsts, fake_outputs_count, unlock_time, fee, extra, detail::digit_split_strategy,
+  transfer(dsts, fake_outputs_count, unlock_time, fee, messages, extra, detail::digit_split_strategy,
     tx_dust_policy(m_currency.defaultDustThreshold()), tx);
 }
 //----------------------------------------------------------------------------------------------------
 void wallet2::transfer(const std::vector<cryptonote::tx_destination_entry>& dsts, size_t fake_outputs_count,
-                       uint64_t unlock_time, uint64_t fee, const std::vector<uint8_t>& extra)
+  uint64_t unlock_time, uint64_t fee, const std::vector<cryptonote::tx_message_entry>& messages, const std::vector<uint8_t>& extra)
 {
   cryptonote::Transaction tx;
-  transfer(dsts, fake_outputs_count, unlock_time, fee, extra, tx);
+  transfer(dsts, fake_outputs_count, unlock_time, fee, messages, extra, tx);
 }
 //----------------------------------------------------------------------------------------------------
 const std::vector<wallet2::Transfer>& wallet2::getTransfers() {

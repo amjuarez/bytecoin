@@ -68,7 +68,7 @@ bool do_send_money(tools::wallet2& w1, tools::wallet2& w2, size_t mix_in_factor,
 
   try
   {
-    w1.transfer(dsts, mix_in_factor, 0, w1.currency().minimumFee(), std::vector<uint8_t>(),
+    w1.transfer(dsts, mix_in_factor, 0, w1.currency().minimumFee(), std::vector<cryptonote::tx_message_entry>(), std::vector<uint8_t>(),
       tools::detail::null_split_strategy, tools::tx_dust_policy(w1.currency().defaultDustThreshold()), tx);
     return true;
   }

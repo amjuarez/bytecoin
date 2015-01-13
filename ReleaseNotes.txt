@@ -1,3 +1,7 @@
+Release notes 1.0.2
+
+- JSON RPC for encrypted messages
+
 Release notes 1.0.1
 
 - Encrypted messages implementation

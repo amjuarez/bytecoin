@@ -900,7 +900,7 @@ bool simple_wallet::transfer(const std::vector<std::string> &args)
       return true;
 
     cryptonote::Transaction tx;
-    m_wallet->transfer(cmd.dsts, cmd.fake_outs_count, 0, cmd.fee, cmd.extra, tx);
+    m_wallet->transfer(cmd.dsts, cmd.fake_outs_count, 0, cmd.fee, std::vector<cryptonote::tx_message_entry>(), cmd.extra, tx);
     success_msg_writer(true) << "Money successfully sent, transaction " << get_transaction_hash(tx);
 
     try {
