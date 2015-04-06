@@ -32,7 +32,7 @@ void tree_hash(const char (*hashes)[HASH_SIZE], size_t count, char *root_hash) {
     size_t i, j;
     size_t cnt = count - 1;
     char (*ints)[HASH_SIZE];
-    for (i = 1; i < 8 * sizeof(size_t); i <<= 1) {
+    for (i = 1; i < sizeof(size_t); i <<= 1) {
       cnt |= cnt >> i;
     }
     cnt &= ~(cnt >> 1);

@@ -29,14 +29,15 @@
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/difficulty.h"
 #include "cryptonote_core/i_miner_handler.h"
+#include "cryptonote_core/MinerConfig.h"
 
 namespace cryptonote {
   class miner {
   public:
     miner(const Currency& currency, i_miner_handler* phandler);
     ~miner();
-    bool init(const boost::program_options::variables_map& vm);
-    static void init_options(boost::program_options::options_description& desc);
+
+    bool init(const MinerConfig& config);
     bool set_block_template(const Block& bl, const difficulty_type& diffic);
     bool on_block_chain_update();
     bool start(const AccountPublicAddress& adr, size_t threads_count, const boost::thread::attributes& attrs);

@@ -279,6 +279,24 @@ namespace cryptonote
     };
   };
 
+  //-----------------------------------------------
+  struct COMMAND_RPC_STOP_DAEMON {
+    struct request {
+
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+
+    struct response {
+      std::string status;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
 
   //
   struct COMMAND_RPC_GETBLOCKCOUNT
@@ -480,18 +498,6 @@ namespace cryptonote
       END_KV_SERIALIZE_MAP()
     };
 
-    struct response_item : public block_complete_entry
-    {
-      crypto::hash block_id;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_VAL_POD_AS_BLOB(block_id)
-        KV_SERIALIZE(block)
-        KV_SERIALIZE(txs)
-      END_KV_SERIALIZE_MAP()
-
-    };
-
     struct response
     {     
       std::string status;
@@ -499,7 +505,7 @@ namespace cryptonote
       uint64_t current_height;
       uint64_t full_offset;
 
-      std::list<response_item> items;
+      std::list<BlockFullInfo> items;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)

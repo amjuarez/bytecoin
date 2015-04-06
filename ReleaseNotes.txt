@@ -1,3 +1,11 @@
+Release notes 1.0.3
+
+- Multisignature API
+- Low level API
+- High level API improvements
+- Instant transaction pool notifications
+- Fully refactored simplewallet
+
 Release notes 1.0.2
 
 - Transaction history for simplewallet

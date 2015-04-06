@@ -32,10 +32,13 @@ using namespace epee;
 #include "common/SignalHandler.h"
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_core.h"
+#include "cryptonote_core/CoreConfig.h"
 #include "cryptonote_core/Currency.h"
+#include "cryptonote_core/MinerConfig.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "daemon/daemon_commands_handler.h"
 #include "p2p/net_node.h"
+#include "p2p/NetNodeConfig.h"
 #include "rpc/core_rpc_server.h"
 #include "version.h"
 
@@ -86,10 +89,11 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, arg_console);
   command_line::add_arg(desc_cmd_sett, arg_testnet_on);
 
-  cryptonote::core::init_options(desc_cmd_sett);
   cryptonote::core_rpc_server::init_options(desc_cmd_sett);
-  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> >::init_options(desc_cmd_sett);
-  cryptonote::miner::init_options(desc_cmd_sett);
+
+  cryptonote::CoreConfig::initOptions(desc_cmd_sett);
+  nodetool::NetNodeConfig::initOptions(desc_cmd_sett);
+  cryptonote::MinerConfig::initOptions(desc_cmd_sett);
 
   po::options_description desc_options("Allowed options");
   desc_options.add(desc_cmd_only).add(desc_cmd_sett);
@@ -165,6 +169,13 @@ int main(int argc, char* argv[])
     ccore.set_checkpoints(std::move(checkpoints));
   }
 
+  cryptonote::CoreConfig coreConfig;
+  coreConfig.init(vm);
+  nodetool::NetNodeConfig netNodeConfig;
+  netNodeConfig.init(vm);
+  cryptonote::MinerConfig minerConfig;
+  minerConfig.init(vm);
+
   cryptonote::t_cryptonote_protocol_handler<cryptonote::core> cprotocol(ccore, NULL);
   nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> > p2psrv(cprotocol);
   cryptonote::core_rpc_server rpc_server(ccore, p2psrv);
@@ -174,12 +185,12 @@ int main(int argc, char* argv[])
 
   //initialize objects
   LOG_PRINT_L0("Initializing p2p server...");
-  bool res = p2psrv.init(vm, testnet_mode);
+  bool res = p2psrv.init(netNodeConfig, testnet_mode);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize p2p server.");
   LOG_PRINT_L0("P2p server initialized OK");
 
   LOG_PRINT_L0("Initializing cryptonote protocol...");
-  res = cprotocol.init(vm);
+  res = cprotocol.init();
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize cryptonote protocol.");
   LOG_PRINT_L0("Cryptonote protocol initialized OK");
 
@@ -190,7 +201,7 @@ int main(int argc, char* argv[])
 
   //initialize core here
   LOG_PRINT_L0("Initializing core...");
-  res = ccore.init(vm, true);
+  res = ccore.init(coreConfig, minerConfig, true);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core");
   LOG_PRINT_L0("Core initialized OK");
   

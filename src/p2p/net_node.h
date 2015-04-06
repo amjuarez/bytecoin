@@ -38,6 +38,7 @@
 #include "math_helper.h"
 #include "net_node_common.h"
 #include "common/command_line.h"
+#include "NetNodeConfig.h"
 
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
@@ -72,7 +73,7 @@ namespace nodetool
     static void init_options(boost::program_options::options_description& desc);
 
     bool run();
-    bool init(const boost::program_options::variables_map& vm, bool testnet);
+    bool init(const NetNodeConfig& config, bool testnet);
     bool deinit();
     bool send_stop_signal();
     uint32_t get_this_peer_port(){return m_listenning_port;}
@@ -121,22 +122,24 @@ namespace nodetool
     bool make_default_config();
     bool store_config();
     bool check_trust(const proof_of_trust& tr);
+    void initUpnp();
 
 
     //----------------- levin_commands_handler -------------------------------------------------------------
-    virtual void on_connection_new(p2p_connection_context& context);
-    virtual void on_connection_close(p2p_connection_context& context);
-    virtual void callback(p2p_connection_context& context);
+    virtual void on_connection_new(p2p_connection_context& context) override;
+    virtual void on_connection_close(p2p_connection_context& context) override;
+    virtual void callback(p2p_connection_context& context) override;
     //----------------- i_p2p_endpoint -------------------------------------------------------------
-    virtual bool relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context);
-    virtual bool invoke_command_to_peer(int command, const std::string& req_buff, std::string& resp_buff, const epee::net_utils::connection_context_base& context);
-    virtual bool invoke_notify_to_peer(int command, const std::string& req_buff, const epee::net_utils::connection_context_base& context);
-    virtual bool drop_connection(const epee::net_utils::connection_context_base& context);
-    virtual void request_callback(const epee::net_utils::connection_context_base& context);
-    virtual void for_each_connection(std::function<bool(typename t_payload_net_handler::connection_context&, peerid_type)> f);
+    virtual void relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context) override;
+    virtual bool invoke_command_to_peer(int command, const std::string& req_buff, std::string& resp_buff, const epee::net_utils::connection_context_base& context) override;
+    virtual bool invoke_notify_to_peer(int command, const std::string& req_buff, const epee::net_utils::connection_context_base& context) override;
+    virtual bool drop_connection(const epee::net_utils::connection_context_base& context) override;
+    virtual void request_callback(const epee::net_utils::connection_context_base& context) override;
+    virtual void for_each_connection(std::function<bool(typename t_payload_net_handler::connection_context&, peerid_type)> f) override;
     //-----------------------------------------------------------------------------------------------
     bool parse_peer_from_string(nodetool::net_address& pe, const std::string& node_addr);
     bool handle_command_line(const boost::program_options::variables_map& vm);
+    bool handleConfig(const NetNodeConfig& config);
     bool idle_worker();
     bool handle_remote_peerlist(const std::list<peerlist_entry>& peerlist, time_t local_time, const epee::net_utils::connection_context_base& context);
     bool get_local_node_data(basic_node_data& node_data);

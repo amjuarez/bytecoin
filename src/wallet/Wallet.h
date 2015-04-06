@@ -27,31 +27,40 @@
 #include "INode.h"
 #include "WalletErrors.h"
 #include "WalletAsyncContextCounter.h"
-#include "WalletTxSendingState.h"
 #include "common/ObserverManager.h"
 #include "cryptonote_core/tx_extra.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/Currency.h"
-#include "WalletTransferDetails.h"
 #include "WalletUserTransactionsCache.h"
 #include "WalletUnconfirmedTransactions.h"
-#include "WalletSynchronizer.h"
+
 #include "WalletTransactionSender.h"
 #include "WalletRequest.h"
 
+#include "transfers/BlockchainSynchronizer.h"
+#include "transfers/TransfersSynchronizer.h"
+
 namespace CryptoNote {
 
-class Wallet : public IWallet {
+class SyncStarter;
+
+class Wallet : 
+  public IWallet, 
+  IBlockchainSynchronizerObserver,  
+  ITransfersObserver {
+
 public:
   Wallet(const cryptonote::Currency& currency, INode& node);
-  ~Wallet() {};
+  virtual ~Wallet();
 
   virtual void addObserver(IWalletObserver* observer);
   virtual void removeObserver(IWalletObserver* observer);
 
   virtual void initAndGenerate(const std::string& password);
   virtual void initAndLoad(std::istream& source, const std::string& password);
+  virtual void initWithKeys(const WalletAccountKeys& accountKeys, const std::string& password);
   virtual void shutdown();
+  virtual void reset();
 
   virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true);
 
@@ -74,12 +83,20 @@ public:
   virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
   virtual std::error_code cancelTransaction(size_t transactionId);
 
-  void startRefresh();
+  virtual void getAccountKeys(WalletAccountKeys& keys);
 
 private:
+
+  // IBlockchainSynchronizerObserver
+  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total) override;
+  virtual void synchronizationCompleted(std::error_code result) override;
+
+  // ITransfersObserver
+  virtual void onTransactionUpdated(ITransfersSubscription* object, const Hash& transactionHash) override;
+  virtual void onTransactionDeleted(ITransfersSubscription* object, const Hash& transactionHash) override;
+
+  void initSync();
   void throwIfNotInitialised();
-  void refresh();
-  uint64_t doPendingBalance();
 
   void doSave(std::ostream& destination, bool saveDetailed, bool saveCache);
   void doLoad(std::istream& source);
@@ -90,8 +107,7 @@ private:
   void synchronizationCallback(WalletRequest::Callback callback, std::error_code ec);
   void sendTransactionCallback(WalletRequest::Callback callback, std::error_code ec);
   void notifyClients(std::deque<std::shared_ptr<WalletEvent> >& events);
-
-  void storeGenesisBlock();
+  void notifyIfBalanceChanged();
 
   enum WalletState
   {
@@ -107,37 +123,22 @@ private:
   std::string m_password;
   const cryptonote::Currency& m_currency;
   INode& m_node;
-  bool m_isSynchronizing;
   bool m_isStopping;
 
-  typedef std::vector<crypto::hash> BlockchainContainer;
+  std::atomic<uint64_t> m_lastNotifiedActualBalance;
+  std::atomic<uint64_t> m_lastNotifiedPendingBalance;
 
-  BlockchainContainer m_blockchain;
-  WalletTransferDetails m_transferDetails;
-  WalletUnconfirmedTransactions m_unconfirmedTransactions;
+  BlockchainSynchronizer m_blockchainSync;
+  TransfersSyncronizer m_transfersSync;
+  ITransfersContainer* m_transferDetails;
+
+  WalletUserTransactionsCache m_transactionsCache;
+  std::unique_ptr<WalletTransactionSender> m_sender;
+
+  WalletAsyncContextCounter m_asyncContextCounter;
   tools::ObserverManager<CryptoNote::IWalletObserver> m_observerManager;
 
-  WalletTxSendingState m_sendingTxsStates;
-  WalletUserTransactionsCache m_transactionsCache;
-
-  struct WalletNodeObserver: public INodeObserver, public IWalletObserver
-  {
-    WalletNodeObserver(Wallet* wallet) : m_wallet(wallet), postponed(false) {}
-    virtual void lastKnownBlockHeightUpdated(uint64_t height) { m_wallet->startRefresh(); }
-    virtual void saveCompleted(std::error_code result);
-    void postponeRefresh();
-
-    Wallet* m_wallet;
-
-    std::mutex postponeMutex;
-    bool postponed;
-  };
-
-  std::unique_ptr<WalletNodeObserver> m_autoRefresher;
-  WalletAsyncContextCounter m_asyncContextCounter;
-
-  WalletSynchronizer m_synchronizer;
-  WalletTransactionSender m_sender;
+  std::unique_ptr<SyncStarter> m_onInitSyncStarter;
 };
 
 } //namespace CryptoNote

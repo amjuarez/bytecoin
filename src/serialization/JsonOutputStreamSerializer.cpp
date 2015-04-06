@@ -17,6 +17,8 @@
 
 #include "serialization/JsonOutputStreamSerializer.h"
 
+#include "string_tools.h"
+
 #include <cassert>
 #include <stdexcept>
 
@@ -149,32 +151,15 @@ ISerializer& JsonOutputStreamSerializer::operator()(bool& value, const std::stri
   return *this;
 }
 
-ISerializer& JsonOutputStreamSerializer::operator()(char* value, std::size_t size, const std::string& name) {
-  assert(false);
-  throw std::runtime_error("JsonOutputStreamSerializer doesn't support \"char *\" type of serialization");
-
-  return *this;
+ISerializer& JsonOutputStreamSerializer::binary(void* value, std::size_t size, const std::string& name) {
+  auto str = static_cast<char*>(value);
+  std::string tmpbuf(str, str + size);
+  return binary(tmpbuf, name);
 }
 
-ISerializer& JsonOutputStreamSerializer::tag(const std::string& name) {
-  assert(false);
-  throw std::runtime_error("JsonOutputStreamSerializer doesn't support this type of serialization");
-
-  return *this;
-}
-
-ISerializer& JsonOutputStreamSerializer::untagged(uint8_t& value) {
-  assert(false);
-  throw std::runtime_error("JsonOutputStreamSerializer doesn't support this type of serialization");
-
-  return *this;
-}
-
-ISerializer& JsonOutputStreamSerializer::endTag() {
-  assert(false);
-  throw std::runtime_error("JsonOutputStreamSerializer doesn't support this type of serialization");
-
-  return *this;
+ISerializer& JsonOutputStreamSerializer::binary(std::string& value, const std::string& name) {
+  std::string hex = epee::string_tools::buff_to_hex(value);
+  return (*this)(hex, name);
 }
 
 bool JsonOutputStreamSerializer::hasObject(const std::string& name) {
@@ -185,5 +170,3 @@ bool JsonOutputStreamSerializer::hasObject(const std::string& name) {
 }
 
 }
-
-

@@ -129,70 +129,10 @@ namespace cryptonote
   {
     CHECK_CORE_READY();
 
-    typedef COMMAND_RPC_QUERY_BLOCKS::response_item ResponseItem;
-
-    LockedBlockchainStorage lbs(m_core.get_blockchain_storage());
-
-    uint64_t currentHeight = lbs->get_current_blockchain_height();
-    uint64_t startOffset = 0;
-
-    if (!lbs->find_blockchain_supplement(req.block_ids, startOffset)) {
-      res.status = "Failed to find blockchain supplement";
+    if (!m_core.queryBlocks(req.block_ids, req.timestamp, res.start_height, res.current_height, res.full_offset, res.items)) {
+      res.status = "Failed to perform query";
       return false;
     }
-
-    uint64_t startFullOffset = 0;
-
-    if (!lbs->getLowerBound(req.timestamp, startOffset, startFullOffset))
-      startFullOffset = startOffset;
-
-    res.full_offset = startFullOffset;
-
-    if (startOffset != startFullOffset) {
-      std::list<crypto::hash> blockIds;
-      if (!lbs->getBlockIds(startOffset, std::min(uint64_t(BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT), startFullOffset - startOffset), blockIds)) {
-        res.status = "Failed to get block ids";
-        return false;
-      }
-
-      for (const auto& id : blockIds) {
-        res.items.push_back(ResponseItem());
-        res.items.back().block_id = id;
-      }
-    }
-
-    auto blocksLeft = std::min(BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT - res.items.size(), size_t(BLOCKS_SYNCHRONIZING_DEFAULT_COUNT));
-
-    if (blocksLeft) {
-      std::list<Block> blocks;
-      lbs->get_blocks(startFullOffset, blocksLeft, blocks);
-
-      for (auto& b : blocks) {
-
-        ResponseItem item;
-
-        item.block_id = get_block_hash(b);
-
-        if (b.timestamp >= req.timestamp) {
-          // query transactions
-          std::list<Transaction> txs;
-          std::list<crypto::hash> missedTxs;
-          lbs->get_transactions(b.txHashes, txs, missedTxs);
-
-          // fill data
-          block_complete_entry& completeEntry = item;
-          completeEntry.block = block_to_blob(b);
-          for (auto& tx : txs) {
-            completeEntry.txs.push_back(tx_to_blob(tx));
-          }
-        }
-
-        res.items.push_back(std::move(item));
-      }
-    }
-
-    res.current_height = currentHeight;
-    res.start_height = startOffset;
 
     res.status = CORE_RPC_STATUS_OK;
     return true;
@@ -351,6 +291,18 @@ namespace cryptonote
       return true;
     }
     res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_stop_daemon(const COMMAND_RPC_STOP_DAEMON::request& req, COMMAND_RPC_STOP_DAEMON::response& res, connection_context& cntx) {
+    CHECK_CORE_READY();
+    if (m_core.currency().isTestnet()) {
+      m_p2p.send_stop_signal();
+      res.status = CORE_RPC_STATUS_OK;
+    } else {
+      res.status = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
+      return false;
+    }
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------

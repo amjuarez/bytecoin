@@ -17,15 +17,16 @@
 
 #pragma once
 
+#include "INode.h"
+// #include "WalletSynchronizationContext.h"
+#include "WalletSendTransactionContext.h"
+#include "WalletEvent.h"
+
+#include <boost/optional.hpp>
+
 #include <deque>
 #include <functional>
 #include <memory>
-
-#include "INode.h"
-
-#include "WalletSynchronizationContext.h"
-#include "WalletSendTransactionContext.h"
-#include "WalletEvent.h"
 
 namespace CryptoNote {
 
@@ -37,40 +38,6 @@ public:
   virtual ~WalletRequest() {};
 
   virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb) = 0;
-};
-
-class WalletGetNewBlocksRequest: public WalletRequest
-{
-public:
-  WalletGetNewBlocksRequest(const std::list<crypto::hash>& knownBlockIds, std::shared_ptr<SynchronizationContext> context, Callback cb) : m_ids(knownBlockIds), m_context(context), m_cb(cb) {};
-  virtual ~WalletGetNewBlocksRequest() {};
-
-  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
-  {
-    node.getNewBlocks(std::move(m_ids), std::ref(m_context->newBlocks), std::ref(m_context->startHeight), std::bind(cb, m_cb, std::placeholders::_1));
-  };
-
-private:
-  std::shared_ptr<SynchronizationContext> m_context;
-  std::list<crypto::hash> m_ids;
-  Callback m_cb;
-};
-
-class WalletGetTransactionOutsGlobalIndicesRequest: public WalletRequest
-{
-public:
-  WalletGetTransactionOutsGlobalIndicesRequest(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, Callback cb) : m_hash(transactionHash), m_outs(outsGlobalIndices), m_cb(cb) {};
-  virtual ~WalletGetTransactionOutsGlobalIndicesRequest() {};
-
-  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
-  {
-    node.getTransactionOutsGlobalIndices(m_hash, std::ref(m_outs), std::bind(cb, m_cb, std::placeholders::_1));
-  };
-
-private:
-  crypto::hash m_hash;
-  std::vector<uint64_t>& m_outs;
-  Callback m_cb;
 };
 
 class WalletGetRandomOutsByAmountsRequest: public WalletRequest

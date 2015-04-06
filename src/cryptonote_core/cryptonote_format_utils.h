@@ -91,6 +91,10 @@ namespace cryptonote
   void get_blob_hash(const blobdata& blob, crypto::hash& res);
   crypto::hash get_blob_hash(const blobdata& blob);
   std::string short_hash_str(const crypto::hash& h);
+  bool createTxExtraWithPaymentId(const std::string& paymentIdString, std::vector<uint8_t>& extra);
+  //returns false if payment id is not found or parse error
+  bool getPaymentIdFromTxExtra(const std::vector<uint8_t>& extra, crypto::hash& paymentId);
+  bool parsePaymentId(const std::string& paymentIdString, crypto::hash& paymentId);
 
   crypto::hash get_transaction_hash(const Transaction& t);
   bool get_transaction_hash(const Transaction& t, crypto::hash& res);

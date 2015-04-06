@@ -239,7 +239,57 @@ namespace cryptonote
     payment_id = *reinterpret_cast<const crypto::hash*>(extra_nonce.data() + 1);
     return true;
   }
-  //---------------------------------------------------------------
+
+  bool parsePaymentId(const std::string& paymentIdString, crypto::hash& paymentId) {
+    cryptonote::blobdata binData;
+    if (!epee::string_tools::parse_hexstr_to_binbuff(paymentIdString, binData)) {
+      return false;
+    }
+
+    if (sizeof(crypto::hash) != binData.size()) {
+      return false;
+    }
+
+    paymentId = *reinterpret_cast<const crypto::hash*>(binData.data());
+    return true;
+  }
+
+
+  bool createTxExtraWithPaymentId(const std::string& paymentIdString, std::vector<uint8_t>& extra) {
+    crypto::hash paymentIdBin;
+
+    if (!parsePaymentId(paymentIdString, paymentIdBin)) {
+      return false;
+    }
+
+    std::string extraNonce;
+    cryptonote::set_payment_id_to_tx_extra_nonce(extraNonce, paymentIdBin);
+
+    if (!cryptonote::add_extra_nonce_to_tx_extra(extra, extraNonce)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool getPaymentIdFromTxExtra(const std::vector<uint8_t>& extra, crypto::hash& paymentId) {
+    std::vector<tx_extra_field> tx_extra_fields;
+    if(!parse_tx_extra(extra, tx_extra_fields)) {
+      return false;
+    }
+
+    tx_extra_nonce extra_nonce;
+    if (find_tx_extra_field_by_type(tx_extra_fields, extra_nonce)) {
+      if (!get_payment_id_from_tx_extra_nonce(extra_nonce.nonce, paymentId)) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+
+    return true;
+  }
+
   bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, std::vector<uint8_t> extra, Transaction& tx, uint64_t unlock_time)
   {
     tx.vin.clear();

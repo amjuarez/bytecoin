@@ -235,6 +235,32 @@ namespace cryptonote {
     }
   }
   //---------------------------------------------------------------------------------
+  void tx_memory_pool::get_difference(const std::vector<crypto::hash>& known_tx_ids, std::vector<crypto::hash>& new_tx_ids, std::vector<crypto::hash>& deleted_tx_ids) const {
+    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::unordered_set<crypto::hash> ready_tx_ids;
+    for (const auto& tx : m_transactions) {
+      TransactionCheckInfo checkInfo(tx);
+      if (is_transaction_ready_to_go(tx.tx, checkInfo)) {
+        ready_tx_ids.insert(tx.id);
+      }
+    }
+
+    std::unordered_set<crypto::hash> known_set(known_tx_ids.begin(), known_tx_ids.end());
+    for (auto it = ready_tx_ids.begin(), e = ready_tx_ids.end(); it != e;) {
+      auto known_it = known_set.find(*it);
+      if (known_it != known_set.end()) {
+        known_set.erase(known_it);
+        it = ready_tx_ids.erase(it);
+      }
+      else {
+        ++it;
+      }
+    }
+
+    new_tx_ids.assign(ready_tx_ids.begin(), ready_tx_ids.end());
+    deleted_tx_ids.assign(known_set.begin(), known_set.end());
+  }
+  //---------------------------------------------------------------------------------
   bool tx_memory_pool::on_blockchain_inc(uint64_t new_block_height, const crypto::hash& top_block_id) {
     return true;
   }
@@ -287,7 +313,7 @@ namespace cryptonote {
         << "max_used_block_id: " << txd.maxUsedBlock.id << std::endl
         << "last_failed_height: " << txd.lastFailedBlock.height << std::endl
         << "last_failed_id: " << txd.lastFailedBlock.id << std::endl
-        << "recieved: " << std::ctime(&txd.receiveTime) << std::endl;
+        << "received: " << std::ctime(&txd.receiveTime) << std::endl;
     }
 
     return ss.str();
@@ -372,21 +398,30 @@ namespace cryptonote {
 
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::removeExpiredTransactions() {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
-    
-    auto now = m_timeProvider.now();
+    bool somethingRemoved = false;
+    {
+      CRITICAL_REGION_LOCAL(m_transactions_lock);
 
-    for (auto it = m_transactions.begin(); it != m_transactions.end();) {
-      uint64_t txAge = now - it->receiveTime;
-      bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
+      auto now = m_timeProvider.now();
 
-      if (remove) {
-        LOG_PRINT_L2("Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge);
-        it = removeTransaction(it);
-      } else {
-        ++it;
+      for (auto it = m_transactions.begin(); it != m_transactions.end();) {
+        uint64_t txAge = now - it->receiveTime;
+        bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
+
+        if (remove) {
+          LOG_PRINT_L2("Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge);
+          it = removeTransaction(it);
+          somethingRemoved = true;
+        } else {
+          ++it;
+        }
       }
     }
+
+    if (somethingRemoved) {
+      m_observerManager.notify(&ITxPoolObserver::txDeletedFromPool);
+    }
+
     return true;
   }
 
@@ -468,5 +503,13 @@ namespace cryptonote {
       }
     }
     return false;
+  }
+
+  bool tx_memory_pool::addObserver(ITxPoolObserver* observer) {
+    return m_observerManager.add(observer);
+  }
+
+  bool tx_memory_pool::removeObserver(ITxPoolObserver* observer) {
+    return m_observerManager.remove(observer);
   }
 }

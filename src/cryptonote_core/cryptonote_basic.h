@@ -28,6 +28,7 @@
 #include "cryptonote_core/tx_extra.h"
 #include "serialization/binary_archive.h"
 #include "serialization/crypto.h"
+#include "serialization/keyvalue_serialization.h" // eepe named serialization
 #include "serialization/debug_archive.h"
 #include "serialization/json_archive.h"
 #include "serialization/serialization.h"
@@ -219,7 +220,6 @@ namespace cryptonote {
       ar.end_array();
     END_SERIALIZE()
 
-  private:
     static size_t getSignatureSize(const TransactionInput& input) {
       struct txin_signature_size_visitor : public boost::static_visitor<size_t> {
         size_t operator()(const TransactionInputGenerate&       txin) const { return 0; }
@@ -318,7 +318,6 @@ namespace cryptonote {
       }
     END_SERIALIZE()
 
-  private:
     ParentBlock& m_parentBlock;
     uint64_t& m_timestamp;
     uint32_t& m_nonce;

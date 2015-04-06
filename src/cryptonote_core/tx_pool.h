@@ -38,11 +38,13 @@
 
 #include "common/util.h"
 #include "common/int-util.h"
+#include "common/ObserverManager.h"
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/ITimeProvider.h"
 #include "cryptonote_core/ITransactionValidator.h"
+#include "cryptonote_core/ITxPoolObserver.h"
 #include "cryptonote_core/verification_context.h"
 
 
@@ -86,6 +88,9 @@ namespace cryptonote {
     tx_memory_pool(const cryptonote::Currency& currency, CryptoNote::ITransactionValidator& validator,
       CryptoNote::ITimeProvider& timeProvider);
 
+    bool addObserver(ITxPoolObserver* observer);
+    bool removeObserver(ITxPoolObserver* observer);
+
     // load/store operations
     bool init(const std::string& config_folder);
     bool deinit();
@@ -105,6 +110,7 @@ namespace cryptonote {
     bool fill_block_template(Block &bl, size_t median_size, size_t maxCumulativeSize, uint64_t already_generated_coins, size_t &total_size, uint64_t &fee);
 
     void get_transactions(std::list<Transaction>& txs) const;
+    void get_difference(const std::vector<crypto::hash>& known_tx_ids, std::vector<crypto::hash>& new_tx_ids, std::vector<crypto::hash>& deleted_tx_ids) const;
     size_t get_transactions_count() const;
     std::string print_pool(bool short_format) const;
     void on_idle();
@@ -194,6 +200,8 @@ namespace cryptonote {
     tx_container_t::iterator removeTransaction(tx_container_t::iterator i);
     bool removeExpiredTransactions();
     bool is_transaction_ready_to_go(const Transaction& tx, TransactionCheckInfo& txd) const;
+
+    tools::ObserverManager<ITxPoolObserver> m_observerManager;
 
     const cryptonote::Currency& m_currency;
     OnceInTimeInterval m_txCheckInterval;

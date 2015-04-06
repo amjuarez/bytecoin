@@ -19,19 +19,21 @@
 
 #include <atomic>
 
-#include "Currency.h"
-#include "SwappedVector.h"
-#include "UpgradeDetector.h"
-#include "cryptonote_format_utils.h"
-#include "tx_pool.h"
-#include "common/util.h"
-#include "checkpoints.h"
-
 #include "google/sparse_hash_set"
 #include "google/sparse_hash_map"
 
-#include "ITransactionValidator.h"
-#include "BlockIndex.h"
+#include "common/ObserverManager.h"
+#include "common/util.h"
+#include "cryptonote_core/BlockIndex.h"
+#include "cryptonote_core/checkpoints.h"
+#include "cryptonote_core/Currency.h"
+#include "cryptonote_core/IBlockchainStorageObserver.h"
+#include "cryptonote_core/ITransactionValidator.h"
+#include "cryptonote_core/SwappedVector.h"
+#include "cryptonote_core/UpgradeDetector.h"
+#include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_core/tx_pool.h"
+
 
 namespace cryptonote {
   struct NOTIFY_RESPONSE_CHAIN_ENTRY_request;
@@ -45,6 +47,9 @@ namespace cryptonote {
   class blockchain_storage : public CryptoNote::ITransactionValidator {
   public:
     blockchain_storage(const Currency& currency, tx_memory_pool& tx_pool);
+
+    bool addObserver(IBlockchainStorageObserver* observer);
+    bool removeObserver(IBlockchainStorageObserver* observer);
 
     // ITransactionValidator
     virtual bool checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock);
@@ -94,6 +99,8 @@ namespace cryptonote {
     uint64_t get_current_comulative_blocksize_limit();
     bool is_storing_blockchain(){return m_is_blockchain_storing;}
     uint64_t block_difficulty(size_t i);
+    bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids);
+
 
     template<class t_ids_container, class t_blocks_container, class t_missed_container>
     bool get_blocks(const t_ids_container& block_ids, t_blocks_container& blocks, t_missed_container& missed_bs) {
@@ -195,6 +202,7 @@ namespace cryptonote {
     tx_memory_pool& m_tx_pool;
     epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
     crypto::cn_context m_cn_context;
+    tools::ObserverManager<IBlockchainStorageObserver> m_observerManager;
 
     key_images_container m_spent_keys;
     size_t m_current_block_cumul_sz_limit;

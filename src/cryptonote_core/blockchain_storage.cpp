@@ -31,6 +31,7 @@
 #include "time_helper.h"
 
 #include "common/boost_serialization_helper.h"
+#include "common/ShuffleGenerator.h"
 #include "cryptonote_format_utils.h"
 #include "cryptonote_boost_serialization.h"
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -292,6 +293,14 @@ blockchain_storage::blockchain_storage(const Currency& currency, tx_memory_pool&
   m_spent_keys.set_deleted_key(nullImage);
 }
 
+bool blockchain_storage::addObserver(IBlockchainStorageObserver* observer) {
+  return m_observerManager.add(observer);
+}
+
+bool blockchain_storage::removeObserver(IBlockchainStorageObserver* observer) {
+  return m_observerManager.remove(observer);
+}
+
 bool blockchain_storage::checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock) {
   return check_tx_inputs(tx, maxUsedBlock.height, maxUsedBlock.id);
 }
@@ -399,14 +408,26 @@ bool blockchain_storage::init(const std::string& config_folder, bool load_existi
             crypto::hash transactionHash = get_transaction_hash(transaction.tx);
             TransactionIndex transactionIndex = { b, t };
             m_transactionMap.insert(std::make_pair(transactionHash, transactionIndex));
+
+            // process inputs
             for (auto& i : transaction.tx.vin) {
               if (i.type() == typeid(TransactionInputToKey)) {
                 m_spent_keys.insert(::boost::get<TransactionInputToKey>(i).keyImage);
+              } else if (i.type() == typeid(TransactionInputMultisignature)) {
+                auto out = ::boost::get<TransactionInputMultisignature>(i);
+                m_multisignatureOutputs[out.amount][out.outputIndex].isUsed = true;
               }
             }
 
+            // process outputs
             for (uint16_t o = 0; o < transaction.tx.vout.size(); ++o) {
-              m_outputs[transaction.tx.vout[o].amount].push_back(std::make_pair<>(transactionIndex, o));
+              const auto& out = transaction.tx.vout[o];
+              if(out.target.type() == typeid(TransactionOutputToKey)) {
+                m_outputs[out.amount].push_back(std::make_pair<>(transactionIndex, o));
+              } else if (out.target.type() == typeid(TransactionOutputMultisignature)) {
+                MultisignatureOutputUsage usage = { transactionIndex, o, false };
+                m_multisignatureOutputs[out.amount].push_back(usage);
+              }
             }
           }
         }
@@ -488,6 +509,22 @@ crypto::hash blockchain_storage::get_tail_id(uint64_t& height) {
 crypto::hash blockchain_storage::get_tail_id() {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   return m_blockIndex.getTailId();
+}
+
+bool blockchain_storage::getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) {
+  CRITICAL_REGION_LOCAL1(m_tx_pool);
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  if (known_block_id != get_tail_id()) {
+    return false;
+  }
+
+  std::vector<crypto::hash> new_tx_ids;
+  m_tx_pool.get_difference(known_pool_tx_ids, new_tx_ids, deleted_tx_ids);
+
+  std::vector<crypto::hash> misses;
+  get_transactions(new_tx_ids, new_txs, misses, true);
+  assert(misses.empty());
+  return true;
 }
 
 bool blockchain_storage::get_short_chain_history(std::list<crypto::hash>& ids) {
@@ -1166,8 +1203,8 @@ size_t blockchain_storage::find_end_of_allowed_index(const std::vector<std::pair
 }
 
 bool blockchain_storage::get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response& res) {
-  srand(static_cast<unsigned int>(time(NULL)));
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
+
   for (uint64_t amount : req.amounts) {
     COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount& result_outs = *res.outs.insert(res.outs.end(), COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount());
     result_outs.amount = amount;
@@ -1182,22 +1219,11 @@ bool blockchain_storage::get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDO
     //lets find upper bound of not fresh outs
     size_t up_index_limit = find_end_of_allowed_index(amount_outs);
     CHECK_AND_ASSERT_MES(up_index_limit <= amount_outs.size(), false, "internal error: find_end_of_allowed_index returned wrong index=" << up_index_limit << ", with amount_outs.size = " << amount_outs.size());
-    if (amount_outs.size() > req.outs_count) {
-      std::set<size_t> used;
-      size_t try_count = 0;
-      for (uint64_t j = 0; j != req.outs_count && try_count < up_index_limit;) {
-        size_t i = rand() % up_index_limit;
-        if (used.count(i))
-          continue;
-        bool added = add_out_to_get_random_outs(amount_outs, result_outs, amount, i);
-        used.insert(i);
-        if (added)
-          ++j;
-        ++try_count;
-      }
-    } else {
-      for (size_t i = 0; i != up_index_limit; i++) {
-        add_out_to_get_random_outs(amount_outs, result_outs, amount, i);
+
+    if (up_index_limit > 0) {
+      ShuffleGenerator<size_t, crypto::random_engine<size_t>> generator(up_index_limit);
+      for (uint64_t j = 0; j < up_index_limit && result_outs.outs.size() < req.outs_count; ++j) {
+        add_out_to_get_random_outs(amount_outs, result_outs, amount, generator());
       }
     }
   }
@@ -1621,8 +1647,9 @@ bool blockchain_storage::add_new_block(const Block& bl_, block_verification_cont
     return false;
   }
 
-  CRITICAL_REGION_LOCAL(m_tx_pool);//to avoid deadlock lets lock tx_pool for whole add/reorganize process
-  CRITICAL_REGION_LOCAL1(m_blockchain_lock);
+  bool add_result;
+  CRITICAL_REGION_BEGIN(m_tx_pool);//to avoid deadlock lets lock tx_pool for whole add/reorganize process
+  CRITICAL_REGION_BEGIN1(m_blockchain_lock);
   if (have_block(id)) {
     LOG_PRINT_L3("block with id = " << id << " already exists");
     bvc.m_already_exists = true;
@@ -1633,11 +1660,18 @@ bool blockchain_storage::add_new_block(const Block& bl_, block_verification_cont
   if (!(bl.prevId == get_tail_id())) {
     //chain switching or wrong block
     bvc.m_added_to_main_chain = false;
-    return handle_alternative_block(bl, id, bvc);
-    //never relay alternative blocks
+    add_result = handle_alternative_block(bl, id, bvc);
+  } else {
+    add_result = pushBlock(bl, bvc);
+  }
+  CRITICAL_REGION_END();
+  CRITICAL_REGION_END();
+
+  if (add_result && bvc.m_added_to_main_chain) {
+    m_observerManager.notify(&IBlockchainStorageObserver::blockchainUpdated);
   }
 
-  return pushBlock(bl, bvc);
+  return add_result;
 }
 
 const blockchain_storage::TransactionEntry& blockchain_storage::transactionByIndex(TransactionIndex index) {
@@ -1864,7 +1898,8 @@ bool blockchain_storage::pushTransaction(BlockEntry& block, const crypto::hash& 
       amountOutputs.push_back(std::make_pair<>(transactionIndex, output));
     } else if (transaction.tx.vout[output].target.type() == typeid(TransactionOutputMultisignature)) {
       auto& amountOutputs = m_multisignatureOutputs[transaction.tx.vout[output].amount];
-      MultisignatureOutputUsage outputUsage = {transactionIndex, output, false};
+      transaction.m_global_output_indexes[output] = amountOutputs.size();
+      MultisignatureOutputUsage outputUsage = { transactionIndex, output, false };
       amountOutputs.push_back(outputUsage);
     }
   }

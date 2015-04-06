@@ -65,7 +65,7 @@ public:
   Array::const_iterator end() const;
 
   JsonValue& pushBack(const JsonValue& val);
-  JsonValue& insert(const std::string key, const JsonValue& value);
+  JsonValue& insert(const std::string& key, const JsonValue& value);
 
   JsonValue& operator=(bool value);
   JsonValue& operator=(int64_t value);

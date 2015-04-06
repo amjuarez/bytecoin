@@ -20,7 +20,9 @@
 #include <streambuf>
 #include <array>
 
-#include "TcpConnection.h"
+#include <System/TcpConnection.h>
+
+namespace System {
 
 class TcpStreambuf : public std::streambuf {
 public:
@@ -41,3 +43,5 @@ private:
   std::array<char, 4096> readBuf;
   std::array<uint8_t, /*1024*/ 16> writeBuf;
 };
+
+}

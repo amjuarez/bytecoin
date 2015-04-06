@@ -32,6 +32,7 @@
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_stat_info.h"
 #include "cryptonote_core/miner.h"
+#include "cryptonote_core/CoreConfig.h"
 #include "cryptonote_config.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "rpc/core_rpc_server_commands_defs.h"
@@ -53,9 +54,12 @@ namespace cryptonote
               m_starter_message_showed(false)
   {
     set_cryptonote_protocol(pprotocol);
+    m_blockchain_storage.addObserver(this);
+    m_mempool.addObserver(this);
   }
   //-----------------------------------------------------------------------------------------------
   core::~core() {
+    m_blockchain_storage.removeObserver(this);
   }
   //-----------------------------------------------------------------------------------------------
   void core::set_cryptonote_protocol(i_cryptonote_protocol* pprotocol)
@@ -116,17 +120,15 @@ namespace cryptonote
     return m_blockchain_storage.get_alternative_blocks_count();
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::init(const boost::program_options::variables_map& vm, bool load_existing)
-  {
-    bool r = handle_command_line(vm);
-
-    r = m_mempool.init(m_config_folder);
+  bool core::init(const CoreConfig& config, const MinerConfig& minerConfig, bool load_existing) {
+    m_config_folder = config.configFolder;
+    bool r = m_mempool.init(m_config_folder);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize memory pool");
 
     r = m_blockchain_storage.init(m_config_folder, load_existing);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
 
-    r = m_miner->init(vm);
+    r = m_miner->init(minerConfig);
     CHECK_AND_ASSERT_MES(r, false, "Failed to initialize blockchain storage");
 
     return load_state_data();
@@ -203,6 +205,7 @@ namespace cryptonote
 
     if (tvc.m_added_to_pool) {
       LOG_PRINT_L1("tx added: " << tx_hash);
+      poolUpdated();
     }
 
     return r;
@@ -390,6 +393,11 @@ namespace cryptonote
     m_miner->on_synchronized();
   }
   //-----------------------------------------------------------------------------------------------
+  bool core::getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) {
+    isBcActual = m_blockchain_storage.getPoolSymmetricDifference(known_pool_tx_ids, known_block_id, new_txs, deleted_tx_ids);
+    return true;
+  }
+  //-----------------------------------------------------------------------------------------------
   bool core::handle_incoming_block_blob(const blobdata& block_blob, block_verification_context& bvc, bool control_miner, bool relay_block) {
     if (block_blob.size() > m_currency.maxBlockBlobSize()) {
       LOG_PRINT_L0("WRONG BLOCK BLOB, too big size " << block_blob.size() << ", rejected");
@@ -485,6 +493,10 @@ namespace cryptonote
     return m_blockchain_storage.handle_get_objects(arg, rsp);
   }
   //-----------------------------------------------------------------------------------------------
+  bool core::getBlockByHash(const crypto::hash &h, Block &blk) {
+    return core::get_block_by_hash(h, blk);
+  }
+
   crypto::hash core::get_block_id_by_height(uint64_t height)
   {
     return m_blockchain_storage.get_block_id_by_height(height);
@@ -530,4 +542,89 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------
+  bool core::addObserver(ICoreObserver* observer) {
+    return m_observerManager.add(observer);
+  }
+
+  bool core::removeObserver(ICoreObserver* observer) {
+    return m_observerManager.remove(observer);
+  }
+
+  void core::blockchainUpdated() {
+    m_observerManager.notify(&ICoreObserver::blockchainUpdated);
+  }
+
+  void core::txDeletedFromPool() {
+    poolUpdated();
+  }
+
+  void core::poolUpdated() {
+    m_observerManager.notify(&ICoreObserver::poolUpdated);
+  }
+
+  bool core::queryBlocks(const std::list<crypto::hash>& knownBlockIds, uint64_t timestamp,
+      uint64_t& resStartHeight, uint64_t& resCurrentHeight, uint64_t& resFullOffset, std::list<BlockFullInfo>& entries) {
+
+    LockedBlockchainStorage lbs(m_blockchain_storage);
+
+    uint64_t currentHeight = lbs->get_current_blockchain_height();
+    uint64_t startOffset = 0;
+
+    if (!lbs->find_blockchain_supplement(knownBlockIds, startOffset)) {
+      return false;
+    }
+
+    uint64_t startFullOffset = 0;
+
+    if (!lbs->getLowerBound(timestamp, startOffset, startFullOffset))
+      startFullOffset = startOffset;
+
+    resFullOffset = startFullOffset;
+
+    if (startOffset != startFullOffset) {
+      std::list<crypto::hash> blockIds;
+      if (!lbs->getBlockIds(startOffset, std::min(uint64_t(BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT), startFullOffset - startOffset), blockIds)) {
+        return false;
+      }
+
+      for (const auto& id : blockIds) {
+        entries.push_back(BlockFullInfo());
+        entries.back().block_id = id;
+      }
+    }
+
+    auto blocksLeft = std::min(BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT - entries.size(), size_t(BLOCKS_SYNCHRONIZING_DEFAULT_COUNT));
+
+    if (blocksLeft) {
+      std::list<Block> blocks;
+      lbs->get_blocks(startFullOffset, blocksLeft, blocks);
+
+      for (auto& b : blocks) {
+        BlockFullInfo item;
+
+        item.block_id = get_block_hash(b);
+
+        if (b.timestamp >= timestamp) {
+          // query transactions
+          std::list<Transaction> txs;
+          std::list<crypto::hash> missedTxs;
+          lbs->get_transactions(b.txHashes, txs, missedTxs);
+
+          // fill data
+          block_complete_entry& completeEntry = item;
+          completeEntry.block = block_to_blob(b);
+          for (auto& tx : txs) {
+            completeEntry.txs.push_back(tx_to_blob(tx));
+          }
+        }
+
+        entries.push_back(std::move(item));
+      }
+    }
+
+    resCurrentHeight = currentHeight;
+    resStartHeight = startOffset;
+
+    return true;
+  }
 }

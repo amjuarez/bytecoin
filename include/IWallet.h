@@ -41,23 +41,48 @@ const TransactionId INVALID_TRANSACTION_ID    = std::numeric_limits<TransactionI
 const TransferId INVALID_TRANSFER_ID          = std::numeric_limits<TransferId>::max();
 const uint64_t UNCONFIRMED_TRANSACTION_HEIGHT = std::numeric_limits<uint64_t>::max();
 
+enum class TransactionState : uint8_t {
+  Active,    // --> {Deleted}
+  Deleted,   // --> {Active}
+
+  Sending,   // --> {Active, Cancelled, Failed}
+  Cancelled, // --> {}
+  Failed     // --> {}
+};
+
 struct TransactionInfo {
-  TransferId      firstTransferId;
-  size_t          transferCount;
-  int64_t         totalAmount;
-  uint64_t        fee;
-  TransactionHash hash;
-  bool            isCoinbase;
-  uint64_t        blockHeight;
-  uint64_t        timestamp;
-  std::string     extra;
+  TransferId       firstTransferId;
+  size_t           transferCount;
+  int64_t          totalAmount;
+  uint64_t         fee;
+  uint64_t         sentTime;
+  uint64_t         unlockTime;
+  TransactionHash  hash;
+  bool             isCoinbase;
+  uint64_t         blockHeight;
+  uint64_t         timestamp;
+  std::string      extra;
+  TransactionState state;
+};
+
+typedef std::array<uint8_t, 32> WalletPublicKey;
+typedef std::array<uint8_t, 32> WalletSecretKey;
+
+struct WalletAccountKeys {
+  WalletPublicKey viewPublicKey;
+  WalletSecretKey viewSecretKey;
+  WalletPublicKey spendPublicKey;
+  WalletSecretKey spendSecretKey;
 };
 
 class IWalletObserver {
 public:
+  virtual ~IWalletObserver() {}
+
   virtual void initCompleted(std::error_code result) {}
   virtual void saveCompleted(std::error_code result) {}
-  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total, std::error_code result) {}
+  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total) {}
+  virtual void synchronizationCompleted(std::error_code result) {}
   virtual void actualBalanceUpdated(uint64_t actualBalance) {}
   virtual void pendingBalanceUpdated(uint64_t pendingBalance) {}
   virtual void externalTransactionCreated(TransactionId transactionId) {}
@@ -73,7 +98,9 @@ public:
 
   virtual void initAndGenerate(const std::string& password) = 0;
   virtual void initAndLoad(std::istream& source, const std::string& password) = 0;
+  virtual void initWithKeys(const WalletAccountKeys& accountKeys, const std::string& password) = 0;
   virtual void shutdown() = 0;
+  virtual void reset() = 0;
 
   virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true) = 0;
 
@@ -95,6 +122,8 @@ public:
   virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) = 0;
   virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) = 0;
   virtual std::error_code cancelTransaction(size_t transferId) = 0;
+
+  virtual void getAccountKeys(WalletAccountKeys& keys) = 0;
 };
 
 }

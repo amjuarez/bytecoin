@@ -155,6 +155,20 @@ int main(int argc, char *argv[]) {
       if (expected != actual) {
         goto error;
       }
+    } else if (cmd == "underive_public_key") {
+      key_derivation derivation;
+      size_t output_index;
+      public_key derived_key;
+      bool expected1, actual1;
+      public_key expected2, actual2;
+      get(input, derivation, output_index, derived_key, expected1);
+      if (expected1) {
+        get(input, expected2);
+      }
+      actual1 = underive_public_key(derivation, output_index, derived_key, actual2);
+      if (expected1 != actual1 || (expected1 && expected2 != actual2)) {
+        goto error;
+      }
     } else if (cmd == "generate_signature") {
       chash prefix_hash;
       public_key pub;
