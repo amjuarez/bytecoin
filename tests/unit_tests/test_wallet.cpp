@@ -1016,8 +1016,8 @@ TEST_F(WalletApi, checkPendingBalance) {
   bobNode->updateObservers();
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
 
-  ASSERT_EQ(0, bob->actualBalance());
-  ASSERT_EQ(sendAmount, bob->pendingBalance());
+  ASSERT_EQ(sendAmount, bob->actualBalance());
+  ASSERT_EQ(0, bob->pendingBalance());
 
   alice->shutdown();
   bob->shutdown();

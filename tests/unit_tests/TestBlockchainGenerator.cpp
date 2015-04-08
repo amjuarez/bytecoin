@@ -127,6 +127,7 @@ bool TestBlockchainGenerator::getBlockRewardForAddress(const cryptonote::Account
 
   cryptonote::Transaction tx;
   creator.generate(address, tx);
+  tx.unlockTime = 10; //default unlock time for coinbase transactions
 
   addToBlockchain(tx);
 

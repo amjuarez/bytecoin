@@ -575,7 +575,9 @@ bool simple_wallet::deinit()
   if (!m_wallet.get())
     return true;
 
-  return close_wallet();
+  bool r = close_wallet();
+  m_wallet->shutdown();
+  return r;
 }
 //----------------------------------------------------------------------------------------------------
 void simple_wallet::handle_command_line(const boost::program_options::variables_map& vm)
@@ -781,17 +783,24 @@ void simple_wallet::externalTransactionCreated(CryptoNote::TransactionId transac
   TransactionInfo txInfo;
   m_wallet->getTransaction(transactionId, txInfo);
 
+  if (txInfo.totalAmount >= 0) {
   message_writer(epee::log_space::console_color_green, false) <<
     "Height " << txInfo.blockHeight <<
     ", transaction " << epee::string_tools::pod_to_hex(txInfo.hash) <<
-    ", received " << m_currency.formatAmount(txInfo.totalAmount);
+    ", received " << m_currency.formatAmount(static_cast<uint64_t>(txInfo.totalAmount));
+  } else {
+    message_writer(epee::log_space::console_color_magenta, false) <<
+      "Height " << txInfo.blockHeight <<
+      ", transaction " << epee::string_tools::pod_to_hex(txInfo.hash) <<
+      ", spent " << m_currency.formatAmount(static_cast<uint64_t>(-txInfo.totalAmount));
+  }
   m_refresh_progress_reporter.update(txInfo.blockHeight, true);
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::show_balance(const std::vector<std::string>& args/* = std::vector<std::string>()*/)
 {
-  success_msg_writer() << "balance: " << m_currency.formatAmount(m_wallet->pendingBalance()) <<
-    ", unlocked balance: " << m_currency.formatAmount(m_wallet->actualBalance());
+  success_msg_writer() << "available balance: " << m_currency.formatAmount(m_wallet->actualBalance()) <<
+    ", locked amount: " << m_currency.formatAmount(m_wallet->pendingBalance());
   return true;
 }
 //----------------------------------------------------------------------------------------------------
@@ -1001,7 +1010,6 @@ bool simple_wallet::run()
 void simple_wallet::stop()
 {
   m_cmd_binder.stop_handling();
-  m_wallet->shutdown();
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::print_address(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
@@ -1145,8 +1153,8 @@ int main(int argc, char* argv[])
     try
     {
       walletFileName = ::tryToOpenWalletOrLoadKeysOrThrow(wallet, wallet_file, wallet_password);      
-      LOG_PRINT_L1("balance: " << currency.formatAmount(wallet->pendingBalance()) <<
-        ", unlocked balance: " << currency.formatAmount(wallet->actualBalance()));
+      LOG_PRINT_L1("available balance: " << currency.formatAmount(wallet->actualBalance()) <<
+        ", locked amount: " << currency.formatAmount(wallet->pendingBalance()));
       LOG_PRINT_GREEN("Loaded ok", LOG_LEVEL_0);
     }
     catch (const std::exception& e)

@@ -413,8 +413,8 @@ TEST_F(DetachTest, testDetachWithWallet) {
   ASSERT_EQ(txInfo.blockHeight, m_node.getLastLocalBlockHeight());
   ASSERT_EQ(txInfo.totalAmount, tr.amount);
 
-  ASSERT_EQ(Bob.pendingBalance(), tr.amount);
-  ASSERT_EQ(Bob.actualBalance(), 0);
+  ASSERT_EQ(Bob.pendingBalance(), 0);
+  ASSERT_EQ(Bob.actualBalance(), tr.amount);
 
   m_node.startAlternativeChain(m_node.getLastLocalBlockHeight() - 1);
   generator.generateEmptyBlocks(2);
