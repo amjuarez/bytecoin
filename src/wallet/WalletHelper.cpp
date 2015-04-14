@@ -9,12 +9,14 @@ using namespace epee;
 
 
 void WalletHelper::prepareFileNames(const std::string& file_path, std::string& keys_file, std::string& wallet_file) {
-  keys_file = file_path;
-  wallet_file = file_path;
-  boost::system::error_code e;
-  if (string_tools::get_extension(keys_file) == "keys") {//provided keys file name
-    wallet_file = string_tools::cut_off_extension(wallet_file);
-  } else {//provided wallet file name
-    keys_file += ".keys";
+  if (string_tools::get_extension(file_path) == "wallet") {
+    keys_file = string_tools::cut_off_extension(file_path) + ".keys";
+    wallet_file = file_path;
+  } else if (string_tools::get_extension(file_path) == "keys") {
+    keys_file = file_path;
+    wallet_file = string_tools::cut_off_extension(file_path) + ".wallet";
+  } else {
+    keys_file = file_path + ".keys";
+    wallet_file = file_path + ".wallet";
   }
 }

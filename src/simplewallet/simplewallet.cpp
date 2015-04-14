@@ -272,6 +272,17 @@ struct TransferCommand {
   }
 };
 
+std::error_code initAndLoadWallet(IWallet& wallet, std::istream& walletFile, const std::string& password) {
+  WalletHelper::InitWalletResultObserver initObserver;
+  std::future<std::error_code> f_initError = initObserver.initResult.get_future();
+
+  wallet.addObserver(&initObserver);
+  wallet.initAndLoad(walletFile, password);
+  auto initError = f_initError.get();
+  wallet.removeObserver(&initObserver);
+
+  return initError;
+}
 
 std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, const std::string& walletFile, const std::string& password) {
   std::string keys_file, walletFileName;
@@ -280,20 +291,25 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
   boost::system::error_code ignore;
   bool keysExists = boost::filesystem::exists(keys_file, ignore);
   bool walletExists = boost::filesystem::exists(walletFileName, ignore);
+  if (!walletExists && !keysExists && boost::filesystem::exists(walletFile, ignore)) {
+    auto replaceEc = tools::replace_file(walletFile, walletFileName);
+    if (replaceEc) {
+      throw std::runtime_error("failed to rename file '" + walletFile + "' to '" + walletFileName + "'");
+    }
+
+    walletExists = true;
+  }
 
   if (walletExists) {
     LOG_PRINT_L0("Loading wallet...");
     std::ifstream walletFile;
     walletFile.open(walletFileName, std::ios_base::binary | std::ios_base::in);
-    if (walletFile.fail())
-      throw std::runtime_error("error opening walletfile");
+    if (walletFile.fail()) {
+      throw std::runtime_error("error opening wallet file '" + walletFileName + "'");
+    }
 
-    WalletHelper::InitWalletResultObserver initObserver;
-    std::future<std::error_code> f_initError = initObserver.initResult.get_future();
-    wallet->addObserver(&initObserver);
-    wallet->initAndLoad(walletFile, password);
-    auto initError = f_initError.get();
-    wallet->removeObserver(&initObserver);
+    auto initError = initAndLoadWallet(*wallet, walletFile, password);
+
     walletFile.close();
     if (initError) { //bad password, or legacy format
       if (keysExists) {
@@ -302,11 +318,7 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
         boost::filesystem::rename(keys_file, keys_file + ".back");
         boost::filesystem::rename(walletFileName, walletFileName + ".back");
 
-        f_initError = initObserver.initResult.get_future();
-        wallet->addObserver(&initObserver);
-        wallet->initAndLoad(ss, password);
-        auto initError = f_initError.get();
-        wallet->removeObserver(&initObserver);
+        initError = initAndLoadWallet(*wallet, ss, password);
         if (initError) {
           throw std::runtime_error("failed to load wallet: " + initError.message());
         }
@@ -314,8 +326,9 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
         LOG_PRINT_L0("Storing wallet...");
         std::ofstream walletFile;
         walletFile.open(walletFileName, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-        if (walletFile.fail())
-          throw std::runtime_error("error saving walletfile");
+        if (walletFile.fail()) {
+          throw std::runtime_error("error saving wallet file '" + walletFileName + "'");
+        }
         WalletHelper::SaveWalletResultObserver saveObserver;
         std::future<std::error_code> f_saveError = saveObserver.saveResult.get_future();
         wallet->addObserver(&saveObserver);
@@ -324,54 +337,53 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
         wallet->removeObserver(&saveObserver);
         if (saveError) {
           fail_msg_writer() << "Failed to store wallet: " << saveError.message();
-          throw std::runtime_error("error saving walletfile");
+          throw std::runtime_error("error saving wallet file '" + walletFileName + "'");
         }
 
         LOG_PRINT_GREEN("Stored ok", LOG_LEVEL_0);
         return walletFileName;
       } else { // no keys, wallet error loading
-        throw std::runtime_error("can't load walletfile, check password");
+        throw std::runtime_error("can't load wallet file '" + walletFileName + "', check password");
       }
     } else { //new wallet ok 
       return walletFileName;
     }
-  } else {
-    if (keysExists) { //wallet not exists but keys presented
-      std::stringstream ss;
-      cryptonote::importLegacyKeys(keys_file, password, ss);
-      boost::filesystem::rename(keys_file, keys_file + ".back");
+  } else if (keysExists) { //wallet not exists but keys presented
+    std::stringstream ss;
+    cryptonote::importLegacyKeys(keys_file, password, ss);
+    boost::filesystem::rename(keys_file, keys_file + ".back");
 
-      WalletHelper::InitWalletResultObserver initObserver;
-      std::future<std::error_code> f_initError = initObserver.initResult.get_future();
-      wallet->addObserver(&initObserver);
-      wallet->initAndLoad(ss, password);
-      auto initError = f_initError.get();
-      wallet->removeObserver(&initObserver);
-      if (initError) {
-        throw std::runtime_error("failed to load wallet: " + initError.message());
-      }
-
-      LOG_PRINT_L0("Storing wallet...");
-      std::ofstream walletFile;
-      walletFile.open(walletFileName, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-      if (walletFile.fail())
-        throw std::runtime_error("error saving walletfile");
-      WalletHelper::SaveWalletResultObserver saveObserver;
-      std::future<std::error_code> f_saveError = saveObserver.saveResult.get_future();
-      wallet->addObserver(&saveObserver);
-      wallet->save(walletFile, false, false);
-      auto saveError = f_saveError.get();
-      wallet->removeObserver(&saveObserver);
-      if (saveError) {
-        fail_msg_writer() << "Failed to store wallet: " << saveError.message();
-        throw std::runtime_error("error saving walletfile");
-      }
-
-      LOG_PRINT_GREEN("Stored ok", LOG_LEVEL_0);
-      return walletFileName;
-    } else { //no wallet no keys
-      throw std::runtime_error("walletfile not found");
+    WalletHelper::InitWalletResultObserver initObserver;
+    std::future<std::error_code> f_initError = initObserver.initResult.get_future();
+    wallet->addObserver(&initObserver);
+    wallet->initAndLoad(ss, password);
+    auto initError = f_initError.get();
+    wallet->removeObserver(&initObserver);
+    if (initError) {
+      throw std::runtime_error("failed to load wallet: " + initError.message());
     }
+
+    LOG_PRINT_L0("Storing wallet...");
+    std::ofstream walletFile;
+    walletFile.open(walletFileName, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
+    if (walletFile.fail()) {
+      throw std::runtime_error("error saving wallet file '" + walletFileName  + "'");
+    }
+    WalletHelper::SaveWalletResultObserver saveObserver;
+    std::future<std::error_code> f_saveError = saveObserver.saveResult.get_future();
+    wallet->addObserver(&saveObserver);
+    wallet->save(walletFile, false, false);
+    auto saveError = f_saveError.get();
+    wallet->removeObserver(&saveObserver);
+    if (saveError) {
+      fail_msg_writer() << "Failed to store wallet: " << saveError.message();
+      throw std::runtime_error("error saving wallet file '" + walletFileName + "'");
+    }
+
+    LOG_PRINT_GREEN("Stored ok", LOG_LEVEL_0);
+    return walletFileName;
+  } else { //no wallet no keys
+    throw std::runtime_error("wallet file '" + walletFileName + "' is not found");
   }
 }
 
@@ -448,8 +460,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
 {
   handle_command_line(vm);
 
-  if (!m_daemon_address.empty() && !m_daemon_host.empty() && 0 != m_daemon_port)
-  {
+  if (!m_daemon_address.empty() && (!m_daemon_host.empty() || 0 != m_daemon_port)) {
     fail_msg_writer() << "you can't specify daemon host or port several times";
     return false;
   }
@@ -462,7 +473,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
       std::getline(std::cin, answer);
       c = answer[0];
       if (!(c == 'O' || c == 'G' || c == 'E' || c == 'o' || c == 'g' || c == 'e')) {
-        std::cout << "Unknown command: " << c<<std::endl;
+        std::cout << "Unknown command: " << c <<std::endl;
       } else {
         break;
       }
@@ -473,13 +484,17 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     }
 
     std::cout << "Specify wallet file name (e.g., wallet.bin).\n";
-    std::cout << "Wallet file name: ";
+    std::string userInput;
+    do {
+      std::cout << "Wallet file name: ";
+      std::getline(std::cin, userInput);
+      userInput = string_tools::trim(userInput);
+    } while (userInput.empty());
+
     if (c == 'g' || c == 'G') {
-      std::getline(std::cin, m_generate_new);
-      m_generate_new = string_tools::trim(m_generate_new);
+      m_generate_new = userInput;
     } else {
-      std::getline(std::cin, m_wallet_file_arg);
-      m_wallet_file_arg = string_tools::trim(m_wallet_file_arg);
+      m_wallet_file_arg = userInput;
     }
   }
 
@@ -488,19 +503,13 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     return false;
   }
 
-  std::string keys_file, walletFileName;
+  std::string walletFileName;
   if (!m_generate_new.empty()) {
-    WalletHelper::prepareFileNames(m_generate_new, keys_file, walletFileName);
+    std::string ignoredString;
+    WalletHelper::prepareFileNames(m_generate_new, ignoredString, walletFileName);
     boost::system::error_code ignore;
-    bool keysExists = boost::filesystem::exists(keys_file, ignore);
-    bool walletExists = boost::filesystem::exists(walletFileName, ignore);
-    if (walletExists) {
+    if (boost::filesystem::exists(walletFileName, ignore)) {
       fail_msg_writer() << walletFileName << " already exists";
-      return false;
-    }
-
-    if (keysExists) {
-      fail_msg_writer() << "keys file found: "<< keys_file<< " you should probably try to load existing wallet";
       return false;
     }
   }
@@ -559,7 +568,6 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     m_node->addObserver(this);
 
     message_writer(epee::log_space::console_color_white, true) << "Opened wallet: " << m_wallet->getAddress();
-
 
     success_msg_writer() <<
       "**********************************************************************\n" <<
