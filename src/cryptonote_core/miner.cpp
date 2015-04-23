@@ -1,14 +1,16 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-
 #include <sstream>
 #include <numeric>
-#include <boost/utility/value_init.hpp>
+
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/interprocess/detail/atomic.hpp>
 #include <boost/limits.hpp>
-#include <boost/foreach.hpp>
+#include <boost/utility/value_init.hpp>
+
 #include "misc_language.h"
 #include "include_base_utils.h"
 #include "cryptonote_basic_impl.h"
@@ -23,27 +25,20 @@
 using namespace epee;
 
 #include "miner.h"
-
-
+#include <thread>
+#include <future>
 
 namespace cryptonote
 {
 
-  namespace
-  {
-    const command_line::arg_descriptor<std::string> arg_extra_messages =  {"extra-messages-file", "Specify file for extra messages to include into coinbase transactions", "", true};
-    const command_line::arg_descriptor<std::string> arg_start_mining =    {"start-mining", "Specify wallet address to mining for", "", true};
-    const command_line::arg_descriptor<uint32_t>    arg_mining_threads =  {"mining-threads", "Specify mining threads count", 0, true};
-  }
-
-
-  miner::miner(i_miner_handler* phandler):m_stop(1),
-    m_template(boost::value_initialized<block>()),
+  miner::miner(const Currency& currency, i_miner_handler* phandler):
+    m_currency(currency),
+    m_stop(1),
+    m_template(boost::value_initialized<Block>()),
     m_template_no(0),
     m_diffic(0),
     m_thread_index(0),
     m_phandler(phandler),
-    m_height(0),
     m_pausers_count(0),
     m_threads_total(0),
     m_starter_nonce(0),
@@ -53,38 +48,34 @@ namespace cryptonote
     m_do_mining(false),
     m_current_hash_rate(0)
   {
-
   }
   //-----------------------------------------------------------------------------------------------------
-  miner::~miner()
-  {
+  miner::~miner() {
     stop();
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::set_block_template(const block& bl, const difficulty_type& di, uint64_t height)
-  {
+  bool miner::set_block_template(const Block& bl, const difficulty_type& di) {
     CRITICAL_REGION_LOCAL(m_template_lock);
     m_template = bl;
+
     m_diffic = di;
-    m_height = height;
     ++m_template_no;
     m_starter_nonce = crypto::rand<uint32_t>();
     return true;
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::on_block_chain_update()
-  {
-    if(!is_mining())
+  bool miner::on_block_chain_update() {
+    if (!is_mining()) {
       return true;
+    }
 
     return request_block_template();
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::request_block_template()
-  {
-    block bl = AUTO_VAL_INIT(bl);
+  bool miner::request_block_template() {
+    Block bl = AUTO_VAL_INIT(bl);
     difficulty_type di = AUTO_VAL_INIT(di);
-    uint64_t height = AUTO_VAL_INIT(height);
+    uint64_t height;
     cryptonote::blobdata extra_nonce;
     if(m_extra_messages.size() && m_config.current_extra_message_index < m_extra_messages.size())
     {
@@ -96,7 +87,7 @@ namespace cryptonote
       LOG_ERROR("Failed to get_block_template(), stopping mining");
       return false;
     }
-    set_block_template(bl, di, height);
+    set_block_template(bl, di);
     return true;
   }
   //-----------------------------------------------------------------------------------------------------
@@ -139,26 +130,16 @@ namespace cryptonote
     m_last_hr_merge_time = misc_utils::get_tick_count();
     m_hashes = 0;
   }
-  //-----------------------------------------------------------------------------------------------------
-  void miner::init_options(boost::program_options::options_description& desc)
-  {
-    command_line::add_arg(desc, arg_extra_messages);
-    command_line::add_arg(desc, arg_start_mining);
-    command_line::add_arg(desc, arg_mining_threads);
-  }
-  //-----------------------------------------------------------------------------------------------------
-  bool miner::init(const boost::program_options::variables_map& vm)
-  {
-    if(command_line::has_arg(vm, arg_extra_messages))
-    {
+
+  bool miner::init(const MinerConfig& config) {
+    if (!config.extraMessages.empty()) {
       std::string buff;
-      bool r = file_io_utils::load_file_to_string(command_line::get_arg(vm, arg_extra_messages), buff);
-      CHECK_AND_ASSERT_MES(r, false, "Failed to load file with extra messages: " << command_line::get_arg(vm, arg_extra_messages));
+      bool r = file_io_utils::load_file_to_string(config.extraMessages, buff);
+      CHECK_AND_ASSERT_MES(r, false, "Failed to load file with extra messages: " << config.extraMessages);
       std::vector<std::string> extra_vec;
       boost::split(extra_vec, buff, boost::is_any_of("\n"), boost::token_compress_on );
       m_extra_messages.resize(extra_vec.size());
-      for(size_t i = 0; i != extra_vec.size(); i++)
-      {
+      for(size_t i = 0; i != extra_vec.size(); i++) {
         string_tools::trim(extra_vec[i]);
         if(!extra_vec[i].size())
           continue;
@@ -166,24 +147,21 @@ namespace cryptonote
         if(buff != "0")
           m_extra_messages[i] = buff;
       }
-      m_config_folder_path = boost::filesystem::path(command_line::get_arg(vm, arg_extra_messages)).parent_path().string();
+      m_config_folder_path = boost::filesystem::path(config.extraMessages).parent_path().string();
       m_config = AUTO_VAL_INIT(m_config);
-      epee::serialization::load_t_from_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
+      epee::serialization::load_t_from_json_file(m_config, m_config_folder_path + "/" + cryptonote::parameters::MINER_CONFIG_FILE_NAME);
       LOG_PRINT_L0("Loaded " << m_extra_messages.size() << " extra messages, current index " << m_config.current_extra_message_index);
     }
 
-    if(command_line::has_arg(vm, arg_start_mining))
-    {
-      if(!cryptonote::get_account_address_from_str(m_mine_address, command_line::get_arg(vm, arg_start_mining)))
-      {
-        LOG_ERROR("Target account address " << command_line::get_arg(vm, arg_start_mining) << " has wrong format, starting daemon canceled");
+    if(!config.startMining.empty()) {
+      if (!m_currency.parseAccountAddressString(config.startMining, m_mine_address)) {
+        LOG_ERROR("Target account address " << config.startMining << " has wrong format, starting daemon canceled");
         return false;
       }
       m_threads_total = 1;
       m_do_mining = true;
-      if(command_line::has_arg(vm, arg_mining_threads))
-      {
-        m_threads_total = command_line::get_arg(vm, arg_mining_threads);
+      if(config.miningThreads > 0) {
+        m_threads_total = config.miningThreads;
       }
     }
 
@@ -195,7 +173,7 @@ namespace cryptonote
     return !m_stop;
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::start(const account_public_address& adr, size_t threads_count, const boost::thread::attributes& attrs)
+  bool miner::start(const AccountPublicAddress& adr, size_t threads_count, const boost::thread::attributes& attrs)
   {
     m_mine_address = adr;
     m_threads_total = static_cast<uint32_t>(threads_count);
@@ -254,18 +232,61 @@ namespace cryptonote
     return true;
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::find_nonce_for_given_block(crypto::cn_context &context, block& bl, const difficulty_type& diffic, uint64_t height)
-  {
-    for(; bl.nonce != std::numeric_limits<uint32_t>::max(); bl.nonce++)
-    {
-      crypto::hash h;
-      get_block_longhash(context, bl, h, height);
+  bool miner::find_nonce_for_given_block(crypto::cn_context &context, Block& bl, const difficulty_type& diffic) {
 
-      if(check_hash(h, diffic))
-      {
-        return true;
+    unsigned nthreads = std::thread::hardware_concurrency();
+
+    if (nthreads > 0 && diffic > 5) {
+      std::vector<std::future<void>> threads(nthreads);
+      std::atomic<uint32_t> foundNonce;
+      std::atomic<bool> found(false);
+      uint32_t startNonce = crypto::rand<uint32_t>();
+
+      for (unsigned i = 0; i < nthreads; ++i) {
+        threads[i] = std::async(std::launch::async, [&, i]() {
+          crypto::cn_context localctx;
+          crypto::hash h;
+
+          Block lb(bl); // copy to local block
+
+          for (uint32_t nonce = startNonce + i; !found; nonce += nthreads) {
+            lb.nonce = nonce;
+
+            if (!get_block_longhash(localctx, lb, h)) {
+              return;
+            }
+
+            if (check_hash(h, diffic)) {
+              foundNonce = nonce;
+              found = true;
+              return;
+            }
+          }
+        });
+      }
+
+      for (auto& t : threads) {
+        t.wait();
+      }
+
+      if (found) {
+        bl.nonce = foundNonce.load();
+      }
+
+      return found;
+    } else {
+      for (; bl.nonce != std::numeric_limits<uint32_t>::max(); bl.nonce++) {
+        crypto::hash h;
+        if (!get_block_longhash(context, bl, h)) {
+          return false;
+        }
+
+        if (check_hash(h, diffic)) {
+          return true;
+        }
       }
     }
+
     return false;
   }
   //-----------------------------------------------------------------------------------------------------
@@ -307,11 +328,10 @@ namespace cryptonote
     LOG_PRINT_L0("Miner thread was started ["<< th_local_index << "]");
     log_space::log_singletone::set_thread_log_prefix(std::string("[miner ") + std::to_string(th_local_index) + "]");
     uint32_t nonce = m_starter_nonce + th_local_index;
-    uint64_t height = 0;
     difficulty_type local_diff = 0;
     uint32_t local_template_ver = 0;
     crypto::cn_context context;
-    block b;
+    Block b;
     while(!m_stop)
     {
       if(m_pausers_count)//anti split workaround
@@ -326,7 +346,6 @@ namespace cryptonote
         CRITICAL_REGION_BEGIN(m_template_lock);
         b = m_template;
         local_diff = m_diffic;
-        height = m_height;
         CRITICAL_REGION_END();
         local_template_ver = m_template_no;
         nonce = m_starter_nonce + th_local_index;
@@ -341,9 +360,12 @@ namespace cryptonote
 
       b.nonce = nonce;
       crypto::hash h;
-      get_block_longhash(context, b, h, height);
+      if (!m_stop && !get_block_longhash(context, b, h)) {
+        LOG_ERROR("Failed to get block long hash");
+        m_stop = true;
+      }
 
-      if(!m_stop && check_hash(h, local_diff))
+      if (!m_stop && check_hash(h, local_diff))
       {
         //we lucky!
         ++m_config.current_extra_message_index;
@@ -354,7 +376,7 @@ namespace cryptonote
         }else
         {
           //success update, lets update config
-          epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
+          epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + cryptonote::parameters::MINER_CONFIG_FILE_NAME);
         }
       }
 
@@ -366,4 +388,3 @@ namespace cryptonote
   }
   //-----------------------------------------------------------------------------------------------------
 }
-

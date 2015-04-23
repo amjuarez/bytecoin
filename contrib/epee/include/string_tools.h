@@ -24,24 +24,23 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 
-
+#pragma once
 
 #ifndef _STRING_TOOLS_H_
 #define _STRING_TOOLS_H_
 
-//#include <objbase.h>
-#include <locale>
-#include <cstdlib>
+#include <cctype>
+#include <cstdint>
 #include <iomanip>
-//#include <strsafe.h>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/asio.hpp>
-#include <boost/algorithm/string/compare.hpp>
-#include <boost/algorithm/string.hpp>
-#include "warnings.h"
+#include <iostream>
+#include <limits>
+#include <map>
+#include <string>
+#include <sstream>
 
+#include <boost/lexical_cast.hpp>
+
+#include "warnings.h"
 
 #ifndef OUT
 	#define OUT
@@ -51,71 +50,32 @@
 #pragma comment (lib, "Rpcrt4.lib")
 #endif
 
+// Don't include lexical_cast.hpp, to reduce compilation time
+//#include <boost/lexical_cast.hpp>
+
+namespace boost {
+  namespace uuids {
+    struct uuid;
+  }
+
+  template <typename Target, typename Source>
+  inline Target lexical_cast(const Source &arg);
+}
+
 namespace epee
 {
 namespace string_tools
 {
-	inline std::wstring get_str_from_guid(const boost::uuids::uuid& rid)
-	{
-		return boost::lexical_cast<std::wstring>(rid);
-	}
-	//----------------------------------------------------------------------------
-	inline std::string get_str_from_guid_a(const boost::uuids::uuid& rid)
-	{
-		return boost::lexical_cast<std::string>(rid);
-	}
-	//----------------------------------------------------------------------------
-	inline bool get_guid_from_string( boost::uuids::uuid& inetifer, std::wstring str_id)
-	{
-		if(str_id.size() < 36)
-			return false;
-
-		if('{' == *str_id.begin())
-			str_id.erase(0, 1);
-
-		if('}' == *(--str_id.end()))
-			str_id.erase(--str_id.end());
-
-		try
-		{
-			inetifer = boost::lexical_cast<boost::uuids::uuid>(str_id);
-			return true;
-		}
-		catch(...)
-		{
-			return false;
-		}
-	}
-	//----------------------------------------------------------------------------
-	inline bool get_guid_from_string(OUT boost::uuids::uuid& inetifer, const std::string& str_id)
-	{
-		std::string local_str_id = str_id;
-		if(local_str_id.size() < 36)
-			return false;
-
-		if('{' == *local_str_id.begin())
-			local_str_id.erase(0, 1);
-
-		if('}' == *(--local_str_id.end()))
-			local_str_id.erase(--local_str_id.end());
-
-		try
-		{
-			inetifer = boost::lexical_cast<boost::uuids::uuid>(local_str_id);
-			return true;
-		}
-		catch(...)
-		{
-			return false;
-		}
-	}
-	//----------------------------------------------------------------------------
+  std::wstring get_str_from_guid(const boost::uuids::uuid& rid);
+  std::string get_str_from_guid_a(const boost::uuids::uuid& rid);
+  bool get_guid_from_string( boost::uuids::uuid& inetifer, std::wstring str_id);
+  bool get_guid_from_string(OUT boost::uuids::uuid& inetifer, const std::string& str_id);
+  //----------------------------------------------------------------------------
   template<class CharT>
   std::basic_string<CharT> buff_to_hex(const std::basic_string<CharT>& s)
   {
-    using namespace std;
-    basic_stringstream<CharT> hexStream;
-    hexStream << hex << noshowbase << setw(2);
+    std::basic_stringstream<CharT> hexStream;
+    hexStream << std::hex << std::noshowbase << std::setw(2);
 
     for(typename std::basic_string<CharT>::const_iterator it = s.begin(); it != s.end(); it++)
     {
@@ -127,13 +87,12 @@ namespace string_tools
   template<class CharT>
   std::basic_string<CharT> buff_to_hex_nodelimer(const std::basic_string<CharT>& s)
   {
-    using namespace std;
-    basic_stringstream<CharT> hexStream;
-    hexStream << hex << noshowbase;
+    std::basic_stringstream<CharT> hexStream;
+    hexStream << std::hex << std::noshowbase;
 
     for(typename std::basic_string<CharT>::const_iterator it = s.begin(); it != s.end(); it++)
     {
-      hexStream << setw(2) << setfill('0') << static_cast<unsigned int>(static_cast<unsigned char>(*it));
+      hexStream << std::setw(2) << std::setfill('0') << static_cast<unsigned int>(static_cast<unsigned char>(*it));
     }
     return hexStream.str();
   }
@@ -273,13 +232,6 @@ POP_WARNINGS
     return true;
 	}
 
-/*  template<typename t_type>
-  bool get_xparam_from_command_line(const std::map<std::string, std::string>& res, const std::basic_string<typename t_string::value_type> & key, t_type& val)
-  {
-
-  }
-  */
-
 	template<class t_string, typename t_type>
 	bool get_xparam_from_command_line(const std::map<t_string, t_string>& res, const t_string & key, t_type& val)
 	{
@@ -295,22 +247,22 @@ POP_WARNINGS
 		return true;
 	}
 
-    template<class t_string, typename t_type>
-    t_type get_xparam_from_command_line(const std::map<t_string, t_string>& res, const t_string & key, const t_type& default_value)
-    {
-        typename std::map<t_string, t_string>::const_iterator it = res.find(key);
-        if(it == res.end())
-            return default_value;
+  template<class t_string, typename t_type>
+  t_type get_xparam_from_command_line(const std::map<t_string, t_string>& res, const t_string & key, const t_type& default_value)
+  {
+      typename std::map<t_string, t_string>::const_iterator it = res.find(key);
+      if(it == res.end())
+          return default_value;
 
-        if(it->second.size())
-        {
-            t_type s;
-            get_xtype_from_string(s, it->second);
-            return s;
-        }
+      if(it->second.size())
+      {
+          t_type s;
+          get_xtype_from_string(s, it->second);
+          return s;
+      }
 
-        return default_value;
-    }
+      return default_value;
+  }
 
   template<class t_string>
   bool have_in_command_line(const std::map<t_string, t_string>& res, const std::basic_string<typename t_string::value_type>& key)
@@ -322,243 +274,40 @@ POP_WARNINGS
     return true;
   }
 
-	//----------------------------------------------------------------------------
-//#ifdef _WINSOCK2API_
-	inline std::string get_ip_string_from_int32(uint32_t ip)
-	{
-		in_addr adr;
-		adr.s_addr = ip;
-		const char* pbuf = inet_ntoa(adr);
-		if(pbuf)
-			return pbuf;
-		else
-			return "[failed]";
-	}
-	//----------------------------------------------------------------------------
-	inline bool get_ip_int32_from_string(uint32_t& ip, const std::string& ip_str)
-	{
-		ip = inet_addr(ip_str.c_str());
-		if(INADDR_NONE == ip)
-			return false;
-
-		return true;
-	}
   //----------------------------------------------------------------------------
-  inline bool parse_peer_from_string(uint32_t& ip, uint32_t& port, const std::string& addres)
-  {
-    //parse ip and address
-    std::string::size_type p = addres.find(':');
-    if(p == std::string::npos)
-    {
-      return false;
-    }
-    std::string ip_str = addres.substr(0, p);
-    std::string port_str = addres.substr(p+1, addres.size());
-
-    if(!get_ip_int32_from_string(ip, ip_str))
-    {
-      return false;
-    }
-
-    if(!get_xtype_from_string(port, port_str))
-    {
-      return false;
-    }
-    return true;
-  }
-
-//#endif
-	//----------------------------------------------------------------------------
+  std::string get_ip_string_from_int32(uint32_t ip);
+  bool get_ip_int32_from_string(uint32_t& ip, const std::string& ip_str);
+  bool parse_peer_from_string(uint32_t& ip, uint32_t& port, const std::string& addres);
+  //----------------------------------------------------------------------------
   template<typename t>
-	inline std::string get_t_as_hex_nwidth(const t& v, std::streamsize w = 8)
+  inline std::string get_t_as_hex_nwidth(const t& v, std::streamsize w = 8)
   {
     std::stringstream ss;
     ss << std::setfill ('0') << std::setw (w) << std::hex << std::noshowbase;
     ss << v;
     return ss.str();
   }
-
-	inline std::string num_to_string_fast(int64_t val)
-	{
-		/*
-		char  buff[30] = {0};
-		i64toa_s(val, buff, sizeof(buff)-1, 10);
-		return buff;*/
-		return boost::lexical_cast<std::string>(val);
-	}
-	//----------------------------------------------------------------------------
-	inline bool string_to_num_fast(const std::string& buff, int64_t& val)
-	{
-		//return get_xtype_from_string(val, buff);
-#if (defined _MSC_VER)
-    val = _atoi64(buff.c_str());
-#else
-    val = atoll(buff.c_str());
-#endif
-		/*
-		 * val = atoi64(buff.c_str());
-     */
-		if(buff != "0" && val == 0)
-			return false;
-		return true;
-	}
-	//----------------------------------------------------------------------------
-	inline bool string_to_num_fast(const std::string& buff, int& val)
-	{
-		val = atoi(buff.c_str());
-		if(buff != "0" && val == 0)
-			return false;
-
-		return true;
-	}
-	//----------------------------------------------------------------------------
+  //----------------------------------------------------------------------------
+  std::string num_to_string_fast(int64_t val);
+  bool string_to_num_fast(const std::string& buff, int64_t& val);
+  bool string_to_num_fast(const std::string& buff, int& val);
 #ifdef WINDOWS_PLATFORM
-	inline std::string system_time_to_string(const SYSTEMTIME& st)
-	{
-	
-		/*
-		TIME_ZONE_INFORMATION tzi;
-		GetTimeZoneInformation(&tzi);
-		SystemTimeToTzSpecificLocalTime(&tzi, &stUTC, &stLocal);
-		*/
-
-		char szTime[25], szDate[25];
-		::GetTimeFormatA(
-			LOCALE_USER_DEFAULT,    // locale
-			TIME_FORCE24HOURFORMAT, // options
-			&st,					// time
-			NULL,                   // time format string
-			szTime,                 // formatted string buffer
-			25                      // size of string buffer
-			);
-
-		::GetDateFormatA(
-			LOCALE_USER_DEFAULT,    // locale
-			NULL,                   // options
-			&st,					// date
-			NULL,                   // date format
-			szDate,                 // formatted string buffer
-			25                      // size of buffer
-			);
-		szTime[24] = szDate[24] = 0; //be happy :)
-		
-		std::string res = szDate;
-		(res += " " )+= szTime;
-		return res; 
-
-	}
+  std::string system_time_to_string(const SYSTEMTIME& st);
 #endif
-	//----------------------------------------------------------------------------
-	
-	inline bool compare_no_case(const std::string& str1, const std::string& str2)
-	{
-		
-		return !boost::iequals(str1, str2);
-	}
-	//----------------------------------------------------------------------------
-	inline bool compare_no_case(const std::wstring& str1, const std::wstring& str2)
-	{
-		return !boost::iequals(str1, str2);
-	}
-	//----------------------------------------------------------------------------
-	inline bool is_match_prefix(const std::wstring& str1, const std::wstring& prefix)
-	{	
-		if(prefix.size()>str1.size())
-			return false;
-
-		if(!compare_no_case(str1.substr(0, prefix.size()), prefix))
-			return true;
-		else
-			return false;
-	}
-	//----------------------------------------------------------------------------
-	inline bool is_match_prefix(const std::string& str1, const std::string& prefix)
-	{	
-		if(prefix.size()>str1.size())
-			return false;
-
-		if(!compare_no_case(str1.substr(0, prefix.size()), prefix))
-			return true;
-		else
-			return false;
-	}
-	//----------------------------------------------------------------------------
-	inline std::string& get_current_module_name()
-	{
-		static std::string module_name;
-		return module_name;
-	}
-	//----------------------------------------------------------------------------
-	inline std::string& get_current_module_folder()
-	{	
-		static std::string module_folder;
-		return module_folder;
-	}
-  //----------------------------------------------------------------------------
+  bool compare_no_case(const std::string& str1, const std::string& str2);
+  bool compare_no_case(const std::wstring& str1, const std::wstring& str2);
+  bool is_match_prefix(const std::wstring& str1, const std::wstring& prefix);
+  bool is_match_prefix(const std::string& str1, const std::string& prefix);
+  std::string& get_current_module_name();
+  std::string& get_current_module_folder();
 #ifdef _WIN32
-  inline std::string get_current_module_path()
-  {
-    char pname [5000] = {0};
-    GetModuleFileNameA( NULL, pname, sizeof(pname));
-    pname[sizeof(pname)-1] = 0; //be happy ;)
-    return pname;
-  }
+  std::string get_current_module_path();
 #endif
-	//----------------------------------------------------------------------------
-	inline bool set_module_name_and_folder(const std::string& path_to_process_)
-	{
-    std::string path_to_process = path_to_process_;
-#ifdef _WIN32
-    path_to_process = get_current_module_path();
-#endif 
-		std::string::size_type a = path_to_process.rfind( '\\' );
-		if(a == std::string::npos )
-		{
-			a = path_to_process.rfind( '/' );
-		}
-		if ( a != std::string::npos )
-		{	
-			get_current_module_name() = path_to_process.substr(a+1, path_to_process.size());
-			get_current_module_folder() = path_to_process.substr(0, a);
-			return true;
-		}else
-			return false;
-
-	}
-
-	//----------------------------------------------------------------------------
-	inline bool trim_left(std::string& str)
-	{
-		for(std::string::iterator it = str.begin(); it!= str.end() && isspace(static_cast<unsigned char>(*it));)
-			str.erase(str.begin());
-			
-		return true;
-	}
-	//----------------------------------------------------------------------------
-	inline bool trim_right(std::string& str)
-	{
-
-		for(std::string::reverse_iterator it = str.rbegin(); it!= str.rend() && isspace(static_cast<unsigned char>(*it));)
-			str.erase( --((it++).base()));
-
-		return true;
-	}
-	//----------------------------------------------------------------------------
-	inline std::string& trim(std::string& str)
-	{
-
-		trim_left(str);
-		trim_right(str);
-		return str;
-	}
-  //----------------------------------------------------------------------------
-  inline std::string trim(const std::string& str_)
-  {
-    std::string str = str_;
-    trim_left(str);
-    trim_right(str);
-    return str;
-  }
+  bool set_module_name_and_folder(const std::string& path_to_process_);
+  bool trim_left(std::string& str);
+  bool trim_right(std::string& str);
+  std::string& trim(std::string& str);
+  std::string trim(const std::string& str_);
   //----------------------------------------------------------------------------
   template<class t_pod_type>
   std::string pod_to_hex(const t_pod_type& s)
@@ -584,161 +333,27 @@ POP_WARNINGS
     return true;
   }
   //----------------------------------------------------------------------------
-	inline std::string get_extension(const std::string& str)
-	{
-		std::string res;
-		std::string::size_type pos = str.rfind('.');
-		if(std::string::npos == pos)
-			return res;
-		
-		res = str.substr(pos+1, str.size()-pos);
-		return res;
-	}
-	//----------------------------------------------------------------------------
-	inline std::string get_filename_from_path(const std::string& str)
-	{
-		std::string res;
-		std::string::size_type pos = str.rfind('\\');
-		if(std::string::npos == pos)
-			return str;
-
-		res = str.substr(pos+1, str.size()-pos);
-		return res;
-	}
-	//----------------------------------------------------------------------------
-
-
-
-	inline std::string cut_off_extension(const std::string& str)
-	{
-		std::string res;
-		std::string::size_type pos = str.rfind('.');
-		if(std::string::npos == pos)
-			return str;
-
-		res = str.substr(0, pos);
-		return res;
-	}
-
-	//----------------------------------------------------------------------------
+  std::string get_extension(const std::string& str);
+  std::string get_filename_from_path(const std::string& str);
+  std::string cut_off_extension(const std::string& str);
 #ifdef _WININET_
-	inline std::string get_string_from_systemtime(const SYSTEMTIME& sys_time)
-	{
-		std::string result_string;
-
-		char buff[100] = {0};
-		BOOL res = ::InternetTimeFromSystemTimeA(&sys_time, INTERNET_RFC1123_FORMAT, buff, 99);
-		if(!res)
-		{
-			LOG_ERROR("Failed to load SytemTime to string");
-		}
-
-		result_string = buff;
-		return result_string;
-
-	}
-	//-------------------------------------------------------------------------------------
-	inline SYSTEMTIME get_systemtime_from_string(const std::string& buff)
-	{
-		SYSTEMTIME result_time = {0};
-
-		BOOL res = ::InternetTimeToSystemTimeA(buff.c_str(), &result_time, NULL);
-		if(!res)
-		{
-			LOG_ERROR("Failed to load SytemTime from string " << buff << "interval set to 15 minutes");
-		}
-
-		return result_time;
-	}
+  std::string get_string_from_systemtime(const SYSTEMTIME& sys_time);
+  SYSTEMTIME get_systemtime_from_string(const std::string& buff);
 #endif
 
 #ifdef WINDOWS_PLATFORM
-	static const DWORD INFO_BUFFER_SIZE = 10000;
+  const DWORD INFO_BUFFER_SIZE = 10000;
 
-	static const wchar_t* get_pc_name()
-	{
-		static wchar_t	info[INFO_BUFFER_SIZE];
-		static DWORD	bufCharCount = INFO_BUFFER_SIZE;
-		static bool		init = false;
-
-		if (!init) {
-			if (!GetComputerNameW( info, &bufCharCount ))
-				info[0] = 0;
-			else
-				init = true;
-		}
-
-		return info;
-	}
-
-	static const wchar_t* get_user_name()
-	{
-		static wchar_t	info[INFO_BUFFER_SIZE];
-		static DWORD	bufCharCount = INFO_BUFFER_SIZE;
-		static bool		init = false;
-
-		if (!init) {
-			if (!GetUserNameW( info, &bufCharCount ))
-				info[0] = 0;
-			else
-				init = true;
-		}
-
-		return info;
-	}
+  const wchar_t* get_pc_name();
+  const wchar_t* get_user_name();
 #endif
 
 #ifdef _LM_
-	static const wchar_t* get_domain_name()
-	{
-		static wchar_t	info[INFO_BUFFER_SIZE];
-		static DWORD	bufCharCount = 0;
-		static bool		init = false;
-
-		if (!init) {
-			LPWSTR domain( NULL );
-			NETSETUP_JOIN_STATUS status;
-			info[0] = 0;
-
-			if (NET_API_STATUS result = NetGetJoinInformation( NULL, &domain, &status )) 
-			{
-				LOG_ERROR("get_domain_name error: " << log_space::get_win32_err_descr(result));
-			} else
-			{
-				StringCchCopyW( info, sizeof(info)/sizeof( info[0] ), domain );
-				NetApiBufferFree((void*)domain);
-				init = true;
-			}
-		}
-
-		return info;
-	}
+  const wchar_t* get_domain_name();
 #endif
 #ifdef WINDOWS_PLATFORM
-	inline
-	std::string load_resource_string_a(int id, const char* pmodule_name = NULL)
-	{
-		//slow realization 
-		HMODULE h = ::GetModuleHandleA( pmodule_name );
-		
-		char buff[2000] = {0};
-		
-		::LoadStringA( h, id, buff, sizeof(buff));
-		buff[sizeof(buff)-1] = 0; //be happy :)
-		return buff;
-	}
-	inline
-	std::wstring load_resource_string_w(int id, const char* pmodule_name = NULL)
-	{
-		//slow realization 
-		HMODULE h = ::GetModuleHandleA( pmodule_name );
-		
-		wchar_t buff[2000] = {0};
-		
-		::LoadStringW( h, id, buff, sizeof(buff) / sizeof( buff[0] ) );
-		buff[(sizeof(buff)/sizeof(buff[0]))-1] = 0; //be happy :)
-		return buff;	
-	}
+  std::string load_resource_string_a(int id, const char* pmodule_name = NULL);
+  std::wstring load_resource_string_w(int id, const char* pmodule_name = NULL);
 #endif
 }
 }

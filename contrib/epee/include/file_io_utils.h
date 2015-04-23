@@ -28,10 +28,7 @@
 #ifndef _FILE_IO_UTILS_H_
 #define _FILE_IO_UTILS_H_
 
-
-//#include <sys/types.h>
-//#include <sys/stat.h>
-
+#include <fstream>
 #include <iostream>
 #include <boost/filesystem.hpp>
 
@@ -75,7 +72,7 @@ namespace file_io_utils
 
 #ifdef BOOST_LEXICAL_CAST_INCLUDED
 	inline
-	bool get_not_used_filename(const std::string& folder, OUT std::string& result_name)
+	bool get_not_used_filename(const std::string& folder, std::string& result_name)
 	{	
 		DWORD folder_attr = ::GetFileAttributesA(folder.c_str());
 		if(folder_attr == INVALID_FILE_ATTRIBUTES)
@@ -302,7 +299,7 @@ namespace file_io_utils
 	}
 	*/
 	inline
-	bool get_file_time(const std::string& path_to_file, OUT time_t& ft)
+	bool get_file_time(const std::string& path_to_file, time_t& ft)
 	{
 		boost::system::error_code ec;
 		ft = boost::filesystem::last_write_time(boost::filesystem::path(path_to_file), ec);
@@ -408,7 +405,7 @@ namespace file_io_utils
 	}
 	*/
 #ifdef WINDOWS_PLATFORM
-	inline bool get_folder_content(const std::string& path, std::list<WIN32_FIND_DATAA>& OUT target_list)
+	inline bool get_folder_content(const std::string& path, std::list<WIN32_FIND_DATAA>& target_list)
 	{
 		WIN32_FIND_DATAA find_data = {0};
 		HANDLE hfind = ::FindFirstFileA((path + "\\*.*").c_str(), &find_data);
@@ -426,7 +423,7 @@ namespace file_io_utils
 		return true;
 	}
 #endif
-	inline bool get_folder_content(const std::string& path, std::list<std::string>& OUT target_list, bool only_files = false)
+	inline bool get_folder_content(const std::string& path, std::list<std::string>& target_list, bool only_files = false)
 	{
 		try
 		{

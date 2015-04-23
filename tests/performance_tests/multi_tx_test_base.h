@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +9,7 @@
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "cryptonote_core/Currency.h"
 #include "crypto/crypto.h"
 
 template<size_t a_ring_size>
@@ -24,15 +25,17 @@ public:
   {
     using namespace cryptonote;
 
+    Currency currency = CurrencyBuilder().currency();
+
     std::vector<tx_source_entry::output_entry> output_entries;
     for (size_t i = 0; i < ring_size; ++i)
     {
       m_miners[i].generate();
 
-      if (!construct_miner_tx(0, 0, 0, 2, 0, m_miners[i].get_keys().m_account_address, m_miner_txs[i]))
+      if (!currency.constructMinerTx(0, 0, 0, 2, 0, m_miners[i].get_keys().m_account_address, m_miner_txs[i]))
         return false;
 
-      txout_to_key tx_out = boost::get<txout_to_key>(m_miner_txs[i].vout[0].target);
+      TransactionOutputToKey tx_out = boost::get<TransactionOutputToKey>(m_miner_txs[i].vout[0].target);
       output_entries.push_back(std::make_pair(i, tx_out.key));
       m_public_keys[i] = tx_out.key;
       m_public_key_ptrs[i] = &m_public_keys[i];
@@ -54,7 +57,7 @@ public:
 
 protected:
   cryptonote::account_base m_miners[ring_size];
-  cryptonote::transaction m_miner_txs[ring_size];
+  cryptonote::Transaction m_miner_txs[ring_size];
   uint64_t m_source_amount;
 
   std::vector<cryptonote::tx_source_entry> m_sources;

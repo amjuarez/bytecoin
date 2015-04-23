@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -140,6 +140,20 @@ int main(int argc, char *argv[]) {
       get(input, derivation, output_index, base, expected);
       derive_secret_key(derivation, output_index, base, actual);
       if (expected != actual) {
+        goto error;
+      }
+    } else if (cmd == "underive_public_key") {
+      key_derivation derivation;
+      size_t output_index;
+      public_key derived_key;
+      bool expected1, actual1;
+      public_key expected2, actual2;
+      get(input, derivation, output_index, derived_key, expected1);
+      if (expected1) {
+        get(input, expected2);
+      }
+      actual1 = underive_public_key(derivation, output_index, derived_key, actual2);
+      if (expected1 != actual1 || (expected1 && expected2 != actual2)) {
         goto error;
       }
     } else if (cmd == "generate_signature") {

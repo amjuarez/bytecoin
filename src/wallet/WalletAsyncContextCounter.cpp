@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -20,10 +20,8 @@ void WalletAsyncContextCounter::delAsyncContext() {
 
 void WalletAsyncContextCounter::waitAsyncContextsFinish() {
   std::unique_lock<std::mutex> lock(m_mutex);
-  while (m_asyncContexts)
+  while (m_asyncContexts > 0)
     m_cv.wait(lock);
 }
 
 } //namespace CryptoNote
-
-

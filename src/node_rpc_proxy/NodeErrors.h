@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,6 +17,7 @@ enum NodeErrorCodes {
   NETWORK_ERROR,
   NODE_BUSY,
   INTERNAL_NODE_ERROR,
+  REQUEST_ERROR
 };
 
 // custom category:
@@ -39,6 +40,7 @@ public:
     case NETWORK_ERROR:       return "Network error";
     case NODE_BUSY:           return "Node is busy";
     case INTERNAL_NODE_ERROR: return "Internal node error";
+    case REQUEST_ERROR:       return "Error in request parameters";
     default:                  return "Unknown error";
     }
   }

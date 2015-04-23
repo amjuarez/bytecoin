@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,136 +8,200 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+
 #include <boost/serialization/version.hpp>
 #include <boost/utility.hpp>
 
+// multi index
+#include <boost/multi_index_container.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/ordered_index.hpp>
+#include <boost/multi_index/member.hpp>
+
+// epee
+#include "math_helper.h"
 #include "string_tools.h"
 #include "syncobj.h"
-#include "cryptonote_basic_impl.h"
-#include "verification_context.h"
+
+#include "common/util.h"
+#include "common/int-util.h"
+#include "common/ObserverManager.h"
 #include "crypto/hash.h"
+#include "cryptonote_core/cryptonote_basic_impl.h"
+#include "cryptonote_core/Currency.h"
+#include "cryptonote_core/ITimeProvider.h"
+#include "cryptonote_core/ITransactionValidator.h"
+#include "cryptonote_core/ITxPoolObserver.h"
+#include "cryptonote_core/verification_context.h"
 
 
-namespace cryptonote
-{
-  class blockchain_storage;
+namespace cryptonote {
+
+
+  class OnceInTimeInterval {
+  public:
+    OnceInTimeInterval(unsigned interval, CryptoNote::ITimeProvider& timeProvider)
+      : m_interval(interval), m_timeProvider(timeProvider) {
+      m_lastWorkedTime = 0;
+    }
+
+    template<class functor_t>
+    bool call(functor_t functr) {
+      time_t now = m_timeProvider.now();
+
+      if (now - m_lastWorkedTime > m_interval) {
+        bool res = functr();
+        m_lastWorkedTime = m_timeProvider.now();
+        return res;
+      }
+
+      return true;
+    }
+
+  private:
+    time_t m_lastWorkedTime;
+    unsigned m_interval;
+    CryptoNote::ITimeProvider& m_timeProvider;
+  };
+
+  using CryptoNote::BlockInfo;
+  using namespace boost::multi_index;
+
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-
-  class tx_memory_pool: boost::noncopyable
-  {
+  class tx_memory_pool: boost::noncopyable {
   public:
-    tx_memory_pool(blockchain_storage& bchs);
-    bool add_tx(const transaction &tx, const crypto::hash &id, size_t blob_size, tx_verification_context& tvc, bool keeped_by_block);
-    bool add_tx(const transaction &tx, tx_verification_context& tvc, bool keeped_by_block);
-    //gets tx and remove it from pool
-    bool take_tx(const crypto::hash &id, transaction &tx, size_t& blob_size, uint64_t& fee);
+    tx_memory_pool(const cryptonote::Currency& currency, CryptoNote::ITransactionValidator& validator,
+      CryptoNote::ITimeProvider& timeProvider);
 
-    bool have_tx(const crypto::hash &id);
-    bool have_tx_keyimg_as_spent(const crypto::key_image& key_im);
-    bool have_tx_keyimges_as_spent(const transaction& tx);
-
-    bool on_blockchain_inc(uint64_t new_block_height, const crypto::hash& top_block_id);
-    bool on_blockchain_dec(uint64_t new_block_height, const crypto::hash& top_block_id);
-
-    void lock();
-    void unlock();
+    bool addObserver(ITxPoolObserver* observer);
+    bool removeObserver(ITxPoolObserver* observer);
 
     // load/store operations
     bool init(const std::string& config_folder);
     bool deinit();
-    bool fill_block_template(block &bl, size_t median_size, uint64_t already_generated_coins, size_t &total_size, uint64_t &fee);
-    bool get_transactions(std::list<transaction>& txs);
-    bool get_transaction(const crypto::hash& h, transaction& tx);
-    size_t get_transactions_count();
-    bool remove_transaction_keyimages(const transaction& tx);
-    bool have_key_images(const std::unordered_set<crypto::key_image>& kic, const transaction& tx);
-    bool append_key_images(std::unordered_set<crypto::key_image>& kic, const transaction& tx);
-    std::string print_pool(bool short_format);
 
-    /*bool flush_pool(const std::strig& folder);
-    bool inflate_pool(const std::strig& folder);*/
+    bool have_tx(const crypto::hash &id) const;
+    bool add_tx(const Transaction &tx, const crypto::hash &id, size_t blobSize, tx_verification_context& tvc, bool keeped_by_block);
+    bool add_tx(const Transaction &tx, tx_verification_context& tvc, bool keeped_by_block);
+    //gets tx and remove it from pool
+    bool take_tx(const crypto::hash &id, Transaction &tx, size_t& blobSize, uint64_t& fee);
 
-#define CURRENT_MEMPOOL_ARCHIVE_VER    7
+    bool on_blockchain_inc(uint64_t new_block_height, const crypto::hash& top_block_id);
+    bool on_blockchain_dec(uint64_t new_block_height, const crypto::hash& top_block_id);
+
+    void lock() const;
+    void unlock() const;
+
+    bool fill_block_template(Block &bl, size_t median_size, size_t maxCumulativeSize, uint64_t already_generated_coins, size_t &total_size, uint64_t &fee);
+
+    void get_transactions(std::list<Transaction>& txs) const;
+    void get_difference(const std::vector<crypto::hash>& known_tx_ids, std::vector<crypto::hash>& new_tx_ids, std::vector<crypto::hash>& deleted_tx_ids) const;
+    size_t get_transactions_count() const;
+    std::string print_pool(bool short_format) const;
+    void on_idle();
+
+    template<class t_ids_container, class t_tx_container, class t_missed_container>
+    void getTransactions(const t_ids_container& txsIds, t_tx_container& txs, t_missed_container& missedTxs) {
+      CRITICAL_REGION_LOCAL(m_transactions_lock);
+
+      for (const auto& id : txsIds) {
+        auto it = m_transactions.find(id);
+        if (it == m_transactions.end()) {
+          missedTxs.push_back(id);
+        } else {
+          txs.push_back(it->tx);
+        }
+      }
+    }
+
+#define CURRENT_MEMPOOL_ARCHIVE_VER    10
 
     template<class archive_t>
-    void serialize(archive_t & a, const unsigned int version)
-    {
-      if(version < CURRENT_MEMPOOL_ARCHIVE_VER )
+    void serialize(archive_t & a, const unsigned int version) {
+      if (version < CURRENT_MEMPOOL_ARCHIVE_VER) {
         return;
+      }
+
       CRITICAL_REGION_LOCAL(m_transactions_lock);
       a & m_transactions;
       a & m_spent_key_images;
+      a & m_spentOutputs;
     }
 
-    struct tx_details
-    {
-      transaction tx;
-      size_t blob_size;
+    struct TransactionCheckInfo {
+      BlockInfo maxUsedBlock;
+      BlockInfo lastFailedBlock;
+    };
+
+    struct TransactionDetails : public TransactionCheckInfo {
+      crypto::hash id;
+      Transaction tx;
+      size_t blobSize;
       uint64_t fee;
-      crypto::hash max_used_block_id;
-      uint64_t max_used_block_height;
-      bool kept_by_block;
-      //
-      uint64_t last_failed_height;
-      crypto::hash last_failed_id;
+      bool keptByBlock;
+      time_t receiveTime;
     };
 
   private:
-    bool is_transaction_ready_to_go(tx_details& txd);
-    typedef std::unordered_map<crypto::hash, tx_details > transactions_container;
+
+    struct TransactionPriorityComparator {
+      // lhs > hrs
+      bool operator()(const TransactionDetails& lhs, const TransactionDetails& rhs) const {
+        // price(lhs) = lhs.fee / lhs.blobSize
+        // price(lhs) > price(rhs) -->
+        // lhs.fee / lhs.blobSize > rhs.fee / rhs.blobSize -->
+        // lhs.fee * rhs.blobSize > rhs.fee * lhs.blobSize
+        uint64_t lhs_hi, lhs_lo = mul128(lhs.fee, rhs.blobSize, &lhs_hi);
+        uint64_t rhs_hi, rhs_lo = mul128(rhs.fee, lhs.blobSize, &rhs_hi);
+
+        return
+          // prefer more profitable transactions
+          (lhs_hi >  rhs_hi) ||
+          (lhs_hi == rhs_hi && lhs_lo >  rhs_lo) ||
+          // prefer smaller
+          (lhs_hi == rhs_hi && lhs_lo == rhs_lo && lhs.blobSize <  rhs.blobSize) ||
+          // prefer older
+          (lhs_hi == rhs_hi && lhs_lo == rhs_lo && lhs.blobSize == rhs.blobSize && lhs.receiveTime < rhs.receiveTime);
+      }
+    };
+
+    typedef hashed_unique<BOOST_MULTI_INDEX_MEMBER(TransactionDetails, crypto::hash, id)> main_index_t;
+    typedef ordered_non_unique<identity<TransactionDetails>, TransactionPriorityComparator> fee_index_t;
+
+    typedef multi_index_container<TransactionDetails,
+      indexed_by<main_index_t, fee_index_t>
+    > tx_container_t;
+
+    typedef std::pair<uint64_t, uint64_t> GlobalOutput;
+    typedef std::set<GlobalOutput> GlobalOutputsContainer;
     typedef std::unordered_map<crypto::key_image, std::unordered_set<crypto::hash> > key_images_container;
 
-    epee::critical_section m_transactions_lock;
-    transactions_container m_transactions;
-    key_images_container m_spent_key_images;
 
-    //transactions_container m_alternative_transactions;
+    // double spending checking
+    bool addTransactionInputs(const crypto::hash& id, const Transaction& tx, bool keptByBlock);
+    bool haveSpentInputs(const Transaction& tx) const;
+    bool removeTransactionInputs(const crypto::hash& id, const Transaction& tx, bool keptByBlock);
+
+    tx_container_t::iterator removeTransaction(tx_container_t::iterator i);
+    bool removeExpiredTransactions();
+    bool is_transaction_ready_to_go(const Transaction& tx, TransactionCheckInfo& txd) const;
+
+    tools::ObserverManager<ITxPoolObserver> m_observerManager;
+
+    const cryptonote::Currency& m_currency;
+    OnceInTimeInterval m_txCheckInterval;
+    mutable epee::critical_section m_transactions_lock;
+    key_images_container m_spent_key_images;
+    GlobalOutputsContainer m_spentOutputs;
 
     std::string m_config_folder;
-    blockchain_storage& m_blockchain;
-    /************************************************************************/
-    /*                                                                      */
-    /************************************************************************/
-    /*class inputs_visitor: public boost::static_visitor<bool>
-    {
-      key_images_container& m_spent_keys;
-    public:
-      inputs_visitor(key_images_container& spent_keys): m_spent_keys(spent_keys)
-      {}
-      bool operator()(const txin_to_key& tx) const
-      {
-        auto pr = m_spent_keys.insert(tx.k_image);
-        CHECK_AND_ASSERT_MES(pr.second, false, "Tried to insert transaction with input seems already spent, input: " << epee::string_tools::pod_to_hex(tx.k_image));
-        return true;
-      }
-      bool operator()(const txin_gen& tx) const
-      {
-        CHECK_AND_ASSERT_MES(false, false, "coinbase transaction in memory pool");
-        return false;
-      }
-      bool operator()(const txin_to_script& tx) const {return false;}
-      bool operator()(const txin_to_scripthash& tx) const {return false;}
-    }; */
-    /************************************************************************/
-    /*                                                                      */
-    /************************************************************************/
-    class amount_visitor: public boost::static_visitor<uint64_t>
-    {
-    public:
-      uint64_t operator()(const txin_to_key& tx) const
-      {
-        return tx.amount;
-      }
-      uint64_t operator()(const txin_gen& tx) const
-      {
-        CHECK_AND_ASSERT_MES(false, false, "coinbase transaction in memory pool");
-        return 0;
-      }
-      uint64_t operator()(const txin_to_script& tx) const {return 0;}
-      uint64_t operator()(const txin_to_scripthash& tx) const {return 0;}
-    };
+    CryptoNote::ITransactionValidator& m_validator;
+    CryptoNote::ITimeProvider& m_timeProvider;
+
+    tx_container_t m_transactions;  
+    tx_container_t::nth_index<1>::type& m_fee_index;
 
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
     friend class blockchain_storage;
@@ -145,25 +209,22 @@ namespace cryptonote
   };
 }
 
-namespace boost
-{
-  namespace serialization
-  {
+namespace boost {
+  namespace serialization {
     template<class archive_t>
-    void serialize(archive_t & ar, cryptonote::tx_memory_pool::tx_details& td, const unsigned int version)
-    {
-      ar & td.blob_size;
+    void serialize(archive_t & ar, cryptonote::tx_memory_pool::TransactionDetails& td, const unsigned int version) {
+      ar & td.id;
+      ar & td.blobSize;
       ar & td.fee;
       ar & td.tx;
-      ar & td.max_used_block_height;
-      ar & td.max_used_block_id;
-      ar & td.last_failed_height;
-      ar & td.last_failed_id;
-
+      ar & td.maxUsedBlock.height;
+      ar & td.maxUsedBlock.id;
+      ar & td.lastFailedBlock.height;
+      ar & td.lastFailedBlock.id;
+      ar & td.keptByBlock;
+      ar & td.receiveTime;
     }
   }
 }
+
 BOOST_CLASS_VERSION(cryptonote::tx_memory_pool, CURRENT_MEMPOOL_ARCHIVE_VER)
-
-
-

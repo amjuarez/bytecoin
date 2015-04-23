@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -20,14 +20,14 @@ public:
       return false;
 
     crypto::generate_key_derivation(m_tx_pub_key, m_bob.get_keys().m_view_secret_key, m_key_derivation);
-    m_spend_public_key = m_bob.get_keys().m_account_address.m_spend_public_key;
+    m_spend_public_key = m_bob.get_keys().m_account_address.m_spendPublicKey;
 
     return true;
   }
 
   bool test()
   {
-    cryptonote::keypair in_ephemeral;
+    cryptonote::KeyPair in_ephemeral;
     crypto::derive_public_key(m_key_derivation, 0, m_spend_public_key, in_ephemeral.pub);
     return true;
   }

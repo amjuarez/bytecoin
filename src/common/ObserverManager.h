@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -90,6 +90,19 @@ public:
 
     for (T* observer : observersCopy) {
       (observer->*notification)(arg0, arg1, arg2);
+    }
+  }
+
+  template<typename F, typename Arg0, typename Arg1, typename Arg2, typename Arg3>
+  void notify(F notification, const Arg0& arg0, const Arg1& arg1, const Arg2& arg2, const Arg3& arg3) {
+    std::vector<T*> observersCopy;
+    {
+      std::unique_lock<std::mutex> lock(m_observersMutex);
+      observersCopy = m_observers;
+    }
+
+    for (T* observer : observersCopy) {
+      (observer->*notification)(arg0, arg1, arg2, arg3);
     }
   }
 

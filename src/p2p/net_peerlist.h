@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -43,7 +43,7 @@ namespace nodetool
     size_t get_white_peers_count(){CRITICAL_REGION_LOCAL(m_peerlist_lock); return m_peers_white.size();}
     size_t get_gray_peers_count(){CRITICAL_REGION_LOCAL(m_peerlist_lock); return m_peers_gray.size();}
     bool merge_peerlist(const std::list<peerlist_entry>& outer_bs);
-    bool get_peerlist_head(std::list<peerlist_entry>& bs_head, uint32_t depth = P2P_DEFAULT_PEERS_IN_HANDSHAKE);
+    bool get_peerlist_head(std::list<peerlist_entry>& bs_head, uint32_t depth = cryptonote::P2P_DEFAULT_PEERS_IN_HANDSHAKE);
     bool get_peerlist_full(std::list<peerlist_entry>& pl_gray, std::list<peerlist_entry>& pl_white);
     bool get_white_peer_by_index(peerlist_entry& p, size_t i);
     bool get_gray_peer_by_index(peerlist_entry& p, size_t i);
@@ -83,18 +83,6 @@ namespace nodetool
     private:
       const peerlist_entry& m_ple;
     };
-
-    struct modify_last_seen
-    {
-      modify_last_seen(time_t last_seen):m_last_seen(last_seen){}
-      void operator()(peerlist_entry& e)
-      {
-        e.last_seen = m_last_seen;
-      }
-    private:
-      time_t m_last_seen;
-    };
-
 
     typedef boost::multi_index_container<
       peerlist_entry,
@@ -180,7 +168,7 @@ namespace nodetool
   //--------------------------------------------------------------------------------------------------
   inline void peerlist_manager::trim_white_peerlist()
   {
-    while(m_peers_gray.size() > P2P_LOCAL_GRAY_PEERLIST_LIMIT)
+    while(m_peers_gray.size() > cryptonote::P2P_LOCAL_GRAY_PEERLIST_LIMIT)
     {
       peers_indexed::index<by_time>::type& sorted_index=m_peers_gray.get<by_time>();
       sorted_index.erase(sorted_index.begin());
@@ -189,7 +177,7 @@ namespace nodetool
   //--------------------------------------------------------------------------------------------------
   inline void peerlist_manager::trim_gray_peerlist()
   {
-    while(m_peers_white.size() > P2P_LOCAL_WHITE_PEERLIST_LIMIT)
+    while(m_peers_white.size() > cryptonote::P2P_LOCAL_WHITE_PEERLIST_LIMIT)
     {
       peers_indexed::index<by_time>::type& sorted_index=m_peers_white.get<by_time>();
       sorted_index.erase(sorted_index.begin());

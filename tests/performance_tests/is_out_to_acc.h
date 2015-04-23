@@ -1,10 +1,9 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
-#include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 
@@ -17,7 +16,7 @@ public:
 
   bool test()
   {
-    const cryptonote::txout_to_key& tx_out = boost::get<cryptonote::txout_to_key>(m_tx.vout[0].target);
+    const cryptonote::TransactionOutputToKey& tx_out = boost::get<cryptonote::TransactionOutputToKey>(m_tx.vout[0].target);
     return cryptonote::is_out_to_acc(m_bob.get_keys(), tx_out, m_tx_pub_key, 0);
   }
 };

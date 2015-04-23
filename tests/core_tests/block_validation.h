@@ -1,179 +1,300 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once 
+
 #include "chaingen.h"
 
-template<size_t invalid_block_idx = 0>
-class gen_block_verification_base : public test_chain_unit_base
-{
+class CheckBlockPurged : public test_chain_unit_base {
 public:
-  gen_block_verification_base()
-  {
-    REGISTER_CALLBACK("check_block_purged", gen_block_verification_base<invalid_block_idx>::check_block_purged);
+  CheckBlockPurged(size_t invalidBlockIdx) :
+    m_invalidBlockIdx(invalidBlockIdx) {
+
+    cryptonote::CurrencyBuilder currencyBuilder;
+    m_currency = currencyBuilder.currency();
+
+    REGISTER_CALLBACK("check_block_purged", CheckBlockPurged::check_block_purged);
+    REGISTER_CALLBACK("markInvalidBlock", CheckBlockPurged::markInvalidBlock);
   }
 
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::block& /*blk*/)
-  {
-    if (invalid_block_idx == event_idx)
+  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t eventIdx, const cryptonote::Block& /*blk*/) {
+    if (m_invalidBlockIdx == eventIdx) {
       return bvc.m_verifivation_failed;
-    else
+    } else {
       return !bvc.m_verifivation_failed;
+    }
   }
 
-  bool check_block_purged(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events)
-  {
-    DEFINE_TESTS_ERROR_CONTEXT("gen_block_verification_base::check_block_purged");
+  bool check_block_purged(cryptonote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
+    DEFINE_TESTS_ERROR_CONTEXT("CheckBlockPurged::check_block_purged");
 
-    CHECK_TEST_CONDITION(invalid_block_idx < ev_index);
+    CHECK_TEST_CONDITION(m_invalidBlockIdx < eventIdx);
     CHECK_EQ(0, c.get_pool_transactions_count());
-    CHECK_EQ(invalid_block_idx, c.get_current_blockchain_height());
+    CHECK_EQ(m_invalidBlockIdx, c.get_current_blockchain_height());
 
     return true;
   }
-};
 
-template<size_t expected_blockchain_height>
-struct gen_block_accepted_base : public test_chain_unit_base
-{
-  gen_block_accepted_base()
-  {
-    REGISTER_CALLBACK("check_block_accepted", gen_block_accepted_base::check_block_accepted);
+  bool markInvalidBlock(cryptonote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
+    m_invalidBlockIdx = eventIdx + 1;
+    return true;
   }
 
-  bool check_block_accepted(cryptonote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& /*events*/)
-  {
-    DEFINE_TESTS_ERROR_CONTEXT("gen_block_accepted_base::check_block_accepted");
+protected:
+  size_t m_invalidBlockIdx;
+};
+
+
+struct CheckBlockAccepted : public test_chain_unit_base {
+  CheckBlockAccepted(size_t expectedBlockchainHeight) :
+    m_expectedBlockchainHeight(expectedBlockchainHeight) {
+
+    cryptonote::CurrencyBuilder currencyBuilder;
+    m_currency = currencyBuilder.currency();
+
+    REGISTER_CALLBACK("check_block_accepted", CheckBlockAccepted::check_block_accepted);
+  }
+
+  bool check_block_accepted(cryptonote::core& c, size_t /*eventIdx*/, const std::vector<test_event_entry>& /*events*/) {
+    DEFINE_TESTS_ERROR_CONTEXT("CheckBlockAccepted::check_block_accepted");
 
     CHECK_EQ(0, c.get_pool_transactions_count());
-    CHECK_EQ(expected_blockchain_height, c.get_current_blockchain_height());
+    CHECK_EQ(m_expectedBlockchainHeight, c.get_current_blockchain_height());
 
     return true;
   }
+
+protected:
+  size_t m_expectedBlockchainHeight;
 };
 
-struct gen_block_big_major_version : public gen_block_verification_base<1>
-{
+
+struct TestBlockMajorVersionAccepted : public CheckBlockAccepted {
+  TestBlockMajorVersionAccepted() :
+    CheckBlockAccepted(2) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_big_minor_version : public gen_block_accepted_base<2>
-{
+struct TestBlockMajorVersionRejected : public CheckBlockPurged {
+  TestBlockMajorVersionRejected() :
+    CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_ts_not_checked : public gen_block_accepted_base<BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW>
-{
+struct TestBlockBigMinorVersion : public CheckBlockAccepted {
+
+  TestBlockBigMinorVersion()
+    : CheckBlockAccepted(2) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_ts_in_past : public gen_block_verification_base<BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW>
+struct gen_block_ts_not_checked : public CheckBlockAccepted
 {
+  gen_block_ts_not_checked()
+    : CheckBlockAccepted(0) {
+    m_expectedBlockchainHeight = m_currency.timestampCheckWindow();
+  }
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_ts_in_future : public gen_block_verification_base<1>
+struct gen_block_ts_in_past : public CheckBlockPurged
 {
+  gen_block_ts_in_past()
+    : CheckBlockPurged(0) {
+    m_invalidBlockIdx = m_currency.timestampCheckWindow();
+  }
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_invalid_prev_id : public gen_block_verification_base<1>
+struct gen_block_ts_in_future_rejected : public CheckBlockPurged
 {
-  bool generate(std::vector<test_event_entry>& events) const;
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::block& /*blk*/);
-};
+  gen_block_ts_in_future_rejected()
+    : CheckBlockPurged(1) {}
 
-struct gen_block_invalid_nonce : public gen_block_verification_base<3>
-{
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_no_miner_tx : public gen_block_verification_base<1>
+struct gen_block_ts_in_future_accepted : public CheckBlockAccepted
 {
+  gen_block_ts_in_future_accepted()
+    : CheckBlockAccepted(2) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_low : public gen_block_verification_base<1>
+struct gen_block_invalid_prev_id : public CheckBlockPurged
 {
+  gen_block_invalid_prev_id() 
+    : CheckBlockPurged(1) {}
+
+  bool generate(std::vector<test_event_entry>& events) const;
+  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*blk*/);
+};
+
+struct gen_block_invalid_nonce : public CheckBlockPurged
+{
+  gen_block_invalid_nonce()
+    : CheckBlockPurged(3) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_high : public gen_block_verification_base<1>
+struct gen_block_no_miner_tx : public CheckBlockPurged
 {
+  gen_block_no_miner_tx()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_timestamp_in_past : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_low : public CheckBlockPurged
 {
+  gen_block_unlock_time_is_low()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_unlock_time_is_timestamp_in_future : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_high : public CheckBlockPurged
 {
+  gen_block_unlock_time_is_high()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_height_is_low : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_timestamp_in_past : public CheckBlockPurged
 {
+  gen_block_unlock_time_is_timestamp_in_past()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_height_is_high : public gen_block_verification_base<1>
+struct gen_block_unlock_time_is_timestamp_in_future : public CheckBlockPurged
 {
+  gen_block_unlock_time_is_timestamp_in_future()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_has_2_tx_gen_in : public gen_block_verification_base<1>
+struct gen_block_height_is_low : public CheckBlockPurged
 {
+  gen_block_height_is_low()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_has_2_in : public gen_block_verification_base<CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW + 1>
+struct gen_block_height_is_high : public CheckBlockPurged
 {
+  gen_block_height_is_high()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_with_txin_to_key : public gen_block_verification_base<CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW + 2>
+struct gen_block_miner_tx_has_2_tx_gen_in : public CheckBlockPurged
 {
+  gen_block_miner_tx_has_2_tx_gen_in()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_out_is_small : public gen_block_verification_base<1>
+struct gen_block_miner_tx_has_2_in : public CheckBlockPurged
 {
+  gen_block_miner_tx_has_2_in()
+    : CheckBlockPurged(0) {
+    m_invalidBlockIdx = m_currency.minedMoneyUnlockWindow() + 1;
+  }
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_out_is_big : public gen_block_verification_base<1>
+struct gen_block_miner_tx_with_txin_to_key : public CheckBlockPurged
 {
+  gen_block_miner_tx_with_txin_to_key()
+    : CheckBlockPurged(0) {
+    m_invalidBlockIdx = m_currency.minedMoneyUnlockWindow() + 2;
+  }
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_has_no_out : public gen_block_verification_base<1>
+struct gen_block_miner_tx_out_is_small : public CheckBlockPurged
 {
+  gen_block_miner_tx_out_is_small()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_miner_tx_has_out_to_alice : public gen_block_accepted_base<2>
+struct gen_block_miner_tx_out_is_big : public CheckBlockPurged
 {
+  gen_block_miner_tx_out_is_big()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_has_invalid_tx : public gen_block_verification_base<1>
+struct gen_block_miner_tx_has_no_out : public CheckBlockPurged
 {
+  gen_block_miner_tx_has_no_out()
+    : CheckBlockPurged(1) {}
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
-struct gen_block_is_too_big : public gen_block_verification_base<1>
+struct gen_block_miner_tx_has_out_to_alice : public CheckBlockAccepted
 {
+  gen_block_miner_tx_has_out_to_alice()
+    : CheckBlockAccepted(2) {}
+
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+struct gen_block_has_invalid_tx : public CheckBlockPurged
+{
+  gen_block_has_invalid_tx()
+    : CheckBlockPurged(1) {}
+
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+struct gen_block_is_too_big : public CheckBlockPurged
+{
+  gen_block_is_too_big()
+      : CheckBlockPurged(1) {
+    cryptonote::CurrencyBuilder currencyBuilder;
+    currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
+    m_currency = currencyBuilder.currency();
+  }
+
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+struct TestBlockCumulativeSizeExceedsLimit : public CheckBlockPurged {
+  TestBlockCumulativeSizeExceedsLimit()
+    : CheckBlockPurged(std::numeric_limits<size_t>::max()) {
+  }
+
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
 struct gen_block_invalid_binary_format : public test_chain_unit_base
 {
   gen_block_invalid_binary_format();
+
   bool generate(std::vector<test_event_entry>& events) const;
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::block& /*blk*/);
+  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*blk*/);
   bool check_all_blocks_purged(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
   bool corrupt_blocks_boundary(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
 

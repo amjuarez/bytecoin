@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,14 +13,20 @@ using namespace epee;
 
 #include <boost/program_options.hpp>
 
-#include "crypto/hash.h"
+// epee
 #include "console_handler.h"
-#include "p2p/net_node.h"
-#include "cryptonote_core/checkpoints_create.h"
+
+#include "common/SignalHandler.h"
+#include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_core.h"
-#include "rpc/core_rpc_server.h"
+#include "cryptonote_core/CoreConfig.h"
+#include "cryptonote_core/Currency.h"
+#include "cryptonote_core/MinerConfig.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
-#include "daemon_commands_handler.h"
+#include "daemon/daemon_commands_handler.h"
+#include "p2p/net_node.h"
+#include "p2p/NetNodeConfig.h"
+#include "rpc/core_rpc_server.h"
 #include "version.h"
 
 #if defined(WIN32)
@@ -31,23 +37,25 @@ namespace po = boost::program_options;
 
 namespace
 {
-  const command_line::arg_descriptor<std::string> arg_config_file = {"config-file", "Specify configuration file", std::string(CRYPTONOTE_NAME ".conf")};
+  const command_line::arg_descriptor<std::string> arg_config_file = {"config-file", "Specify configuration file", std::string(cryptonote::CRYPTONOTE_NAME) + ".conf"};
   const command_line::arg_descriptor<bool>        arg_os_version  = {"os-version", ""};
   const command_line::arg_descriptor<std::string> arg_log_file    = {"log-file", "", ""};
   const command_line::arg_descriptor<int>         arg_log_level   = {"log-level", "", LOG_LEVEL_0};
   const command_line::arg_descriptor<bool>        arg_console     = {"no-console", "Disable daemon console commands"};
   const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
     "network id is changed. Use it with --data-dir flag. The wallet must be launched with --testnet flag.", false};
-  const command_line::arg_descriptor<bool>        arg_print_genesis_tx = {"print-genesis-tx", "Prints genesis' block tx hex to insert it to config and exits"};
+  const command_line::arg_descriptor<bool>        arg_print_genesis_tx = { "print-genesis-tx", "Prints genesis' block tx hex to insert it to config and exits" };
 }
 
 bool command_line_preprocessor(const boost::program_options::variables_map& vm);
 
 void print_genesis_tx_hex() {
-  std::string tx_hex = cryptonote::get_genesis_tx_hex();
+  cryptonote::Transaction tx = cryptonote::CurrencyBuilder().generateGenesisTransaction();
+  cryptonote::blobdata txb = tx_to_blob(tx);
+  std::string tx_hex = string_tools::buff_to_hex_nodelimer(txb);
 
   std::cout << "Insert this line into your coin configuration file as is: " << std::endl;
-  std::cout << "#define GENESIS_COINBASE_TX_HEX  \"" << tx_hex  << "\"" << std::endl;
+  std::cout << "const char GENESIS_COINBASE_TX_HEX[] = \"" << tx_hex << "\";" << std::endl;
 
   return;
 }
@@ -81,10 +89,11 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, arg_testnet_on);
   command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
 
-  cryptonote::core::init_options(desc_cmd_sett);
   cryptonote::core_rpc_server::init_options(desc_cmd_sett);
-  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> >::init_options(desc_cmd_sett);
-  cryptonote::miner::init_options(desc_cmd_sett);
+
+  cryptonote::CoreConfig::initOptions(desc_cmd_sett);
+  nodetool::NetNodeConfig::initOptions(desc_cmd_sett);
+  cryptonote::MinerConfig::initOptions(desc_cmd_sett);
 
   po::options_description desc_options("Allowed options");
   desc_options.add(desc_cmd_only).add(desc_cmd_sett);
@@ -96,7 +105,7 @@ int main(int argc, char* argv[])
 
     if (command_line::get_arg(vm, command_line::arg_help))
     {
-      std::cout << CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL << ENDL;
+      std::cout << cryptonote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL << ENDL;
       std::cout << desc_options << std::endl;
       return false;
     }
@@ -136,7 +145,7 @@ int main(int argc, char* argv[])
   log_dir = log_file_path.has_parent_path() ? log_file_path.parent_path().string() : log_space::log_singletone::get_default_log_folder();
 
   log_space::log_singletone::add_logger(LOGGER_FILE, log_file_path.filename().string().c_str(), log_dir.c_str());
-  LOG_PRINT_L0(CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG);
+  LOG_PRINT_L0(cryptonote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG);
 
   if (command_line_preprocessor(vm))
   {
@@ -145,20 +154,40 @@ int main(int argc, char* argv[])
 
   LOG_PRINT("Module folder: " << argv[0], LOG_LEVEL_0);
 
-  bool res = true;
-  cryptonote::checkpoints checkpoints;
-  res = cryptonote::create_checkpoints(checkpoints);
-  CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize checkpoints");
-
-  //create objects and link them
-  cryptonote::core ccore(NULL);
-
   bool testnet_mode = command_line::get_arg(vm, arg_testnet_on);
   if (testnet_mode) {
     LOG_PRINT_L0("Starting in testnet mode!");
-  } else {
+  }
+
+  //create objects and link them
+  cryptonote::CurrencyBuilder currencyBuilder;
+  currencyBuilder.testnet(testnet_mode);
+
+  try {
+    currencyBuilder.currency();
+  } catch (std::exception&) {
+    std::cout << "GENESIS_COINBASE_TX_HEX constant has an incorrect value. Please launch: " << cryptonote::CRYPTONOTE_NAME << "d --" << arg_print_genesis_tx.name;
+    return 1;
+  }
+
+  cryptonote::Currency currency = currencyBuilder.currency();
+  cryptonote::core ccore(currency, NULL);
+
+  cryptonote::checkpoints checkpoints;
+  for (const auto& cp : cryptonote::CHECKPOINTS) {
+    checkpoints.add_checkpoint(cp.height, cp.blockId);
+  }
+
+  if (!testnet_mode) {
     ccore.set_checkpoints(std::move(checkpoints));
   }
+
+  cryptonote::CoreConfig coreConfig;
+  coreConfig.init(vm);
+  nodetool::NetNodeConfig netNodeConfig;
+  netNodeConfig.init(vm);
+  cryptonote::MinerConfig minerConfig;
+  minerConfig.init(vm);
 
   cryptonote::t_cryptonote_protocol_handler<cryptonote::core> cprotocol(ccore, NULL);
   nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core> > p2psrv(cprotocol);
@@ -169,12 +198,12 @@ int main(int argc, char* argv[])
 
   //initialize objects
   LOG_PRINT_L0("Initializing p2p server...");
-  res = p2psrv.init(vm, testnet_mode);
+  bool res = p2psrv.init(netNodeConfig, testnet_mode);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize p2p server.");
   LOG_PRINT_L0("P2p server initialized OK");
 
   LOG_PRINT_L0("Initializing cryptonote protocol...");
-  res = cprotocol.init(vm);
+  res = cprotocol.init();
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize cryptonote protocol.");
   LOG_PRINT_L0("Cryptonote protocol initialized OK");
 
@@ -185,7 +214,7 @@ int main(int argc, char* argv[])
 
   //initialize core here
   LOG_PRINT_L0("Initializing core...");
-  res = ccore.init(vm, true, testnet_mode);
+  res = ccore.init(coreConfig, minerConfig, true);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core");
   LOG_PRINT_L0("Core initialized OK");
   
@@ -200,7 +229,7 @@ int main(int argc, char* argv[])
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize core rpc server.");
   LOG_PRINT_L0("Core rpc server started ok");
 
-  tools::signal_handler::install([&dch, &p2psrv] {
+  tools::SignalHandler::install([&dch, &p2psrv] {
     dch.stop_handling();
     p2psrv.send_stop_signal();
   });
@@ -239,7 +268,7 @@ bool command_line_preprocessor(const boost::program_options::variables_map& vm)
   bool exit = false;
   if (command_line::get_arg(vm, command_line::arg_version))
   {
-    std::cout << CRYPTONOTE_NAME  << " v" << PROJECT_VERSION_LONG << ENDL;
+    std::cout << cryptonote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL;
     exit = true;
   }
   if (command_line::get_arg(vm, arg_os_version))

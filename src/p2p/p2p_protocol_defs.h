@@ -1,12 +1,16 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
 #include <boost/uuid/uuid.hpp>
+
 #include "serialization/keyvalue_serialization.h"
 #include "misc_language.h"
+#include "string_tools.h"
+#include "time_helper.h"
+
 #include "cryptonote_config.h"
 #include "crypto/crypto.h"
 
@@ -310,6 +314,3 @@ namespace nodetool
 
 
 }
-
-
-

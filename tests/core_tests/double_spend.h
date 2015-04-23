@@ -1,9 +1,10 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once 
 #include "chaingen.h"
+#include "TransactionBuilder.h"
 
 const size_t invalid_index_value = std::numeric_limits<size_t>::max();
 
@@ -16,8 +17,8 @@ public:
 
   gen_double_spend_base();
 
-  bool check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::transaction& tx);
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::block& block);
+  bool check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::Transaction& tx);
+  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& block);
 
   bool mark_last_valid_block(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
   bool mark_invalid_tx(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
@@ -25,7 +26,7 @@ public:
   bool check_double_spend(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
 
 private:
-  cryptonote::block m_last_valid_block;
+  cryptonote::Block m_last_valid_block;
   size_t m_invalid_tx_index;
   size_t m_invalid_block_index;
 };
@@ -64,10 +65,18 @@ struct gen_double_spend_in_different_blocks : public gen_double_spend_base< gen_
   static const bool has_invalid_tx = !txs_keeped_by_block;
   static const size_t expected_pool_txs_count = has_invalid_tx ? 0 : 1;
   static const uint64_t expected_bob_balance = 0;
-  static const uint64_t expected_alice_balance = send_amount - TESTS_DEFAULT_FEE;
+  static uint64_t expected_alice_balance;
+
+  gen_double_spend_in_different_blocks() :
+    gen_double_spend_base< gen_double_spend_in_different_blocks<txs_keeped_by_block> >() {
+    expected_alice_balance = send_amount - this->m_currency.minimumFee();
+  }
 
   bool generate(std::vector<test_event_entry>& events) const;
 };
+
+template<bool txs_keeped_by_block>
+uint64_t gen_double_spend_in_different_blocks<txs_keeped_by_block>::expected_alice_balance;
 
 
 template<bool txs_keeped_by_block>
@@ -100,13 +109,104 @@ class gen_double_spend_in_different_chains : public test_chain_unit_base
 {
 public:
   static const uint64_t send_amount = MK_COINS(31);
-  static const size_t expected_blockchain_height = 4 + 2 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+  size_t expected_blockchain_height;
 
   gen_double_spend_in_different_chains();
 
   bool generate(std::vector<test_event_entry>& events) const;
 
   bool check_double_spend(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+};
+
+
+class TestGenerator;
+
+class DoubleSpendBase : public test_chain_unit_base
+{
+public:
+  
+  // parameters to be checked
+  uint64_t send_amount;
+  bool has_invalid_tx;
+
+  DoubleSpendBase();
+
+  bool check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::Transaction& tx);
+  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& block);
+
+  bool mark_last_valid_block(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool mark_invalid_tx(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool mark_invalid_block(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool check_double_spend(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+
+  TestGenerator prepare(std::vector<test_event_entry>& events) const;
+  TransactionBuilder createBobToAliceTx() const;
+  TransactionBuilder::MultisignatureSource createSource() const;
+
+protected:
+
+  cryptonote::account_base m_bob_account;
+  cryptonote::account_base m_alice_account;
+  cryptonote::KeyPair m_outputTxKey;
+
+private:
+
+  crypto::hash m_last_valid_block;
+  size_t m_invalid_tx_index;
+  size_t m_invalid_block_index;
+};
+
+
+struct MultiSigTx_DoubleSpendInTx : public DoubleSpendBase
+{ 
+  const bool m_txsKeepedByBlock;
+
+  MultiSigTx_DoubleSpendInTx(bool txsKeepedByBlock);
+
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+struct MultiSigTx_DoubleSpendSameBlock : public DoubleSpendBase
+{
+  const bool m_txsKeepedByBlock;
+
+  MultiSigTx_DoubleSpendSameBlock(bool txsKeepedByBlock);
+
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+
+struct MultiSigTx_DoubleSpendDifferentBlocks : public DoubleSpendBase
+{
+  const bool m_txsKeepedByBlock;
+
+  MultiSigTx_DoubleSpendDifferentBlocks(bool txsKeepedByBlock);
+
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+struct MultiSigTx_DoubleSpendAltChainSameBlock : public DoubleSpendBase
+{
+  const bool m_txsKeepedByBlock;
+
+  MultiSigTx_DoubleSpendAltChainSameBlock(bool txsKeepedByBlock);
+
+  bool check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::Transaction& tx) {
+    return true;
+  }
+
+  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& block) {
+    return true;
+  }
+
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+struct MultiSigTx_DoubleSpendAltChainDifferentBlocks : public DoubleSpendBase
+{
+  const bool m_txsKeepedByBlock;
+  MultiSigTx_DoubleSpendAltChainDifferentBlocks(bool txsKeepedByBlock);
+  bool generate(std::vector<test_event_entry>& events) const;
 };
 
 

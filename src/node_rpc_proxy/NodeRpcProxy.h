@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -31,11 +31,14 @@ public:
   virtual size_t getPeerCount() const;
   virtual uint64_t getLastLocalBlockHeight() const;
   virtual uint64_t getLastKnownBlockHeight() const;
+  virtual uint64_t getLastLocalBlockTimestamp() const override;
 
-  virtual void relayTransaction(const cryptonote::transaction& transaction, const Callback& callback);
+  virtual void relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback);
   virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback);
   virtual void getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback);
   virtual void getTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback);
+  virtual void queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) override;
+  virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override;
 
   unsigned int rpcTimeout() const { return m_rpcTimeout; }
   void rpcTimeout(unsigned int val) { m_rpcTimeout = val; }
@@ -48,10 +51,11 @@ private:
   void updateNodeStatus();
   void updatePeerCount();
 
-  void doRelayTransaction(const cryptonote::transaction& transaction, const Callback& callback);
+  void doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback);
   void doGetRandomOutsByAmounts(std::vector<uint64_t>& amounts, uint64_t outsCount, std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback);
   void doGetNewBlocks(std::list<crypto::hash>& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback);
   void doGetTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback);
+  void doQueryBlocks(const std::list<crypto::hash>& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback);
 
 private:
   tools::InitState m_initState;
@@ -71,6 +75,7 @@ private:
   uint64_t m_nodeHeight;
   uint64_t m_networkHeight;
   crypto::hash m_lastKnowHash;
+  uint64_t m_lastLocalBlockTimestamp;
 };
 
 }

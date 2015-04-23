@@ -1,7 +1,6 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
 
 #pragma once
 namespace cryptonote
@@ -15,6 +14,7 @@ namespace cryptonote
     bool m_verifivation_failed; //bad tx, should drop connection
     bool m_verifivation_impossible; //the transaction is related with an alternative blockchain
     bool m_added_to_pool; 
+    bool m_tx_fee_too_small;
   };
 
   struct block_verification_context

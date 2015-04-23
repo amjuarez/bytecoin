@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,7 +13,3 @@
 #define CORE_RPC_ERROR_CODE_WRONG_BLOCKBLOB       -6
 #define CORE_RPC_ERROR_CODE_BLOCK_NOT_ACCEPTED    -7
 #define CORE_RPC_ERROR_CODE_CORE_BUSY             -9
-
-
-
-

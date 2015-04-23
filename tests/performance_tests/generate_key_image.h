@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,7 +26,7 @@ public:
     crypto::key_derivation recv_derivation;
     crypto::generate_key_derivation(m_tx_pub_key, bob_keys.m_view_secret_key, recv_derivation);
 
-    crypto::derive_public_key(recv_derivation, 0, bob_keys.m_account_address.m_spend_public_key, m_in_ephemeral.pub);
+    crypto::derive_public_key(recv_derivation, 0, bob_keys.m_account_address.m_spendPublicKey, m_in_ephemeral.pub);
     crypto::derive_secret_key(recv_derivation, 0, bob_keys.m_spend_secret_key, m_in_ephemeral.sec);
 
     return true;
@@ -40,5 +40,5 @@ public:
   }
 
 private:
-  cryptonote::keypair m_in_ephemeral;
+  cryptonote::KeyPair m_in_ephemeral;
 };

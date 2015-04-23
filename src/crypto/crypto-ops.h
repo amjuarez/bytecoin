@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -89,6 +89,10 @@ void ge_p3_tobytes(unsigned char *, const ge_p3 *);
 
 extern const ge_precomp ge_base[32][8];
 void ge_scalarmult_base(ge_p3 *, const unsigned char *);
+
+/* From ge_sub.c */
+
+void ge_sub(ge_p1p1 *, const ge_p3 *, const ge_cached *);
 
 /* From ge_tobytes.c */
 

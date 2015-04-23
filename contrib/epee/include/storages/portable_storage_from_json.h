@@ -25,6 +25,10 @@
 // 
 
 #pragma once
+
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/lexical_cast.hpp>
+
 #include "parserse_base_utils.h"
 #include "file_io_utils.h"
 
@@ -365,6 +369,7 @@ namespace epee
         }
         catch(const std::exception& ex)
         {
+          (void)(ex);
           LOG_PRINT_RED_L0("Failed to parse json, what: " << ex.what());
           return false;
         }

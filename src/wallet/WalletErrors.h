@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,7 +25,8 @@ enum WalletErrorCodes {
   ZERO_DESTINATION,
   TX_CANCEL_IMPOSSIBLE,
   TX_CANCELLED,
-  OPERATION_CANCELLED
+  OPERATION_CANCELLED,
+  TX_TRANSFER_IMPOSSIBLE
 };
 
 // custom category:
@@ -56,6 +57,7 @@ public:
     case TX_CANCEL_IMPOSSIBLE: return "Impossible to cancel transaction";
     case WRONG_STATE:         return "The wallet is in wrong state (maybe loading or saving), try again later";
     case OPERATION_CANCELLED: return "The operation you've requested has been cancelled";
+    case TX_TRANSFER_IMPOSSIBLE: return "Transaction transfer impossible";
     default:                  return "Unknown error";
     }
   }

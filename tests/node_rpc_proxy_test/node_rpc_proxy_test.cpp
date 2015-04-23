@@ -1,3 +1,7 @@
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <chrono>
 #include <thread>
 
@@ -102,7 +106,7 @@ int main(int argc, const char** argv) {
     LOG_PRINT_RED_L0("shutdown error");
   }
 
-  cryptonote::transaction tx;
+  cryptonote::Transaction tx;
   nodeProxy.relayTransaction(tx, [](std::error_code ec) {
     if (!ec) {
       LOG_PRINT_L0("relayTransaction called successfully");

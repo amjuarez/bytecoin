@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -127,7 +127,7 @@ namespace tools
     //----------------------------------------------------------------------------------------------------
     struct unexpected_txin_type : public wallet_internal_error
     {
-      explicit unexpected_txin_type(std::string&& loc, const cryptonote::transaction& tx)
+      explicit unexpected_txin_type(std::string&& loc, const cryptonote::Transaction& tx)
         : wallet_internal_error(std::move(loc), "one of tx inputs has unexpected type")
         , m_tx(tx)
       {
@@ -135,18 +135,17 @@ namespace tools
 
       ~unexpected_txin_type() throw() { }
 
-      const cryptonote::transaction& tx() const { return m_tx; }
+      const cryptonote::Transaction& tx() const { return m_tx; }
 
       std::string to_string() const
       {
         std::ostringstream ss;
-        cryptonote::transaction tx = m_tx;
-        ss << wallet_internal_error::to_string() << ", tx:\n" << cryptonote::obj_to_json_str(tx);
+        ss << wallet_internal_error::to_string() << ", tx:\n" << cryptonote::obj_to_json_str(m_tx);
         return ss.str();
       }
 
     private:
-      cryptonote::transaction m_tx;
+      cryptonote::Transaction m_tx;
     };
     //----------------------------------------------------------------------------------------------------
     const char* const file_error_messages[] = {
@@ -209,7 +208,7 @@ namespace tools
     //----------------------------------------------------------------------------------------------------
     struct acc_outs_lookup_error : public refresh_error
     {
-      explicit acc_outs_lookup_error(std::string&& loc, const cryptonote::transaction& tx,
+      explicit acc_outs_lookup_error(std::string&& loc, const cryptonote::Transaction& tx,
         const crypto::public_key& tx_pub_key, const cryptonote::account_keys& acc_keys)
         : refresh_error(std::move(loc), "account outs lookup error")
         , m_tx(tx)
@@ -220,20 +219,19 @@ namespace tools
 
       ~acc_outs_lookup_error() throw() { }
 
-      const cryptonote::transaction& tx() const { return m_tx; }
+      const cryptonote::Transaction& tx() const { return m_tx; }
       const crypto::public_key& tx_pub_key() const { return m_tx_pub_key; }
       const cryptonote::account_keys& acc_keys() const { return m_acc_keys; }
 
       std::string to_string() const
       {
         std::ostringstream ss;
-        cryptonote::transaction tx = m_tx;
-        ss << refresh_error::to_string() << ", tx: " << cryptonote::obj_to_json_str(tx);
+        ss << refresh_error::to_string() << ", tx: " << cryptonote::obj_to_json_str(m_tx);
         return ss.str();
       }
 
     private:
-      const cryptonote::transaction m_tx;
+      const cryptonote::Transaction m_tx;
       const crypto::public_key m_tx_pub_key;
       const cryptonote::account_keys m_acc_keys;
     };
@@ -307,9 +305,9 @@ namespace tools
       {
         std::ostringstream ss;
         ss << transfer_error::to_string() <<
-          ", available = " << cryptonote::print_money(m_available) <<
-          ", tx_amount = " << cryptonote::print_money(m_tx_amount) <<
-          ", fee = " << cryptonote::print_money(m_fee);
+          ", available = " << m_available <<
+          ", tx_amount = " << m_tx_amount <<
+          ", fee = " << m_fee;
         return ss.str();
       }
 
@@ -341,7 +339,7 @@ namespace tools
         ss << transfer_error::to_string() << ", mixin_count = " << m_mixin_count << ", scanty_outs:";
         for (const auto& outs_for_amount : m_scanty_outs)
         {
-          ss << '\n' << cryptonote::print_money(outs_for_amount.amount) << " - " << outs_for_amount.outs.size();
+          ss << '\n' << outs_for_amount.amount << " - " << outs_for_amount.outs.size();
         }
         return ss.str();
       }
@@ -356,8 +354,10 @@ namespace tools
       typedef std::vector<cryptonote::tx_source_entry> sources_t;
       typedef std::vector<cryptonote::tx_destination_entry> destinations_t;
 
-      explicit tx_not_constructed(std::string&& loc, const sources_t& sources, const destinations_t& destinations, uint64_t unlock_time)
+      explicit tx_not_constructed(std::string&& loc, uint64_t addressPrefix, const sources_t& sources,
+        const destinations_t& destinations, uint64_t unlock_time)
         : transfer_error(std::move(loc), "transaction was not constructed")
+        , m_addressPrefix(addressPrefix)
         , m_sources(sources)
         , m_destinations(destinations)
         , m_unlock_time(unlock_time)
@@ -379,7 +379,7 @@ namespace tools
         {
           const cryptonote::tx_source_entry& src = m_sources[i];
           ss << "\n  source " << i << ":";
-          ss << "\n    amount: " << cryptonote::print_money(src.amount);
+          ss << "\n    amount: " << src.amount;
           // It's not good, if logs will contain such much data
           //ss << "\n    real_output: " << src.real_output;
           //ss << "\n    real_output_in_tx_index: " << src.real_output_in_tx_index;
@@ -396,8 +396,7 @@ namespace tools
         for (size_t i = 0; i < m_destinations.size(); ++i)
         {
           const cryptonote::tx_destination_entry& dst = m_destinations[i];
-          ss << "\n  " << i << ": " << cryptonote::get_account_address_as_str(dst.addr) << " " <<
-            cryptonote::print_money(dst.amount);
+          ss << "\n  " << i << ": " << getAccountAddressAsStr(m_addressPrefix, dst.addr) << ' ' << dst.amount;
         }
 
         ss << "\nunlock_time: " << m_unlock_time;
@@ -406,6 +405,7 @@ namespace tools
       }
 
     private:
+      uint64_t m_addressPrefix;
       sources_t m_sources;
       destinations_t m_destinations;
       uint64_t m_unlock_time;
@@ -413,7 +413,7 @@ namespace tools
     //----------------------------------------------------------------------------------------------------
     struct tx_rejected : public transfer_error
     {
-      explicit tx_rejected(std::string&& loc, const cryptonote::transaction& tx, const std::string& status)
+      explicit tx_rejected(std::string&& loc, const cryptonote::Transaction& tx, const std::string& status)
         : transfer_error(std::move(loc), "transaction was rejected by daemon")
         , m_tx(tx)
         , m_status(status)
@@ -422,27 +422,29 @@ namespace tools
 
       ~tx_rejected() throw() { }
 
-      const cryptonote::transaction& tx() const { return m_tx; }
+      const cryptonote::Transaction& tx() const { return m_tx; }
       const std::string& status() const { return m_status; }
 
       std::string to_string() const
       {
         std::ostringstream ss;
         ss << transfer_error::to_string() << ", status = " << m_status << ", tx:\n";
-        cryptonote::transaction tx = m_tx;
-        ss << cryptonote::obj_to_json_str(tx);
+        ss << cryptonote::obj_to_json_str(m_tx);
         return ss.str();
       }
 
     private:
-      cryptonote::transaction m_tx;
+      cryptonote::Transaction m_tx;
       std::string m_status;
     };
     //----------------------------------------------------------------------------------------------------
     struct tx_sum_overflow : public transfer_error
     {
-      explicit tx_sum_overflow(std::string&& loc, const std::vector<cryptonote::tx_destination_entry>& destinations, uint64_t fee)
-        : transfer_error(std::move(loc), "transaction sum + fee exceeds " + cryptonote::print_money(std::numeric_limits<uint64_t>::max()))
+      typedef std::vector<cryptonote::tx_destination_entry> destinations_t;
+
+      explicit tx_sum_overflow(std::string&& loc, uint64_t addressPrefix, const destinations_t& destinations, uint64_t fee)
+        : transfer_error(std::move(loc), "transaction sum + fee exceeds " + std::to_string(std::numeric_limits<uint64_t>::max()))
+        , m_addressPrefix(addressPrefix)
         , m_destinations(destinations)
         , m_fee(fee)
       {
@@ -457,23 +459,24 @@ namespace tools
       {
         std::ostringstream ss;
         ss << transfer_error::to_string() <<
-          ", fee = " << cryptonote::print_money(m_fee) <<
+          ", fee = " << m_fee <<
           ", destinations:";
         for (const auto& dst : m_destinations)
         {
-          ss << '\n' << cryptonote::print_money(dst.amount) << " -> " << cryptonote::get_account_address_as_str(dst.addr);
+          ss << '\n' << dst.amount << " -> " << getAccountAddressAsStr(m_addressPrefix, dst.addr);
         }
         return ss.str();
       }
 
     private:
-      std::vector<cryptonote::tx_destination_entry> m_destinations;
+      uint64_t m_addressPrefix;
+      destinations_t m_destinations;
       uint64_t m_fee;
     };
     //----------------------------------------------------------------------------------------------------
     struct tx_too_big : public transfer_error
     {
-      explicit tx_too_big(std::string&& loc, const cryptonote::transaction& tx, uint64_t tx_size_limit)
+      explicit tx_too_big(std::string&& loc, const cryptonote::Transaction& tx, uint64_t tx_size_limit)
         : transfer_error(std::move(loc), "transaction is too big")
         , m_tx(tx)
         , m_tx_size_limit(tx_size_limit)
@@ -482,22 +485,21 @@ namespace tools
 
       ~tx_too_big() throw() { }
 
-      const cryptonote::transaction& tx() const { return m_tx; }
+      const cryptonote::Transaction& tx() const { return m_tx; }
       uint64_t tx_size_limit() const { return m_tx_size_limit; }
 
       std::string to_string() const
       {
         std::ostringstream ss;
-        cryptonote::transaction tx = m_tx;
         ss << transfer_error::to_string() <<
           ", tx_size_limit = " << m_tx_size_limit <<
           ", tx size = " << get_object_blobsize(m_tx) <<
-          ", tx:\n" << cryptonote::obj_to_json_str(tx);
+          ", tx:\n" << cryptonote::obj_to_json_str(m_tx);
         return ss.str();
       }
 
     private:
-      cryptonote::transaction m_tx;
+      cryptonote::Transaction m_tx;
       uint64_t m_tx_size_limit;
     };
     //----------------------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -27,7 +27,7 @@ public:
 
   bool test()
   {
-    cryptonote::keypair in_ephemeral;
+    cryptonote::KeyPair in_ephemeral;
     crypto::derive_secret_key(m_key_derivation, 0, m_spend_secret_key, in_ephemeral.sec);
     return true;
   }

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,81 +28,96 @@ namespace cryptonote
     END_KV_SERIALIZE_MAP()
   };
 
+  struct BlockFullInfo : public block_complete_entry
+  {
+    crypto::hash block_id;
+
+    BEGIN_KV_SERIALIZE_MAP()
+    KV_SERIALIZE_VAL_POD_AS_BLOB(block_id)
+    KV_SERIALIZE(block)
+    KV_SERIALIZE(txs)
+    END_KV_SERIALIZE_MAP()
+  };
 
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
+  struct NOTIFY_NEW_BLOCK_request
+  {
+    block_complete_entry b;
+    uint64_t current_blockchain_height;
+    uint32_t hop;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(b)
+      KV_SERIALIZE(current_blockchain_height)
+      KV_SERIALIZE(hop)
+    END_KV_SERIALIZE_MAP()
+  };
+
   struct NOTIFY_NEW_BLOCK
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 1;
-
-    struct request
-    {
-      block_complete_entry b;
-      uint64_t current_blockchain_height;
-      uint32_t hop;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(b)
-        KV_SERIALIZE(current_blockchain_height)
-        KV_SERIALIZE(hop)
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef NOTIFY_NEW_BLOCK_request request;
   };
 
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
+  struct NOTIFY_NEW_TRANSACTIONS_request
+  {
+    std::list<blobdata>   txs;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(txs)
+    END_KV_SERIALIZE_MAP()
+  };
+
   struct NOTIFY_NEW_TRANSACTIONS
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 2;
-
-    struct request
-    {
-      std::list<blobdata>   txs;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(txs)
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef NOTIFY_NEW_TRANSACTIONS_request request;
   };
+
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
+  struct NOTIFY_REQUEST_GET_OBJECTS_request
+  {
+    std::list<crypto::hash>    txs;
+    std::list<crypto::hash>    blocks;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(txs)
+      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(blocks)
+    END_KV_SERIALIZE_MAP()
+  };
+
   struct NOTIFY_REQUEST_GET_OBJECTS
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 3;
+    typedef NOTIFY_REQUEST_GET_OBJECTS_request request;
+  };
 
-    struct request
-    {
-      std::list<crypto::hash>    txs;
-      std::list<crypto::hash>    blocks;
+  struct NOTIFY_RESPONSE_GET_OBJECTS_request
+  {
+    std::list<blobdata>              txs;
+    std::list<block_complete_entry>  blocks;
+    std::list<crypto::hash>               missed_ids;
+    uint64_t                         current_blockchain_height;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(txs)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(blocks)
-      END_KV_SERIALIZE_MAP()
-    };
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(txs)
+      KV_SERIALIZE(blocks)
+      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(missed_ids)
+      KV_SERIALIZE(current_blockchain_height)
+    END_KV_SERIALIZE_MAP()
   };
 
   struct NOTIFY_RESPONSE_GET_OBJECTS
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 4;
-
-    struct request
-    {
-      std::list<blobdata>              txs;
-      std::list<block_complete_entry>  blocks;
-      std::list<crypto::hash>               missed_ids;
-      uint64_t                         current_blockchain_height;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(txs)
-        KV_SERIALIZE(blocks)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(missed_ids)
-        KV_SERIALIZE(current_blockchain_height)
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef NOTIFY_RESPONSE_GET_OBJECTS_request request;
   };
 
 
@@ -131,22 +146,23 @@ namespace cryptonote
     };
   };
 
+  struct NOTIFY_RESPONSE_CHAIN_ENTRY_request
+  {
+    uint64_t start_height;
+    uint64_t total_height;
+    std::list<crypto::hash> m_block_ids;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(start_height)
+      KV_SERIALIZE(total_height)
+      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(m_block_ids)
+    END_KV_SERIALIZE_MAP()
+  };
+
   struct NOTIFY_RESPONSE_CHAIN_ENTRY
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 7;
-
-    struct request
-    {
-      uint64_t start_height;
-      uint64_t total_height;
-      std::list<crypto::hash> m_block_ids;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(start_height)
-        KV_SERIALIZE(total_height)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(m_block_ids)
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef NOTIFY_RESPONSE_CHAIN_ENTRY_request request;
   };
 
 }

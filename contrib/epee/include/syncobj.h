@@ -32,13 +32,9 @@
 
 #include <condition_variable>
 #include <mutex>
-#include <boost/thread/locks.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/recursive_mutex.hpp>
 
 namespace epee
 {
-
   struct simple_event
   {
     simple_event() : m_rised(false)
@@ -70,7 +66,7 @@ namespace epee
 
   class critical_section
   {
-    boost::recursive_mutex m_section;
+    std::recursive_mutex m_section;
 
   public:
     //to make copy fake!
@@ -89,7 +85,6 @@ namespace epee
     void lock()
     {
       m_section.lock();
-      //EnterCriticalSection( &m_section );
     }
 
     void unlock()

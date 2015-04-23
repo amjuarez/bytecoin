@@ -1,37 +1,42 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <boost/interprocess/detail/atomic.hpp>
-#include "cryptonote_core/cryptonote_format_utils.h"
+// epee
 #include "profile_tools.h"
+
+#include "cryptonote_core/cryptonote_format_utils.h"
+
 namespace cryptonote
 {
-
   //-----------------------------------------------------------------------------------------------------------------------  
   template<class t_core>
-    t_cryptonote_protocol_handler<t_core>::t_cryptonote_protocol_handler(t_core& rcore, nodetool::i_p2p_endpoint<connection_context>* p_net_layout):m_core(rcore), 
-                                                                                                              m_p2p(p_net_layout),
-                                                                                                              m_syncronized_connections_count(0),
-                                                                                                              m_synchronized(false)
-
-  {
-    if(!m_p2p)
+  t_cryptonote_protocol_handler<t_core>::t_cryptonote_protocol_handler(t_core& rcore, nodetool::i_p2p_endpoint<connection_context>* p_net_layout) :
+      m_core(rcore), 
+      m_p2p(p_net_layout),
+      m_synchronized(false),
+      m_stop(false),
+      m_observedHeight(0) {
+    if (!m_p2p) {
       m_p2p = &m_p2p_stub;
+    }
   }
-  //-----------------------------------------------------------------------------------------------------------------------
-  template<class t_core> 
-  bool t_cryptonote_protocol_handler<t_core>::init(const boost::program_options::variables_map& vm)
-  {
+
+  template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::init() {
+    m_peersCount = 0;
     return true;
   }
-  //------------------------------------------------------------------------------------------------------------------------  
+  //------------------------------------------------------------------------------------------------------------------------
   template<class t_core> 
   bool t_cryptonote_protocol_handler<t_core>::deinit()
   {
-    
-
     return true;
+  }
+
+  template<class t_core>
+  size_t t_cryptonote_protocol_handler<t_core>::getPeerCount() const {
+    return m_peersCount;
   }
   //------------------------------------------------------------------------------------------------------------------------  
   template<class t_core> 
@@ -43,7 +48,41 @@ namespace cryptonote
       m_p2p = &m_p2p_stub;
   }
   //------------------------------------------------------------------------------------------------------------------------  
-  template<class t_core> 
+  template<class t_core>
+  void t_cryptonote_protocol_handler<t_core>::onConnectionOpened(cryptonote_connection_context& context) {
+  }
+  //------------------------------------------------------------------------------------------------------------------------  
+  template<class t_core>
+  void t_cryptonote_protocol_handler<t_core>::onConnectionClosed(cryptonote_connection_context& context) {
+    bool updated = false;
+    {
+      std::lock_guard<std::mutex> lock(m_observedHeightMutex);
+      uint64_t prevHeight = m_observedHeight;
+      recalculateMaxObservedHeight(context);
+      if (prevHeight != m_observedHeight) {
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      LOG_PRINT_L2("Observed height updated: " << m_observedHeight);
+      m_observerManager.notify(&ICryptonoteProtocolObserver::lastKnownBlockHeightUpdated, m_observedHeight);
+    }
+
+    if (context.m_state != cryptonote_connection_context::state_befor_handshake) {
+      m_peersCount--;
+      m_observerManager.notify(&ICryptonoteProtocolObserver::peerCountUpdated, m_peersCount.load());
+    }
+  }
+
+  //------------------------------------------------------------------------------------------------------------------------  
+  template<class t_core>
+  void t_cryptonote_protocol_handler<t_core>::stop() {
+    m_stop = true;
+  }
+
+  //------------------------------------------------------------------------------------------------------------------------  
+  template<class t_core>
   bool t_cryptonote_protocol_handler<t_core>::on_callback(cryptonote_connection_context& context)
   {
     LOG_PRINT_CCONTEXT_L2("callback fired");
@@ -97,29 +136,34 @@ namespace cryptonote
     if(context.m_state == cryptonote_connection_context::state_befor_handshake && !is_inital)
       return true;
 
-    if(context.m_state == cryptonote_connection_context::state_synchronizing)
-      return true;
-
-    if(m_core.have_block(hshd.top_id))  
-    {
+    if(context.m_state == cryptonote_connection_context::state_synchronizing) {
+    } else if(m_core.have_block(hshd.top_id)) {
       context.m_state = cryptonote_connection_context::state_normal;
       if(is_inital)
         on_connection_synchronized();
-      return true;
+    } else {
+      int64_t diff = static_cast<int64_t>(hshd.current_height) - static_cast<int64_t>(m_core.get_current_blockchain_height());
+      LOG_PRINT_CCONTEXT_YELLOW("Sync data returned unknown top block: " << m_core.get_current_blockchain_height() << " -> " << hshd.current_height
+        << " [" << std::abs(diff) << " blocks (" << std::abs(diff) / (24 * 60 * 60 / m_core.currency().difficultyTarget()) << " days) "
+        << (diff >= 0 ? std::string("behind") : std::string("ahead")) << "] " << std::endl <<
+        "SYNCHRONIZATION started", (diff >= 0 ? (is_inital ? LOG_LEVEL_0 : LOG_LEVEL_1) : LOG_LEVEL_2));
+      LOG_PRINT_L1("Remote top block height: " << hshd.current_height << ", id: " << hshd.top_id);
+      context.m_state = cryptonote_connection_context::state_synchronizing;
+
+      //let the socket to send response to handshake, but request callback, to let send request data after response
+      LOG_PRINT_CCONTEXT_L2("requesting callback");
+      ++context.m_callback_request_count;
+      m_p2p->request_callback(context);
     }
 
-    int64_t diff = static_cast<int64_t>(hshd.current_height) - static_cast<int64_t>(m_core.get_current_blockchain_height());
-    LOG_PRINT_CCONTEXT_YELLOW("Sync data returned unknown top block: " << m_core.get_current_blockchain_height() << " -> " << hshd.current_height
-      << " [" << std::abs(diff) << " blocks (" << diff / (24 * 60 * 60 / DIFFICULTY_TARGET) << " days) "
-      << (0 <= diff ? std::string("behind") : std::string("ahead"))
-      << "] " << ENDL << "SYNCHRONIZATION started", (is_inital ? LOG_LEVEL_0:LOG_LEVEL_1));
-    LOG_PRINT_L1("Remote top block height: " << hshd.current_height << ", id: " << hshd.top_id);
-    context.m_state = cryptonote_connection_context::state_synchronizing;
+    updateObservedHeight(hshd.current_height, context);
     context.m_remote_blockchain_height = hshd.current_height;
-    //let the socket to send response to handshake, but request callback, to let send request data after response
-    LOG_PRINT_CCONTEXT_L2("requesting callback");
-    ++context.m_callback_request_count;
-    m_p2p->request_callback(context);
+
+    if (is_inital) {
+      m_peersCount++;
+      m_observerManager.notify(&ICryptonoteProtocolObserver::peerCountUpdated, m_peersCount.load());
+    }
+
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------  
@@ -131,59 +175,47 @@ namespace cryptonote
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------  
-    template<class t_core> 
-    bool t_cryptonote_protocol_handler<t_core>::get_payload_sync_data(blobdata& data)
-  {
-    CORE_SYNC_DATA hsd = boost::value_initialized<CORE_SYNC_DATA>();
-    get_payload_sync_data(hsd);
-    epee::serialization::store_t_to_binary(hsd, data);
-    return true;
-  }
-  //------------------------------------------------------------------------------------------------------------------------  
-    template<class t_core> 
-    int t_cryptonote_protocol_handler<t_core>::handle_notify_new_block(int command, NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& context)
-  {
+  template<class t_core> 
+  int t_cryptonote_protocol_handler<t_core>::handle_notify_new_block(int command, NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& context) {
     LOG_PRINT_CCONTEXT_L2("NOTIFY_NEW_BLOCK (hop " << arg.hop << ")");
-    if(context.m_state != cryptonote_connection_context::state_normal)
-      return 1;
 
-    for(auto tx_blob_it = arg.b.txs.begin(); tx_blob_it!=arg.b.txs.end();tx_blob_it++)
-    {
+    updateObservedHeight(arg.current_blockchain_height, context);
+
+    context.m_remote_blockchain_height = arg.current_blockchain_height;
+
+    if (context.m_state != cryptonote_connection_context::state_normal) {
+      return 1;
+    }
+
+    for (auto tx_blob_it = arg.b.txs.begin(); tx_blob_it != arg.b.txs.end(); tx_blob_it++) {
       cryptonote::tx_verification_context tvc = AUTO_VAL_INIT(tvc);
       m_core.handle_incoming_tx(*tx_blob_it, tvc, true);
-      if(tvc.m_verifivation_failed)
-      {
+      if (tvc.m_verifivation_failed) {
         LOG_PRINT_CCONTEXT_L0("Block verification failed: transaction verification failed, dropping connection");
         m_p2p->drop_connection(context);
         return 1;
       }
     }
 
-
     block_verification_context bvc = boost::value_initialized<block_verification_context>();
-    m_core.pause_mine();
-    m_core.handle_incoming_block(arg.b.block, bvc);
-    m_core.resume_mine();
-    if(bvc.m_verifivation_failed)
-    {
-      LOG_PRINT_CCONTEXT_L0("Block verification failed, dropping connection");
+    m_core.handle_incoming_block_blob(arg.b.block, bvc, true, false);
+    if (bvc.m_verifivation_failed) {
+      LOG_PRINT_CCONTEXT_L1("Block verification failed, dropping connection");
       m_p2p->drop_connection(context);
       return 1;
     }
-    if(bvc.m_added_to_main_chain)
-    {
+    if (bvc.m_added_to_main_chain) {
       ++arg.hop;
       //TODO: Add here announce protocol usage
       relay_block(arg, context);
-    }else if(bvc.m_marked_as_orphaned)
-    {
+    } else if (bvc.m_marked_as_orphaned) {
       context.m_state = cryptonote_connection_context::state_synchronizing;
       NOTIFY_REQUEST_CHAIN::request r = boost::value_initialized<NOTIFY_REQUEST_CHAIN::request>();
       m_core.get_short_chain_history(r.block_ids);
-      LOG_PRINT_CCONTEXT_L2("-->>NOTIFY_REQUEST_CHAIN: m_block_ids.size()=" << r.block_ids.size() );
+      LOG_PRINT_CCONTEXT_L2("-->>NOTIFY_REQUEST_CHAIN: m_block_ids.size()=" << r.block_ids.size());
       post_notify<NOTIFY_REQUEST_CHAIN>(r, context);
     }
-      
+
     return 1;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -247,20 +279,22 @@ namespace cryptonote
       return 1;
     }
 
+    updateObservedHeight(arg.current_blockchain_height, context);
+
     context.m_remote_blockchain_height = arg.current_blockchain_height;
 
     size_t count = 0;
-    BOOST_FOREACH(const block_complete_entry& block_entry, arg.blocks)
+    for (const block_complete_entry& block_entry : arg.blocks)
     {
       ++count;
-      block b;
+      Block b;
       if(!parse_and_validate_block_from_blob(block_entry.block, b))
       {
         LOG_ERROR_CCONTEXT("sent wrong block: failed to parse and validate block: \r\n" 
           << epee::string_tools::buff_to_hex_nodelimer(block_entry.block) << "\r\n dropping connection");
         m_p2p->drop_connection(context);
         return 1;
-      }      
+      }
       //to avoid concurrency in core between connections, suspend connections which delivered block later then first one
       if(count == 2)
       { 
@@ -273,7 +307,7 @@ namespace cryptonote
           return 1;
         }
       }
-      
+
       auto req_it = context.m_requested_objects.find(get_block_hash(b));
       if(req_it == context.m_requested_objects.end())
       {
@@ -282,10 +316,10 @@ namespace cryptonote
         m_p2p->drop_connection(context);
         return 1;
       }
-      if(b.tx_hashes.size() != block_entry.txs.size()) 
+      if (b.txHashes.size() != block_entry.txs.size()) 
       {
         LOG_ERROR_CCONTEXT("sent wrong NOTIFY_RESPONSE_GET_OBJECTS: block with id=" << epee::string_tools::pod_to_hex(get_blob_hash(block_entry.block)) 
-          << ", tx_hashes.size()=" << b.tx_hashes.size() << " mismatch with block_complete_entry.m_txs.size()=" << block_entry.txs.size() << ", dropping connection");
+          << ", txHashes.size()=" << b.txHashes.size() << " mismatch with block_complete_entry.m_txs.size()=" << block_entry.txs.size() << ", dropping connection");
         m_p2p->drop_connection(context);
         return 1;
       }
@@ -302,20 +336,21 @@ namespace cryptonote
     }
 
     {
-      m_core.pause_mine();
+      m_core.pause_mining();
       epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler(
-        boost::bind(&t_core::resume_mine, &m_core));
+        std::bind(&t_core::update_block_template_and_resume_mining, &m_core));
 
-      BOOST_FOREACH(const block_complete_entry& block_entry, arg.blocks)
-      {
+      for (const block_complete_entry& block_entry : arg.blocks) {
+        if (m_stop) {
+          break;
+        }
+
         //process transactions
         TIME_MEASURE_START(transactions_process_time);
-        BOOST_FOREACH(auto& tx_blob, block_entry.txs)
-        {
+        for (auto& tx_blob : block_entry.txs) {
           tx_verification_context tvc = AUTO_VAL_INIT(tvc);
           m_core.handle_incoming_tx(tx_blob, tvc, true);
-          if(tvc.m_verifivation_failed)
-          {
+          if (tvc.m_verifivation_failed) {
             LOG_ERROR_CCONTEXT("transaction verification failed on NOTIFY_RESPONSE_GET_OBJECTS, \r\ntx_id = " 
               << epee::string_tools::pod_to_hex(get_blob_hash(tx_blob)) << ", dropping connection");
             m_p2p->drop_connection(context);
@@ -327,28 +362,28 @@ namespace cryptonote
         //process block
         TIME_MEASURE_START(block_process_time);
         block_verification_context bvc = boost::value_initialized<block_verification_context>();
+        m_core.handle_incoming_block_blob(block_entry.block, bvc, false, false);
 
-        m_core.handle_incoming_block(block_entry.block, bvc, false);
-
-        if(bvc.m_verifivation_failed)
-        {
-          LOG_PRINT_CCONTEXT_L0("Block verification failed, dropping connection");
+        if (bvc.m_verifivation_failed) {
+          LOG_PRINT_CCONTEXT_L1("Block verification failed, dropping connection");
           m_p2p->drop_connection(context);
           return 1;
-        }
-        if(bvc.m_marked_as_orphaned)
-        {
+        } else if (bvc.m_marked_as_orphaned) {
           LOG_PRINT_CCONTEXT_L0("Block received at sync phase was marked as orphaned, dropping connection");
           m_p2p->drop_connection(context);
           return 1;
         }
 
         TIME_MEASURE_FINISH(block_process_time);
-        LOG_PRINT_CCONTEXT_L2("Block process time: " << block_process_time + transactions_process_time << "(" << transactions_process_time << "/" << block_process_time << ")ms");
+        LOG_PRINT_CCONTEXT_L2("Block process time: " << block_process_time + transactions_process_time <<
+          " (" << transactions_process_time << " / " << block_process_time << ") ms");
       }
     }
 
-    request_missing_objects(context, true);
+    if (!m_stop) {
+      request_missing_objects(context, true);
+    }
+
     return 1;
   }
   //------------------------------------------------------------------------------------------------------------------------
@@ -482,8 +517,7 @@ namespace cryptonote
       m_p2p->drop_connection(context);
     }
 
-    BOOST_FOREACH(auto& bl_id, arg.m_block_ids)
-    {
+    for (auto& bl_id : arg.m_block_ids) {
       if(!m_core.have_block(bl_id))
         context.m_needed_objects.push_back(bl_id);
     }
@@ -493,14 +527,74 @@ namespace cryptonote
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core> 
-  bool t_cryptonote_protocol_handler<t_core>::relay_block(NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& exclude_context)
+  void t_cryptonote_protocol_handler<t_core>::relay_block(NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& exclude_context)
   {
-    return relay_post_notify<NOTIFY_NEW_BLOCK>(arg, exclude_context);
+    relay_post_notify<NOTIFY_NEW_BLOCK>(arg, exclude_context);
   }
   //------------------------------------------------------------------------------------------------------------------------
   template<class t_core> 
-  bool t_cryptonote_protocol_handler<t_core>::relay_transactions(NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& exclude_context)
+  void t_cryptonote_protocol_handler<t_core>::relay_transactions(NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& exclude_context)
   {
-    return relay_post_notify<NOTIFY_NEW_TRANSACTIONS>(arg, exclude_context);
+    relay_post_notify<NOTIFY_NEW_TRANSACTIONS>(arg, exclude_context);
   }
-}
+  //------------------------------------------------------------------------------------------------------------------------
+  template<class t_core> 
+  void t_cryptonote_protocol_handler<t_core>::updateObservedHeight(uint64_t peerHeight, const cryptonote_connection_context& context) {
+    bool updated = false;
+    {
+      std::lock_guard<std::mutex> lock(m_observedHeightMutex);
+
+      uint64_t height = m_observedHeight;
+      if (peerHeight > context.m_remote_blockchain_height) {
+        m_observedHeight = std::max(m_observedHeight, peerHeight);
+        if (m_observedHeight != height) {
+          updated = true;
+        }
+      } else if (context.m_remote_blockchain_height == m_observedHeight) {
+        //the client switched to alternative chain and had maximum observed height. need to recalculate max height
+        recalculateMaxObservedHeight(context);
+        if (m_observedHeight != height) {
+          updated = true;
+        }
+      }
+    }
+
+    if (updated) {
+      LOG_PRINT_L2("Observed height updated: " << m_observedHeight);
+      m_observerManager.notify(&ICryptonoteProtocolObserver::lastKnownBlockHeightUpdated, m_observedHeight);
+    }
+  }
+
+  template<class t_core>
+  void t_cryptonote_protocol_handler<t_core>::recalculateMaxObservedHeight(const cryptonote_connection_context& context) {
+    //should be locked outside
+    uint64_t peerHeight = 0;
+    m_p2p->for_each_connection([&peerHeight, &context](const cryptonote_connection_context& ctx, nodetool::peerid_type peerId) {
+      if (ctx.m_connection_id != context.m_connection_id) {
+        peerHeight = std::max(peerHeight, ctx.m_remote_blockchain_height);
+      }
+      return true;
+    });
+
+    uint64_t localHeight = 0;
+    crypto::hash ignore;
+    m_core.get_blockchain_top(localHeight, ignore);
+    m_observedHeight = std::max(peerHeight, localHeight);
+  }
+
+  template<class t_core>
+  uint64_t t_cryptonote_protocol_handler<t_core>::getObservedHeight() const {
+    std::lock_guard<std::mutex> lock(m_observedHeightMutex);
+    return m_observedHeight;
+  };
+
+  template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::addObserver(ICryptonoteProtocolObserver* observer) {
+    return m_observerManager.add(observer);
+  }
+
+  template<class t_core>
+  bool t_cryptonote_protocol_handler<t_core>::removeObserver(ICryptonoteProtocolObserver* observer) {
+    return m_observerManager.remove(observer);
+  }
+};

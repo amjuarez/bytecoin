@@ -1,12 +1,21 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
+#if defined(WIN32)
+#include <io.h>
+#endif
+
+#include <fstream>
+
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 
+// epee
+#include "include_base_utils.h"
+#include "misc_os_dependent.h"
 
 namespace tools
 {

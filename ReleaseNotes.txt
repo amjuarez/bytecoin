@@ -1,4 +1,25 @@
-Release notes 0.8.11
+Release notes 1.0.2
+
+- Multisignature with API
+- Low level API
+- High level API improvements
+- Updated block reward scheme
+- Dynamic maximum block size limit
+
+- Instant transaction pool notifications
+- Transaction priority based on tx fee
+- Transactions are returned from tx pools after 24 hours
+
+- Fully refactored simplewallet
+- Transaction history for simplewallet
+- Reset command for simplewallet
+- Faster wallet refresh
+
+- Further optimization in daemon RAM consumption
+- Various network health updates
+- Config and CryptoNote forking how-to update
+
+Release notes 1.0.1
 
 - High level API implementation
 - CryptoNight hash function optimization

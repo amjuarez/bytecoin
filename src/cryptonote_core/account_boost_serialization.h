@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2014 The Cryptonote developers
+// Copyright (c) 2011-2015 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,10 +21,10 @@ namespace boost
     }
 
     template <class Archive>
-    inline void serialize(Archive &a, cryptonote::account_public_address &x, const boost::serialization::version_type ver)
+    inline void serialize(Archive &a, cryptonote::AccountPublicAddress &x, const boost::serialization::version_type ver)
     {
-      a & x.m_spend_public_key;
-      a & x.m_view_public_key;
+      a & x.m_spendPublicKey;
+      a & x.m_viewPublicKey;
     }
 
   }
