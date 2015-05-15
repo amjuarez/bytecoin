@@ -220,6 +220,7 @@ namespace nodetool
     //keep connections to initiate some interactions
     net_server m_net_server;
     boost::uuids::uuid m_network_id;
+std::string m_p2pStatTrustedPubKey;
   };
 }
 

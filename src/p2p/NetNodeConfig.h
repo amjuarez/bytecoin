@@ -23,6 +23,7 @@
 
 #include <boost/program_options.hpp>
 #include "p2p_protocol_defs.h"
+#include "p2p_networks.h"
 
 namespace nodetool {
 
@@ -41,6 +42,8 @@ public:
   std::vector<net_address> exclusiveNodes;
   std::vector<net_address> seedNodes;
   bool hideMyPort;
+boost::uuids::uuid networkId;
+std::string p2pStatTrustedPubKey;
   std::string configFolder;
 };
 

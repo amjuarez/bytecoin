@@ -165,6 +165,8 @@ namespace nodetool
     m_port = config.bindPort;
     m_external_port = config.externalPort;
     m_allow_local_ip = config.allowLocalIp;
+m_network_id = config.networkId;
+m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
 
     std::copy(config.peers.begin(), config.peers.end(), std::back_inserter(m_command_line_peers));
     std::copy(config.exclusiveNodes.begin(), config.exclusiveNodes.end(), std::back_inserter(m_exclusive_peers));
@@ -177,7 +179,7 @@ namespace nodetool
 
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::init(const NetNodeConfig& config, bool testnet) {
-    if (!testnet) {
+    if (!testnet && config.seedNodes.size() == 0) {
       for (auto seed : cryptonote::SEED_NODES) {
         append_net_address(m_seed_nodes, seed);
       }
@@ -760,8 +762,7 @@ namespace nodetool
       return false;
     }
     crypto::public_key pk = AUTO_VAL_INIT(pk);
-    epee::string_tools::hex_to_pod(cryptonote::P2P_STAT_TRUSTED_PUB_KEY, pk);
-    crypto::hash h = tools::get_proof_of_trust_hash(tr);
+    epee::string_tools::hex_to_pod(m_p2pStatTrustedPubKey, pk);    crypto::hash h = tools::get_proof_of_trust_hash(tr);
     if(!crypto::check_signature(h, pk, tr.sign))
     {
       LOG_ERROR("check_trust failed: sign check failed");

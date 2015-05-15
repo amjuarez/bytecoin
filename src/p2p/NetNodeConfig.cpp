@@ -33,6 +33,8 @@ const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_priori
 const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_exclusive_node   = {"add-exclusive-node", "Specify list of peers to connect to only."
       " If this option is given the options add-priority-node and seed-node are ignored"};
 const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_seed_node   = {"seed-node", "Connect to a node to retrieve peer addresses, and disconnect"};
+const command_line::arg_descriptor<std::string> arg_network_id = {"BYTECOIN_NETWORK", "Network id", epee::string_tools::get_str_from_guid_a(nodetool::BYTECOIN_NETWORK)};
+const command_line::arg_descriptor<std::string> arg_P2P_STAT_TRUSTED_PUB_KEY = {"P2P_STAT_TRUSTED_PUB_KEY", "P2P stat trusted pub key", ""};
 const command_line::arg_descriptor<bool> arg_p2p_hide_my_port   =    {"hide-my-port", "Do not announce yourself as peerlist candidate", false, true};
 
 bool parsePeerFromString(nodetool::net_address& pe, const std::string& node_addr) {
@@ -68,6 +70,8 @@ void NetNodeConfig::initOptions(boost::program_options::options_description& des
   command_line::add_arg(desc, arg_p2p_add_exclusive_node);
   command_line::add_arg(desc, arg_p2p_seed_node);
   command_line::add_arg(desc, arg_p2p_hide_my_port);
+command_line::add_arg(desc, arg_network_id);
+command_line::add_arg(desc, arg_P2P_STAT_TRUSTED_PUB_KEY);
 }
 
 NetNodeConfig::NetNodeConfig() {
@@ -76,6 +80,7 @@ NetNodeConfig::NetNodeConfig() {
   externalPort = 0;
   allowLocalIp = false;
   hideMyPort = false;
+p2pStatTrustedPubKey = "";
   configFolder = tools::get_default_data_dir();
 }
 
@@ -85,6 +90,10 @@ bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
   bindPort = command_line::get_arg(vm, arg_p2p_bind_port);
   externalPort = command_line::get_arg(vm, arg_p2p_external_port);
   allowLocalIp = command_line::get_arg(vm, arg_p2p_allow_local_ip);
+p2pStatTrustedPubKey = command_line::get_arg(vm, arg_P2P_STAT_TRUSTED_PUB_KEY);
+if (!epee::string_tools::get_guid_from_string(networkId, command_line::get_arg(vm, arg_network_id)))
+  return false;
+
   configFolder = command_line::get_arg(vm, command_line::arg_data_dir);
 
   if (command_line::has_arg(vm, arg_p2p_add_peer))
