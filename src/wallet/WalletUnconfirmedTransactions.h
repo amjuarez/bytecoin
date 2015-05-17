@@ -17,55 +17,63 @@
 
 #pragma once
 
-#include <unordered_map>
-
-#include <time.h>
-
 #include "IWallet.h"
+#include "ITransfersContainer.h"
+
+#include <unordered_map>
+#include <set>
+#include <time.h>
+#include <boost/functional/hash.hpp>
+
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic.h"
 
+namespace cryptonote {
+class ISerializer;
+}
+
 namespace CryptoNote {
 
-struct UnconfirmedTransferDetails
-{
+typedef std::pair<PublicKey, size_t> TransactionOutputId;
+
+struct UnconfirmedTransferDetails {
+
+  UnconfirmedTransferDetails() :
+    amount(0), sentTime(0), transactionId(INVALID_TRANSACTION_ID) {}
+
   cryptonote::Transaction tx;
-  uint64_t change;
+  uint64_t amount;
+  uint64_t outsAmount;
   time_t sentTime;
   TransactionId transactionId;
+  std::vector<TransactionOutputId> usedOutputs;
 };
 
 class WalletUnconfirmedTransactions
 {
 public:
-  template <typename Archive>
-  void save(Archive& ar, bool saveCache) const;
 
-  template<typename Archive>
-  void load(Archive& ar);
+  void serialize(cryptonote::ISerializer& s, const std::string& name);
 
-  bool findTransactionId(const crypto::hash& hash, TransactionId& id);
-  void erase(const crypto::hash& hash);
-  void add(const cryptonote::Transaction& tx, TransactionId transactionId, uint64_t change_amount);
+  bool findTransactionId(const TransactionHash& hash, TransactionId& id);
+  void erase(const TransactionHash& hash);
+  void add(const cryptonote::Transaction& tx, TransactionId transactionId, 
+    uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs);
+  void updateTransactionId(const TransactionHash& hash, TransactionId id);
 
-  uint64_t countPendingBalance() const;
+  uint64_t countUnconfirmedOutsAmount() const;
+  uint64_t countUnconfirmedTransactionsAmount() const;
+  bool isUsed(const TransactionOutputInformation& out) const;
 
 private:
-  typedef std::unordered_map<crypto::hash, UnconfirmedTransferDetails> UnconfirmedTxsContainer;
+
+  void collectUsedOutputs();
+
+  typedef std::unordered_map<TransactionHash, UnconfirmedTransferDetails, boost::hash<TransactionHash>> UnconfirmedTxsContainer;
+  typedef std::set<TransactionOutputId> UsedOutputsContainer;
+
   UnconfirmedTxsContainer m_unconfirmedTxs;
+  UsedOutputsContainer m_usedOutputs;
 };
-
-template <typename Archive>
-void WalletUnconfirmedTransactions::save(Archive& ar, bool saveCache) const
-{
-  const UnconfirmedTxsContainer& unconfirmedTxs = saveCache ? m_unconfirmedTxs : UnconfirmedTxsContainer();
-  ar << unconfirmedTxs;
-}
-
-template<typename Archive>
-void WalletUnconfirmedTransactions::load(Archive& ar)
-{
-  ar >> m_unconfirmedTxs;
-}
 
 } // namespace CryptoNote

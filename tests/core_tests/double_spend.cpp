@@ -92,6 +92,7 @@ DoubleSpendBase::DoubleSpendBase() :
   send_amount(MK_COINS(17)),
   has_invalid_tx(false)
 {
+  m_outputTxKey = KeyPair::generate();
   m_bob_account.generate();
   m_alice_account.generate();
 
@@ -151,6 +152,7 @@ TestGenerator DoubleSpendBase::prepare(std::vector<test_event_entry>& events) co
 
   auto builder = generator.createTxBuilder(generator.minerAccount, m_bob_account, send_amount, m_currency.minimumFee());
 
+  builder.setTxKeys(m_outputTxKey);
   builder.m_destinations.clear();
 
   TransactionBuilder::KeysVector kv;
@@ -160,7 +162,7 @@ TestGenerator DoubleSpendBase::prepare(std::vector<test_event_entry>& events) co
 
   // move money
   auto tx = builder.build();
-
+    
   generator.addEvent(tx);
   generator.makeNextBlock(tx);
 
@@ -170,19 +172,27 @@ TestGenerator DoubleSpendBase::prepare(std::vector<test_event_entry>& events) co
   return generator;
 }
 
+
+TransactionBuilder::MultisignatureSource DoubleSpendBase::createSource() const {
+
+  TransactionBuilder::MultisignatureSource src;
+
+  src.input.amount = send_amount;
+  src.input.outputIndex = 0;
+  src.input.signatures = 1;
+
+  src.keys.push_back(m_bob_account.get_keys());
+  src.srcTxPubKey = m_outputTxKey.pub;
+  src.srcOutputIndex = 0;
+
+  return src;
+}
+
 TransactionBuilder DoubleSpendBase::createBobToAliceTx() const {
   TransactionBuilder builder(m_currency);
 
-  TransactionInputMultisignature msigInput;
-  msigInput.amount = send_amount;
-  msigInput.outputIndex = 0;
-  msigInput.signatures = 1;
-
-  TransactionBuilder::KeysVector kv;
-  kv.push_back(m_bob_account.get_keys());
-
   builder.
-    addMultisignatureInput(msigInput, kv).
+    addMultisignatureInput(createSource()).
     addOutput(tx_destination_entry(send_amount - m_currency.minimumFee(), m_alice_account.get_keys().m_account_address));
 
   return builder;
@@ -203,19 +213,11 @@ bool MultiSigTx_DoubleSpendInTx::generate(std::vector<test_event_entry>& events)
 
   generator.addCallback("mark_last_valid_block");
 
-  TransactionInputMultisignature msigInput;
-  msigInput.amount = send_amount;
-  msigInput.outputIndex = 0;
-  msigInput.signatures = 1;
-
-  TransactionBuilder::KeysVector kv;
-  kv.push_back(m_bob_account.get_keys());
-  
   TransactionBuilder builder(generator.currency());
 
   auto tx = builder.
-    addMultisignatureInput(msigInput, kv).
-    addMultisignatureInput(msigInput, kv).
+    addMultisignatureInput(createSource()).
+    addMultisignatureInput(createSource()).
     addOutput(tx_destination_entry(send_amount*2 - m_currency.minimumFee(), m_alice_account.get_keys().m_account_address)).
     build();
 

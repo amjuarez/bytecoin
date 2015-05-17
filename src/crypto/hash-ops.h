@@ -24,6 +24,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../common/static_assert.h"
 #include "common/int-util.h"
 #include "warnings.h"
 

@@ -46,12 +46,11 @@ public:
   virtual ISerializer& operator()(uint64_t& value, const std::string& name) = 0;
   virtual ISerializer& operator()(double& value, const std::string& name) = 0;
   virtual ISerializer& operator()(bool& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(char* value, std::size_t size, const std::string& name) = 0;
   virtual ISerializer& operator()(std::string& value, const std::string& name) = 0;
-
-  virtual ISerializer& tag(const std::string& name) = 0;
-  virtual ISerializer& untagged(uint8_t& value) = 0;
-  virtual ISerializer& endTag() = 0;
+  
+  // read/write binary block
+  virtual ISerializer& binary(void* value, std::size_t size, const std::string& name) = 0;
+  virtual ISerializer& binary(std::string& value, const std::string& name) = 0;
 
   virtual bool hasObject(const std::string& name) = 0;
 
@@ -70,66 +69,5 @@ void serialize(T& value, const std::string& name, ISerializer& serializer) {
   value.serialize(serializer, name);
   return;
 }
-
-/*
-template<typename T>
-void serialize(std::vector<T>& value, const std::string& name);
-
-template<typename K, typename V>
-void serialize(std::unordered_map<K, V>& value, const std::string& name);
-
-
-
-template<typename T>
-void ISerializer::serialize(std::vector<T>& value, const std::string& name) {
-  std::size_t size = value.size();
-  beginArray(size, name);
-  value.resize(size);
-
-  for (size_t i = 0; i < size; ++i) {
-    serialize(value[i], "");
-  }
-
-  endArray();
-
-  return *this;
-}
-
-template<typename K, typename V>
-void ISerializer::serialize(std::unordered_map<K, V>& value, const std::string& name) {
-  std::size_t size;
-  size = value.size();
-
-  beginArray(size, name);
-
-  if (type() == INPUT) {
-    value.reserve(size);
-
-    for (size_t i = 0; i < size; ++i) {
-      K key;
-      V v;
-      beginObject("");
-      serialize(key, "");
-      serialize(v, "");
-      endObject();
-
-      value[key] = v;
-    }
-  } else {
-    for (auto kv: value) {
-      K key;
-      key = kv.first;
-      beginObject("");
-      serialize(key, "");
-      serialize(kv.second, "");
-      endObject();
-    }
-  }
-
-  endArray();
-
-  return *this;
-}
-*/
 
 }

@@ -36,9 +36,6 @@
 #include "portable_storage_from_json.h"
 #include "portable_storage_val_converters.h"
 
-
-
-
 namespace epee
 {
   namespace serialization
@@ -82,7 +79,6 @@ namespace epee
       bool        delete_entry(const std::string& pentry_name, hsection hparent_section = nullptr);
 
       //-------------------------------------------------------------------------------
-      void    Dump(const void * mem, unsigned int n);
       bool		store_to_binary(binarybuffer& target);
       bool		load_from_binary(const binarybuffer& target);
       template<class trace_policy>
@@ -134,14 +130,6 @@ namespace epee
     }
 
     inline
-    void portable_storage::Dump( const void * mem, unsigned int n ) {
-      const char * p = reinterpret_cast< const char *>( mem );
-      for ( unsigned int i = 0; i < n; i++ ) {
-        LOG_PRINT_L0(std::hex << short(p[i]) << " ");
-      }
-    }
-
-    inline
     bool portable_storage::store_to_binary(binarybuffer& target)
     {
       TRY_ENTRY();
@@ -167,7 +155,6 @@ namespace epee
         return false;
       }
       storage_block_header* pbuff = (storage_block_header*)source.data();
-
       if(pbuff->m_signature_a != PORTABLE_STORAGE_SIGNATUREA || 
         pbuff->m_signature_b != PORTABLE_STORAGE_SIGNATUREB 
         )
@@ -180,17 +167,12 @@ namespace epee
         LOG_WARNING("portable_storage: wrong binary format - unknown format ver = " << pbuff->m_ver, LOG_LEVEL_2);
         return false;
       }
-
-
       TRY_ENTRY();
-//      portable_storage::Dump( source.data()+sizeof(storage_block_header), source.size()-sizeof(storage_block_header));
-
       throwable_buffer_reader buf_reader(source.data()+sizeof(storage_block_header), source.size()-sizeof(storage_block_header));
       buf_reader.read(m_root);
       return true;//TODO:
       CATCH_ENTRY("portable_storage::load_from_binary", false);
     }
-
     //---------------------------------------------------------------------------------------------------------------
     inline
     hsection portable_storage::open_section(const std::string& section_name,  hsection hparent_section, bool create_if_notexist)

@@ -26,6 +26,8 @@
 #if defined(_MSC_VER)
 #include <stdlib.h>
 
+#define inline __inline
+
 static inline uint32_t rol32(uint32_t x, int r) {
   static_assert(sizeof(uint32_t) == sizeof(unsigned int), "this code assumes 32-bit integers");
   return _rotl(x, r);

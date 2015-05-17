@@ -147,14 +147,13 @@ namespace epee
       type &= ~SERIALIZE_FLAG_ARRAY;
       switch(type)
       {
-
       case SERIALIZE_TYPE_INT64:  return read_ae<int64_t>();
       case SERIALIZE_TYPE_INT32:  return read_ae<int32_t>();
       case SERIALIZE_TYPE_INT16:  return read_ae<int16_t>();
       case SERIALIZE_TYPE_INT8:   return read_ae<int8_t>();
       case SERIALIZE_TYPE_UINT64: return read_ae<uint64_t>();
       case SERIALIZE_TYPE_UINT32: return read_ae<uint32_t>();
-      case SERIALIZE_TYPE_UINT16: return read_ae<uint16_t>();     
+      case SERIALIZE_TYPE_UINT16: return read_ae<uint16_t>();
       case SERIALIZE_TYPE_UINT8:  return read_ae<uint8_t>();
       case SERIALIZE_TYPE_DUOBLE: return read_ae<double>();
       case SERIALIZE_TYPE_BOOL:   return read_ae<bool>();
@@ -233,7 +232,6 @@ namespace epee
       if(ent_type&SERIALIZE_FLAG_ARRAY)
         return load_storage_array_entry(ent_type);
 
-      
       switch(ent_type)
       {
       case SERIALIZE_TYPE_INT64:  return read_se<int64_t>();

@@ -33,16 +33,30 @@ public:
   TestBlockchainGenerator(const cryptonote::Currency& currency);
 
   std::vector<cryptonote::Block>& getBlockchain();
-  void addGenesisBlock();
   void generateEmptyBlocks(size_t count);
   bool getBlockRewardForAddress(const cryptonote::AccountPublicAddress& address);
+  bool getSingleOutputTransaction(const cryptonote::AccountPublicAddress& address, uint64_t amount);
   void addTxToBlockchain(const cryptonote::Transaction& transaction);
   bool getTransactionByHash(const crypto::hash& hash, cryptonote::Transaction& tx);
+  const cryptonote::account_base& getMinerAccount() const { return miner_acc; }
+
+  void putTxToPool(const cryptonote::Transaction& tx);
+  void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
+    std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids);
+  void putTxPoolToBlockchain();
+  void clearTxPool();
 
 private:
+  
+  void addGenesisBlock();
+  void addMiningBlock();
+
   const cryptonote::Currency& m_currency;
   test_generator generator;
   cryptonote::account_base miner_acc;
   std::vector<cryptonote::Block> m_blockchain;
   std::unordered_map<crypto::hash, cryptonote::Transaction> m_txs;
+  std::unordered_map<crypto::hash, cryptonote::Transaction> m_txPool;
+
+  void addToBlockchain(cryptonote::Transaction const& tx);
 };

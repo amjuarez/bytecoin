@@ -212,7 +212,7 @@ void JsonValue::readArray(std::istream& in) {
     in.read(&c, 1);
   }
 
-  if (c != ']') {
+  if (in.peek() != ']') {
     for (;;) {
       value.resize(value.size() + 1);
       in >> value.back();
@@ -226,6 +226,8 @@ void JsonValue::readArray(std::istream& in) {
         throw(std::runtime_error("Unable to parse"));
       }
     }
+  } else {
+    in.read(&c, 1);
   }
 
   if (d_type != JsonValue::ARRAY) {
@@ -542,7 +544,7 @@ JsonValue& JsonValue::pushBack(const JsonValue& val) {
   return array->back();
 }
 
-JsonValue& JsonValue::insert(const std::string key, const JsonValue& value) {
+JsonValue& JsonValue::insert(const std::string& key, const JsonValue& value) {
   if (d_type != OBJECT) {
     throw std::runtime_error("JsonValue error. insert is only possible for objects");
   }

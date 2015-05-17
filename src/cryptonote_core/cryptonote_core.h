@@ -26,9 +26,13 @@
 #include "tx_pool.h"
 #include "blockchain_storage.h"
 #include "cryptonote_core/i_miner_handler.h"
+#include "cryptonote_core/MinerConfig.h"
 #include "connection_context.h"
 #include "warnings.h"
 #include "crypto/hash.h"
+#include "ICore.h"
+#include "ICoreObserver.h"
+#include "common/ObserverManager.h"
 
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
@@ -36,30 +40,33 @@ DISABLE_VS_WARNINGS(4355)
 namespace cryptonote {
   struct core_stat_info;
   class miner;
+  class CoreConfig;
 
-   class core: public i_miner_handler {
+  class core : public ICore, public i_miner_handler, public IBlockchainStorageObserver, public ITxPoolObserver {
    public:
      core(const Currency& currency, i_cryptonote_protocol* pprotocol);
      ~core();
      bool handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS_request& arg, NOTIFY_RESPONSE_GET_OBJECTS_request& rsp, cryptonote_connection_context& context);
      bool on_idle();
-     bool handle_incoming_tx(const blobdata& tx_blob, tx_verification_context& tvc, bool keeped_by_block);
+     virtual bool handle_incoming_tx(const blobdata& tx_blob, tx_verification_context& tvc, bool keeped_by_block);
      bool handle_incoming_block_blob(const blobdata& block_blob, block_verification_context& bvc, bool control_miner, bool relay_block);
      const Currency& currency() const { return m_currency; }
-     i_cryptonote_protocol* get_protocol(){return m_pprotocol;}
+     virtual i_cryptonote_protocol* get_protocol(){return m_pprotocol;}
 
      //-------------------- i_miner_handler -----------------------
      virtual bool handle_block_found(Block& b);
      virtual bool get_block_template(Block& b, const AccountPublicAddress& adr, difficulty_type& diffic, uint64_t& height, const blobdata& ex_nonce);
 
+     bool addObserver(ICoreObserver* observer);
+     bool removeObserver(ICoreObserver* observer);
 
      miner& get_miner() { return *m_miner; }
      static void init_options(boost::program_options::options_description& desc);
-     bool init(const boost::program_options::variables_map& vm, bool load_existing);
+     bool init(const CoreConfig& config, const MinerConfig& minerConfig, bool load_existing);
      bool set_genesis_block(const Block& b);
      bool deinit();
      uint64_t get_current_blockchain_height();
-     bool get_blockchain_top(uint64_t& heeight, crypto::hash& top_id);
+     virtual bool get_blockchain_top(uint64_t& heeight, crypto::hash& top_id);
      bool get_blocks(uint64_t start_offset, size_t count, std::list<Block>& blocks, std::list<Transaction>& txs);
      bool get_blocks(uint64_t start_offset, size_t count, std::list<Block>& blocks);
      template<class t_ids_container, class t_blocks_container, class t_missed_container>
@@ -67,10 +74,14 @@ namespace cryptonote {
      {
        return m_blockchain_storage.get_blocks(block_ids, blocks, missed_bs);
      }
+     virtual bool queryBlocks(const std::list<crypto::hash>& block_ids, uint64_t timestamp,
+         uint64_t& start_height, uint64_t& current_height, uint64_t& full_offset, std::list<BlockFullInfo>& entries);
      crypto::hash get_block_id_by_height(uint64_t height);
      void get_transactions(const std::vector<crypto::hash>& txs_ids, std::list<Transaction>& txs, std::list<crypto::hash>& missed_txs);
      bool get_block_by_hash(const crypto::hash &h, Block &blk);
      //void get_all_known_block_ids(std::list<crypto::hash> &main, std::list<crypto::hash> &alt, std::list<crypto::hash> &invalid);
+
+     virtual bool getBlockByHash(const crypto::hash &h, Block &blk) override;
 
      bool get_alternative_blocks(std::list<Block>& blocks);
      size_t get_alternative_blocks_count();
@@ -84,13 +95,13 @@ namespace cryptonote {
      //bool get_outs(uint64_t amount, std::list<crypto::public_key>& pkeys);
      bool have_block(const crypto::hash& id);
      bool get_short_chain_history(std::list<crypto::hash>& ids);
-     bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, NOTIFY_RESPONSE_CHAIN_ENTRY_request& resp);
-     bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::list<std::pair<Block, std::list<Transaction> > >& blocks, uint64_t& total_height, uint64_t& start_height, size_t max_count);
+     virtual bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, NOTIFY_RESPONSE_CHAIN_ENTRY_request& resp);
+     virtual bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::list<std::pair<Block, std::list<Transaction> > >& blocks, uint64_t& total_height, uint64_t& start_height, size_t max_count);
      bool get_stat_info(core_stat_info& st_inf);
      //bool get_backward_blocks_sizes(uint64_t from_height, std::vector<size_t>& sizes, size_t count);
-     bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs);
+     virtual bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs);
      crypto::hash get_tail_id();
-     bool get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res);
+     virtual bool get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res);
      void pause_mining();
      void update_block_template_and_resume_mining();
      blockchain_storage& get_blockchain_storage(){return m_blockchain_storage;}
@@ -100,6 +111,7 @@ namespace cryptonote {
      std::string print_pool(bool short_format);
      void print_blockchain_outs(const std::string& file);
      void on_synchronized();
+     virtual bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) override;
 
    private:
      bool add_new_tx(const Transaction& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prefix_hash, size_t blob_size, tx_verification_context& tvc, bool keeped_by_block);
@@ -121,6 +133,9 @@ namespace cryptonote {
      bool handle_command_line(const boost::program_options::variables_map& vm);
      bool on_update_blocktemplate_interval();
      bool check_tx_inputs_keyimages_diff(const Transaction& tx);
+     virtual void blockchainUpdated() override;
+     virtual void txDeletedFromPool() override;
+     void poolUpdated();
 
      const Currency& m_currency;
      CryptoNote::RealTimeProvider m_timeProvider;
@@ -133,6 +148,7 @@ namespace cryptonote {
      cryptonote_protocol_stub m_protocol_stub;
      friend class tx_validate_inputs;
      std::atomic<bool> m_starter_message_showed;
+     tools::ObserverManager<cryptonote::ICoreObserver> m_observerManager;
    };
 }
 

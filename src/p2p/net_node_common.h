@@ -30,7 +30,7 @@ namespace nodetool
   template<class t_connection_context>
   struct i_p2p_endpoint
   {
-    virtual bool relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)=0;
+    virtual void relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)=0;
     virtual bool invoke_command_to_peer(int command, const std::string& req_buff, std::string& resp_buff, const epee::net_utils::connection_context_base& context)=0;
     virtual bool invoke_notify_to_peer(int command, const std::string& req_buff, const epee::net_utils::connection_context_base& context)=0;
     virtual bool drop_connection(const epee::net_utils::connection_context_base& context)=0;
@@ -42,9 +42,8 @@ namespace nodetool
   template<class t_connection_context>
   struct p2p_endpoint_stub: public i_p2p_endpoint<t_connection_context>
   {
-    virtual bool relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)
+    virtual void relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)
     {
-      return false;
     }
     virtual bool invoke_command_to_peer(int command, const std::string& req_buff, std::string& resp_buff, const epee::net_utils::connection_context_base& context)
     {
@@ -60,11 +59,9 @@ namespace nodetool
     }
     virtual void request_callback(const epee::net_utils::connection_context_base& context)
     {
-
     }
     virtual void for_each_connection(std::function<bool(t_connection_context&,peerid_type)> f)
     {
-
     }
 
     virtual uint64_t get_connections_count()    

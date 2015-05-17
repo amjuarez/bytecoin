@@ -154,11 +154,13 @@ public:
 
   TestGenerator prepare(std::vector<test_event_entry>& events) const;
   TransactionBuilder createBobToAliceTx() const;
+  TransactionBuilder::MultisignatureSource createSource() const;
 
 protected:
 
   cryptonote::account_base m_bob_account;
   cryptonote::account_base m_alice_account;
+  cryptonote::KeyPair m_outputTxKey;
 
 private:
 

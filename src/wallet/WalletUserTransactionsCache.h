@@ -19,23 +19,35 @@
 
 #include "crypto/hash.h"
 #include "IWallet.h"
-#include "WalletTxSendingState.h"
+#include "ITransfersContainer.h"
+
+#include "WalletEvent.h"
+#include "WalletUnconfirmedTransactions.h"
+
+namespace cryptonote {
+class ISerializer;
+}
 
 namespace CryptoNote {
 
 class WalletUserTransactionsCache
 {
 public:
-  WalletUserTransactionsCache(WalletTxSendingState& states) : m_sendingTxsStates(states) {}
+  WalletUserTransactionsCache() {}
 
-  template <typename Archive>
-  void save(Archive& ar, bool saveDetailed, bool saveCache);
+  void serialize(cryptonote::ISerializer& serializer, const std::string& name);
 
-  template<typename Archive>
-  void load(Archive& ar);
-
+  uint64_t unconfirmedTransactionsAmount() const;
+  uint64_t unconfrimedOutsAmount() const;
   size_t getTransactionCount() const;
   size_t getTransferCount() const;
+
+  TransactionId addNewTransaction(uint64_t amount, uint64_t fee, const std::string& extra, const std::vector<Transfer>& transfers, uint64_t unlockTime);
+  void updateTransaction(TransactionId transactionId, const cryptonote::Transaction& tx, uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs);
+  void updateTransactionSendingState(TransactionId transactionId, std::error_code ec);
+
+  std::shared_ptr<WalletEvent> onTransactionUpdated(const TransactionInformation& txInfo, int64_t txBalance);
+  std::shared_ptr<WalletEvent> onTransactionDeleted(const TransactionHash& transactionHash);
 
   TransactionId findTransactionByTransferId(TransferId transferId) const;
 
@@ -44,47 +56,26 @@ public:
   bool getTransfer(TransferId transferId, Transfer& transfer) const;
   Transfer& getTransfer(TransferId transferId);
 
-  TransactionId insertTransaction(TransactionInfo&& Transaction);
-  TransferId insertTransfers(const std::vector<Transfer>& transfers);
-
-  TransactionId findTransactionByHash(const crypto::hash& hash);
-  void detachTransactions(uint64_t height);
+  bool isUsed(const TransactionOutputInformation& out) const;
 
 private:
+
+  TransactionId findTransactionByHash(const TransactionHash& hash);
+  TransactionId insertTransaction(TransactionInfo&& Transaction);
+  TransferId insertTransfers(const std::vector<Transfer>& transfers);
+  void updateUnconfirmedTransactions();
+
   typedef std::vector<Transfer> UserTransfers;
   typedef std::vector<TransactionInfo> UserTransactions;
 
-  void getGoodItems(bool saveDetailed, UserTransactions& transactions, UserTransfers& transfers);
-  void getGoodTransaction(TransactionId txId, size_t offset, bool saveDetailed, UserTransactions& transactions, UserTransfers& transfers);
+  void getGoodItems(UserTransactions& transactions, UserTransfers& transfers);
+  void getGoodTransaction(TransactionId txId, size_t offset, UserTransactions& transactions, UserTransfers& transfers);
 
-  void getGoodTransfers(UserTransfers& transfers);
   void getTransfersByTx(TransactionId id, UserTransfers& transfers);
 
   UserTransactions m_transactions;
   UserTransfers m_transfers;
-
-  WalletTxSendingState& m_sendingTxsStates;
+  WalletUnconfirmedTransactions m_unconfirmedTransactions;
 };
-
-template<typename Archive>
-void WalletUserTransactionsCache::load(Archive& ar) {
-  ar >> m_transactions;
-  ar >> m_transfers;
-}
-
-template <typename Archive>
-void WalletUserTransactionsCache::save(Archive& ar, bool saveDetailed, bool saveCache) {
-  UserTransactions txsToSave;
-  UserTransfers transfersToSave;
-
-  if (saveCache) {
-    getGoodItems(saveDetailed, txsToSave, transfersToSave);
-  } else  {
-    if (saveDetailed) getGoodTransfers(transfersToSave);
-  }
-
-  ar << txsToSave;
-  ar << transfersToSave;
-}
 
 } //namespace CryptoNote

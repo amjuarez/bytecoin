@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstddef>
+#include <limits>
 #include <mutex>
 #include <vector>
 
@@ -26,6 +27,8 @@
 #include "hash.h"
 
 namespace crypto {
+
+  using std::size_t;
 
   extern "C" {
 #include "random.h"
@@ -87,6 +90,8 @@ namespace crypto {
     friend bool derive_public_key(const key_derivation &, std::size_t, const public_key &, public_key &);
     static void derive_secret_key(const key_derivation &, std::size_t, const secret_key &, secret_key &);
     friend void derive_secret_key(const key_derivation &, std::size_t, const secret_key &, secret_key &);
+    static bool underive_public_key(const key_derivation &, std::size_t, const public_key &, public_key &);
+    friend bool underive_public_key(const key_derivation &, std::size_t, const public_key &, public_key &);
     static void generate_signature(const hash &, const public_key &, const secret_key &, signature &);
     friend void generate_signature(const hash &, const public_key &, const secret_key &, signature &);
     static bool check_signature(const hash &, const public_key &, const signature &);
@@ -113,6 +118,35 @@ namespace crypto {
     return res;
   }
 
+  /* Random number engine based on crypto::rand()
+   */
+  template <typename T>
+  class random_engine {
+  public:
+    typedef T result_type;
+
+#ifdef __clang__
+    constexpr static T min() {
+      return (std::numeric_limits<T>::min)();
+    }
+
+    constexpr static T max() {
+      return (std::numeric_limits<T>::max)();
+    }
+#else
+    static T(min)() {
+      return (std::numeric_limits<T>::min)();
+    }
+
+    static T(max)() {
+      return (std::numeric_limits<T>::max)();
+    }
+#endif
+    typename std::enable_if<std::is_unsigned<T>::value, T>::type operator()() {
+      return rand<T>();
+    }
+  };
+
   /* Generate a new key pair
    */
   inline void generate_keys(public_key &pub, secret_key &sec) {
@@ -133,8 +167,8 @@ namespace crypto {
 
   /* To generate an ephemeral key used to send money to:
    * * The sender generates a new key pair, which becomes the transaction key. The public transaction key is included in "extra" field.
-   * * Both the sender and the receiver generate key derivation from the transaction key, the receivers' "view" key and the output index.
-   * * The sender uses key derivation and the receivers' "spend" key to derive an ephemeral public key.
+   * * Both the sender and the receiver generate key derivation from the transaction key and the receivers' "view" key.
+   * * The sender uses key derivation, the output index, and the receivers' "spend" key to derive an ephemeral public key.
    * * The receiver can either derive the public key (to check that the transaction is addressed to him) or the private key (to spend the money).
    */
   inline bool generate_key_derivation(const public_key &key1, const secret_key &key2, key_derivation &derivation) {
@@ -147,6 +181,13 @@ namespace crypto {
   inline void derive_secret_key(const key_derivation &derivation, std::size_t output_index,
     const secret_key &base, secret_key &derived_key) {
     crypto_ops::derive_secret_key(derivation, output_index, base, derived_key);
+  }
+
+  /* Inverse function of derive_public_key. It can be used by the receiver to find which "spend" key was used to generate a transaction. This may be useful if the receiver used multiple addresses which only differ in "spend" key.
+   */
+  inline bool underive_public_key(const key_derivation &derivation, std::size_t output_index,
+    const public_key &derived_key, public_key &base) {
+    return crypto_ops::underive_public_key(derivation, output_index, derived_key, base);
   }
 
   /* Generation and checking of a standard signature.
@@ -194,6 +235,6 @@ namespace crypto {
   }
 }
 
-CRYPTO_MAKE_COMPARABLE(public_key)
+CRYPTO_MAKE_HASHABLE(public_key)
 CRYPTO_MAKE_HASHABLE(key_image)
 CRYPTO_MAKE_COMPARABLE(signature)

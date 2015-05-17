@@ -41,6 +41,16 @@ namespace cryptonote
     END_KV_SERIALIZE_MAP()
   };
 
+  struct BlockFullInfo : public block_complete_entry
+  {
+    crypto::hash block_id;
+
+    BEGIN_KV_SERIALIZE_MAP()
+    KV_SERIALIZE_VAL_POD_AS_BLOB(block_id)
+    KV_SERIALIZE(block)
+    KV_SERIALIZE(txs)
+    END_KV_SERIALIZE_MAP()
+  };
 
   /************************************************************************/
   /*                                                                      */

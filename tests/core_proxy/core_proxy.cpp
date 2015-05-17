@@ -29,6 +29,7 @@ using namespace epee;
 using namespace std;
 
 #include <boost/program_options.hpp>
+#include "cryptonote_core/CoreConfig.h"
 
 #include "common/command_line.h"
 #include "console_handler.h"
@@ -71,7 +72,9 @@ int main(int argc, char* argv[])
   po::options_description desc("Allowed options");
   // tools::get_default_data_dir() can't be called during static initialization
   command_line::add_arg(desc, command_line::arg_data_dir, tools::get_default_data_dir());
-  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> >::init_options(desc);
+
+  cryptonote::CoreConfig::initOptions(desc);
+  nodetool::NetNodeConfig::initOptions(desc);
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc, [&]()
@@ -97,14 +100,18 @@ int main(int argc, char* argv[])
   //daemon_cmmands_handler dch(p2psrv);
 
   //initialize objects
+  cryptonote::CoreConfig coreConfig;
+  coreConfig.init(vm);
+  nodetool::NetNodeConfig netNodeConfig;
+  netNodeConfig.init(vm);
 
   LOG_PRINT_L0("Initializing p2p server...");
-  bool res = p2psrv.init(vm, false);
+  bool res = p2psrv.init(netNodeConfig, false);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize p2p server.");
   LOG_PRINT_L0("P2p server initialized OK");
 
   LOG_PRINT_L0("Initializing cryptonote protocol...");
-  res = cprotocol.init(vm);
+  res = cprotocol.init();
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize cryptonote protocol.");
   LOG_PRINT_L0("Cryptonote protocol initialized OK");
 

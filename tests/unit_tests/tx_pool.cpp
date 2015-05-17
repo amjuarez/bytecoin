@@ -395,3 +395,31 @@ TEST(tx_pool, cleanup_stale_tx)
 
   ASSERT_EQ(3, pool.get_transactions_count());
 }
+
+TEST(tx_pool, add_tx_after_cleanup)
+{
+  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
+  TestPool<TransactionValidator, FakeTimeProvider> pool(currency);
+  const uint64_t fee = currency.minimumFee();
+
+  time_t startTime = pool.timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, fee, 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false)); // main chain
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  pool.timeProvider.timeNow = startTime + currency.mempoolTxLiveTime() + 1;
+  pool.on_idle();
+
+  ASSERT_EQ(0, pool.get_transactions_count());
+
+  // add again
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false)); // main chain
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  ASSERT_EQ(1, pool.get_transactions_count());
+
+}

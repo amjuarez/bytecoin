@@ -46,11 +46,9 @@ public:
   virtual ISerializer& operator()(std::string& value, const std::string& name) override;
   virtual ISerializer& operator()(uint8_t& value, const std::string& name) override;
   virtual ISerializer& operator()(bool& value, const std::string& name) override;
-  virtual ISerializer& operator()(char* value, std::size_t size, const std::string& name) override;
-
-  virtual ISerializer& tag(const std::string& name) override;
-  virtual ISerializer& untagged(uint8_t& value) override;
-  virtual ISerializer& endTag() override;
+  
+  virtual ISerializer& binary(void* value, std::size_t size, const std::string& name) override;
+  virtual ISerializer& binary(std::string& value, const std::string& name) override;
 
   virtual bool hasObject(const std::string& name) override;
 

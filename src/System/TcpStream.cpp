@@ -19,6 +19,8 @@
 
 #include <cstring>
 
+using namespace System;
+
 TcpStreambuf::TcpStreambuf(TcpConnection& connection) : connection(connection) {
   setg(&readBuf.front(), &readBuf.front(), &readBuf.front());
   setp(reinterpret_cast<char*>(&writeBuf.front()), reinterpret_cast<char *>(&writeBuf.front() + writeBuf.max_size()));
