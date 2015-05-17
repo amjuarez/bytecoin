@@ -17,31 +17,27 @@
 
 #pragma  once
 
-#include <future>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include "net/http_server_impl_base.h"
 #include "wallet_rpc_server_commans_defs.h"
-#include "Wallet.h"
+#include "wallet2.h"
 #include "common/command_line.h"
 namespace tools
 {
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  class wallet_rpc_server: public epee::http_server_impl_base<wallet_rpc_server>, public CryptoNote::IWalletObserver
+  class wallet_rpc_server: public epee::http_server_impl_base<wallet_rpc_server>
   {
   public:
     typedef epee::net_utils::connection_context_base connection_context;
 
-    wallet_rpc_server(CryptoNote::IWallet &w, CryptoNote::INode &n, cryptonote::Currency& currency, const std::string& walletFilename);
+    wallet_rpc_server(wallet2& cr);
 
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_port;
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_ip;
 
-    //---------------- IWalletObserver -------------------------
-    virtual void saveCompleted(std::error_code result) override;
-    //----------------------------------------------------------
 
     static void init_options(boost::program_options::options_description& desc);
     bool init(const boost::program_options::variables_map& vm);
@@ -73,13 +69,8 @@ namespace tools
 
       bool handle_command_line(const boost::program_options::variables_map& vm);
 
-      CryptoNote::IWallet& m_wallet;
-      CryptoNote::INode& m_node;
+      wallet2& m_wallet;
       std::string m_port;
       std::string m_bind_ip;
-      cryptonote::Currency& m_currency;
-      const std::string m_walletFilename;
-
-      std::unique_ptr<std::promise<std::error_code>> m_saveResultPromise;
   };
 }

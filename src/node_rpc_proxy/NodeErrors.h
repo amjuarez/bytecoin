@@ -30,7 +30,6 @@ enum NodeErrorCodes {
   NETWORK_ERROR,
   NODE_BUSY,
   INTERNAL_NODE_ERROR,
-  REQUEST_ERROR
 };
 
 // custom category:
@@ -53,7 +52,6 @@ public:
     case NETWORK_ERROR:       return "Network error";
     case NODE_BUSY:           return "Node is busy";
     case INTERNAL_NODE_ERROR: return "Internal node error";
-    case REQUEST_ERROR:       return "Error in request parameters";
     default:                  return "Unknown error";
     }
   }

@@ -166,7 +166,6 @@ namespace cryptonote
     std::string m_txPoolFileName;
 
     bool m_testnet;
-std::string m_genesisCoinbaseTxHex;
 
     Block m_genesisBlock;
     crypto::hash m_genesisBlockHash;
@@ -185,7 +184,6 @@ std::string m_genesisCoinbaseTxHex;
       return m_currency;
     }
 
-Transaction generateGenesisTransaction();
     CurrencyBuilder& maxBlockNumber(uint64_t val) { m_currency.m_maxBlockHeight = val; return *this; }
     CurrencyBuilder& maxBlockBlobSize(size_t val) { m_currency.m_maxBlockBlobSize = val; return *this; }
     CurrencyBuilder& maxTxSize(size_t val) { m_currency.m_maxTxSize = val; return *this; }
@@ -232,7 +230,6 @@ Transaction generateGenesisTransaction();
     CurrencyBuilder& blockIndexesFileName(const std::string& val) { m_currency.m_blockIndexesFileName = val; return *this; }
     CurrencyBuilder& txPoolFileName(const std::string& val) { m_currency.m_txPoolFileName = val; return *this; }
 
-CurrencyBuilder& genesisCoinbaseTxHex(const std::string& val) { m_currency.m_genesisCoinbaseTxHex = val; return *this; }
     CurrencyBuilder& testnet(bool val) { m_currency.m_testnet = val; return *this; }
 
   private:

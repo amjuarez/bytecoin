@@ -68,15 +68,10 @@ ISerializer& JsonInputValueSerializer::beginArray(std::size_t& size, const std::
 
   const JsonValue* parent = chain.back();
 
-  if (parent->count(name)) {
-    const JsonValue& arr = (*parent)(name);
-    size = arr.size();
-    chain.push_back(&arr);
-  } else {
-    size = 0;
-    chain.push_back(0);
-  }
+  const JsonValue& arr = (*parent)(name);
+  size = arr.size();
 
+  chain.push_back(&arr);
   idxs.push_back(0);
   return *this;
 }
@@ -91,78 +86,131 @@ ISerializer& JsonInputValueSerializer::endArray() {
 
 ISerializer& JsonInputValueSerializer::operator()(uint32_t& value, const std::string& name) {
   assert(root);
-  value = static_cast<uint32_t>(getNumber(name));
+
+  int64_t v = static_cast<int64_t>(value);
+  operator()(v, name);
+  value = static_cast<uint64_t>(v);
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::operator()(int32_t& value, const std::string& name) {
   assert(root);
-  value = static_cast<int32_t>(getNumber(name));
+
+  int64_t v = static_cast<int64_t>(value);
+  operator()(v, name);
+  value = static_cast<uint64_t>(v);
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::operator()(int64_t& value, const std::string& name) {
   assert(root);
-  value = getNumber(name);
+
+  const JsonValue* val = chain.back();
+
+  if (val->isArray()) {
+    const JsonValue& v = (*val)[idxs.back()++];
+    value = v.getNumber();
+  } else {
+    const JsonValue& v = (*val)(name);
+    value = v.getNumber();
+  }
+
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::operator()(uint64_t& value, const std::string& name) {
   assert(root);
-  value = static_cast<uint64_t>(getNumber(name));
+
+  int64_t v = static_cast<int64_t>(value);
+  operator()(v, name);
+  value = static_cast<uint64_t>(v);
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::operator()(double& value, const std::string& name) {
   assert(root);
-  value = getValue(name).getDouble();
+
+  const JsonValue* val = chain.back();
+
+  if (val->isArray()) {
+    value = (*val)[idxs.back()++].getDouble();
+  } else {
+    value = (*val)(name).getDouble();
+  }
+
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::operator()(std::string& value, const std::string& name) {
   assert(root);
-  value = getValue(name).getString();
+
+  const JsonValue* val = chain.back();
+
+  if (val->isArray()) {
+    value = (*val)[idxs.back()++].getString();
+  } else {
+    value = (*val)(name).getString();
+  }
+
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::operator()(uint8_t& value, const std::string& name) {
   assert(root);
-  value = static_cast<uint8_t>(getNumber(name));
+
+  uint64_t v = static_cast<uint64_t>(value);
+  operator()(v, name);
+  value = static_cast<uint8_t>(value);
+
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::operator()(bool& value, const std::string& name) {
   assert(root);
-  value = getValue(name).getBool();
+
+  const JsonValue* val = chain.back();
+
+  if (val->isArray()) {
+    value = (*val)[idxs.back()++].getBool();
+  } else {
+    value = (*val)(name).getBool();
+  }
+
   return *this;
 }
 
 bool JsonInputValueSerializer::hasObject(const std::string& name) {
-  return chain.back()->count(name) != 0;
+  const JsonValue* val = chain.back();
+
+  return val->count(name) != 0;
 }
 
-ISerializer& JsonInputValueSerializer::binary(void* value, std::size_t size, const std::string& name) {
+ISerializer& JsonInputValueSerializer::operator()(char* value, std::size_t size, const std::string& name) {
   assert(false);
   throw std::runtime_error("JsonInputValueSerializer doesn't support this type of serialization");
 
   return *this;
 }
 
-ISerializer& JsonInputValueSerializer::binary(std::string& value, const std::string& name) {
+ISerializer& JsonInputValueSerializer::tag(const std::string& name) {
   assert(false);
   throw std::runtime_error("JsonInputValueSerializer doesn't support this type of serialization");
 
   return *this;
 }
 
-JsonValue JsonInputValueSerializer::getValue(const std::string& name) {
-  const JsonValue& val = *chain.back();
-  return val.isArray() ? val[idxs.back()++] : val(name);
+ISerializer& JsonInputValueSerializer::untagged(uint8_t& value) {
+  assert(false);
+  throw std::runtime_error("JsonInputValueSerializer doesn't support this type of serialization");
+
+  return *this;
 }
 
-int64_t JsonInputValueSerializer::getNumber(const std::string& name) {
-  return getValue(name).getNumber();
-}
+ISerializer& JsonInputValueSerializer::endTag() {
+  assert(false);
+  throw std::runtime_error("JsonInputValueSerializer doesn't support this type of serialization");
 
+  return *this;
+}
 
 }

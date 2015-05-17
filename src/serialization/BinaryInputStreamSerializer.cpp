@@ -24,41 +24,103 @@
 
 namespace {
 
-template<typename T, int bits = std::numeric_limits<T>::digits>
-typename std::enable_if<std::is_integral<T>::value && std::is_unsigned<T>::value, size_t>::type
-readVarint(std::istream& s, T &i) {
-  size_t read = 0;
-  i = 0;
-  for (int shift = 0;; shift += 7) {
-    if (s.eof()) {
-      return read;
-    }
-    uint8_t byte = s.get();
-    if (!s) {
-      throw std::runtime_error("Stream read error");
-    }
-    ++read;
-    if (shift + 7 >= bits && byte >= 1 << (bits - shift)) {
-      throw std::runtime_error("Varint overflow");
-    }
-    if (byte == 0 && shift != 0) {
-      throw std::runtime_error("Non-canonical varint representation");
-    }
-    i |= static_cast<T>(byte & 0x7f) << shift;
-    if ((byte & 0x80) == 0) {
-      break;
-    }
+void deserialize(std::istream& stream, uint8_t& v) {
+  char c;
+  stream.get(c);
+  v = static_cast<uint8_t>(c);
+}
+
+void deserialize(std::istream& stream, int8_t& v) {
+  uint8_t val;
+  deserialize(stream, val);
+  v = val;
+}
+
+void deserialize(std::istream& stream, bool& v) {
+  uint8_t val;
+  deserialize(stream, val);
+
+  v = val;
+}
+
+void deserialize(std::istream& stream, uint32_t& v) {
+  char c;
+
+  stream.get(c);
+  v = static_cast<uint8_t>(c);
+
+  stream.get(c);
+  v += static_cast<uint8_t>(c) << 8;
+
+  stream.get(c);
+  v += static_cast<uint8_t>(c) << 16;
+
+  stream.get(c);
+  v += static_cast<uint8_t>(c) << 24;
+}
+
+void deserialize(std::istream& stream, int32_t& v) {
+  uint32_t val;
+  deserialize(stream, val);
+  v = val;
+}
+
+void deserialize(std::istream& stream, uint64_t& v) {
+  char c;
+  uint64_t uc;
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v = uc;
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v += (uc << 8);
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v += (uc << 16);
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v += (uc << 24);
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v += (uc << 32);
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v += (uc << 40);
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v += (uc << 48);
+
+  stream.get(c);
+  uc = static_cast<unsigned char>(c);
+  v += (uc << 56);
+}
+
+void deserialize(std::istream& stream, int64_t& v) {
+  uint64_t val;
+  deserialize(stream, val);
+  v = val;
+}
+
+void deserialize(std::istream& stream, char* buf, size_t len) {
+  const size_t chunk = 1000;
+
+//  stream.read(buf, len);
+
+//  looks redundant, but i had a bug with it
+  while (len && stream) {
+    size_t toRead = std::min(len, chunk);
+    stream.read(buf, toRead);
+    len -= toRead;
+    buf += toRead;
   }
-  return read;
 }
-
-template<typename StorageType, typename T>
-void readVarintAs(std::istream& s, T &i) {
-  StorageType v;
-  readVarint(s, v);
-  i = static_cast<T>(v);
-}
-
 
 }
 
@@ -77,7 +139,10 @@ ISerializer& BinaryInputStreamSerializer::endObject() {
 }
 
 ISerializer& BinaryInputStreamSerializer::beginArray(std::size_t& size, const std::string& name) {
-  readVarintAs<uint64_t>(stream, size);
+  uint64_t val;
+  serializeVarint(val, name, *this);
+  size = val;
+
   return *this;
 }
 
@@ -86,61 +151,79 @@ ISerializer& BinaryInputStreamSerializer::endArray() {
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(uint8_t& value, const std::string& name) {
-  readVarint(stream, value);
+  deserialize(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(uint32_t& value, const std::string& name) {
-  readVarint(stream, value);
+  deserialize(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(int32_t& value, const std::string& name) {
-  readVarintAs<uint32_t>(stream, value);
+  uint32_t v;
+  operator()(v, name);
+  value = v;
+
   return *this;
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(int64_t& value, const std::string& name) {
-  readVarintAs<uint64_t>(stream, value);
+  deserialize(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(uint64_t& value, const std::string& name) {
-  readVarint(stream, value);
+  deserialize(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(bool& value, const std::string& name) {
-  value = static_cast<bool>(stream.get());
+  deserialize(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(std::string& value, const std::string& name) {
   uint64_t size;
-  readVarint(stream, size);
+  serializeVarint(size, name, *this);
 
-  if (size > 0) {
-    std::vector<char> temp;
-    temp.resize(size);
-    checkedRead(&temp[0], size);
-    value.reserve(size);
-    value.assign(&temp[0], size);
-  } else {
-    value.clear();
-  }
+  std::vector<char> temp;
+  temp.resize(size);
+
+  deserialize(stream, &temp[0], size);
+
+  value.reserve(size);
+  value.assign(&temp[0], size);
 
   return *this;
 }
 
-ISerializer& BinaryInputStreamSerializer::binary(void* value, std::size_t size, const std::string& name) {
-  stream.read(static_cast<char*>(value), size);
+ISerializer& BinaryInputStreamSerializer::operator()(char* value, std::size_t size, const std::string& name) {
+  stream.read(value, size);
+
   return *this;
 }
 
-ISerializer& BinaryInputStreamSerializer::binary(std::string& value, const std::string& name) {
-  return (*this)(value, name);
+ISerializer& BinaryInputStreamSerializer::tag(const std::string& name) {
+  return *this;
 }
 
+ISerializer& BinaryInputStreamSerializer::untagged(uint8_t& value) {
+  char v;
+  stream.get(v);
+  value = v;
+
+  return *this;
+}
+
+ISerializer& BinaryInputStreamSerializer::endTag() {
+  return *this;
+}
 
 bool BinaryInputStreamSerializer::hasObject(const std::string& name) {
   assert(false); //the method is not supported for this type of serialization
@@ -155,13 +238,5 @@ ISerializer& BinaryInputStreamSerializer::operator()(double& value, const std::s
 
   return *this;
 }
-
-void BinaryInputStreamSerializer::checkedRead(char* buf, size_t size) {
-  stream.read(buf, size);
-  if (!stream) {
-    throw std::runtime_error("Stream read error");
-  }
-}
-
 
 }

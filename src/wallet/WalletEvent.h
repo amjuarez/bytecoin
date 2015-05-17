@@ -79,31 +79,20 @@ private:
 class WalletSynchronizationProgressUpdatedEvent : public WalletEvent
 {
 public:
-  WalletSynchronizationProgressUpdatedEvent(uint64_t current, uint64_t total) : m_current(current), m_total(total) {};
+  WalletSynchronizationProgressUpdatedEvent(uint64_t current, uint64_t total, std::error_code result) : m_current(current), m_total(total), m_ec(result) {};
   virtual ~WalletSynchronizationProgressUpdatedEvent() {};
 
   virtual void notify(tools::ObserverManager<CryptoNote::IWalletObserver>& observer)
   {
-    observer.notify(&IWalletObserver::synchronizationProgressUpdated, m_current, m_total);
+    observer.notify(&IWalletObserver::synchronizationProgressUpdated, m_current, m_total, m_ec);
   }
 
 private:
   uint64_t m_current;
   uint64_t m_total;
-};
-
-class WalletSynchronizationCompletedEvent : public WalletEvent {
-public:
-  WalletSynchronizationCompletedEvent(uint64_t current, uint64_t total, std::error_code result) : m_ec(result) {};
-  virtual ~WalletSynchronizationCompletedEvent() {};
-
-  virtual void notify(tools::ObserverManager<CryptoNote::IWalletObserver>& observer) {
-    observer.notify(&IWalletObserver::synchronizationCompleted, m_ec);
-  }
-
-private:
   std::error_code m_ec;
 };
+
 
 class WalletActualBalanceUpdatedEvent : public WalletEvent
 {

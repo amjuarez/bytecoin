@@ -30,7 +30,6 @@
 #include "transaction_tests.h"
 #include "tx_validation.h"
 #include "upgrade.h"
-#include "random_outs.h"
 
 namespace po = boost::program_options;
 
@@ -204,12 +203,12 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendAltChainDifferentBlocks(false));
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendAltChainDifferentBlocks(true));
 
+
     GENERATE_AND_PLAY(gen_uint_overflow_1);
     GENERATE_AND_PLAY(gen_uint_overflow_2);
 
     GENERATE_AND_PLAY(gen_block_reward);
     GENERATE_AND_PLAY(gen_upgrade);
-    GENERATE_AND_PLAY(GetRandomOutputs);
 
     std::cout << (failed_tests.empty() ? concolor::green : concolor::magenta);
     std::cout << "\nREPORT:\n";

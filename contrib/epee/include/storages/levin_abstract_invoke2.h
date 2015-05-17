@@ -114,7 +114,6 @@ namespace epee
       const_cast<t_arg&>(out_struct).store(stg);//TODO: add true const support to searilzation
       std::string buff_to_send, buff_to_recv;
       stg.store_to_binary(buff_to_send);
-
       int res = transport.invoke_async(command, buff_to_send, conn_id, [cb, command](int code, const std::string& buff, typename t_transport::connection_context& context)->bool 
       {
         t_result result_struct = AUTO_VAL_INIT(result_struct);
@@ -132,7 +131,6 @@ namespace epee
           return false;
         }
         result_struct.load(stg_ret);
-
         cb(code, result_struct, context);
         return true;
       }, inv_timeout);

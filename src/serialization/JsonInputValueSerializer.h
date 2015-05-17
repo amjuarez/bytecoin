@@ -45,9 +45,11 @@ public:
   virtual ISerializer& operator()(std::string& value, const std::string& name) override;
   virtual ISerializer& operator()(uint8_t& value, const std::string& name) override;
   virtual ISerializer& operator()(bool& value, const std::string& name) override;
-  
-  virtual ISerializer& binary(void* value, std::size_t size, const std::string& name) override;
-  virtual ISerializer& binary(std::string& value, const std::string& name) override;
+  virtual ISerializer& operator()(char* value, std::size_t size, const std::string& name) override;
+
+  virtual ISerializer& tag(const std::string& name) override;
+  virtual ISerializer& untagged(uint8_t& value) override;
+  virtual ISerializer& endTag() override;
 
   virtual bool hasObject(const std::string& name) override;
 
@@ -57,10 +59,6 @@ public:
   }
 
 private:
-
-  JsonValue getValue(const std::string& name);
-  int64_t getNumber(const std::string& name);
-
   const JsonValue* root;
   std::vector<const JsonValue*> chain;
   std::vector<size_t> idxs;

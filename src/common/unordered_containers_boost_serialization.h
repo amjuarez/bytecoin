@@ -28,8 +28,8 @@ namespace boost
 {
   namespace serialization
   {
-    template <class Archive, class h_key, class hval, class hfunc>
-    inline void save(Archive &a, const std::unordered_map<h_key, hval, hfunc> &x, const boost::serialization::version_type ver)
+    template <class Archive, class h_key, class hval>
+    inline void save(Archive &a, const std::unordered_map<h_key, hval> &x, const boost::serialization::version_type ver)
     {
       size_t s = x.size();
       a << s;
@@ -40,8 +40,8 @@ namespace boost
       }
     }
 
-    template <class Archive, class h_key, class hval, class hfunc>
-    inline void load(Archive &a, std::unordered_map<h_key, hval, hfunc> &x, const boost::serialization::version_type ver)
+    template <class Archive, class h_key, class hval>
+    inline void load(Archive &a, std::unordered_map<h_key, hval> &x, const boost::serialization::version_type ver)
     {
       x.clear();
       size_t s = 0;
@@ -128,7 +128,6 @@ namespace boost
       x.clear();
       size_t s = 0;
       a >> s;
-      x.resize(s);
       for(size_t i = 0; i != s; i++)
       {
         hval v;
@@ -161,7 +160,6 @@ namespace boost
       x.clear();
       size_t s = 0;
       a >> s;
-      x.resize(s);
       for(size_t i = 0; i != s; i++)
       {
         h_key k;
@@ -178,8 +176,8 @@ namespace boost
       split_free(a, x, ver);
     }
 
-    template <class Archive, class h_key, class hval, class hfunc>
-    inline void serialize(Archive &a, std::unordered_map<h_key, hval, hfunc> &x, const boost::serialization::version_type ver)
+    template <class Archive, class h_key, class hval>
+    inline void serialize(Archive &a, std::unordered_map<h_key, hval> &x, const boost::serialization::version_type ver)
     {
       split_free(a, x, ver);
     }

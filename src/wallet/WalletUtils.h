@@ -18,10 +18,6 @@
 #pragma once
 
 #include <exception>
-#include <iomanip>
-#include <iostream>
-
-#include "IWallet.h"
 #include "WalletErrors.h"
 
 namespace CryptoNote {
@@ -30,19 +26,6 @@ inline void throwIf(bool expr, cryptonote::error::WalletErrorCodes ec)
 {
   if (expr)
     throw std::system_error(make_error_code(ec));
-}
-
-inline std::ostream& operator <<(std::ostream& ostr, const TransactionHash& hash) {
-  std::ios_base::fmtflags flags = ostr.setf(std::ios_base::hex, std::ios_base::basefield);
-  char fill = ostr.fill('0');
-
-  for (auto b : hash) {
-    ostr << std::setw(2) << static_cast<unsigned int>(b);
-  }
-
-  ostr.fill(fill);
-  ostr.setf(flags);
-  return ostr;
 }
 
 } //namespace CryptoNote

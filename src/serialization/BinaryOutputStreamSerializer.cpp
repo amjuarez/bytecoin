@@ -22,18 +22,58 @@
 
 namespace {
 
-template<typename T>
-typename std::enable_if<std::is_integral<T>::value && std::is_unsigned<T>::value, void>::type
-writeVarint(std::ostream& s, T i) {
-  while (i >= 0x80) {
-    s.put((static_cast<char>(i)& 0x7f) | 0x80);
-    i >>= 7;
-  }
-  s.put(static_cast<char>(i));
+void serializeInteger(std::ostream& stream, uint8_t v) {
+  stream.put(static_cast<char>(v));
+}
 
-  if (!s) {
-    throw std::runtime_error("Stream write error");
-  }
+void serializeBool(std::ostream& stream, bool v) {
+  serializeInteger(stream, static_cast<uint8_t>(v));
+}
+
+void serializeInteger(std::ostream& stream, uint32_t v) {
+  stream.put(static_cast<char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<char>(v & 0xff));
+}
+
+void serializeInteger(std::ostream& stream, uint64_t v) {
+  stream.put(static_cast<unsigned char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<unsigned char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<unsigned char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<unsigned char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<unsigned char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<unsigned char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<unsigned char>(v & 0xff));
+  v >>= 8;
+
+  stream.put(static_cast<unsigned char>(v & 0xff));
+}
+
+void serializeInteger(std::ostream& stream, int64_t v) {
+  serializeInteger(stream, static_cast<uint64_t>(v));
+}
+
+void serializeData(std::ostream& stream, const char* buf, size_t len) {
+  stream.write(buf, len);
 }
 
 }
@@ -53,7 +93,9 @@ ISerializer& BinaryOutputStreamSerializer::endObject() {
 }
 
 ISerializer& BinaryOutputStreamSerializer::beginArray(std::size_t& size, const std::string& name) {
-  writeVarint(stream, size);
+  uint64_t size64 = size;
+  serializeVarint(size64, name, *this);
+  size = size64;
   return *this;
 }
 
@@ -62,50 +104,68 @@ ISerializer& BinaryOutputStreamSerializer::endArray() {
 }
 
 ISerializer& BinaryOutputStreamSerializer::operator()(uint8_t& value, const std::string& name) {
-  writeVarint(stream, value);
+  serializeInteger(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryOutputStreamSerializer::operator()(uint32_t& value, const std::string& name) {
-  writeVarint(stream, value);
+  serializeInteger(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryOutputStreamSerializer::operator()(int32_t& value, const std::string& name) {
-  writeVarint(stream, static_cast<uint32_t>(value));
+  uint32_t v = value;
+  operator()(v, name);
+
   return *this;
 }
 
 ISerializer& BinaryOutputStreamSerializer::operator()(int64_t& value, const std::string& name) {
-  writeVarint(stream, static_cast<uint64_t>(value));
+  serializeInteger(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryOutputStreamSerializer::operator()(uint64_t& value, const std::string& name) {
-  writeVarint(stream, value);
+  serializeInteger(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryOutputStreamSerializer::operator()(bool& value, const std::string& name) {
-  char boolVal = value;
-  checkedWrite(&boolVal, 1);
+  serializeBool(stream, value);
+
   return *this;
 }
 
 ISerializer& BinaryOutputStreamSerializer::operator()(std::string& value, const std::string& name) {
-  writeVarint(stream, value.size());
-  checkedWrite(value.data(), value.size());
+  uint64_t size = value.size();
+  serializeVarint(size, name, *this);
+  serializeData(stream, value.c_str(), value.size());
+
   return *this;
 }
 
-ISerializer& BinaryOutputStreamSerializer::binary(void* value, std::size_t size, const std::string& name) {
-  checkedWrite(static_cast<const char*>(value), size);
+ISerializer& BinaryOutputStreamSerializer::operator()(char* value, std::size_t size, const std::string& name) {
+  serializeData(stream, value, size);
+
   return *this;
 }
 
-ISerializer& BinaryOutputStreamSerializer::binary(std::string& value, const std::string& name) {
-  // write as string (with size prefix)
-  return (*this)(value, name);
+ISerializer& BinaryOutputStreamSerializer::tag(const std::string& name) {
+  return *this;
+}
+
+ISerializer& BinaryOutputStreamSerializer::untagged(uint8_t& value) {
+  stream.put(value);
+
+  return *this;
+}
+
+ISerializer& BinaryOutputStreamSerializer::endTag() {
+  return *this;
 }
 
 bool BinaryOutputStreamSerializer::hasObject(const std::string& name) {
@@ -120,13 +180,6 @@ ISerializer& BinaryOutputStreamSerializer::operator()(double& value, const std::
   throw std::runtime_error("double serialization is not supported in BinaryOutputStreamSerializer");
 
   return *this;
-}
-
-void BinaryOutputStreamSerializer::checkedWrite(const char* buf, size_t size) {
-  stream.write(buf, size);
-  if (!stream) {
-    throw std::runtime_error("Stream write error");
-  }
 }
 
 }

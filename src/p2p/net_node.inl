@@ -37,6 +37,35 @@
 
 namespace nodetool
 {
+  namespace
+  {
+    const command_line::arg_descriptor<std::string> arg_p2p_bind_ip        = {"p2p-bind-ip", "Interface for p2p network protocol", "0.0.0.0"};
+    const command_line::arg_descriptor<std::string> arg_p2p_bind_port      = {"p2p-bind-port", "Port for p2p network protocol", boost::to_string(cryptonote::P2P_DEFAULT_PORT)};
+    const command_line::arg_descriptor<uint32_t>    arg_p2p_external_port  = {"p2p-external-port", "External port for p2p network protocol (if port forwarding used with NAT)", 0};
+    const command_line::arg_descriptor<bool>        arg_p2p_allow_local_ip = {"allow-local-ip", "Allow local ip add to peer list, mostly in debug purposes"};
+    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer   = {"add-peer", "Manually add peer to local peerlist"};
+    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_priority_node   = {"add-priority-node", "Specify list of peers to connect to and attempt to keep the connection open"};
+    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_exclusive_node   = {"add-exclusive-node", "Specify list of peers to connect to only."
+                                                                                                  " If this option is given the options add-priority-node and seed-node are ignored"};
+    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_seed_node   = {"seed-node", "Connect to a node to retrieve peer addresses, and disconnect"};
+    const command_line::arg_descriptor<bool> arg_p2p_hide_my_port   =    {"hide-my-port", "Do not announce yourself as peerlist candidate", false, true};
+  }
+
+  //-----------------------------------------------------------------------------------
+  template<class t_payload_net_handler>
+  void node_server<t_payload_net_handler>::init_options(boost::program_options::options_description& desc)
+  {
+    command_line::add_arg(desc, arg_p2p_bind_ip);
+    command_line::add_arg(desc, arg_p2p_bind_port);
+    command_line::add_arg(desc, arg_p2p_external_port);
+    command_line::add_arg(desc, arg_p2p_allow_local_ip);
+    command_line::add_arg(desc, arg_p2p_add_peer);
+    command_line::add_arg(desc, arg_p2p_add_priority_node);
+    command_line::add_arg(desc, arg_p2p_add_exclusive_node);
+    command_line::add_arg(desc, arg_p2p_seed_node);    
+    command_line::add_arg(desc, arg_p2p_hide_my_port);
+  }
+  //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::init_config()
   {
@@ -83,6 +112,55 @@ namespace nodetool
     return true;
   }
   //-----------------------------------------------------------------------------------
+  template<class t_payload_net_handler>
+  bool node_server<t_payload_net_handler>::parse_peer_from_string(nodetool::net_address& pe, const std::string& node_addr)
+  {
+    return epee::string_tools::parse_peer_from_string(pe.ip, pe.port, node_addr);
+  }
+  //-----------------------------------------------------------------------------------
+  template<class t_payload_net_handler>
+  bool node_server<t_payload_net_handler>::handle_command_line(const boost::program_options::variables_map& vm)
+  {
+    m_bind_ip = command_line::get_arg(vm, arg_p2p_bind_ip);
+    m_port = command_line::get_arg(vm, arg_p2p_bind_port);
+    m_external_port = command_line::get_arg(vm, arg_p2p_external_port);
+    m_allow_local_ip = command_line::get_arg(vm, arg_p2p_allow_local_ip);
+
+    if (command_line::has_arg(vm, arg_p2p_add_peer))
+    {       
+      std::vector<std::string> perrs = command_line::get_arg(vm, arg_p2p_add_peer);
+      for(const std::string& pr_str: perrs)
+      {
+        nodetool::peerlist_entry pe = AUTO_VAL_INIT(pe);
+        pe.id = crypto::rand<uint64_t>();
+        bool r = parse_peer_from_string(pe.adr, pr_str);
+        CHECK_AND_ASSERT_MES(r, false, "Failed to parse address from string: " << pr_str);
+        m_command_line_peers.push_back(pe);
+      }
+    }
+
+    if (command_line::has_arg(vm,arg_p2p_add_exclusive_node))
+    {
+      if (!parse_peers_and_add_to_container(vm, arg_p2p_add_exclusive_node, m_exclusive_peers))
+        return false;
+    }
+    if (command_line::has_arg(vm, arg_p2p_add_priority_node))
+    {
+      if (!parse_peers_and_add_to_container(vm, arg_p2p_add_priority_node, m_priority_peers))
+        return false;
+    }
+    if (command_line::has_arg(vm, arg_p2p_seed_node))
+    {
+      if (!parse_peers_and_add_to_container(vm, arg_p2p_seed_node, m_seed_nodes))
+        return false;
+    }
+
+    if(command_line::has_arg(vm, arg_p2p_hide_my_port))
+      m_hide_my_port = true;
+
+    return true;
+  }
+  //-----------------------------------------------------------------------------------
   namespace
   {
     template<typename T>
@@ -124,62 +202,10 @@ namespace nodetool
     }
   }
 
+  //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
-  void node_server<t_payload_net_handler>::initUpnp() {
-    // Add UPnP port mapping
-    LOG_PRINT_L0("Attempting to add IGD port mapping.");
-    int result;
-    UPNPDev* deviceList = upnpDiscover(1000, NULL, NULL, 0, 0, &result);
-    UPNPUrls urls;
-    IGDdatas igdData;
-    char lanAddress[64];
-    result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress);
-    freeUPNPDevlist(deviceList);
-    if (result != 0) {
-      if (result == 1) {
-        std::ostringstream portString;
-        portString << m_listenning_port;
-        if (UPNP_AddPortMapping(urls.controlURL, igdData.first.servicetype, portString.str().c_str(),
-            portString.str().c_str(), lanAddress, cryptonote::CRYPTONOTE_NAME, "TCP", 0, "0") != 0) {
-          LOG_ERROR("UPNP_AddPortMapping failed.");
-        } else {
-          LOG_PRINT_GREEN("Added IGD port mapping.", LOG_LEVEL_0);
-        }
-      } else if (result == 2) {
-        LOG_PRINT_L0("IGD was found but reported as not connected.");
-      } else if (result == 3) {
-        LOG_PRINT_L0("UPnP device was found but not recoginzed as IGD.");
-      } else {
-        LOG_ERROR("UPNP_GetValidIGD returned an unknown result code.");
-      }
-
-      FreeUPNPUrls(&urls);
-    } else {
-      LOG_PRINT_L0("No IGD was found.");
-    }
-  }
-
-  template<class t_payload_net_handler>
-  bool node_server<t_payload_net_handler>::handleConfig(const NetNodeConfig& config) {
-    m_bind_ip = config.bindIp;
-    m_port = config.bindPort;
-    m_external_port = config.externalPort;
-    m_allow_local_ip = config.allowLocalIp;
-m_network_id = config.networkId;
-m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
-
-    std::copy(config.peers.begin(), config.peers.end(), std::back_inserter(m_command_line_peers));
-    std::copy(config.exclusiveNodes.begin(), config.exclusiveNodes.end(), std::back_inserter(m_exclusive_peers));
-    std::copy(config.priorityNodes.begin(), config.priorityNodes.end(), std::back_inserter(m_priority_peers));
-    std::copy(config.seedNodes.begin(), config.seedNodes.end(), std::back_inserter(m_seed_nodes));
-
-    m_hide_my_port = config.hideMyPort;
-    return true;
-  }
-
-  template<class t_payload_net_handler>
-  bool node_server<t_payload_net_handler>::init(const NetNodeConfig& config, bool testnet) {
-    if (!testnet && config.seedNodes.size() == 0) {
+  bool node_server<t_payload_net_handler>::init(const boost::program_options::variables_map& vm, bool testnet) {
+    if (!testnet) {
       for (auto seed : cryptonote::SEED_NODES) {
         append_net_address(m_seed_nodes, seed);
       }
@@ -187,10 +213,9 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
       m_network_id.data[0] += 1;
     }
 
-    bool res = handleConfig(config);
+    bool res = handle_command_line(vm);
     CHECK_AND_ASSERT_MES(res, false, "Failed to handle command line");
-
-    m_config_folder = config.configFolder;
+    m_config_folder = command_line::get_arg(vm, command_line::arg_data_dir);
 
     res = init_config();
     CHECK_AND_ASSERT_MES(res, false, "Failed to init config.");
@@ -222,7 +247,37 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
     if(m_external_port)
       LOG_PRINT_L0("External port defined as " << m_external_port);
 
-    initUpnp();
+    // Add UPnP port mapping
+    LOG_PRINT_L0("Attempting to add IGD port mapping.");
+    int result;
+    UPNPDev* deviceList = upnpDiscover(1000, NULL, NULL, 0, 0, &result);
+    UPNPUrls urls;
+    IGDdatas igdData;
+    char lanAddress[64];
+    result = UPNP_GetValidIGD(deviceList, &urls, &igdData, lanAddress, sizeof lanAddress);
+    freeUPNPDevlist(deviceList);
+    if (result != 0) {
+      if (result == 1) {
+        std::ostringstream portString;
+        portString << m_listenning_port;
+        if (UPNP_AddPortMapping(urls.controlURL, igdData.first.servicetype, portString.str().c_str(),
+            portString.str().c_str(), lanAddress, cryptonote::CRYPTONOTE_NAME, "TCP", 0, "0") != 0) {
+          LOG_ERROR("UPNP_AddPortMapping failed.");
+        } else {
+          LOG_PRINT_GREEN("Added IGD port mapping.", LOG_LEVEL_0);
+        }
+      } else if (result == 2) {
+        LOG_PRINT_L0("IGD was found but reported as not connected.");
+      } else if (result == 3) {
+        LOG_PRINT_L0("UPnP device was found but not recoginzed as IGD.");
+      } else {
+        LOG_ERROR("UPNP_GetValidIGD returned an unknown result code.");
+      }
+
+      FreeUPNPUrls(&urls);
+    } else {
+      LOG_PRINT_L0("No IGD was found.");
+    }
 
     return res;
   }
@@ -301,10 +356,11 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
   bool node_server<t_payload_net_handler>::send_stop_signal()
   {
     m_net_server.send_stop_signal();
-    m_payload_handler.stop();
     LOG_PRINT_L0("[node] Stop signal sent");
     return true;
   }
+  //-----------------------------------------------------------------------------------
+ 
 
   template<class t_payload_net_handler>
   bool node_server<t_payload_net_handler>::do_handshake_with_peer(peerid_type& pi, p2p_connection_context& context_, bool just_take_peerlist)
@@ -762,7 +818,8 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
       return false;
     }
     crypto::public_key pk = AUTO_VAL_INIT(pk);
-    epee::string_tools::hex_to_pod(m_p2pStatTrustedPubKey, pk);    crypto::hash h = tools::get_proof_of_trust_hash(tr);
+    epee::string_tools::hex_to_pod(cryptonote::P2P_STAT_TRUSTED_PUB_KEY, pk);
+    crypto::hash h = tools::get_proof_of_trust_hash(tr);
     if(!crypto::check_signature(h, pk, tr.sign))
     {
       LOG_ERROR("check_trust failed: sign check failed");
@@ -829,7 +886,7 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
-  void node_server<t_payload_net_handler>::relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)
+  bool node_server<t_payload_net_handler>::relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)
   {
     std::list<boost::uuids::uuid> connections;
     m_net_server.get_config_object().foreach_connection([&](const p2p_connection_context& cntxt)
@@ -843,6 +900,7 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
     {
       m_net_server.get_config_object().notify(command, data_buff, c_id);
     }
+    return true;
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
@@ -1057,14 +1115,12 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
   void node_server<t_payload_net_handler>::on_connection_new(p2p_connection_context& context)
   {
     LOG_PRINT_L2("["<< epee::net_utils::print_connection_context(context) << "] NEW CONNECTION");
-    m_payload_handler.onConnectionOpened(context);
   }
   //-----------------------------------------------------------------------------------
   template<class t_payload_net_handler>
   void node_server<t_payload_net_handler>::on_connection_close(p2p_connection_context& context)
   {
     LOG_PRINT_L2("["<< epee::net_utils::print_connection_context(context) << "] CLOSE CONNECTION");
-    m_payload_handler.onConnectionClosed(context);
   }
 
   template<class t_payload_net_handler>
@@ -1085,6 +1141,22 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
         continue;
 
       try_to_connect_and_handshake_with_new_peer(na);
+    }
+
+    return true;
+  }
+
+  template<class t_payload_net_handler> template <class Container>
+  bool node_server<t_payload_net_handler>::parse_peers_and_add_to_container(const boost::program_options::variables_map& vm, const command_line::arg_descriptor<std::vector<std::string> > & arg, Container& container)
+  {
+    std::vector<std::string> perrs = command_line::get_arg(vm, arg);
+
+    for(const std::string& pr_str: perrs)
+    {
+      nodetool::net_address na = AUTO_VAL_INIT(na);
+      bool r = parse_peer_from_string(na, pr_str);
+      CHECK_AND_ASSERT_MES(r, false, "Failed to parse address from string: " << pr_str);
+      container.push_back(na);
     }
 
     return true;

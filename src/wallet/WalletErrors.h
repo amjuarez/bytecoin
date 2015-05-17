@@ -38,8 +38,7 @@ enum WalletErrorCodes {
   ZERO_DESTINATION,
   TX_CANCEL_IMPOSSIBLE,
   TX_CANCELLED,
-  OPERATION_CANCELLED,
-  TX_TRANSFER_IMPOSSIBLE
+  OPERATION_CANCELLED
 };
 
 // custom category:
@@ -70,7 +69,6 @@ public:
     case TX_CANCEL_IMPOSSIBLE: return "Impossible to cancel transaction";
     case WRONG_STATE:         return "The wallet is in wrong state (maybe loading or saving), try again later";
     case OPERATION_CANCELLED: return "The operation you've requested has been cancelled";
-    case TX_TRANSFER_IMPOSSIBLE: return "Transaction transfer impossible";
     default:                  return "Unknown error";
     }
   }

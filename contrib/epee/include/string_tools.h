@@ -38,8 +38,6 @@
 #include <string>
 #include <sstream>
 
-#include <boost/lexical_cast.hpp>
-
 #include "warnings.h"
 
 #ifndef OUT

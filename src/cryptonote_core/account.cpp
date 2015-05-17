@@ -50,9 +50,5 @@ namespace cryptonote
   {
     return m_keys;
   }
-
-  void account_base::set_keys(const account_keys& keys) {
-    m_keys = keys;
-  }
   //-----------------------------------------------------------------
 }

@@ -22,7 +22,6 @@
 #include "common/base58.cpp"
 #include "cryptonote_core/cryptonote_basic_impl.h"
 #include "serialization/binary_utils.h"
-#include "cryptonote_core/Currency.h"
 
 using namespace tools;
 
@@ -492,11 +491,9 @@ TEST(parseAccountAddressString, fails_on_invalid_address_prefix)
 {
   std::string addr_str = base58::encode_addr(0, test_serialized_keys);
 
-  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
-
+  uint64_t prefix;
   cryptonote::AccountPublicAddress addr;
-  
-  ASSERT_FALSE(currency.parseAccountAddressString(addr_str, addr));
+  ASSERT_FALSE(cryptonote::parseAccountAddressString(prefix, addr, addr_str));
 }
 
 TEST(parseAccountAddressString, fails_on_invalid_address_content)
