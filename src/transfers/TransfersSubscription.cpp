@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,7 +20,7 @@
 
 namespace CryptoNote {
 
-TransfersSubscription::TransfersSubscription(const cryptonote::Currency& currency, const AccountSubscription& sub)
+TransfersSubscription::TransfersSubscription(const CryptoNote::Currency& currency, const AccountSubscription& sub)
   : m_currency(currency), m_subscription(sub), m_transfers(currency, sub.transactionSpendableAge) {}
 
 
@@ -37,7 +37,7 @@ void TransfersSubscription::onBlockchainDetach(uint64_t height) {
 
 void TransfersSubscription::onError(const std::error_code& ec, uint64_t height) {
   if (height != UNCONFIRMED_TRANSACTION_HEIGHT) {
-    m_transfers.detach(height);
+  m_transfers.detach(height);
   }
   m_observerManager.notify(&ITransfersObserver::onError, this, height, ec);
 }

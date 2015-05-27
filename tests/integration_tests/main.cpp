@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,19 +15,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
+#include "gtest/gtest.h"
+
 #include <thread>
 #include <chrono>
 #include <mutex>  
 #include <functional>
 #include <future>
 
-#include "boost/lexical_cast.hpp"
+#include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
+
 #include "cryptonote_core/cryptonote_format_utils.h"
-#include "string_tools.h"
 
 #include "../integration_test_lib/BaseFunctionalTest.h"
 #include "../integration_test_lib/Logger.h"
+
+#include "Logging/ConsoleLogger.h"
 
 #ifndef CHECK_AND_ASSERT_MES
 #define CHECK_AND_ASSERT_MES(expr, fail_ret_val, message)   do{if(!(expr)) {LOG_ERROR(message); return fail_ret_val;};}while(0)
@@ -37,9 +41,10 @@
 #define CHECK_AND_ASSERT_MES_NON_FATAL(expr, fail_ret_val, message)   do{if(!(expr)) {LOG_WARNING(message); };}while(0)
 #endif
 
+Tests::Common::BaseFunctionalTestConfig baseCfg;
+System::Dispatcher globalDispatcher;
 
-
-
+void testMultiVersion(const CryptoNote::Currency& currency, System::Dispatcher& d, const Tests::Common::BaseFunctionalTestConfig& config);
 
 namespace po = boost::program_options;
 namespace {
@@ -53,9 +58,10 @@ struct Configuration : public Tests::Common::BaseFunctionalTestConfig {
     init();
   }
 
-  bool handleCommandLine(int argc, char** argv) {
+  bool handleCommandLine(int argc, char **argv) {
     po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
+    // po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
     BaseFunctionalTestConfig::handleCommandLine(vm);
     if (vm.count("help")) {
@@ -65,9 +71,11 @@ struct Configuration : public Tests::Common::BaseFunctionalTestConfig {
 
     if (vm.count("test-type")) {
       auto testType = vm["test-type"].as<uint16_t>();
-      if (testType<1 || testType>6) throw ConfigurationError("Incorrect test type.");
+      if (testType < 1 || testType >= TESTLAST)
+        throw ConfigurationError("Incorrect test type.");
       _testType = (TestType)testType;
-    } else throw ConfigurationError("Missing test type.");
+    } else
+      throw ConfigurationError("Missing test type.");
     return true;
   }
 
@@ -76,7 +84,9 @@ struct Configuration : public Tests::Common::BaseFunctionalTestConfig {
     BLOCKTHRUDAEMONS = 3,
     RELAYBLOCKTHRUDAEMONS = 4,
     TESTPOOLANDINPROCNODE = 5,
-    TESTPOOLDELETION = 6
+    TESTPOOLDELETION = 6,
+    TESTMULTIVERSION = 7,
+    TESTLAST
   } _testType;
 
   po::options_description desc;
@@ -85,7 +95,14 @@ protected:
   void init() {
     desc.add_options()
       ("help,h", "produce this help message and exit")
-      ("test-type,t", po::value<uint16_t>()->default_value(1), "test type:\r\n1 - wallet to wallet test,\r\n3 - block thru daemons test\r\n4 - relay block thru daemons\r\n5 - test tx pool and inproc node\r\n6 - deleting tx from pool due to timeout");
+      ("test-type,t", po::value<uint16_t>()->default_value(1), 
+        "test type:\r\n"
+        "1 - wallet to wallet test,\r\n"
+        "3 - block thru daemons test\r\n"
+        "4 - relay block thru daemons\r\n"
+        "5 - test tx pool and inproc node\r\n"
+        "6 - deleting tx from pool due to timeout\r\n"
+        "7 - multiple daemons interoperability test (use -a option to specify daemons)\r\n");
     BaseFunctionalTestConfig::init(desc);
   }
 };
@@ -95,7 +112,8 @@ protected:
 class SimpleTest : public Tests::Common::BaseFunctionalTest {
 public:
 
-  SimpleTest(const cryptonote::Currency& currency, System::Dispatcher& system, const Configuration& config) : BaseFunctionalTest(currency, system, config) {}
+  SimpleTest(const CryptoNote::Currency& currency, System::Dispatcher& system, const Tests::Common::BaseFunctionalTestConfig& config) 
+    : BaseFunctionalTest(currency, system, config) {}
 
   class WaitForActualGrowObserver : public CryptoNote::IWalletObserver {
     Tests::Common::Semaphore& m_GotActual;
@@ -201,7 +219,6 @@ public:
   bool perform1() {
     using namespace Tests::Common;
     using namespace CryptoNote;
-    using namespace cryptonote;
     const uint64_t FEE = 1000000;
     launchTestnet(2);
     LOG_TRACE("STEP 1 PASSED");
@@ -506,12 +523,14 @@ public:
   bool perform5() {
     using namespace Tests::Common;
     using namespace CryptoNote;
-    using namespace cryptonote;
     const uint64_t FEE = 1000000;
     launchTestnetWithInprocNode(2);
     
     std::unique_ptr<CryptoNote::INode> node1;
+    std::unique_ptr<CryptoNote::INode> inprocNode;
+
     nodeDaemons.front()->makeINode(node1);
+    nodeDaemons.back()->makeINode(inprocNode);
 
     while (node1->getLastLocalBlockHeight() != inprocNode->getLastLocalBlockHeight()) {
       LOG_TRACE("Syncing...");
@@ -563,7 +582,6 @@ public:
     CryptoNote::Transfer tr;
     tr.address = wallet2->getAddress();
     tr.amount = wallet1ActualBeforeTransaction / 2;
-    TransactionId sendTransaction;
     std::error_code result;
     Semaphore w2GotPending;
     WaitForPendingGrowObserver pgo1(w2GotPending, wallet2PendingBeforeTransaction);
@@ -654,12 +672,14 @@ public:
   bool perform6() {
     using namespace Tests::Common;
     using namespace CryptoNote;
-    using namespace cryptonote;
     const uint64_t FEE = 1000000;
     launchTestnetWithInprocNode(2);
 
     std::unique_ptr<CryptoNote::INode> node1;
     nodeDaemons.front()->makeINode(node1);
+
+    std::unique_ptr<CryptoNote::INode> inprocNode;
+    nodeDaemons.back()->makeINode(inprocNode);
 
     while (node1->getLastLocalBlockHeight() != inprocNode->getLastLocalBlockHeight()) {
       LOG_TRACE("Syncing...");
@@ -711,7 +731,6 @@ public:
     CryptoNote::Transfer tr;
     tr.address = wallet2->getAddress();
     tr.amount = wallet1ActualBeforeTransaction / 2;
-    TransactionId sendTransaction;
     std::error_code result;
     Semaphore w2GotPending;
     WaitForPendingGrowObserver pgo1(w2GotPending, wallet2PendingBeforeTransaction);
@@ -781,38 +800,58 @@ public:
 };
 
 
+class SimpleTestCase : public ::testing::Test {
+
+public:
+
+  SimpleTestCase() : 
+    currency(CryptoNote::CurrencyBuilder(logger).testnet(true).currency()), 
+    test(currency, globalDispatcher, baseCfg) {
+  }
+
+  Logging::ConsoleLogger logger;
+  CryptoNote::Currency currency;
+  SimpleTest test;
+};
+
+TEST_F(SimpleTestCase, WALLET2WALLET) {
+  ASSERT_TRUE(test.perform1());
+}
+
+TEST_F(SimpleTestCase, BLOCKTHRUDAEMONS) {
+  ASSERT_TRUE(test.perform2());
+}
+
+TEST_F(SimpleTestCase, RELAYBLOCKTHRUDAEMONS) {
+  ASSERT_TRUE(test.perform4());
+}
+
+TEST_F(SimpleTestCase, TESTPOOLANDINPROCNODE) {
+  ASSERT_TRUE(test.perform5());
+}
+
+TEST_F(SimpleTestCase, TESTPOOLDELETION) {
+  currency = CryptoNote::CurrencyBuilder(logger).testnet(true).mempoolTxLiveTime(60).currency();
+  ASSERT_TRUE(test.perform6());
+}
+
+TEST_F(SimpleTestCase, MULTIVERSION) {
+  ASSERT_NO_THROW(testMultiVersion(currency, globalDispatcher, baseCfg));
+}
 
 int main(int argc, char** argv) {
   CLogger::Instance().init(CLogger::DEBUG);
+
   try {
     ::Configuration config;
     if (!config.handleCommandLine(argc, argv)) {
       return 0; //help message requested or so
     }
 
-    cryptonote::Currency currency = cryptonote::CurrencyBuilder().testnet(true).currency();
-    if (config._testType == Configuration::TESTPOOLDELETION) {
-      currency = cryptonote::CurrencyBuilder().testnet(true).mempoolTxLiveTime(60).currency();
-    }
-    
-    System::Dispatcher system;
-    SimpleTest t(currency, system, config);
-    bool success = false;
-    switch (config._testType)
-    {
-    case Configuration::WALLET2WALLET: success = t.perform1(); break;
-    case Configuration::BLOCKTHRUDAEMONS: success = t.perform2(); break;
-    case Configuration::RELAYBLOCKTHRUDAEMONS: success = t.perform4(); break;
-    case Configuration::TESTPOOLANDINPROCNODE: success = t.perform5(); break;
-    case Configuration::TESTPOOLDELETION: success = t.perform6(); break;
-    default: throw std::runtime_error("Oh snap! Serious crap happened...");
-    };
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-    if (!success) {
-      LOG_ERROR("TEST FAILED");
-      return 1;
-    }
-    LOG_TRACE("TEST PASSED");
+    baseCfg = config;
+
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
   }
   catch (::ConfigurationError& ex) {
     std::cerr << "Configuration error: " << ex.what() << std::endl;
@@ -822,5 +861,6 @@ int main(int argc, char** argv) {
     LOG_ERROR("Fatal error: " + std::string(ex.what()));
     return 1;
   }
+
   return 0;
 }

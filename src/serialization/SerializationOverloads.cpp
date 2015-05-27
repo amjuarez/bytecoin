@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,9 +19,9 @@
 
 #include <limits>
 
-namespace cryptonote {
+namespace CryptoNote {
 
-//void readVarint(uint64_t& value, cryptonote::ISerializer& serializer) {
+//void readVarint(uint64_t& value, CryptoNote::ISerializer& serializer) {
 //  const int bits = std::numeric_limits<uint64_t>::digits;
 //
 //  uint64_t v = 0;
@@ -46,7 +46,7 @@ namespace cryptonote {
 //  value = v;
 //}
 //
-//void writeVarint(uint64_t& value, cryptonote::ISerializer& serializer) {
+//void writeVarint(uint64_t& value, CryptoNote::ISerializer& serializer) {
 //  uint64_t v = value;
 //
 //  while (v >= 0x80) {
@@ -60,10 +60,10 @@ namespace cryptonote {
 //}
 //
 //
-//void serializeVarint(uint64_t& value, const std::string& name, cryptonote::ISerializer& serializer) {
+//void serializeVarint(uint64_t& value, const std::string& name, CryptoNote::ISerializer& serializer) {
 //  serializer.tag(name);
 //
-//  if (serializer.type() == cryptonote::ISerializer::INPUT) {
+//  if (serializer.type() == CryptoNote::ISerializer::INPUT) {
 //    readVarint(value, serializer);
 //  } else {
 //    writeVarint(value, serializer);
@@ -72,7 +72,7 @@ namespace cryptonote {
 //  serializer.endTag();
 //}
 //
-//void serializeVarint(uint32_t& value, const std::string& name, cryptonote::ISerializer& serializer) {
+//void serializeVarint(uint32_t& value, const std::string& name, CryptoNote::ISerializer& serializer) {
 //  uint64_t v = value;
 //  serializeVarint(v, name, serializer);
 //  value = static_cast<uint32_t>(v);

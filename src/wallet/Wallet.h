@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -27,7 +27,7 @@
 #include "INode.h"
 #include "WalletErrors.h"
 #include "WalletAsyncContextCounter.h"
-#include "common/ObserverManager.h"
+#include "Common/ObserverManager.h"
 #include "cryptonote_core/tx_extra.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/Currency.h"
@@ -50,7 +50,7 @@ class Wallet :
   ITransfersObserver {
 
 public:
-  Wallet(const cryptonote::Currency& currency, INode& node);
+  Wallet(const CryptoNote::Currency& currency, INode& node);
   virtual ~Wallet();
 
   virtual void addObserver(IWalletObserver* observer);
@@ -101,9 +101,6 @@ private:
   void doSave(std::ostream& destination, bool saveDetailed, bool saveCache);
   void doLoad(std::istream& source);
 
-  crypto::chacha8_iv encrypt(const std::string& plain, std::string& cipher);
-  void decrypt(const std::string& cipher, std::string& plain, crypto::chacha8_iv iv, const std::string& password);
-
   void synchronizationCallback(WalletRequest::Callback callback, std::error_code ec);
   void sendTransactionCallback(WalletRequest::Callback callback, std::error_code ec);
   void notifyClients(std::deque<std::shared_ptr<WalletEvent> >& events);
@@ -119,9 +116,9 @@ private:
 
   WalletState m_state;
   std::mutex m_cacheMutex;
-  cryptonote::account_base m_account;
+  CryptoNote::account_base m_account;
   std::string m_password;
-  const cryptonote::Currency& m_currency;
+  const CryptoNote::Currency& m_currency;
   INode& m_node;
   bool m_isStopping;
 

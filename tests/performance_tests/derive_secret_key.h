@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -40,7 +40,7 @@ public:
 
   bool test()
   {
-    cryptonote::KeyPair in_ephemeral;
+    CryptoNote::KeyPair in_ephemeral;
     crypto::derive_secret_key(m_key_derivation, 0, m_spend_secret_key, in_ephemeral.sec);
     return true;
   }

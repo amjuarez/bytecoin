@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,16 +17,14 @@
 
 #pragma once
 
-#include "ISerializer.h"
-#include "SerializationOverloads.h"
-
-#include "JsonValue.h"
-#include "JsonInputValueSerializer.h"
-
 #include <istream>
 #include <memory>
+#include "../Common/JsonValue.h"
+#include "ISerializer.h"
+#include "JsonInputValueSerializer.h"
+#include "SerializationOverloads.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 
 class KVBinaryInputStreamSerializer : public JsonInputValueSerializer {
 public:
@@ -39,14 +37,13 @@ public:
   virtual ISerializer& binary(std::string& value, const std::string& name) override;
 
 private:
-
-  JsonValue loadSection();
-  JsonValue loadEntry();
-  JsonValue loadValue(uint8_t type);
-  JsonValue loadArray(uint8_t itemType);
-
-  std::unique_ptr<JsonValue> root;
+  std::unique_ptr<Common::JsonValue> root;
   std::istream& stream;
+
+  Common::JsonValue loadSection();
+  Common::JsonValue loadEntry();
+  Common::JsonValue loadValue(uint8_t type);
+  Common::JsonValue loadArray(uint8_t itemType);
 };
 
 }

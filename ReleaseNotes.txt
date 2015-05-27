@@ -1,3 +1,10 @@
+Release notes 1.0.4
+
+- Bytecoin RPC Wallet
+- New multithreading library
+- Improved console logging
+- Further optimizations
+
 Release notes 1.0.3
 
 - Multisignature API

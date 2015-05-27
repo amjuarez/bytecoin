@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <queue>
 #include <stack>
@@ -29,38 +30,45 @@ public:
   Dispatcher(const Dispatcher&) = delete;
   ~Dispatcher();
   Dispatcher& operator=(const Dispatcher&) = delete;
+  void clear();
+  void dispatch();
+  void* getCurrentContext() const;
+  void pushContext(void* context);
+  void remoteSpawn(std::function<void()>&& procedure);
   void spawn(std::function<void()>&& procedure);
   void yield();
-  void clear();
-  
-  struct ContextExt {
+
+  struct OperationContext {
     void *context;
+    bool interrupted;
   };
-private:
-  friend class Event;
-  friend class DispatcherAccessor;
-  friend class TcpConnection;
-  friend class TcpConnector;
-  friend class TcpListener;
-  friend class Timer;
-  int kqueue;
-  void* currentContext;
-  int lastCreatedTimer;
-  std::size_t contextCount;
-  std::queue<void*> resumingContexts;
-  std::stack<void*> reusableContexts;
-  std::stack<uint8_t *> allocatedStacks;
-  std::queue<std::function<void()>> spawningProcedures;
-  std::stack<int> timers;
-  
+
   int getKqueue() const;
   int getTimer();
   void pushTimer(int timer);
-  void pushContext(void* context);
-  void* getCurrentContext() const;
-  
+
+#ifdef __LP64__
+  static const int SIZEOF_PTHREAD_MUTEX_T = 56 + sizeof(long);
+#else
+  static const int SIZEOF_PTHREAD_MUTEX_T = 40 + sizeof(long);
+#endif
+
+private:
+  std::stack<uint8_t*> allocatedStacks;
+  std::size_t contextCount;
+  void* currentContext;
+  int kqueue;
+  int lastCreatedTimer;
+  uint8_t mutex[SIZEOF_PTHREAD_MUTEX_T];
+  std::atomic<bool> remoteSpawned;
+  std::queue<std::function<void()>> remoteSpawningProcedures;
+  std::queue<void*> resumingContexts;
+  std::queue<std::function<void()>> spawningProcedures;
+  std::stack<void*> reusableContexts;
+  std::stack<int> timers;
+
   void contextProcedure();
-  static void contextProcedureStatic(void* context);
+  static void contextProcedureStatic(intptr_t context);
 };
 
 }

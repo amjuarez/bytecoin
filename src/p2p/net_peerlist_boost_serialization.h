@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,7 +23,7 @@ namespace boost
   {
     //BOOST_CLASS_VERSION(odetool::net_adress, 1)
     template <class Archive, class ver_type>
-    inline void serialize(Archive &a,  nodetool::net_address& na, const ver_type ver)
+    inline void serialize(Archive &a,  CryptoNote::net_address& na, const ver_type ver)
     {
       a & na.ip;
       a & na.port;
@@ -31,7 +31,7 @@ namespace boost
 
 
     template <class Archive, class ver_type>
-    inline void serialize(Archive &a,  nodetool::peerlist_entry& pl, const ver_type ver)
+    inline void serialize(Archive &a, CryptoNote::peerlist_entry& pl, const ver_type ver)
     {
       a & pl.adr;
       a & pl.id;

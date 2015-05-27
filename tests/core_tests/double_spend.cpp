@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,7 +19,7 @@
 #include "TestGenerator.h"
 
 using namespace epee;
-using namespace cryptonote;
+using namespace CryptoNote;
 
 //======================================================================================================================
 
@@ -56,7 +56,7 @@ bool gen_double_spend_in_different_chains::generate(std::vector<test_event_entry
   return true;
 }
 
-bool gen_double_spend_in_different_chains::check_double_spend(cryptonote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
+bool gen_double_spend_in_different_chains::check_double_spend(CryptoNote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_double_spend_in_different_chains::check_double_spend");
 
@@ -70,10 +70,10 @@ bool gen_double_spend_in_different_chains::check_double_spend(cryptonote::core& 
   CHECK_EQ(1, c.get_pool_transactions_count());
   CHECK_EQ(1, c.get_alternative_blocks_count());
 
-  cryptonote::account_base bob_account = boost::get<cryptonote::account_base>(events[1]);
-  cryptonote::account_base alice_account = boost::get<cryptonote::account_base>(events[2]);
+  CryptoNote::account_base bob_account = boost::get<CryptoNote::account_base>(events[1]);
+  CryptoNote::account_base alice_account = boost::get<CryptoNote::account_base>(events[2]);
 
-  std::vector<cryptonote::Block> chain;
+  std::vector<CryptoNote::Block> chain;
   map_hash2tx_t mtx;
   r = find_block_chain(events, chain, mtx, get_block_hash(blocks.back()));
   CHECK_TEST_CONDITION(r);
@@ -102,7 +102,7 @@ DoubleSpendBase::DoubleSpendBase() :
   REGISTER_CALLBACK_METHOD(DoubleSpendBase, check_double_spend);
 }
 
-bool DoubleSpendBase::check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::Transaction& /*tx*/)
+bool DoubleSpendBase::check_tx_verification_context(const CryptoNote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const CryptoNote::Transaction& /*tx*/)
 {
   if (m_invalid_tx_index == event_idx)
     return tvc.m_verifivation_failed;
@@ -110,7 +110,7 @@ bool DoubleSpendBase::check_tx_verification_context(const cryptonote::tx_verific
     return !tvc.m_verifivation_failed && tx_added;
 }
 
-bool DoubleSpendBase::check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*block*/)
+bool DoubleSpendBase::check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*block*/)
 {
   if (m_invalid_block_index == event_idx)
     return bvc.m_verifivation_failed;
@@ -118,25 +118,25 @@ bool DoubleSpendBase::check_block_verification_context(const cryptonote::block_v
     return !bvc.m_verifivation_failed;
 }
 
-bool DoubleSpendBase::mark_last_valid_block(cryptonote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& /*events*/)
+bool DoubleSpendBase::mark_last_valid_block(CryptoNote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& /*events*/)
 {
   m_last_valid_block = c.get_blockchain_storage().get_tail_id();
   return true;
 }
 
-bool DoubleSpendBase::mark_invalid_tx(cryptonote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
+bool DoubleSpendBase::mark_invalid_tx(CryptoNote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
 {
   m_invalid_tx_index = ev_index + 1;
   return true;
 }
 
-bool DoubleSpendBase::mark_invalid_block(cryptonote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
+bool DoubleSpendBase::mark_invalid_block(CryptoNote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
 {
   m_invalid_block_index = ev_index + 1;
   return true;
 }
 
-bool DoubleSpendBase::check_double_spend(cryptonote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
+bool DoubleSpendBase::check_double_spend(CryptoNote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("DoubleSpendBase::check_double_spend");
   CHECK_EQ(m_last_valid_block, c.get_blockchain_storage().get_tail_id());

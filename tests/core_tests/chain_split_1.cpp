@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,7 +20,7 @@
 using namespace std;
 
 using namespace epee;
-using namespace cryptonote;
+using namespace CryptoNote;
 
 
 gen_simple_chain_split_1::gen_simple_chain_split_1()
@@ -146,99 +146,99 @@ bool gen_simple_chain_split_1::generate(std::vector<test_event_entry> &events) c
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_mempool_2(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_mempool_2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_mempool_2");
   CHECK_TEST_CONDITION(c.get_pool_transactions_count() == 2);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_mempool_1(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_mempool_1(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_mempool_1");
   CHECK_TEST_CONDITION(c.get_pool_transactions_count() == 3);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_not_switched(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_not_switched(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_not_switched");
   //check height
   CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 9);
   CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 9);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<cryptonote::Block>(events[8])));
+  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[8])));
   CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 2);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_not_switched2(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_not_switched2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_not_switched2");
   //check height
   CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 9);
   CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 9);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<cryptonote::Block>(events[8])));
+  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[8])));
   CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 3);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_switched(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_switched(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_switched");
 
   //check height
   CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 10);
   CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 10);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<cryptonote::Block>(events[14])));
+  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[14])));
   CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 3);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_not_switched_back(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_not_switched_back(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_not_switched_back");
   //check height
   CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 14);
   CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 14);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<cryptonote::Block>(events[19])));
+  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[19])));
   CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 8);
 
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_switched_back_1(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_switched_back_1(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_switched_back_1");
 
   //check height
   CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 15);
   CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 15);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<cryptonote::Block>(events[26])));
+  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[26])));
   CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 8);
 
   return true;
 }//-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_switched_back_2(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_switched_back_2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_switched_back_2");
 
   //check height
   CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 16);
   CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 16);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<cryptonote::Block>(events[28])));
+  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[28])));
   CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 8);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
 /*
-bool gen_simple_chain_split_1::check_orphaned_chain_1(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_1(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_1");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 2);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_switched_to_alternative(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_switched_to_alternative(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_switched_to_alternative");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 0);
@@ -247,14 +247,14 @@ bool gen_simple_chain_split_1::check_orphaned_switched_to_alternative(cryptonote
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_2(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_2");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 4);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_switched_to_main(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_switched_to_main(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_switched_to_main");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 0);
@@ -263,7 +263,7 @@ bool gen_simple_chain_split_1::check_orphaned_switched_to_main(cryptonote::core&
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_38(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_38(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_38");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 6);
@@ -272,7 +272,7 @@ bool gen_simple_chain_split_1::check_orphaned_chain_38(cryptonote::core& c, size
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_39(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_39(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_39");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 4);
@@ -281,7 +281,7 @@ bool gen_simple_chain_split_1::check_orphaned_chain_39(cryptonote::core& c, size
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_40(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_40(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_40");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 5);
@@ -290,7 +290,7 @@ bool gen_simple_chain_split_1::check_orphaned_chain_40(cryptonote::core& c, size
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_41(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_41(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_41");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 0);
@@ -299,4 +299,4 @@ bool gen_simple_chain_split_1::check_orphaned_chain_41(cryptonote::core& c, size
 
   return true;
 }*/
-//----------------------------------------------------------------------------------------------------- 
+//-----------------------------------------------------------------------------------------------------

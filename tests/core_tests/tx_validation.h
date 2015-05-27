@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -28,7 +28,7 @@ struct get_tx_validation_base : public test_chain_unit_base
     REGISTER_CALLBACK_METHOD(get_tx_validation_base, mark_invalid_block);
   }
 
-  bool check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::Transaction& /*tx*/)
+  bool check_tx_verification_context(const CryptoNote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const CryptoNote::Transaction& /*tx*/)
   {
     if (m_invalid_tx_index == event_idx)
       return tvc.m_verifivation_failed;
@@ -36,7 +36,7 @@ struct get_tx_validation_base : public test_chain_unit_base
       return !tvc.m_verifivation_failed && tx_added;
   }
 
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*block*/)
+  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*block*/)
   {
     if (m_invalid_block_index == event_idx)
       return bvc.m_verifivation_failed;
@@ -44,13 +44,13 @@ struct get_tx_validation_base : public test_chain_unit_base
       return !bvc.m_verifivation_failed;
   }
 
-  bool mark_invalid_block(cryptonote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
+  bool mark_invalid_block(CryptoNote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
   {
     m_invalid_block_index = ev_index + 1;
     return true;
   }
 
-  bool mark_invalid_tx(cryptonote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
+  bool mark_invalid_tx(CryptoNote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
   {
     m_invalid_tx_index = ev_index + 1;
     return true;
@@ -154,7 +154,7 @@ struct MultiSigTx_OutputSignatures : public get_tx_validation_base {
   const size_t m_givenKeys;
   const uint32_t m_requiredSignatures;
   const bool m_shouldSucceed;
-  std::vector<cryptonote::account_base> m_outputAccounts;
+  std::vector<CryptoNote::account_base> m_outputAccounts;
 };
 
 struct MultiSigTx_InvalidOutputSignature : public get_tx_validation_base {

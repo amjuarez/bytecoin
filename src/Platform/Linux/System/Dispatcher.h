@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -29,33 +29,53 @@ public:
   Dispatcher(const Dispatcher&) = delete;
   ~Dispatcher();
   Dispatcher& operator=(const Dispatcher&) = delete;
+  void clear();
+  void dispatch();
+  void* getCurrentContext() const;
+  void pushContext(void* context);
+  void remoteSpawn(std::function<void()>&& procedure);
   void spawn(std::function<void()>&& procedure);
   void yield();
-  void clear();
 
-  struct ContextExt {
+  struct OperationContext {
     void *context;
-    void *writeContext; //required workaround
+    bool interrupted;
+    uint32_t events;
   };
+
+  struct ContextPair {
+    OperationContext *readContext;
+    OperationContext *writeContext;
+  };
+
+  // system-dependent
+  int getEpoll() const;
+  int getTimer();
+  void pushTimer(int timer);
+
+#ifdef __x86_64__
+# if __WORDSIZE == 64
+  static const int SIZEOF_PTHREAD_MUTEX_T = 40;
+# else
+  static const int SIZEOF_PTHREAD_MUTEX_T = 32
+# endif
+#else
+  static const int SIZEOF_PTHREAD_MUTEX_T = 24
+#endif
+
 private:
-  friend class Event;
-  friend class DispatcherAccessor;
-  friend class TcpConnection;
-  friend class TcpConnector;
-  friend class TcpListener;
-  friend class Timer;
-  int epoll;
-  void* currentContext;
+  std::stack<uint8_t *> allocatedStacks;
   std::size_t contextCount;
+  void* currentContext;
+  int epoll;
+  ContextPair eventContext;
+  uint8_t mutex[SIZEOF_PTHREAD_MUTEX_T];
+  int remoteSpawnEvent;
+  std::queue<std::function<void()>> remoteSpawningProcedures;
   std::queue<void*> resumingContexts;
   std::stack<void*> reusableContexts;
-  std::stack<uint8_t *> allocatedStacks;
   std::queue<std::function<void()>> spawningProcedures;
   std::stack<int> timers;
-
-  int getEpoll() const;
-  void pushContext(void* context);
-  void* getCurrentContext() const;
 
   void contextProcedure();
   static void contextProcedureStatic(void* context);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,7 +19,7 @@
 
 #include <cstddef>
 
-namespace cryptonote {
+namespace CryptoNote {
 class ICryptonoteProtocolObserver;
 
 class ICryptonoteProtocolQuery {
@@ -31,4 +31,4 @@ public:
   virtual size_t getPeerCount() const = 0;
 };
 
-} //namespace cryptonote
+} //namespace CryptoNote

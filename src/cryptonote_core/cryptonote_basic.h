@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -29,13 +29,17 @@
 #include "serialization/binary_archive.h"
 #include "serialization/crypto.h"
 #include "serialization/keyvalue_serialization.h" // eepe named serialization
-#include "serialization/debug_archive.h"
 #include "serialization/json_archive.h"
 #include "serialization/serialization.h"
 #include "serialization/variant.h"
 #include "cryptonote_config.h"
 
-namespace cryptonote {
+namespace Common {
+class IInputStream;
+class IOutputStream;
+}
+
+namespace CryptoNote {
   class account_base;
   struct account_keys;
   struct Block;
@@ -52,11 +56,14 @@ namespace cryptonote {
   /* inputs */
 
   struct TransactionInputGenerate {
-    size_t height;
+    uint32_t height;
 
     BEGIN_SERIALIZE_OBJECT()
       VARINT_FIELD(height);
     END_SERIALIZE()
+
+    void serialize(Common::IOutputStream& out) const;
+    static TransactionInputGenerate deserialize(Common::IInputStream& in);
   };
 
   struct TransactionInputToKey {
@@ -68,7 +75,10 @@ namespace cryptonote {
       VARINT_FIELD(amount);
       FIELD(keyOffsets);
       FIELD(keyImage);
-    END_SERIALIZE()
+      END_SERIALIZE()
+
+    void serialize(Common::IOutputStream& out) const;
+    static TransactionInputToKey deserialize(Common::IInputStream& in);
   };
 
   struct TransactionInputMultisignature {
@@ -81,6 +91,9 @@ namespace cryptonote {
       VARINT_FIELD(signatures);
       VARINT_FIELD(outputIndex);
     END_SERIALIZE()
+
+    void serialize(Common::IOutputStream& out) const;
+    static TransactionInputMultisignature deserialize(Common::IInputStream& in);
   };
 
   /* outputs */
@@ -89,6 +102,9 @@ namespace cryptonote {
     TransactionOutputToKey() { }
     TransactionOutputToKey(const crypto::public_key &_key) : key(_key) { }
     crypto::public_key key;
+
+    void serialize(Common::IOutputStream& out) const;
+    static TransactionOutputToKey deserialize(Common::IInputStream& in);
   };
 
   struct TransactionOutputMultisignature {
@@ -99,6 +115,9 @@ namespace cryptonote {
       FIELD(keys);
       VARINT_FIELD(requiredSignatures);
     END_SERIALIZE()
+
+    void serialize(Common::IOutputStream& out) const;
+    static TransactionOutputMultisignature deserialize(Common::IInputStream& in);
   };
 
   struct TransactionInputToScript {
@@ -142,11 +161,14 @@ namespace cryptonote {
       VARINT_FIELD(amount);
       FIELD(target);
     END_SERIALIZE()
+
+    void serialize(Common::IOutputStream& out) const;
+    static TransactionOutput deserialize(Common::IInputStream& in);
   };
 
   struct TransactionPrefix {
     // tx information
-    size_t   version;
+    uint8_t   version;
     uint64_t unlockTime;  //number of block (or time), used as a limitation like: spend this tx not early then block/time
 
     std::vector<TransactionInput> vin;
@@ -231,13 +253,16 @@ namespace cryptonote {
 
       return boost::apply_visitor(txin_signature_size_visitor(), input);
     }
+
+    void serialize(Common::IOutputStream& out) const;
+    static Transaction deserialize(Common::IInputStream& in);
   };
 
   struct ParentBlock {
     uint8_t majorVersion;
     uint8_t minorVersion;
     crypto::hash prevId;
-    size_t numberOfTransactions;
+    uint16_t numberOfTransactions;
     std::vector<crypto::hash> minerTxBranch;
     Transaction minerTx;
     std::vector<crypto::hash> blockchainBranch;
@@ -368,6 +393,9 @@ namespace cryptonote {
       FIELD(minerTx);
       FIELD(txHashes);
     END_SERIALIZE()
+
+    void serialize(Common::IOutputStream& out) const;
+    static Block deserialize(Common::IInputStream& in);
   };
 
   inline ParentBlockSerializer makeParentBlockSerializer(const Block& b, bool hashingSerialization, bool headerOnly) {
@@ -397,40 +425,28 @@ namespace cryptonote {
   };
 }
 
-BLOB_SERIALIZER(cryptonote::TransactionOutputToKey);
+BLOB_SERIALIZER(CryptoNote::TransactionOutputToKey);
 
-VARIANT_TAG(binary_archive, cryptonote::TransactionInputGenerate, 0xff);
-VARIANT_TAG(binary_archive, cryptonote::TransactionInputToScript, 0x0);
-VARIANT_TAG(binary_archive, cryptonote::TransactionInputToScriptHash, 0x1);
-VARIANT_TAG(binary_archive, cryptonote::TransactionInputToKey, 0x2);
-VARIANT_TAG(binary_archive, cryptonote::TransactionInputMultisignature, 0x3);
-VARIANT_TAG(binary_archive, cryptonote::TransactionOutputToScript, 0x0);
-VARIANT_TAG(binary_archive, cryptonote::TransactionOutputToScriptHash, 0x1);
-VARIANT_TAG(binary_archive, cryptonote::TransactionOutputToKey, 0x2);
-VARIANT_TAG(binary_archive, cryptonote::TransactionOutputMultisignature, 0x3);
-VARIANT_TAG(binary_archive, cryptonote::Transaction, 0xcc);
-VARIANT_TAG(binary_archive, cryptonote::Block, 0xbb);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionInputGenerate, 0xff);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionInputToScript, 0x0);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionInputToScriptHash, 0x1);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionInputToKey, 0x2);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionInputMultisignature, 0x3);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionOutputToScript, 0x0);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionOutputToScriptHash, 0x1);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionOutputToKey, 0x2);
+VARIANT_TAG(binary_archive, CryptoNote::TransactionOutputMultisignature, 0x3);
+VARIANT_TAG(binary_archive, CryptoNote::Transaction, 0xcc);
+VARIANT_TAG(binary_archive, CryptoNote::Block, 0xbb);
 
-VARIANT_TAG(json_archive, cryptonote::TransactionInputGenerate, "generate");
-VARIANT_TAG(json_archive, cryptonote::TransactionInputToScript, "script");
-VARIANT_TAG(json_archive, cryptonote::TransactionInputToScriptHash, "scripthash");
-VARIANT_TAG(json_archive, cryptonote::TransactionInputToKey, "key");
-VARIANT_TAG(json_archive, cryptonote::TransactionInputMultisignature, "multisignature");
-VARIANT_TAG(json_archive, cryptonote::TransactionOutputToScript, "script");
-VARIANT_TAG(json_archive, cryptonote::TransactionOutputToScriptHash, "scripthash");
-VARIANT_TAG(json_archive, cryptonote::TransactionOutputToKey, "key");
-VARIANT_TAG(json_archive, cryptonote::TransactionOutputMultisignature, "multisignature");
-VARIANT_TAG(json_archive, cryptonote::Transaction, "Transaction");
-VARIANT_TAG(json_archive, cryptonote::Block, "Block");
-
-VARIANT_TAG(debug_archive, cryptonote::TransactionInputGenerate, "generate");
-VARIANT_TAG(debug_archive, cryptonote::TransactionInputToScript, "script");
-VARIANT_TAG(debug_archive, cryptonote::TransactionInputToScriptHash, "scripthash");
-VARIANT_TAG(debug_archive, cryptonote::TransactionInputToKey, "key");
-VARIANT_TAG(debug_archive, cryptonote::TransactionInputMultisignature, "multisignature");
-VARIANT_TAG(debug_archive, cryptonote::TransactionOutputToScript, "script");
-VARIANT_TAG(debug_archive, cryptonote::TransactionOutputToScriptHash, "scripthash");
-VARIANT_TAG(debug_archive, cryptonote::TransactionOutputToKey, "key");
-VARIANT_TAG(debug_archive, cryptonote::TransactionOutputMultisignature, "multisignature");
-VARIANT_TAG(debug_archive, cryptonote::Transaction, "Transaction");
-VARIANT_TAG(debug_archive, cryptonote::Block, "Block");
+VARIANT_TAG(json_archive, CryptoNote::TransactionInputGenerate, "generate");
+VARIANT_TAG(json_archive, CryptoNote::TransactionInputToScript, "script");
+VARIANT_TAG(json_archive, CryptoNote::TransactionInputToScriptHash, "scripthash");
+VARIANT_TAG(json_archive, CryptoNote::TransactionInputToKey, "key");
+VARIANT_TAG(json_archive, CryptoNote::TransactionInputMultisignature, "multisignature");
+VARIANT_TAG(json_archive, CryptoNote::TransactionOutputToScript, "script");
+VARIANT_TAG(json_archive, CryptoNote::TransactionOutputToScriptHash, "scripthash");
+VARIANT_TAG(json_archive, CryptoNote::TransactionOutputToKey, "key");
+VARIANT_TAG(json_archive, CryptoNote::TransactionOutputMultisignature, "multisignature");
+VARIANT_TAG(json_archive, CryptoNote::Transaction, "Transaction");
+VARIANT_TAG(json_archive, CryptoNote::Block, "Block");

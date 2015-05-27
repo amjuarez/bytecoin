@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -28,16 +28,16 @@ public:
 
   bool generate(std::vector<test_event_entry>& events) const;
 
-  bool check_split_not_switched(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
-  bool check_split_switched(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool check_split_not_switched(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool check_split_switched(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
 
 private:
-  std::list<cryptonote::Block> m_chain_1;
+  std::list<CryptoNote::Block> m_chain_1;
 
-  cryptonote::account_base m_recipient_account_1;
-  cryptonote::account_base m_recipient_account_2;
-  cryptonote::account_base m_recipient_account_3;
-  cryptonote::account_base m_recipient_account_4;
+  CryptoNote::account_base m_recipient_account_1;
+  CryptoNote::account_base m_recipient_account_2;
+  CryptoNote::account_base m_recipient_account_3;
+  CryptoNote::account_base m_recipient_account_4;
 
-  std::list<cryptonote::Transaction> m_tx_pool;
+  std::list<CryptoNote::Transaction> m_tx_pool;
 };

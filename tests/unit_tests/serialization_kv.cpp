@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -30,9 +30,9 @@
 
 #include <array>
 
-using namespace cryptonote;
+using namespace CryptoNote;
 
-namespace cryptonote {
+namespace CryptoNote {
 
 
 template <typename Cont> 

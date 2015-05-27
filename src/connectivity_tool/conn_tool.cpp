@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,34 +15,34 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <boost/optional.hpp>
 #include <boost/program_options.hpp>
 
-// epee
-#include "include_base_utils.h"
-#include "net/http_client.h"
-#include "net/levin_client.h"
-#include "storages/http_abstract_invoke.h"
-#include "storages/levin_abstract_invoke2.h"
-#include "storages/portable_storage_template_helper.h"
+#include <System/Dispatcher.h>
+#include <System/Event.h>
+#include <System/InterruptedException.h>
+#include <System/Ipv4Address.h>
+#include <System/Ipv4Resolver.h>
+#include <System/TcpConnection.h>
+#include <System/TcpConnector.h>
+#include <System/Timer.h>
 
-#include "common/command_line.h"
+#include "Common/command_line.h"
+#include "Common/StringTools.h"
 #include "crypto/crypto.h"
-#include "cryptonote_core/cryptonote_core.h"
-#include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "p2p/p2p_protocol_defs.h"
+#include "p2p/LevinProtocol.h"
 #include "rpc/core_rpc_server_commands_defs.h"
+#include "rpc/HttpClient.h"
 #include "version.h"
 
 namespace po = boost::program_options;
-using namespace cryptonote;
-using namespace epee;
-using namespace nodetool;
+using namespace CryptoNote;
 
-namespace
-{
+namespace {
   const command_line::arg_descriptor<std::string, true> arg_ip           = {"ip", "set ip"};
-  const command_line::arg_descriptor<size_t>      arg_port               = {"port", "set port"};
-  const command_line::arg_descriptor<size_t>      arg_rpc_port           = {"rpc_port", "set rpc port"};
+  const command_line::arg_descriptor<uint16_t>      arg_port = { "port", "set port" };
+  const command_line::arg_descriptor<uint16_t>      arg_rpc_port           = {"rpc_port", "set rpc port"};
   const command_line::arg_descriptor<uint32_t, true> arg_timeout         = {"timeout", "set timeout"};
   const command_line::arg_descriptor<std::string> arg_priv_key           = {"private_key", "private key to subscribe debug command", "", true};
   const command_line::arg_descriptor<uint64_t>    arg_peer_id            = {"peer_id", "peer_id if known(if not - will be requested)", 0};
@@ -52,83 +52,102 @@ namespace
   const command_line::arg_descriptor<bool>        arg_get_daemon_info    = {"rpc_get_daemon_info", "request daemon state info vie rpc (--rpc_port option should be set ).", "", true};
 }
 
-typedef COMMAND_REQUEST_STAT_INFO_T<t_cryptonote_protocol_handler<core>::stat_info> COMMAND_REQUEST_STAT_INFO;
-
-struct response_schema
-{
+struct response_schema {
   std::string status;
   std::string COMMAND_REQUEST_STAT_INFO_status;
   std::string COMMAND_REQUEST_NETWORK_STATE_status;
-  enableable<COMMAND_REQUEST_STAT_INFO::response> si_rsp;
-  enableable<COMMAND_REQUEST_NETWORK_STATE::response> ns_rsp;
-
-  BEGIN_KV_SERIALIZE_MAP()
-    KV_SERIALIZE(status)
-    KV_SERIALIZE(COMMAND_REQUEST_STAT_INFO_status)
-    KV_SERIALIZE(COMMAND_REQUEST_NETWORK_STATE_status)
-    KV_SERIALIZE(si_rsp)
-    KV_SERIALIZE(ns_rsp)
-  END_KV_SERIALIZE_MAP() 
+  boost::optional<COMMAND_REQUEST_STAT_INFO::response> si_rsp;
+  boost::optional<COMMAND_REQUEST_NETWORK_STATE::response> ns_rsp;
 };
 
-  std::string get_response_schema_as_json(response_schema& rs)
-  {
-    std::stringstream ss;
-    ss << "{" << ENDL 
-       << "  \"status\": \"" << rs.status << "\"," << ENDL
-       << "  \"COMMAND_REQUEST_NETWORK_STATE_status\": \"" << rs.COMMAND_REQUEST_NETWORK_STATE_status << "\"," << ENDL
-       << "  \"COMMAND_REQUEST_STAT_INFO_status\": \"" << rs.COMMAND_REQUEST_STAT_INFO_status <<  "\"";
-    if(rs.si_rsp.enabled)
-    {
-      ss << "," << ENDL << "  \"si_rsp\": " <<  epee::serialization::store_t_to_json(rs.si_rsp.v, 1);
-    }
-    if(rs.ns_rsp.enabled)
-    {
-      ss << "," << ENDL << "  \"ns_rsp\": {" << ENDL 
-        << "    \"local_time\": " <<  rs.ns_rsp.v.local_time << "," << ENDL 
-        << "    \"my_id\": \"" <<  rs.ns_rsp.v.my_id << "\"," << ENDL
-        << "    \"connections_list\": [" << ENDL;
 
-      size_t i = 0;
-      BOOST_FOREACH(const connection_entry& ce, rs.ns_rsp.v.connections_list)
-      {
-        ss <<  "      {\"peer_id\": \"" << ce.id << "\", \"ip\": \"" << string_tools::get_ip_string_from_int32(ce.adr.ip) << "\", \"port\": " << ce.adr.port << ", \"is_income\": "<< ce.is_income << "}";
-        if(rs.ns_rsp.v.connections_list.size()-1 != i)
-          ss << ",";
-        ss << ENDL; 
-        i++;
-      }
-      ss << "    ]," << ENDL;
-      ss << "    \"local_peerlist_white\": [" << ENDL;      
-      i = 0;
-      BOOST_FOREACH(const peerlist_entry& pe, rs.ns_rsp.v.local_peerlist_white)
-      {
-        ss <<  "      {\"peer_id\": \"" << pe.id << "\", \"ip\": \"" << string_tools::get_ip_string_from_int32(pe.adr.ip) << "\", \"port\": " << pe.adr.port << ", \"last_seen\": "<< rs.ns_rsp.v.local_time - pe.last_seen << "}";
-        if(rs.ns_rsp.v.local_peerlist_white.size()-1 != i)
-          ss << ",";
-        ss << ENDL; 
-        i++;
-      }
-      ss << "    ]," << ENDL;
+template <typename SystemObj>
+void withTimeout(System::Dispatcher& dispatcher, SystemObj& obj, unsigned timeout, std::function<void()> f) {
+  System::Event timeoutEvent(dispatcher);
+  System::Timer timeoutTimer(dispatcher);
 
-      ss << "    \"local_peerlist_gray\": [" << ENDL;      
-      i = 0;
-      BOOST_FOREACH(const peerlist_entry& pe, rs.ns_rsp.v.local_peerlist_gray)
-      {
-        ss <<  "      {\"peer_id\": \"" << pe.id << "\", \"ip\": \"" << string_tools::get_ip_string_from_int32(pe.adr.ip) << "\", \"port\": " << pe.adr.port << ", \"last_seen\": "<< rs.ns_rsp.v.local_time - pe.last_seen << "}";
-        if(rs.ns_rsp.v.local_peerlist_gray.size()-1 != i)
-          ss << ",";
-        ss << ENDL; 
-        i++;
-      }
-      ss << "    ]" << ENDL << "  }" << ENDL;
-    }
-    ss << "}";
-    return std::move(ss.str());
+  dispatcher.spawn([&](){
+    try {
+      timeoutTimer.sleep(std::chrono::milliseconds(timeout));
+      obj.stop();
+    } catch (std::exception&) {}
+    timeoutEvent.set();
+  });
+
+  try {
+    f();
+  } catch (System::InterruptedException&) {
+    timeoutEvent.wait();
+    throw std::runtime_error("Operation timeout");
+  } catch (std::exception&) {
+    timeoutTimer.stop();
+    timeoutEvent.wait();
+    throw;
   }
+
+  timeoutTimer.stop();
+  timeoutEvent.wait();
+}
+
+
+std::ostream& get_response_schema_as_json(std::ostream& ss, response_schema &rs) {
+  
+  ss << "{" << ENDL
+     << "  \"status\": \"" << rs.status << "\"," << ENDL
+     << "  \"COMMAND_REQUEST_NETWORK_STATE_status\": \"" << rs.COMMAND_REQUEST_NETWORK_STATE_status << "\"," << ENDL
+     << "  \"COMMAND_REQUEST_STAT_INFO_status\": \"" << rs.COMMAND_REQUEST_STAT_INFO_status << "\"";
+
+  if (rs.si_rsp.is_initialized()) {
+    ss << "," << ENDL << "  \"si_rsp\": " << epee::serialization::store_t_to_json(rs.si_rsp.get(), 1);
+  }
+
+  if (rs.ns_rsp.is_initialized()) {
+    const auto& networkState = rs.ns_rsp.get();
+
+    ss << "," << ENDL << "  \"ns_rsp\": {" << ENDL
+       << "    \"local_time\": " << networkState.local_time << "," << ENDL
+       << "    \"my_id\": \"" << networkState.my_id << "\"," << ENDL
+       << "    \"connections_list\": [" << ENDL;
+
+    size_t i = 0;
+    for (const connection_entry &ce : networkState.connections_list) {
+      ss << "      {\"peer_id\": \"" << ce.id << "\", \"ip\": \"" << Common::ipAddressToString(ce.adr.ip) << "\", \"port\": " << ce.adr.port << ", \"is_income\": " << ce.is_income << "}";
+      if (networkState.connections_list.size() - 1 != i)
+        ss << ",";
+      ss << ENDL;
+      i++;
+    }
+    ss << "    ]," << ENDL;
+    ss << "    \"local_peerlist_white\": [" << ENDL;
+    i = 0;
+    for (const peerlist_entry &pe : networkState.local_peerlist_white) {
+      ss << "      {\"peer_id\": \"" << pe.id << "\", \"ip\": \"" << Common::ipAddressToString(pe.adr.ip) << "\", \"port\": " << pe.adr.port << ", \"last_seen\": " << networkState.local_time - pe.last_seen << "}";
+      if (networkState.local_peerlist_white.size() - 1 != i)
+        ss << ",";
+      ss << ENDL;
+      i++;
+    }
+    ss << "    ]," << ENDL;
+
+    ss << "    \"local_peerlist_gray\": [" << ENDL;
+    i = 0;
+    for (const peerlist_entry &pe : networkState.local_peerlist_gray) {
+      ss << "      {\"peer_id\": \"" << pe.id << "\", \"ip\": \"" << Common::ipAddressToString(pe.adr.ip) << "\", \"port\": " << pe.adr.port << ", \"last_seen\": " << networkState.local_time - pe.last_seen << "}";
+      if (networkState.local_peerlist_gray.size() - 1 != i)
+        ss << ",";
+      ss << ENDL;
+      i++;
+    }
+    ss << "    ]" << ENDL << "  }" << ENDL;
+  }
+
+  ss << "}";
+
+  return ss;
+}
+
 //---------------------------------------------------------------------------------------------------------------
-bool print_COMMAND_REQUEST_STAT_INFO(const COMMAND_REQUEST_STAT_INFO::response& si)
-{
+bool print_COMMAND_REQUEST_STAT_INFO(const COMMAND_REQUEST_STAT_INFO::response &si) {
   std::cout << " ------ COMMAND_REQUEST_STAT_INFO ------ " << ENDL;
   std::cout << "Version:             " << si.version << ENDL;
   std::cout << "OS Version:          " << si.os_version << ENDL;
@@ -144,167 +163,176 @@ bool print_COMMAND_REQUEST_STAT_INFO(const COMMAND_REQUEST_STAT_INFO::response& 
   return true;
 }
 //---------------------------------------------------------------------------------------------------------------
-bool print_COMMAND_REQUEST_NETWORK_STATE(const COMMAND_REQUEST_NETWORK_STATE::response& ns)
-{
+bool print_COMMAND_REQUEST_NETWORK_STATE(const COMMAND_REQUEST_NETWORK_STATE::response &ns) {
   std::cout << " ------ COMMAND_REQUEST_NETWORK_STATE ------ " << ENDL;
   std::cout << "Peer id: " << ns.my_id << ENDL;
-  std::cout << "Active connections:"  << ENDL;
-  BOOST_FOREACH(const connection_entry& ce, ns.connections_list)
-  {
-    std::cout <<  ce.id << "\t" << string_tools::get_ip_string_from_int32(ce.adr.ip) << ":" << ce.adr.port << (ce.is_income ? "(INC)":"(OUT)") << ENDL; 
+  std::cout << "Active connections:" << ENDL;
+
+  for (const connection_entry &ce : ns.connections_list) {
+    std::cout << ce.id << "\t" << ce.adr << (ce.is_income ? "(INC)" : "(OUT)") << ENDL;
   }
-  
+
   std::cout << "Peer list white:" << ns.my_id << ENDL;
-  BOOST_FOREACH(const peerlist_entry& pe, ns.local_peerlist_white)
-  {
-    std::cout <<  pe.id << "\t" << string_tools::get_ip_string_from_int32(pe.adr.ip) << ":" << pe.adr.port <<  "\t" << misc_utils::get_time_interval_string(ns.local_time - pe.last_seen) << ENDL; 
+  for (const peerlist_entry &pe : ns.local_peerlist_white) {
+    std::cout << pe.id << "\t" << pe.adr << "\t" << Common::timeIntervalToString(ns.local_time - pe.last_seen) << ENDL;
   }
 
   std::cout << "Peer list gray:" << ns.my_id << ENDL;
-  BOOST_FOREACH(const peerlist_entry& pe, ns.local_peerlist_gray)
-  {
-    std::cout <<  pe.id << "\t" << string_tools::get_ip_string_from_int32(pe.adr.ip) << ":" << pe.adr.port <<  "\t" << misc_utils::get_time_interval_string(ns.local_time - pe.last_seen) << ENDL; 
+  for (const peerlist_entry &pe : ns.local_peerlist_gray) {
+    std::cout << pe.id << "\t" << pe.adr << "\t" << Common::timeIntervalToString(ns.local_time - pe.last_seen) << ENDL;
   }
-
 
   return true;
 }
 //---------------------------------------------------------------------------------------------------------------
-bool handle_get_daemon_info(po::variables_map& vm)
-{
-  if(!command_line::has_arg(vm, arg_rpc_port))
-  {
+bool handle_get_daemon_info(po::variables_map& vm) {
+  if(!command_line::has_arg(vm, arg_rpc_port)) {
     std::cout << "ERROR: rpc port not set" << ENDL;
     return false;
   }
 
-  epee::net_utils::http::http_simple_client http_client;
+  try {
+    System::Dispatcher dispatcher;
+    HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip), command_line::get_arg(vm, arg_rpc_port));
 
-  cryptonote::COMMAND_RPC_GET_INFO::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_GET_INFO::response res = AUTO_VAL_INIT(res);
-  std::string daemon_addr = command_line::get_arg(vm, arg_ip) + ":" + std::to_string(command_line::get_arg(vm, arg_rpc_port));
-  bool r = net_utils::invoke_http_json_remote_command2(daemon_addr + "/getinfo", req, res, http_client, command_line::get_arg(vm, arg_timeout));
-  if(!r)
-  {
-    std::cout << "ERROR: failed to invoke request" << ENDL;
+    CryptoNote::COMMAND_RPC_GET_INFO::request req = AUTO_VAL_INIT(req);
+    CryptoNote::COMMAND_RPC_GET_INFO::response res = AUTO_VAL_INIT(res);
+
+    invokeJsonCommand(httpClient, "/getinfo", req, res); // TODO: timeout
+
+    std::cout << "OK" << ENDL
+      << "height: " << res.height << ENDL
+      << "difficulty: " << res.difficulty << ENDL
+      << "tx_count: " << res.tx_count << ENDL
+      << "tx_pool_size: " << res.tx_pool_size << ENDL
+      << "alt_blocks_count: " << res.alt_blocks_count << ENDL
+      << "outgoing_connections_count: " << res.outgoing_connections_count << ENDL
+      << "incoming_connections_count: " << res.incoming_connections_count << ENDL
+      << "white_peerlist_size: " << res.white_peerlist_size << ENDL
+      << "grey_peerlist_size: " << res.grey_peerlist_size << ENDL;
+
+  } catch (const std::exception& e) {
+    std::cout << "ERROR: " << e.what() << std::endl;
     return false;
   }
-  std::cout << "OK" << ENDL
-    << "height: " << res.height << ENDL
-  << "difficulty: " << res.difficulty << ENDL
-  << "tx_count: " << res.tx_count << ENDL
-  << "tx_pool_size: " << res.tx_pool_size << ENDL
-  << "alt_blocks_count: " << res.alt_blocks_count << ENDL
-  << "outgoing_connections_count: " << res.outgoing_connections_count << ENDL
-  << "incoming_connections_count: " << res.incoming_connections_count << ENDL
-  << "white_peerlist_size: " << res.white_peerlist_size << ENDL
-  << "grey_peerlist_size: " << res.grey_peerlist_size << ENDL;
 
   return true;
 }
 //---------------------------------------------------------------------------------------------------------------
-bool handle_request_stat(po::variables_map& vm, peerid_type peer_id)
-{
-
-  if(!command_line::has_arg(vm, arg_priv_key))
-  {
+bool handle_request_stat(po::variables_map& vm, peerid_type peer_id) {
+  if(!command_line::has_arg(vm, arg_priv_key)) {
     std::cout << "{" << ENDL << "  \"status\": \"ERROR: " << "secret key not set \"" << ENDL << "}";
     return false;
   }
+
   crypto::secret_key prvk = AUTO_VAL_INIT(prvk);
-  if(!string_tools::hex_to_pod(command_line::get_arg(vm, arg_priv_key) , prvk))
-  {
+  if (!Common::podFromHex(command_line::get_arg(vm, arg_priv_key), prvk)) {
     std::cout << "{" << ENDL << "  \"status\": \"ERROR: " << "wrong secret key set \"" << ENDL << "}";
     return false;
   }
 
-
   response_schema rs = AUTO_VAL_INIT(rs);
+  unsigned timeout = command_line::get_arg(vm, arg_timeout);
 
-  levin::levin_client_impl2 transport;
-  if(!transport.connect(command_line::get_arg(vm, arg_ip), static_cast<int>(command_line::get_arg(vm, arg_port)), static_cast<int>(command_line::get_arg(vm, arg_timeout))))
-  {
-    std::cout << "{" << ENDL << "  \"status\": \"ERROR: " << "Failed to connect to " << command_line::get_arg(vm, arg_ip) << ":" << command_line::get_arg(vm, arg_port) << "\"" << ENDL << "}";
-    return false;
-  }else
+  try {
+    System::Dispatcher dispatcher;
+    System::TcpConnector connector(dispatcher);
+    System::Ipv4Resolver resolver(dispatcher);
+
+    std::cout << "Connecting to " << command_line::get_arg(vm, arg_ip) << ":" << command_line::get_arg(vm, arg_port) << ENDL;
+
+    auto addr = resolver.resolve(command_line::get_arg(vm, arg_ip));
+
+    System::TcpConnection connection;
+
+    withTimeout(dispatcher, connector, timeout, [&] {
+      connection = connector.connect(addr, command_line::get_arg(vm, arg_port));
+    });
+
     rs.status = "OK";
 
-  if(!peer_id)
-  {
-    COMMAND_REQUEST_PEER_ID::request req = AUTO_VAL_INIT(req);
-    COMMAND_REQUEST_PEER_ID::response rsp = AUTO_VAL_INIT(rsp);
-    if(!net_utils::invoke_remote_command2(COMMAND_REQUEST_PEER_ID::ID, req, rsp, transport))
-    {
-      std::cout << "{" << ENDL << "  \"status\": \"ERROR: " << "Failed to connect to " << command_line::get_arg(vm, arg_ip) << ":" << command_line::get_arg(vm, arg_port) << "\"" << ENDL << "}";
-      return false;
-    }else
-    {
+    LevinProtocol levin(connection);
+
+    if (!peer_id) {
+      COMMAND_REQUEST_PEER_ID::request req;
+      COMMAND_REQUEST_PEER_ID::response rsp;
+      withTimeout(dispatcher, connection, timeout, [&] {
+        levin.invoke(COMMAND_REQUEST_PEER_ID::ID, req, rsp);
+      });
       peer_id = rsp.my_id;
     }
-  }
 
-
-  nodetool::proof_of_trust pot = AUTO_VAL_INIT(pot);
-  pot.peer_id = peer_id;
-  pot.time = time(NULL);
-  crypto::public_key pubk = AUTO_VAL_INIT(pubk);
-  string_tools::hex_to_pod(P2P_STAT_TRUSTED_PUB_KEY, pubk);
-  crypto::hash h = tools::get_proof_of_trust_hash(pot);
-  crypto::generate_signature(h, pubk, prvk, pot.sign);
-
-  if(command_line::get_arg(vm, arg_request_stat_info))
-  {
-    COMMAND_REQUEST_STAT_INFO::request req = AUTO_VAL_INIT(req);
-    req.tr = pot;
-    if(!net_utils::invoke_remote_command2(COMMAND_REQUEST_STAT_INFO::ID, req, rs.si_rsp.v, transport))
-    {
-      std::stringstream ss;
-      ss << "ERROR: " << "Failed to invoke remote command COMMAND_REQUEST_STAT_INFO to " << command_line::get_arg(vm, arg_ip) << ":" << command_line::get_arg(vm, arg_port);
-      rs.COMMAND_REQUEST_STAT_INFO_status = ss.str();
-    }else
-    {
-      rs.si_rsp.enabled = true;
-      rs.COMMAND_REQUEST_STAT_INFO_status = "OK";
-    }
-  }
-
-
-  if(command_line::get_arg(vm, arg_request_net_state))
-  {
-    ++pot.time;
-    h = tools::get_proof_of_trust_hash(pot);
+    proof_of_trust pot = AUTO_VAL_INIT(pot);
+    pot.peer_id = peer_id;
+    pot.time = time(NULL);
+    crypto::public_key pubk = AUTO_VAL_INIT(pubk);
+    Common::podFromHex(P2P_STAT_TRUSTED_PUB_KEY, pubk);
+    crypto::hash h = get_proof_of_trust_hash(pot);
     crypto::generate_signature(h, pubk, prvk, pot.sign);
-    COMMAND_REQUEST_NETWORK_STATE::request req = AUTO_VAL_INIT(req);    
-    req.tr = pot;
-    if(!net_utils::invoke_remote_command2(COMMAND_REQUEST_NETWORK_STATE::ID, req, rs.ns_rsp.v, transport))
-    {
-      std::stringstream ss;
-      ss << "ERROR: " << "Failed to invoke remote command COMMAND_REQUEST_NETWORK_STATE to " << command_line::get_arg(vm, arg_ip) << ":" << command_line::get_arg(vm, arg_port);
-      rs.COMMAND_REQUEST_NETWORK_STATE_status = ss.str();
-    }else
-    {
-      rs.ns_rsp.enabled = true;
-      rs.COMMAND_REQUEST_NETWORK_STATE_status = "OK";
+
+    if (command_line::get_arg(vm, arg_request_stat_info)) {
+      COMMAND_REQUEST_STAT_INFO::request req = AUTO_VAL_INIT(req);
+      COMMAND_REQUEST_STAT_INFO::response res = AUTO_VAL_INIT(res);
+
+      req.tr = pot;
+
+      try {
+        withTimeout(dispatcher, connection, timeout, [&] {
+          levin.invoke(COMMAND_REQUEST_STAT_INFO::ID, req, res);
+        });
+        rs.si_rsp = std::move(res);
+        rs.COMMAND_REQUEST_STAT_INFO_status = "OK";
+      } catch (const std::exception &e) {
+        std::stringstream ss;
+        ss << "ERROR: Failed to invoke remote command COMMAND_REQUEST_STAT_INFO to " 
+           << command_line::get_arg(vm, arg_ip) << ":" << command_line::get_arg(vm, arg_port) 
+           << " - " << e.what();
+        rs.COMMAND_REQUEST_STAT_INFO_status = ss.str();
+      }
     }
+
+    if (command_line::get_arg(vm, arg_request_net_state))  {
+      ++pot.time;
+      h = get_proof_of_trust_hash(pot);
+      crypto::generate_signature(h, pubk, prvk, pot.sign);
+      COMMAND_REQUEST_NETWORK_STATE::request req = AUTO_VAL_INIT(req);
+      COMMAND_REQUEST_NETWORK_STATE::response res = AUTO_VAL_INIT(res);
+      req.tr = pot;
+
+      try {
+        withTimeout(dispatcher, connection, timeout, [&] {
+          levin.invoke(COMMAND_REQUEST_NETWORK_STATE::ID, req, res);
+        });
+        rs.ns_rsp = std::move(res);
+        rs.COMMAND_REQUEST_NETWORK_STATE_status = "OK";
+      } catch (const std::exception &e) {
+        std::stringstream ss;
+        ss << "ERROR: Failed to invoke remote command COMMAND_REQUEST_NETWORK_STATE to "
+           << command_line::get_arg(vm, arg_ip) << ":" << command_line::get_arg(vm, arg_port)
+           << " - " << e.what();
+        rs.COMMAND_REQUEST_NETWORK_STATE_status = ss.str();
+      }
+    }
+  } catch (const std::exception& e) {
+    std::cout << "ERROR: " << e.what() << std::endl;
+    return false;
   }
-  std::cout << get_response_schema_as_json(rs);
+
+  get_response_schema_as_json(std::cout, rs) << std::endl;
   return true;
 }
+
 //---------------------------------------------------------------------------------------------------------------
-bool generate_and_print_keys()
-{
+bool generate_and_print_keys() {
   crypto::public_key pk = AUTO_VAL_INIT(pk);
   crypto::secret_key sk = AUTO_VAL_INIT(sk);
   generate_keys(pk, sk);
-  std::cout << "PUBLIC KEY: " << epee::string_tools::pod_to_hex(pk) << ENDL 
-    << "PRIVATE KEY: " << epee::string_tools::pod_to_hex(sk);
+  std::cout << "PUBLIC KEY: " << Common::podToHex(pk) << ENDL
+            << "PRIVATE KEY: " << Common::podToHex(sk);
   return true;
 }
-int main(int argc, char* argv[])
-{
-  string_tools::set_module_name_and_folder(argv[0]);
-  log_space::get_set_log_detalisation_level(true, LOG_LEVEL_0);
 
+int main(int argc, char *argv[]) {
   // Declare the supported options.
   po::options_description desc_general("General options");
   command_line::add_arg(desc_general, command_line::arg_help);
@@ -321,13 +349,11 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_params, arg_priv_key);
   command_line::add_arg(desc_params, arg_get_daemon_info);
 
-
   po::options_description desc_all;
   desc_all.add(desc_general).add(desc_params);
 
   po::variables_map vm;
-  bool r = command_line::handle_error_helper(desc_all, [&]()
-  {
+  bool r = command_line::handle_error_helper(desc_all, [&]() {
     po::store(command_line::parse_command_line(argc, argv, desc_general, true), vm);
     if (command_line::get_arg(vm, command_line::arg_help))
     {
@@ -340,26 +366,23 @@ int main(int argc, char* argv[])
 
     return true;
   });
+
   if (!r)
     return 1;
 
-  if(command_line::has_arg(vm, arg_request_stat_info) || command_line::has_arg(vm, arg_request_net_state))
-  {
-    return handle_request_stat(vm, command_line::get_arg(vm, arg_peer_id)) ? 0:1;
+  if (command_line::has_arg(vm, arg_request_stat_info) || command_line::has_arg(vm, arg_request_net_state)) {
+    return handle_request_stat(vm, command_line::get_arg(vm, arg_peer_id)) ? 0 : 1;
   }
-  if(command_line::has_arg(vm, arg_get_daemon_info))
-  {
-    return handle_get_daemon_info(vm) ? 0:1;
-  }
-  else if(command_line::has_arg(vm, arg_generate_keys))
-  {
-    return  generate_and_print_keys() ? 0:1;
-  }
-  else
-  {
-    std::cerr << "Not enough arguments." << ENDL;
-    std::cerr << desc_all << ENDL;
+  
+  if (command_line::has_arg(vm, arg_get_daemon_info)) {
+    return handle_get_daemon_info(vm) ? 0 : 1;
+  } 
+  
+  if (command_line::has_arg(vm, arg_generate_keys)) {
+    return generate_and_print_keys() ? 0 : 1;
   }
 
+  std::cerr << "Not enough arguments." << ENDL;
+  std::cerr << desc_all << ENDL;
   return 1;
 }

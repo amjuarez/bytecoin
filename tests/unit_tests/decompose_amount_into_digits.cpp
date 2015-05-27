@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -70,7 +70,7 @@ namespace
 TEST_F(decompose_amount_into_digits_test, is_correct_0)
 {
   std::vector<uint64_t> expected_chunks;
-  cryptonote::decompose_amount_into_digits(0, 0, m_chunk_handler, m_dust_handler);
+  CryptoNote::decompose_amount_into_digits(0, 0, m_chunk_handler, m_dust_handler);
   ASSERT_EQ(m_chunk_handler.m_chunks, expected_chunks);
   ASSERT_EQ(m_dust_handler.m_has_dust, false);
 }
@@ -78,7 +78,7 @@ TEST_F(decompose_amount_into_digits_test, is_correct_0)
 TEST_F(decompose_amount_into_digits_test, is_correct_1)
 {
   std::vector<uint64_t> expected_chunks;
-  cryptonote::decompose_amount_into_digits(0, 10, m_chunk_handler, m_dust_handler);
+  CryptoNote::decompose_amount_into_digits(0, 10, m_chunk_handler, m_dust_handler);
   ASSERT_EQ(m_chunk_handler.m_chunks, expected_chunks);
   ASSERT_EQ(m_dust_handler.m_has_dust, false);
 }
@@ -87,7 +87,7 @@ TEST_F(decompose_amount_into_digits_test, is_correct_2)
 {
   uint64_t expected_chunks_arr[] = {10};
   VEC_FROM_ARR(expected_chunks);
-  cryptonote::decompose_amount_into_digits(10, 0, m_chunk_handler, m_dust_handler);
+  CryptoNote::decompose_amount_into_digits(10, 0, m_chunk_handler, m_dust_handler);
   ASSERT_EQ(m_chunk_handler.m_chunks, expected_chunks);
   ASSERT_EQ(m_dust_handler.m_has_dust, false);
 }
@@ -96,7 +96,7 @@ TEST_F(decompose_amount_into_digits_test, is_correct_3)
 {
   std::vector<uint64_t> expected_chunks;
   uint64_t expected_dust = 10;
-  cryptonote::decompose_amount_into_digits(10, 10, m_chunk_handler, m_dust_handler);
+  CryptoNote::decompose_amount_into_digits(10, 10, m_chunk_handler, m_dust_handler);
   ASSERT_EQ(m_chunk_handler.m_chunks, expected_chunks);
   ASSERT_EQ(m_dust_handler.m_dust, expected_dust);
 }
@@ -105,7 +105,7 @@ TEST_F(decompose_amount_into_digits_test, is_correct_4)
 {
   uint64_t expected_dust = 8100;
   std::vector<uint64_t> expected_chunks;
-  cryptonote::decompose_amount_into_digits(8100, 1000000, m_chunk_handler, m_dust_handler);
+  CryptoNote::decompose_amount_into_digits(8100, 1000000, m_chunk_handler, m_dust_handler);
   ASSERT_EQ(m_chunk_handler.m_chunks, expected_chunks);
   ASSERT_EQ(m_dust_handler.m_dust, expected_dust);
 }
@@ -114,7 +114,7 @@ TEST_F(decompose_amount_into_digits_test, is_correct_5)
 {
   uint64_t expected_chunks_arr[] = {100, 900000, 8000000};
   VEC_FROM_ARR(expected_chunks);
-  cryptonote::decompose_amount_into_digits(8900100, 10, m_chunk_handler, m_dust_handler);
+  CryptoNote::decompose_amount_into_digits(8900100, 10, m_chunk_handler, m_dust_handler);
   ASSERT_EQ(m_chunk_handler.m_chunks, expected_chunks);
   ASSERT_EQ(m_dust_handler.m_has_dust, false);
 }
@@ -124,7 +124,7 @@ TEST_F(decompose_amount_into_digits_test, is_correct_6)
   uint64_t expected_chunks_arr[] = {900000, 8000000};
   VEC_FROM_ARR(expected_chunks);
   uint64_t expected_dust = 100;
-  cryptonote::decompose_amount_into_digits(8900100, 1000, m_chunk_handler, m_dust_handler);
+  CryptoNote::decompose_amount_into_digits(8900100, 1000, m_chunk_handler, m_dust_handler);
   ASSERT_EQ(m_chunk_handler.m_chunks, expected_chunks);
   ASSERT_EQ(m_dust_handler.m_dust, expected_dust);
 }

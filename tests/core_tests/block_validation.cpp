@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,23 +19,23 @@
 #include "TestGenerator.h"
 
 using namespace epee;
-using namespace cryptonote;
+using namespace CryptoNote;
 
 #define BLOCK_VALIDATION_INIT_GENERATE()                        \
   GENERATE_ACCOUNT(miner_account);                              \
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, 1338224400);
 
 namespace {
-  bool lift_up_difficulty(const cryptonote::Currency& currency, std::vector<test_event_entry>& events,
+  bool lift_up_difficulty(const CryptoNote::Currency& currency, std::vector<test_event_entry>& events,
                           std::vector<uint64_t>& timestamps,
-                          std::vector<cryptonote::difficulty_type>& cummulative_difficulties, test_generator& generator,
-                          size_t new_block_count, const cryptonote::Block blk_last,
-                          const cryptonote::account_base& miner_account, uint8_t block_major_version) {
-    cryptonote::difficulty_type commulative_diffic = cummulative_difficulties.empty() ? 0 : cummulative_difficulties.back();
-    cryptonote::Block blk_prev = blk_last;
+                          std::vector<CryptoNote::difficulty_type>& cummulative_difficulties, test_generator& generator,
+                          size_t new_block_count, const CryptoNote::Block blk_last,
+                          const CryptoNote::account_base& miner_account, uint8_t block_major_version) {
+    CryptoNote::difficulty_type commulative_diffic = cummulative_difficulties.empty() ? 0 : cummulative_difficulties.back();
+    CryptoNote::Block blk_prev = blk_last;
     for (size_t i = 0; i < new_block_count; ++i) {
-      cryptonote::Block blk_next;
-      cryptonote::difficulty_type diffic = currency.nextDifficulty(timestamps, cummulative_difficulties);
+      CryptoNote::Block blk_next;
+      CryptoNote::difficulty_type diffic = currency.nextDifficulty(timestamps, cummulative_difficulties);
       if (!generator.constructBlockManually(blk_next, blk_prev, miner_account,
         test_generator::bf_major_ver | test_generator::bf_timestamp | test_generator::bf_diffic, 
         block_major_version, 0, blk_prev.timestamp, crypto::hash(), diffic)) {
@@ -57,16 +57,16 @@ namespace {
     return true;
   }
 
-  bool getParentBlockSize(const cryptonote::Block& block, size_t& size) {
-    auto serializer = cryptonote::makeParentBlockSerializer(block, false, false);
-    if (!cryptonote::get_object_blobsize(serializer, size)) {
+  bool getParentBlockSize(const CryptoNote::Block& block, size_t& size) {
+    auto serializer = CryptoNote::makeParentBlockSerializer(block, false, false);
+    if (!CryptoNote::get_object_blobsize(serializer, size)) {
       LOG_ERROR("Failed to get size of parent block");
       return false;
     }
     return true;
   }
 
-  bool adjustParentBlockSize(cryptonote::Block& block, size_t targetSize) {
+  bool adjustParentBlockSize(CryptoNote::Block& block, size_t targetSize) {
     size_t parentBlockSize;
     if (!getParentBlockSize(block, parentBlockSize)) {
       return false;
@@ -130,7 +130,7 @@ bool TestBlockMajorVersionRejected::generate(std::vector<test_event_entry>& even
 bool TestBlockBigMinorVersion::generate(std::vector<test_event_entry>& events) const {
   BLOCK_VALIDATION_INIT_GENERATE();
 
-  cryptonote::Block blk_1;
+  CryptoNote::Block blk_1;
   generator.constructBlockManually(blk_1, blk_0, miner_account,
     test_generator::bf_major_ver | test_generator::bf_minor_ver, m_blockMajorVersion, BLOCK_MINOR_VERSION_0 + 1);
 
@@ -223,7 +223,7 @@ bool gen_block_invalid_prev_id::generate(std::vector<test_event_entry>& events) 
   return true;
 }
 
-bool gen_block_invalid_prev_id::check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*blk*/)
+bool gen_block_invalid_prev_id::check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*blk*/)
 {
   if (1 == event_idx)
     return bvc.m_marked_as_orphaned && !bvc.m_added_to_main_chain && !bvc.m_verifivation_failed;
@@ -428,7 +428,7 @@ bool gen_block_miner_tx_has_2_in::generate(std::vector<test_event_entry>& events
   destinations.push_back(de);
 
   Transaction tmp_tx;
-  if (!construct_tx(miner_account.get_keys(), sources, destinations, std::vector<uint8_t>(), tmp_tx, 0))
+  if (!construct_tx(miner_account.get_keys(), sources, destinations, std::vector<uint8_t>(), tmp_tx, 0, m_logger))
     return false;
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_0);
@@ -473,7 +473,7 @@ bool gen_block_miner_tx_with_txin_to_key::generate(std::vector<test_event_entry>
   destinations.push_back(de);
 
   Transaction tmp_tx;
-  if (!construct_tx(miner_account.get_keys(), sources, destinations, std::vector<uint8_t>(), tmp_tx, 0))
+  if (!construct_tx(miner_account.get_keys(), sources, destinations, std::vector<uint8_t>(), tmp_tx, 0, m_logger))
     return false;
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_1);
@@ -635,8 +635,8 @@ bool TestBlockCumulativeSizeExceedsLimit::generate(std::vector<test_event_entry>
 gen_block_invalid_binary_format::gen_block_invalid_binary_format(uint8_t blockMajorVersion) : 
     m_corrupt_blocks_begin_idx(0),
     m_blockMajorVersion(blockMajorVersion) {
-  cryptonote::CurrencyBuilder currencyBuilder;
-  currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : 0);
+  CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
+  currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : 0);
   m_currency = currencyBuilder.currency();
 
   REGISTER_CALLBACK("check_all_blocks_purged", gen_block_invalid_binary_format::check_all_blocks_purged);
@@ -710,8 +710,8 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
   return true;
 }
 
-bool gen_block_invalid_binary_format::check_block_verification_context(const cryptonote::block_verification_context& bvc,
-                                                                       size_t event_idx, const cryptonote::Block& blk)
+bool gen_block_invalid_binary_format::check_block_verification_context(const CryptoNote::block_verification_context& bvc,
+                                                                       size_t event_idx, const CryptoNote::Block& blk)
 {
   if (0 == m_corrupt_blocks_begin_idx || event_idx < m_corrupt_blocks_begin_idx)
   {
@@ -723,13 +723,13 @@ bool gen_block_invalid_binary_format::check_block_verification_context(const cry
   }
 }
 
-bool gen_block_invalid_binary_format::corrupt_blocks_boundary(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events)
+bool gen_block_invalid_binary_format::corrupt_blocks_boundary(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events)
 {
   m_corrupt_blocks_begin_idx = ev_index + 1;
   return true;
 }
 
-bool gen_block_invalid_binary_format::check_all_blocks_purged(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events)
+bool gen_block_invalid_binary_format::check_all_blocks_purged(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_block_invalid_binary_format::check_all_blocks_purged");
 
@@ -742,7 +742,7 @@ bool gen_block_invalid_binary_format::check_all_blocks_purged(cryptonote::core& 
 bool TestMaxSizeOfParentBlock::generate(std::vector<test_event_entry>& events) const {
   BLOCK_VALIDATION_INIT_GENERATE();
 
-  cryptonote::Block blk_1;
+  CryptoNote::Block blk_1;
   generator.constructBlockManually(blk_1, blk_0, miner_account, test_generator::bf_major_ver, BLOCK_MAJOR_VERSION_2);
   if (!adjustParentBlockSize(blk_1, 2 * 1024)) {
     return false;
@@ -757,7 +757,7 @@ bool TestMaxSizeOfParentBlock::generate(std::vector<test_event_entry>& events) c
 bool TestBigParentBlock::generate(std::vector<test_event_entry>& events) const {
   BLOCK_VALIDATION_INIT_GENERATE();
 
-  cryptonote::Block blk_1;
+  CryptoNote::Block blk_1;
   generator.constructBlockManually(blk_1, blk_0, miner_account, test_generator::bf_major_ver, BLOCK_MAJOR_VERSION_2);
   if (!adjustParentBlockSize(blk_1, 2 * 1024 + 1)) {
     return false;
@@ -773,10 +773,10 @@ bool TestBigParentBlock::generate(std::vector<test_event_entry>& events) const {
 namespace
 {
   template <typename MutateFunc>
-  bool GenerateAndMutateBlockV2(const cryptonote::Currency& currency, std::vector<test_event_entry>& events, const std::string& callback, MutateFunc mf) {
+  bool GenerateAndMutateBlockV2(const CryptoNote::Currency& currency, std::vector<test_event_entry>& events, const std::string& callback, MutateFunc mf) {
     TestGenerator bg(currency, events);
 
-    cryptonote::Block blk_1;
+    CryptoNote::Block blk_1;
     bg.generator.constructBlockManually(
       blk_1, bg.lastBlock, bg.minerAccount, test_generator::bf_major_ver, BLOCK_MAJOR_VERSION_2);
 
@@ -790,21 +790,21 @@ namespace
 }
 
 bool TestBlock2ExtraEmpty::generate(std::vector<test_event_entry>& events) const {
-  return GenerateAndMutateBlockV2(m_currency, events, "check_block_purged", [](cryptonote::Block& blk) {
+  return GenerateAndMutateBlockV2(m_currency, events, "check_block_purged", [](CryptoNote::Block& blk) {
     blk.parentBlock.minerTx.extra.clear();
   });
 }
 
 bool TestBlock2ExtraWithoutMMTag::generate(std::vector<test_event_entry>& events) const {
-  return GenerateAndMutateBlockV2(m_currency, events, "check_block_purged", [](cryptonote::Block& blk) {
+  return GenerateAndMutateBlockV2(m_currency, events, "check_block_purged", [](CryptoNote::Block& blk) {
     blk.parentBlock.minerTx.extra.clear();
-    cryptonote::add_extra_nonce_to_tx_extra(blk.parentBlock.minerTx.extra, "0xdeadbeef");
+    CryptoNote::add_extra_nonce_to_tx_extra(blk.parentBlock.minerTx.extra, "0xdeadbeef");
   });
 }
 
 bool TestBlock2ExtraWithGarbage::generate(std::vector<test_event_entry>& events) const {
-  return GenerateAndMutateBlockV2(m_currency, events, "check_block_accepted", [](cryptonote::Block& blk) {
-    cryptonote::add_extra_nonce_to_tx_extra(blk.parentBlock.minerTx.extra, "0xdeadbeef");
+  return GenerateAndMutateBlockV2(m_currency, events, "check_block_accepted", [](CryptoNote::Block& blk) {
+    CryptoNote::add_extra_nonce_to_tx_extra(blk.parentBlock.minerTx.extra, "0xdeadbeef");
     blk.parentBlock.minerTx.extra.push_back(0xde);
     blk.parentBlock.minerTx.extra.push_back(0xad);
     blk.parentBlock.minerTx.extra.push_back(0xbe);

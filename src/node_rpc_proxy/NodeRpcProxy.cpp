@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,39 +16,105 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "NodeRpcProxy.h"
+#include "NodeErrors.h"
 
 #include <atomic>
 #include <system_error>
 #include <thread>
 
+#include <HTTP/HttpRequest.h>
+#include <HTTP/HttpResponse.h>
+#include <System/Dispatcher.h>
+
+#include "cryptonote_core/cryptonote_basic_impl.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "rpc/core_rpc_server_commands_defs.h"
-#include "storages/http_abstract_invoke.h"
-#include "NodeErrors.h"
+#include "rpc/HttpClient.h"
+#include "rpc/JsonRpc.h"
 
-namespace cryptonote {
-
-using namespace CryptoNote;
+namespace CryptoNote {
 
 namespace {
-  std::error_code interpretJsonRpcResponse(bool ok, const std::string& status) {
-    if (!ok) {
-      return make_error_code(error::NETWORK_ERROR);
-    } else if (CORE_RPC_STATUS_BUSY == status) {
-      return make_error_code(error::NODE_BUSY);
-    } else if (CORE_RPC_STATUS_OK != status) {
-      return make_error_code(error::INTERNAL_NODE_ERROR);
-    }
-    return std::error_code();
+std::error_code interpretResponseStatus(const std::string& status) {
+  if (CORE_RPC_STATUS_BUSY == status) {
+    return make_error_code(error::NODE_BUSY);
+  } else if (CORE_RPC_STATUS_OK != status) {
+    return make_error_code(error::INTERNAL_NODE_ERROR);
   }
+  return std::error_code();
 }
 
-NodeRpcProxy::NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort)
-  : m_nodeAddress("http://" + nodeHost + ":" + std::to_string(nodePort))
-  , m_rpcTimeout(10000)
-  , m_pullTimer(m_ioService)
-  , m_pullInterval(10000)
-  , m_lastLocalBlockTimestamp(0) {
+template <typename Request, typename Response>
+std::error_code binaryCommand(HttpClient& client, const std::string& url, const Request& req, Response& res) {
+  std::error_code ec;
+  
+  try {
+    invokeBinaryCommand(client, url, req, res);
+    ec = interpretResponseStatus(res.status);
+  } catch (const std::exception&) {
+    ec = make_error_code(error::NETWORK_ERROR);
+  }
+
+  return ec;
+}
+
+template <typename Request, typename Response>
+std::error_code jsonCommand(HttpClient& client, const std::string& url, const Request& req, Response& res) {
+  std::error_code ec;
+
+  try {
+    invokeJsonCommand(client, url, req, res);
+    ec = interpretResponseStatus(res.status);
+  } catch (const std::exception&) {
+    ec = make_error_code(error::NETWORK_ERROR);
+  }
+
+  return ec;
+}
+
+template <typename Request, typename Response>
+std::error_code jsonRpcCommand(HttpClient& client, const std::string& method, const Request& req, Response& res) {
+  std::error_code ec = make_error_code(error::INTERNAL_NODE_ERROR);
+
+  try {
+    JsonRpc::JsonRpcRequest jsReq;
+
+    jsReq.setMethod(method);
+    jsReq.setParams(req);
+
+    HttpRequest httpReq;
+    HttpResponse httpRes;
+
+    httpReq.setUrl("/json_rpc");
+    httpReq.setBody(jsReq.getBody());
+
+    client.request(httpReq, httpRes);
+
+    JsonRpc::JsonRpcResponse jsRes;
+
+    if (httpRes.getStatus() == HttpResponse::STATUS_200) {
+      jsRes.parse(httpRes.getBody());
+      if (jsRes.getResult(res)) {
+        ec = interpretResponseStatus(res.status);
+      }
+    }
+  } catch (const std::exception&) {
+    ec = make_error_code(error::NETWORK_ERROR);
+  }
+
+  return ec;
+}
+
+
+}
+
+NodeRpcProxy::NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort) :
+  m_rpcTimeout(10000),
+  m_pullTimer(m_ioService),
+  m_pullInterval(10000),
+  m_nodeHost(nodeHost),
+  m_nodePort(nodePort),
+  m_lastLocalBlockTimestamp(0) {
   resetInternalState();
 }
 
@@ -61,7 +127,7 @@ void NodeRpcProxy::resetInternalState() {
   m_peerCount = 0;
   m_nodeHeight = 0;
   m_networkHeight = 0;
-  m_lastKnowHash = cryptonote::null_hash;
+  m_lastKnowHash = CryptoNote::null_hash;
 }
 
 void NodeRpcProxy::init(const INode::Callback& callback) {
@@ -95,6 +161,10 @@ void NodeRpcProxy::workerThread(const INode::Callback& initialized_callback) {
     return;
   }
 
+  System::Dispatcher dispatcher;
+  HttpClient httpClient(dispatcher, m_nodeHost, m_nodePort);
+  m_httpClient = &httpClient;
+
   initialized_callback(std::error_code());
 
   pullNodeStatusAndScheduleTheNext();
@@ -116,14 +186,14 @@ void NodeRpcProxy::pullNodeStatusAndScheduleTheNext() {
 }
 
 void NodeRpcProxy::updateNodeStatus() {
-  cryptonote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::response rsp = AUTO_VAL_INIT(rsp);
-  bool r = epee::net_utils::invoke_http_json_rpc(m_nodeAddress + "/json_rpc", "getlastblockheader", req, rsp, m_httpClient, m_rpcTimeout);
-  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
+  CryptoNote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::request req = AUTO_VAL_INIT(req);
+  CryptoNote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::response rsp = AUTO_VAL_INIT(rsp);
+
+  std::error_code ec = jsonRpcCommand(*m_httpClient, "getlastblockheader", req, rsp);
+
   if (!ec) {
     crypto::hash blockHash;
     if (!parse_hash256(rsp.block_header.hash, blockHash)) {
-      LOG_ERROR("Invalid block hash format: " << rsp.block_header.hash);
       return;
     }
 
@@ -140,26 +210,24 @@ void NodeRpcProxy::updateNodeStatus() {
       //}
       m_observerManager.notify(&INodeObserver::localBlockchainUpdated, m_nodeHeight);
     }
-  } else {
-    LOG_PRINT_L2("Failed to invoke getlastblockheader: " << ec.message() << ':' << ec.value());
   }
 
   updatePeerCount();
 }
 
 void NodeRpcProxy::updatePeerCount() {
-  cryptonote::COMMAND_RPC_GET_INFO::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_GET_INFO::response rsp = AUTO_VAL_INIT(rsp);
-  bool r = epee::net_utils::invoke_http_json_remote_command2(m_nodeAddress + "/getinfo", req, rsp, m_httpClient, m_rpcTimeout);
-  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
+
+  CryptoNote::COMMAND_RPC_GET_INFO::request req = AUTO_VAL_INIT(req);
+  CryptoNote::COMMAND_RPC_GET_INFO::response rsp = AUTO_VAL_INIT(rsp);
+
+  std::error_code ec = jsonCommand(*m_httpClient, "/getinfo", req, rsp);
+
   if (!ec) {
     size_t peerCount = rsp.incoming_connections_count + rsp.outgoing_connections_count;
     if (peerCount != m_peerCount) {
       m_peerCount = peerCount;
       m_observerManager.notify(&INodeObserver::peerCountUpdated, m_peerCount);
     }
-  } else {
-    LOG_PRINT_L2("Failed to invoke getinfo: " << ec.message() << ':' << ec.value());
   }
 }
 
@@ -183,11 +251,19 @@ uint64_t NodeRpcProxy::getLastKnownBlockHeight() const {
   return m_networkHeight;
 }
 
+uint64_t NodeRpcProxy::getLocalBlockCount() const {
+  return m_nodeHeight;
+}
+
+uint64_t NodeRpcProxy::getKnownBlockCount() const {
+  return m_networkHeight;
+}
+
 uint64_t NodeRpcProxy::getLastLocalBlockTimestamp() const {
   return m_lastLocalBlockTimestamp;
 }
 
-void NodeRpcProxy::relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
+void NodeRpcProxy::relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) {
   if (!m_initState.initialized()) {
     callback(make_error_code(error::NOT_INITIALIZED));
     return;
@@ -206,7 +282,7 @@ void NodeRpcProxy::getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint6
   m_ioService.post(std::bind(&NodeRpcProxy::doGetRandomOutsByAmounts, this, std::move(amounts), outsCount, std::ref(outs), callback));
 }
 
-void NodeRpcProxy::getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
+void NodeRpcProxy::getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<CryptoNote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
   if (!m_initState.initialized()) {
     callback(make_error_code(error::NOT_INITIALIZED));
     return;
@@ -233,12 +309,11 @@ void NodeRpcProxy::queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t
   m_ioService.post(std::bind(&NodeRpcProxy::doQueryBlocks, this, std::move(knownBlockIds), timestamp, std::ref(newBlocks), std::ref(startHeight), callback));
 }
 
-void NodeRpcProxy::doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
+void NodeRpcProxy::doRelayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) {
   COMMAND_RPC_SEND_RAW_TX::request req;
   COMMAND_RPC_SEND_RAW_TX::response rsp;
-  req.tx_as_hex = epee::string_tools::buff_to_hex_nodelimer(cryptonote::tx_to_blob(transaction));
-  bool r = epee::net_utils::invoke_http_json_remote_command2(m_nodeAddress + "/sendrawtransaction", req, rsp, m_httpClient, m_rpcTimeout);
-  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
+  req.tx_as_hex = blobToHex(CryptoNote::tx_to_blob(transaction));
+  std::error_code ec = jsonCommand(*m_httpClient, "/sendrawtransaction", req, rsp); 
   callback(ec);
 }
 
@@ -247,50 +322,53 @@ void NodeRpcProxy::doGetRandomOutsByAmounts(std::vector<uint64_t>& amounts, uint
   COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response rsp = AUTO_VAL_INIT(rsp);
   req.amounts = std::move(amounts);
   req.outs_count = outsCount;
-  bool r = epee::net_utils::invoke_http_bin_remote_command2(m_nodeAddress + "/getrandom_outs.bin", req, rsp, m_httpClient, m_rpcTimeout);
-  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
+
+  std::error_code ec = binaryCommand(*m_httpClient, "/getrandom_outs.bin", req, rsp);
+
   if (!ec) {
     outs = std::move(rsp.outs);
   }
   callback(ec);
 }
 
-void NodeRpcProxy::doGetNewBlocks(std::list<crypto::hash>& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
-  cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_GET_BLOCKS_FAST::response rsp = AUTO_VAL_INIT(rsp);
+void NodeRpcProxy::doGetNewBlocks(std::list<crypto::hash>& knownBlockIds, std::list<CryptoNote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
+  CryptoNote::COMMAND_RPC_GET_BLOCKS_FAST::request req = AUTO_VAL_INIT(req);
+  CryptoNote::COMMAND_RPC_GET_BLOCKS_FAST::response rsp = AUTO_VAL_INIT(rsp);
   req.block_ids = std::move(knownBlockIds);
-  bool r = epee::net_utils::invoke_http_bin_remote_command2(m_nodeAddress + "/getblocks.bin", req, rsp, m_httpClient, m_rpcTimeout);
-  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
+
+  std::error_code ec = binaryCommand(*m_httpClient, "/getblocks.bin", req, rsp);
+
   if (!ec) {
     newBlocks = std::move(rsp.blocks);
     startHeight = rsp.start_height;
   }
+
   callback(ec);
 }
 
 void NodeRpcProxy::doGetTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback) {
-  cryptonote::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::response rsp = AUTO_VAL_INIT(rsp);
+  CryptoNote::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::request req = AUTO_VAL_INIT(req);
+  CryptoNote::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::response rsp = AUTO_VAL_INIT(rsp);
   req.txid = transactionHash;
-  bool r = epee::net_utils::invoke_http_bin_remote_command2(m_nodeAddress + "/get_o_indexes.bin", req, rsp, m_httpClient, m_rpcTimeout);
-  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
+
+  std::error_code ec = binaryCommand(*m_httpClient, "/get_o_indexes.bin", req, rsp);
+
   if (!ec) {
     outsGlobalIndices = std::move(rsp.o_indexes);
   }
+
   callback(ec);
 }
 
 void NodeRpcProxy::doQueryBlocks(const std::list<crypto::hash>& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
-  cryptonote::COMMAND_RPC_QUERY_BLOCKS::request req = AUTO_VAL_INIT(req);
-  cryptonote::COMMAND_RPC_QUERY_BLOCKS::response rsp = AUTO_VAL_INIT(rsp);
-  
+  CryptoNote::COMMAND_RPC_QUERY_BLOCKS::request req = AUTO_VAL_INIT(req);
+  CryptoNote::COMMAND_RPC_QUERY_BLOCKS::response rsp = AUTO_VAL_INIT(rsp);
+
   req.block_ids = knownBlockIds;
   req.timestamp = timestamp;
 
-  bool r = epee::net_utils::invoke_http_bin_remote_command2(m_nodeAddress + "/queryblocks.bin", req, rsp, m_httpClient, m_rpcTimeout);
+  std::error_code ec = binaryCommand(*m_httpClient, "/queryblocks.bin", req, rsp);
 
-  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
-  
   if (!ec) {
     for (auto& item : rsp.items) {
       BlockCompleteEntry entry;
@@ -307,7 +385,7 @@ void NodeRpcProxy::doQueryBlocks(const std::list<crypto::hash>& knownBlockIds, u
   callback(ec);
 }
 
-void NodeRpcProxy::getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) { 
+void NodeRpcProxy::getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) { 
   is_bc_actual = true;
   callback(std::error_code()); 
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -31,11 +31,11 @@ namespace CryptoNote {
 
     void clear() {
       height = 0;
-      id = cryptonote::null_hash;
+      id = CryptoNote::null_hash;
     }
 
     bool empty() const {
-      return id == cryptonote::null_hash;
+      return id == CryptoNote::null_hash;
     }
   };
 
@@ -43,9 +43,9 @@ namespace CryptoNote {
   public:
     virtual ~ITransactionValidator() {}
     
-    virtual bool checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock) = 0;
-    virtual bool checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock, BlockInfo& lastFailed) = 0;
-    virtual bool haveSpentKeyImages(const cryptonote::Transaction& tx) = 0;
+    virtual bool checkTransactionInputs(const CryptoNote::Transaction& tx, BlockInfo& maxUsedBlock) = 0;
+    virtual bool checkTransactionInputs(const CryptoNote::Transaction& tx, BlockInfo& maxUsedBlock, BlockInfo& lastFailed) = 0;
+    virtual bool haveSpentKeyImages(const CryptoNote::Transaction& tx) = 0;
   };
 
 }

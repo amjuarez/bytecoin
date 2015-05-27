@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,28 +21,34 @@
 #include <System/Dispatcher.h>
 #include "HTTP/HttpRequest.h"
 #include "HTTP/HttpResponse.h"
-
+#include "rpc/HttpClient.h"
 
 #include "TestNode.h"
 
-using namespace cryptonote;
 
 namespace Tests {
-  class RPCTestNode : public Common::TestNode {
-  public:
-    RPCTestNode(uint16_t port, System::Dispatcher& d) : m_rpcPort(port), m_dispatcher(d) {}
-    virtual bool startMining(size_t threadsCount, const std::string& address) override;
-    virtual bool stopMining() override;
-    virtual bool stopDaemon() override;
-    virtual bool submitBlock(const std::string& block) override;
-    virtual bool makeINode(std::unique_ptr<CryptoNote::INode>& node) override;
-    virtual ~RPCTestNode() { }
 
-  private:
-    void prepareRequest(HttpRequest& httpReq, const std::string& method, const std::string& params);
-    void sendRequest(const HttpRequest& httpReq, HttpResponse& httpResp);
+using namespace CryptoNote;
 
-    uint16_t m_rpcPort;
-    System::Dispatcher& m_dispatcher;
-  };
+class RPCTestNode : public TestNode {
+public:
+  RPCTestNode(uint16_t port, System::Dispatcher &d);
+
+  virtual bool startMining(size_t threadsCount, const std::string &address) override;
+  virtual bool stopMining() override;
+  virtual bool stopDaemon() override;
+  virtual bool getBlockTemplate(const std::string &minerAddress, CryptoNote::Block &blockTemplate, uint64_t &difficulty) override;
+  virtual bool submitBlock(const std::string &block) override;
+  virtual bool getTailBlockId(crypto::hash &tailBlockId) override;
+  virtual bool makeINode(std::unique_ptr<CryptoNote::INode> &node) override;
+  virtual uint64_t getLocalHeight() override;
+
+  virtual ~RPCTestNode() {}
+
+private:
+  uint16_t m_rpcPort;
+  System::Dispatcher &m_dispatcher;
+  CryptoNote::HttpClient m_httpClient;
+};
+
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,16 +22,22 @@
 
 #include <boost/program_options/variables_map.hpp>
 
-#include "cryptonote_core/cryptonote_basic_impl.h"
-#include "cryptonote_core/Currency.h"
-#include "console_handler.h"
-#include "password_container.h"
 #include "IWallet.h"
 #include "INode.h"
-#include "wallet/WalletHelper.h"
-#include "net/http_client.h"
+#include "password_container.h"
 
-namespace cryptonote
+#include "Common/ConsoleHandler.h"
+#include "cryptonote_core/cryptonote_basic_impl.h"
+#include "cryptonote_core/Currency.h"
+#include "wallet/WalletHelper.h"
+
+#include <Logging/LoggerRef.h>
+#include <Logging/LoggerManager.h>
+
+#include <System/Dispatcher.h>
+#include <System/Ipv4Address.h>
+
+namespace CryptoNote
 {
   /************************************************************************/
   /*                                                                      */
@@ -39,21 +45,30 @@ namespace cryptonote
   class simple_wallet : public CryptoNote::INodeObserver, public CryptoNote::IWalletObserver
   {
   public:
-    typedef std::vector<std::string> command_type;
+    simple_wallet(System::Dispatcher& dispatcher, const CryptoNote::Currency& currency, Logging::LoggerManager& log);
 
-    simple_wallet(const cryptonote::Currency& currency);
     bool init(const boost::program_options::variables_map& vm);
     bool deinit();
     bool run();
     void stop();
 
-    //wallet *create_wallet();
     bool process_command(const std::vector<std::string> &args);
     std::string get_commands_str();
 
-    const cryptonote::Currency& currency() const { return m_currency; }
+    const CryptoNote::Currency& currency() const { return m_currency; }
 
   private:
+
+    Logging::LoggerMessage success_msg_writer(bool color = false) {
+      return logger(Logging::INFO, color ? Logging::GREEN : Logging::DEFAULT);
+    }
+
+    Logging::LoggerMessage fail_msg_writer() {
+      auto msg = logger(Logging::ERROR, Logging::BRIGHT_RED);
+      msg << "Error: ";
+      return msg;
+    }
+
     void handle_command_line(const boost::program_options::variables_map& vm);
 
     bool run_console_handler();
@@ -63,9 +78,9 @@ namespace cryptonote
     bool close_wallet();
 
     bool help(const std::vector<std::string> &args = std::vector<std::string>());
+    bool exit(const std::vector<std::string> &args);
     bool start_mining(const std::vector<std::string> &args);
     bool stop_mining(const std::vector<std::string> &args);
-    //bool refresh(const std::vector<std::string> &args = std::vector<std::string>());
     bool show_balance(const std::vector<std::string> &args = std::vector<std::string>());
     bool show_incoming_transfers(const std::vector<std::string> &args);
     bool show_payments(const std::vector<std::string> &args);
@@ -77,19 +92,10 @@ namespace cryptonote
     bool reset(const std::vector<std::string> &args);
     bool set_log(const std::vector<std::string> &args);
 
-    //uint64_t get_daemon_blockchain_height(std::string& err);
-    //bool try_connect_to_daemon();
     bool ask_wallet_create_if_needed();
-
-    ////----------------- i_wallet2_callback ---------------------
-    //virtual void on_money_received(uint64_t height, const cryptonote::Transaction& tx, size_t out_index);
-    //virtual void on_money_spent(uint64_t height, const cryptonote::Transaction& in_tx, size_t out_index, const cryptonote::Transaction& spend_tx);
-    //virtual void on_skip_transaction(uint64_t height, const cryptonote::Transaction& tx);
-    ////----------------------------------------------------------
 
     //---------------- IWalletObserver -------------------------
     virtual void initCompleted(std::error_code result) override;
-    virtual void saveCompleted(std::error_code result) override;
     virtual void externalTransactionCreated(CryptoNote::TransactionId transactionId) override;
     //----------------------------------------------------------
 
@@ -102,7 +108,7 @@ namespace cryptonote
     class refresh_progress_reporter_t
     {
     public:
-      refresh_progress_reporter_t(cryptonote::simple_wallet& simple_wallet)
+      refresh_progress_reporter_t(CryptoNote::simple_wallet& simple_wallet)
         : m_simple_wallet(simple_wallet)
         , m_blockchain_height(0)
         , m_blockchain_height_update_time()
@@ -121,7 +127,7 @@ namespace cryptonote
 
         if (std::chrono::milliseconds(1) < current_time - m_print_time || force)
         {
-          LOG_PRINT_L0("Height " << height << " of " << m_blockchain_height << '\r');
+          std::cout << "Height " << height << " of " << m_blockchain_height << '\r';
           m_print_time = current_time;
         }
       }
@@ -138,12 +144,12 @@ namespace cryptonote
         }
         else
         {
-          LOG_ERROR("Failed to get current blockchain height: " << err);
+          std::cerr << "Failed to get current blockchain height: " << err;
         }
       }
 
     private:
-      cryptonote::simple_wallet& m_simple_wallet;
+      CryptoNote::simple_wallet& m_simple_wallet;
       uint64_t m_blockchain_height;
       std::chrono::system_clock::time_point m_blockchain_height_update_time;
       std::chrono::system_clock::time_point m_print_time;
@@ -156,20 +162,19 @@ namespace cryptonote
 
     std::string m_daemon_address;
     std::string m_daemon_host;
-    int m_daemon_port;
+    uint16_t m_daemon_port;
 
     std::string m_wallet_file;
 
-    std::unique_ptr<std::promise<std::error_code>> m_initResultPromise;
-    std::unique_ptr<std::promise<std::error_code>> m_saveResultPromise;
-
-    epee::console_handlers_binder m_cmd_binder;
-
-    const cryptonote::Currency& m_currency;
+    Common::ConsoleHandler m_consoleHandler;
+    const CryptoNote::Currency& m_currency;
+    Logging::LoggerManager& logManager;
+    System::Dispatcher& m_dispatcher;
+    Logging::LoggerRef logger;
 
     std::unique_ptr<CryptoNote::INode> m_node;
     std::unique_ptr<CryptoNote::IWallet> m_wallet;
-    epee::net_utils::http::http_simple_client m_http_client;
     refresh_progress_reporter_t m_refresh_progress_reporter;
+    std::unique_ptr<std::promise<std::error_code>> m_initResultPromise;
   };
 }

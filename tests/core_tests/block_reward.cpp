@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,7 @@
 #include "misc_language.h"
 
 using namespace epee;
-using namespace cryptonote;
+using namespace CryptoNote;
 
 namespace
 {
@@ -53,7 +53,7 @@ namespace
 
 gen_block_reward::gen_block_reward()
   : m_invalid_block_index(0) {
-  cryptonote::CurrencyBuilder currencyBuilder;
+  CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
   currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
   m_currency = currencyBuilder.currency();
 
@@ -116,21 +116,21 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
     return false;
 
   // Test: fee increases block reward
-  Transaction tx_0(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 3 * m_currency.minimumFee()));
+  Transaction tx_0(construct_tx_with_fee(m_logger, events, blk_5, miner_account, bob_account, MK_COINS(1), 3 * m_currency.minimumFee()));
   MAKE_NEXT_BLOCK_TX1(events, blk_6, blk_5r, miner_account, tx_0);
   DO_CALLBACK(events, "mark_checked_block");
 
   // Test: fee from all block transactions increase block reward
   std::list<Transaction> txs_0;
-  txs_0.push_back(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 5 * m_currency.minimumFee()));
-  txs_0.push_back(construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 7 * m_currency.minimumFee()));
+  txs_0.push_back(construct_tx_with_fee(m_logger, events, blk_5, miner_account, bob_account, MK_COINS(1), 5 * m_currency.minimumFee()));
+  txs_0.push_back(construct_tx_with_fee(m_logger, events, blk_5, miner_account, bob_account, MK_COINS(1), 7 * m_currency.minimumFee()));
   MAKE_NEXT_BLOCK_TX_LIST(events, blk_7, blk_6, miner_account, txs_0);
   DO_CALLBACK(events, "mark_checked_block");
 
   // Test: block reward == transactions fee
   {
-    Transaction tx_1 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 11 * m_currency.minimumFee());
-    Transaction tx_2 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 13 * m_currency.minimumFee());
+    Transaction tx_1 = construct_tx_with_fee(m_logger, events, blk_5, miner_account, bob_account, MK_COINS(1), 11 * m_currency.minimumFee());
+    Transaction tx_2 = construct_tx_with_fee(m_logger, events, blk_5, miner_account, bob_account, MK_COINS(1), 13 * m_currency.minimumFee());
     size_t txs_1_size = get_object_blobsize(tx_1) + get_object_blobsize(tx_2);
     uint64_t txs_fee = get_tx_fee(tx_1) + get_tx_fee(tx_2);
 
@@ -161,7 +161,7 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
   return true;
 }
 
-bool gen_block_reward::check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*blk*/)
+bool gen_block_reward::check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*blk*/)
 {
   if (m_invalid_block_index == event_idx)
   {
@@ -174,19 +174,19 @@ bool gen_block_reward::check_block_verification_context(const cryptonote::block_
   }
 }
 
-bool gen_block_reward::mark_invalid_block(cryptonote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
+bool gen_block_reward::mark_invalid_block(CryptoNote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
 {
   m_invalid_block_index = ev_index + 1;
   return true;
 }
 
-bool gen_block_reward::mark_checked_block(cryptonote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
+bool gen_block_reward::mark_checked_block(CryptoNote::core& /*c*/, size_t ev_index, const std::vector<test_event_entry>& /*events*/)
 {
   m_checked_blocks_indices.push_back(ev_index - 1);
   return true;
 }
 
-bool gen_block_reward::check_block_rewards(cryptonote::core& /*c*/, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
+bool gen_block_reward::check_block_rewards(CryptoNote::core& /*c*/, size_t /*ev_index*/, const std::vector<test_event_entry>& events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_block_reward_without_txs::check_block_rewards");
 

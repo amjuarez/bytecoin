@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -35,7 +35,7 @@ struct BlockchainInterval {
 
 struct CompleteBlock {
   crypto::hash blockHash;
-  boost::optional<cryptonote::Block> block;
+  boost::optional<CryptoNote::Block> block;
   // first transaction is always coinbase
   std::list<std::shared_ptr<ITransactionReader>> transactions;
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,21 +19,21 @@
 
 #include "cryptonote_basic.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 class ISerializer;
 }
 
 namespace crypto {
 
-void serialize(public_key& pubKey, const std::string& name, cryptonote::ISerializer& enumerator);
-void serialize(secret_key& secKey, const std::string& name, cryptonote::ISerializer& enumerator);
-void serialize(hash& h, const std::string& name, cryptonote::ISerializer& enumerator);
-void serialize(chacha8_iv& chacha, const std::string& name, cryptonote::ISerializer& enumerator);
-void serialize(key_image& keyImage, const std::string& name, cryptonote::ISerializer& enumerator);
+void serialize(public_key& pubKey, const std::string& name, CryptoNote::ISerializer& enumerator);
+void serialize(secret_key& secKey, const std::string& name, CryptoNote::ISerializer& enumerator);
+void serialize(hash& h, const std::string& name, CryptoNote::ISerializer& enumerator);
+void serialize(chacha8_iv& chacha, const std::string& name, CryptoNote::ISerializer& enumerator);
+void serialize(key_image& keyImage, const std::string& name, CryptoNote::ISerializer& enumerator);
 
 } //namespace crypto
 
-namespace cryptonote {
+namespace CryptoNote {
 void serialize(ParentBlockSerializer& pbs, const std::string& name, ISerializer& serializer);
 void serialize(TransactionPrefix& txP, const std::string& name, ISerializer& serializer);
 void serialize(Transaction& tx, const std::string& name, ISerializer& serializer);
@@ -59,4 +59,4 @@ void serialize(Block& block, const std::string& name, ISerializer& serializer);
 void serialize(AccountPublicAddress& address, const std::string& name, ISerializer& serializer);
 void serialize(tx_extra_merge_mining_tag& tag, const std::string& name, ISerializer& serializer);
 
-} //namespace cryptonote
+} //namespace CryptoNote

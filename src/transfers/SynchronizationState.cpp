@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,12 +23,12 @@
 
 namespace CryptoNote {
 
-SynchronizationState::ShortHistory SynchronizationState::getShortHistory() const {
+SynchronizationState::ShortHistory SynchronizationState::getShortHistory(size_t localHeight) const {
 
   ShortHistory history;
   size_t i = 0;
   size_t current_multiplier = 1;
-  size_t sz = m_blockchain.size();
+  size_t sz = std::min(m_blockchain.size(), localHeight + 1);
 
   if (!sz)
     return history;
@@ -101,16 +101,16 @@ uint64_t SynchronizationState::getHeight() const {
 }
 
 void SynchronizationState::save(std::ostream& os) {
-  cryptonote::BinaryOutputStreamSerializer s(os);
+  CryptoNote::BinaryOutputStreamSerializer s(os);
   serialize(s, "state");
 }
 
 void SynchronizationState::load(std::istream& in) {
-  cryptonote::BinaryInputStreamSerializer s(in);
+  CryptoNote::BinaryInputStreamSerializer s(in);
   serialize(s, "state");
 }
 
-cryptonote::ISerializer& SynchronizationState::serialize(cryptonote::ISerializer& s, const std::string& name) {
+CryptoNote::ISerializer& SynchronizationState::serialize(CryptoNote::ISerializer& s, const std::string& name) {
   s.beginObject(name);
   s(m_blockchain, "blockchain");
   s.endObject();

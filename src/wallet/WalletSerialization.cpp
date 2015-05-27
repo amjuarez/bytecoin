@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -25,7 +25,7 @@
 
 namespace CryptoNote {
 
-void serialize(UnconfirmedTransferDetails& utd, const std::string& name, cryptonote::ISerializer& serializer) {
+void serialize(UnconfirmedTransferDetails& utd, const std::string& name, CryptoNote::ISerializer& serializer) {
   serializer.beginObject(name);
   serializer(utd.tx, "transaction");
   serializer(utd.amount, "amount");
@@ -39,7 +39,7 @@ void serialize(UnconfirmedTransferDetails& utd, const std::string& name, crypton
   serializer.endObject();
 }
 
-void serialize(TransactionInfo& txi, const std::string& name, cryptonote::ISerializer& serializer) {
+void serialize(TransactionInfo& txi, const std::string& name, CryptoNote::ISerializer& serializer) {
   serializer.beginObject(name);
 
   uint64_t trId = static_cast<uint64_t>(txi.firstTransferId);
@@ -62,7 +62,7 @@ void serialize(TransactionInfo& txi, const std::string& name, cryptonote::ISeria
   serializer.endObject();
 }
 
-void serialize(Transfer& tr, const std::string& name, cryptonote::ISerializer& serializer) {
+void serialize(Transfer& tr, const std::string& name, CryptoNote::ISerializer& serializer) {
   serializer.beginObject(name);
   serializer(tr.address, "address");
   serializer(tr.amount, "amount");

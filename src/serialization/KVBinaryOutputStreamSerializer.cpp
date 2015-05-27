@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,7 +22,6 @@
 #include <stdexcept>
 
 using namespace CryptoNote;
-using namespace cryptonote;
 
 namespace {
 
@@ -65,7 +64,7 @@ size_t writeArraySize(IOutputStream& s, size_t val) {
 
 }
 
-namespace cryptonote {
+namespace CryptoNote {
 
 using namespace CryptoNote;
 

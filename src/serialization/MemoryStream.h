@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,7 +23,7 @@
 #include <algorithm>
 #include <cstring> // memcpy
 
-namespace cryptonote {
+namespace CryptoNote {
 
 class MemoryStream: 
   public IInputStream, 
@@ -79,4 +79,3 @@ private:
 };
 
 }
-

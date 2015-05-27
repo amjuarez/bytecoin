@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,7 +19,7 @@
 
 #include <cstdint>
 
-namespace cryptonote {
+namespace CryptoNote {
 namespace parameters {
 
 const uint64_t CRYPTONOTE_MAX_BLOCK_NUMBER                   = 500000000;
@@ -41,8 +41,6 @@ const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE     = 20000; //size of 
 const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1  = 10000;
 const size_t   CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE        = 600;
 const size_t   CRYPTONOTE_DISPLAY_DECIMAL_POINT              = 8;
-// COIN - number of smallest units in one coin
-const uint64_t COIN                                          = UINT64_C(100000000);  // pow(10, 8)
 const uint64_t MINIMUM_FEE                                   = UINT64_C(1000000);    // pow(10, 6)
 const uint64_t DEFAULT_DUST_THRESHOLD                        = UINT64_C(1000000);    // pow(10, 6)
 
@@ -70,7 +68,6 @@ const size_t   UPGRADE_WINDOW                                = EXPECTED_NUMBER_O
 static_assert(0 < UPGRADE_VOTING_THRESHOLD && UPGRADE_VOTING_THRESHOLD <= 100, "Bad UPGRADE_VOTING_THRESHOLD");
 static_assert(UPGRADE_VOTING_WINDOW > 1, "Bad UPGRADE_VOTING_WINDOW");
 
-const char     CRYPTONOTE_BLOCKCHAINDATA_FILENAME[]          = "blockchain.bin";    // Obsolete blockchain format
 const char     CRYPTONOTE_BLOCKS_FILENAME[]                  = "blocks.dat";
 const char     CRYPTONOTE_BLOCKINDEXES_FILENAME[]            = "blockindexes.dat";
 const char     CRYPTONOTE_BLOCKSCACHE_FILENAME[]             = "blockscache.dat";
@@ -152,8 +149,9 @@ const CheckpointData CHECKPOINTS[] = {
   {645000, "1eeba944c0dd6b9a1228a425a74076fbdbeaf9b657ba7ef02547d99f971de70d"},
   {667000, "a020c8fcaa567845d04b520bb7ebe721e097a9bed2bdb8971081f933b5b42995"},
   {689000, "212ec2698c5ebd15d6242d59f36c2d186d11bb47c58054f476dd8e6b1c7f0008"},
-  {713000, "a03f836c4a19f907cd6cac095eb6f56f5279ca2d1303fb7f826750dcb9025495"}
+  {713000, "a03f836c4a19f907cd6cac095eb6f56f5279ca2d1303fb7f826750dcb9025495"},
+  {750300, "5117631dbeb5c14748a91127a515ecbf13f6849e14fda7ee03cd55da41f1710c"}
 };
-} // cryptonote
+} // CryptoNote
 
 #define ALLOW_DEBUG_COMMANDS

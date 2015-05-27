@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,8 +20,8 @@
 #include <string>
 #include <ostream>
 
-namespace cryptonote {
+namespace CryptoNote {
 
 void importLegacyKeys(const std::string& legacyKeysFilename, const std::string& password, std::ostream& destination);
 
-} //namespace cryptonote
+} //namespace CryptoNote

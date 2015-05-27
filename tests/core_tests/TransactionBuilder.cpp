@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,23 +17,23 @@
 
 #include "TransactionBuilder.h"
 
-using namespace cryptonote;
+using namespace CryptoNote;
 
 
-TransactionBuilder::TransactionBuilder(const cryptonote::Currency& currency, uint64_t unlockTime)
-  : m_currency(currency), m_version(cryptonote::CURRENT_TRANSACTION_VERSION), m_unlockTime(unlockTime), m_txKey(KeyPair::generate()) {}
+TransactionBuilder::TransactionBuilder(const CryptoNote::Currency& currency, uint64_t unlockTime)
+  : m_currency(currency), m_version(CryptoNote::CURRENT_TRANSACTION_VERSION), m_unlockTime(unlockTime), m_txKey(KeyPair::generate()) {}
 
 TransactionBuilder& TransactionBuilder::newTxKeys() {
   m_txKey = KeyPair::generate();
   return *this;
 }
 
-TransactionBuilder& TransactionBuilder::setTxKeys(const cryptonote::KeyPair& txKeys) {
+TransactionBuilder& TransactionBuilder::setTxKeys(const CryptoNote::KeyPair& txKeys) {
   m_txKey = txKeys;
   return *this;
 }
 
-TransactionBuilder& TransactionBuilder::setInput(const std::vector<cryptonote::tx_source_entry>& sources, const cryptonote::account_keys& senderKeys) {
+TransactionBuilder& TransactionBuilder::setInput(const std::vector<CryptoNote::tx_source_entry>& sources, const CryptoNote::account_keys& senderKeys) {
   m_sources = sources;
   m_senderKeys = senderKeys;
   return *this;
@@ -44,12 +44,12 @@ TransactionBuilder& TransactionBuilder::addMultisignatureInput(const Multisignat
   return *this;
 }
 
-TransactionBuilder& TransactionBuilder::setOutput(const std::vector<cryptonote::tx_destination_entry>& destinations) {
+TransactionBuilder& TransactionBuilder::setOutput(const std::vector<CryptoNote::tx_destination_entry>& destinations) {
   m_destinations = destinations;
   return *this;
 }
 
-TransactionBuilder& TransactionBuilder::addOutput(const cryptonote::tx_destination_entry& dest) {
+TransactionBuilder& TransactionBuilder::addOutput(const CryptoNote::tx_destination_entry& dest) {
   m_destinations.push_back(dest);
   return *this;
 }
@@ -73,10 +73,10 @@ Transaction TransactionBuilder::build() const {
   Transaction tx;
   add_tx_pub_key_to_extra(tx, m_txKey.pub);
 
-  tx.version = m_version;
+  tx.version = static_cast<uint8_t>(m_version);
   tx.unlockTime = m_unlockTime;
 
-  std::vector<cryptonote::KeyPair> contexts;
+  std::vector<CryptoNote::KeyPair> contexts;
 
   fillInputs(tx, contexts);
   fillOutputs(tx);
@@ -88,7 +88,7 @@ Transaction TransactionBuilder::build() const {
   return tx;
 }
 
-void TransactionBuilder::fillInputs(Transaction& tx, std::vector<cryptonote::KeyPair>& contexts) const {
+void TransactionBuilder::fillInputs(Transaction& tx, std::vector<CryptoNote::KeyPair>& contexts) const {
   for (const tx_source_entry& src_entr : m_sources) {
     contexts.push_back(KeyPair());
     KeyPair& in_ephemeral = contexts.back();
@@ -153,7 +153,7 @@ void TransactionBuilder::fillOutputs(Transaction& tx) const {
 }
 
 
-void TransactionBuilder::signSources(const crypto::hash& prefixHash, const std::vector<cryptonote::KeyPair>& contexts, Transaction& tx) const {
+void TransactionBuilder::signSources(const crypto::hash& prefixHash, const std::vector<CryptoNote::KeyPair>& contexts, Transaction& tx) const {
   
   tx.signatures.clear();
 

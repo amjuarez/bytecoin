@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -38,11 +38,6 @@ struct AccountKeys {
   AccountAddress address;
   SecretKey spendSecretKey;
   SecretKey viewSecretKey;
-};
-
-struct KeyPair {
-  PublicKey publicKey;
-  SecretKey secretKey;
 };
 
 namespace TransactionTypes {
@@ -92,6 +87,11 @@ namespace TransactionTypes {
     OutputKeyInfo realOutput;
   };
 
+  struct KeyPair {
+    PublicKey publicKey;
+    SecretKey secretKey;
+  };
+
 }
 
 //
@@ -109,6 +109,7 @@ public:
   // extra
   virtual bool getPaymentId(Hash& paymentId) const = 0;
   virtual bool getExtraNonce(std::string& nonce) const = 0;
+  virtual Blob getExtra() const = 0;
 
   // inputs
   virtual size_t getInputCount() const = 0;
@@ -154,7 +155,7 @@ public:
 
   // Inputs/Outputs 
   virtual size_t addInput(const TransactionTypes::InputKey& input) = 0;
-  virtual size_t addInput(const AccountKeys& senderKeys, const TransactionTypes::InputKeyInfo& info, KeyPair& ephKeys) = 0;
+  virtual size_t addInput(const AccountKeys& senderKeys, const TransactionTypes::InputKeyInfo& info, TransactionTypes::KeyPair& ephKeys) = 0;
   virtual size_t addInput(const TransactionTypes::InputMultisignature& input) = 0;
 
   virtual size_t addOutput(uint64_t amount, const AccountAddress& to) = 0;
@@ -165,7 +166,7 @@ public:
   virtual void setTransactionSecretKey(const SecretKey& key) = 0;
 
   // signing
-  virtual void signInputKey(size_t input, const TransactionTypes::InputKeyInfo& info, const KeyPair& ephKeys) = 0;
+  virtual void signInputKey(size_t input, const TransactionTypes::InputKeyInfo& info, const TransactionTypes::KeyPair& ephKeys) = 0;
   virtual void signInputMultisignature(size_t input, const PublicKey& sourceTransactionKey, size_t outputIndex, const AccountKeys& accountKeys) = 0;
 };
 

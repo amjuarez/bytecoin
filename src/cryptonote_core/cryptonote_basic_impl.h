@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,15 +17,13 @@
 
 #pragma once
 
-//epee
-#include "string_tools.h"
-
+#include "Common/StringTools.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic.h"
 
 
-namespace cryptonote {
+namespace CryptoNote {
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
@@ -46,16 +44,16 @@ namespace cryptonote {
   bool parseAccountAddressString(uint64_t& prefix, AccountPublicAddress& adr, const std::string& str);
   bool is_coinbase(const Transaction& tx);
 
-  bool operator ==(const cryptonote::Transaction& a, const cryptonote::Transaction& b);
-  bool operator ==(const cryptonote::Block& a, const cryptonote::Block& b);
+  bool operator ==(const CryptoNote::Transaction& a, const CryptoNote::Transaction& b);
+  bool operator ==(const CryptoNote::Block& a, const CryptoNote::Block& b);
 }
 
 template <class T>
 std::ostream &print256(std::ostream &o, const T &v) {
-  return o << "<" << epee::string_tools::pod_to_hex(v) << ">";
+  return o << "<" << Common::podToHex(v) << ">";
 }
 
-bool parse_hash256(const std::string str_hash, crypto::hash& hash);
+bool parse_hash256(const std::string& str_hash, crypto::hash& hash);
 
 namespace crypto {
   inline std::ostream &operator <<(std::ostream &o, const crypto::public_key &v) { return print256(o, v); }

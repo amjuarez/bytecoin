@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -18,7 +18,7 @@
 #pragma once
 
 #include "IWallet.h"
-#include "common/ObserverManager.h"
+#include "Common/ObserverManager.h"
 
 namespace CryptoNote
 {

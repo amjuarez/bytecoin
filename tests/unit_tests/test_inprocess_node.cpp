@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,7 +22,7 @@
 #include "EventWaiter.h"
 #include "ICoreStub.h"
 #include "ICryptonoteProtocolQueryStub.h"
-#include "inprocess_node/InProcessNode.h"
+#include "InProcessNode/InProcessNode.h"
 
 struct CallbackStatus {
   CallbackStatus() {}
@@ -107,7 +107,7 @@ TEST_F(InProcessNode, getLastLocalBlockHeightFailure) {
 
 TEST_F(InProcessNode, getLastKnownBlockHeightSuccess) {
   protocolQueryStub.setObservedHeight(10);
-  ASSERT_EQ(10, node.getLastKnownBlockHeight());
+  ASSERT_EQ(10, node.getLastKnownBlockHeight() + 1);
 }
 
 TEST_F(InProcessNode, getTransactionOutsGlobalIndicesSuccess) {
@@ -144,14 +144,14 @@ TEST_F(InProcessNode, getRandomOutsByAmountsSuccess) {
   crypto::secret_key ignoredSectetKey;
   crypto::generate_keys(ignoredPublicKey, ignoredSectetKey);
 
-  cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response expectedResp;
-  cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount out;
+  CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response expectedResp;
+  CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount out;
   out.amount = 10;
   out.outs.push_back({ 11, ignoredPublicKey });
   expectedResp.outs.push_back(out);
   coreStub.set_random_outs(expectedResp, true);
 
-  std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount> outs;
+  std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount> outs;
 
   CallbackStatus status;
   node.getRandomOutsByAmounts({1,2,3}, 1, outs, [&status] (std::error_code ec) { status.setStatus(ec); });
@@ -164,10 +164,10 @@ TEST_F(InProcessNode, getRandomOutsByAmountsSuccess) {
 }
 
 TEST_F(InProcessNode, getRandomOutsByAmountsFailure) {
-  cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response expectedResp;
+  CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response expectedResp;
   coreStub.set_random_outs(expectedResp, false);
 
-  std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount> outs;
+  std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount> outs;
 
   CallbackStatus status;
   node.getRandomOutsByAmounts({1,2,3}, 1, outs, [&status] (std::error_code ec) { status.setStatus(ec); });
@@ -193,7 +193,7 @@ TEST_F(InProcessNode, getLastKnownBlockHeightUninitialized) {
 TEST_F(InProcessNode, getNewBlocksUninitialized) {
   CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
   std::list<crypto::hash> knownBlockIds;
-  std::list<cryptonote::block_complete_entry> newBlocks;
+  std::list<CryptoNote::block_complete_entry> newBlocks;
   uint64_t startHeight;
 
   CallbackStatus status;
@@ -214,7 +214,7 @@ TEST_F(InProcessNode, getTransactionOutsGlobalIndicesUninitialized) {
 
 TEST_F(InProcessNode, getRandomOutsByAmountsUninitialized) {
   CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
-  std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount> outs;
+  std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_outs_for_amount> outs;
 
   CallbackStatus status;
   newNode.getRandomOutsByAmounts({1,2,3}, 1, outs, [&] (std::error_code ec) { status.setStatus(ec); });
@@ -226,7 +226,7 @@ TEST_F(InProcessNode, relayTransactionUninitialized) {
   CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
 
   CallbackStatus status;
-  newNode.relayTransaction(cryptonote::Transaction(), [&] (std::error_code ec) { status.setStatus(ec); });
+  newNode.relayTransaction(CryptoNote::Transaction(), [&] (std::error_code ec) { status.setStatus(ec); });
   ASSERT_TRUE(status.wait());
   ASSERT_NE(std::error_code(), status.getStatus());
 }
@@ -239,7 +239,7 @@ TEST_F(InProcessNode, getLastLocalBlockTimestamp) {
       return true;
     }
 
-    virtual bool getBlockByHash(const crypto::hash &h, cryptonote::Block &blk) override {
+    virtual bool getBlockByHash(const crypto::hash &h, CryptoNote::Block &blk) override {
       blk.timestamp = timestamp;
       return true;
     }
@@ -267,7 +267,7 @@ TEST_F(InProcessNode, getLastLocalBlockTimestampError) {
       return true;
     }
 
-    virtual bool getBlockByHash(const crypto::hash &h, cryptonote::Block &blk) override {
+    virtual bool getBlockByHash(const crypto::hash &h, CryptoNote::Block &blk) override {
       return false;
     }
   };

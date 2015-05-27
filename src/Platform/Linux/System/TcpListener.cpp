@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,38 +16,75 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "TcpListener.h"
+#include <cassert>
+#include <stdexcept>
 
+#include <fcntl.h>
+#include <netdb.h>
 #include <sys/epoll.h>
 #include <unistd.h>
-#include <netdb.h>
-#include <fcntl.h>
-#include <assert.h>
-#include <iostream>
-#include <cassert>
-#include <errno.h>
-#include <stdexcept>
+
 #include "Dispatcher.h"
 #include "TcpConnection.h"
-#include "InterruptedException.h"
+#include <System/InterruptedException.h>
+#include <System/Ipv4Address.h>
 
-using namespace System;
-
-namespace {
-
-struct ListenerContext : public Dispatcher::ContextExt {
-  bool interrupted;
-};
-
-}
+namespace System {
 
 TcpListener::TcpListener() : dispatcher(nullptr) {
 }
 
+TcpListener::TcpListener(Dispatcher& dispatcher, const Ipv4Address& addr, uint16_t port) : dispatcher(&dispatcher) {
+  std::string message;
+  listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (listener == -1) {
+    message = "socket() failed, errno=" + std::to_string(errno);
+  } else {
+    int flags = fcntl(listener, F_GETFL, 0);
+    if (flags == -1 || fcntl(listener, F_SETFL, flags | O_NONBLOCK) == -1) {
+      message = "fcntl() failed errno=" + std::to_string(errno);
+    } else {
+      int on = 1;
+      if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == -1) {
+        message = "setsockopt failed, errno=" + std::to_string(errno);
+      } else {
+        sockaddr_in address;
+        address.sin_family = AF_INET;
+        address.sin_port = htons(port);
+        address.sin_addr.s_addr = htonl( addr.getValue());
+        if (bind(listener, reinterpret_cast<sockaddr *>(&address), sizeof address) != 0) {
+          message = "bind failed, errno=" + std::to_string(errno);
+        } else if (listen(listener, SOMAXCONN) != 0) {
+          message = "listen failed, errno=" + std::to_string(errno);
+        } else {
+          epoll_event listenEvent;
+          listenEvent.events = 0;
+          listenEvent.data.ptr = nullptr;
+
+          if (epoll_ctl(dispatcher.getEpoll(), EPOLL_CTL_ADD, listener, &listenEvent) == -1) {
+            message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+          } else {
+            stopped = false;
+            context = nullptr;
+            return;
+          }
+        }
+      }
+    }
+
+    int result = close(listener);
+    assert(result != -1);
+  }
+
+  throw std::runtime_error("TcpListener::TcpListener, " + message);
+}
+
 TcpListener::TcpListener(TcpListener&& other) : dispatcher(other.dispatcher) {
   if (other.dispatcher != nullptr) {
+    assert(other.context == nullptr);
     listener = other.listener;
     stopped = other.stopped;
-    context = other.context;
+    context = nullptr;
     other.dispatcher = nullptr;
   }
 }
@@ -55,9 +92,8 @@ TcpListener::TcpListener(TcpListener&& other) : dispatcher(other.dispatcher) {
 TcpListener::~TcpListener() {
   if (dispatcher != nullptr) {
     assert(context == nullptr);
-    if (close(listener) == -1) {
-      std::cerr << "close() failed, errno=" << errno << '.' << std::endl;
-    }
+    int result = close(listener);
+    assert(result != -1);
   }
 }
 
@@ -65,16 +101,16 @@ TcpListener& TcpListener::operator=(TcpListener&& other) {
   if (dispatcher != nullptr) {
     assert(context == nullptr);
     if (close(listener) == -1) {
-      std::cerr << "close() failed, errno=" << errno << '.' << std::endl;
-      throw std::runtime_error("TcpListener::operator=");
+      throw std::runtime_error("TcpListener::operator=, close failed, errno=" + std::to_string(errno));
     }
   }
 
   dispatcher = other.dispatcher;
   if (other.dispatcher != nullptr) {
+    assert(other.context == nullptr);
     listener = other.listener;
     stopped = other.stopped;
-    context = other.context;
+    context = nullptr;
     other.dispatcher = nullptr;
   }
 
@@ -87,45 +123,26 @@ void TcpListener::start() {
   stopped = false;
 }
 
-TcpListener::TcpListener(Dispatcher& dispatcher, const std::string& address, uint16_t port) : dispatcher(&dispatcher) {
-  listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (listener == -1) {
-    std::cerr << "socket failed, errno=" << errno << std::endl;
-  } else {
-    int flags = fcntl(listener, F_GETFL, 0);
-    if (flags == -1 || fcntl(listener, F_SETFL, flags | O_NONBLOCK) == -1) {
-      std::cerr << "fcntl() failed errno=" << errno << std::endl;
-    } else {
-      sockaddr_in address;
-      address.sin_family = AF_INET;
-      address.sin_port = htons(port);
-      address.sin_addr.s_addr = INADDR_ANY;
-      if (bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof address) != 0) {
-        std::cerr << "bind failed, errno=" << errno << std::endl;
-      } else if (listen(listener, SOMAXCONN) != 0) {
-        std::cerr << "listen failed, errno=" << errno << std::endl;
-      } else {
-        epoll_event listenEvent;
-        listenEvent.data.fd = listener;
-        listenEvent.events = 0;
-        listenEvent.data.ptr = nullptr;
+void TcpListener::stop() {
+  assert(dispatcher != nullptr);
+  assert(!stopped);
+  if (context != nullptr) {
+    Dispatcher::OperationContext* listenerContext = static_cast<Dispatcher::OperationContext*>(context);
+    if (!listenerContext->interrupted) {
+      epoll_event listenEvent;
+      listenEvent.events = 0;
+      listenEvent.data.ptr = nullptr;
 
-        if (epoll_ctl(dispatcher.getEpoll(), EPOLL_CTL_ADD, listener, &listenEvent) == -1) {
-          std::cerr << "epoll_ctl() failed, errno=" << errno << '.' << std::endl;
-        } else {
-          stopped = false;
-          context = nullptr;
-          return;
-        }
+      if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, listener, &listenEvent) == -1) {
+        throw std::runtime_error("TcpListener::stop, epoll_ctl() failed, errno=" + std::to_string(errno) );
       }
-    }
 
-    if (close(listener) == -1) {
-      std::cerr << "close failed, errno=" << errno << std::endl;
+      listenerContext->interrupted = true;
+      dispatcher->pushContext(listenerContext->context);
     }
   }
 
-  throw std::runtime_error("TcpListener::TcpListener");
+  stopped = true;
 }
 
 TcpConnection TcpListener::accept() {
@@ -135,73 +152,56 @@ TcpConnection TcpListener::accept() {
     throw InterruptedException();
   }
 
-  ListenerContext context2;
-  context2.context = dispatcher->getCurrentContext();
-  context2.writeContext = nullptr;
-  context2.interrupted = false;
+  Dispatcher::ContextPair contextPair;
+  Dispatcher::OperationContext listenerContext;
+  listenerContext.interrupted = false;
+  listenerContext.context = dispatcher->getCurrentContext();
+
+  contextPair.writeContext = nullptr;
+  contextPair.readContext = &listenerContext;
 
   epoll_event listenEvent;
-  listenEvent.data.fd = listener;
   listenEvent.events = EPOLLIN | EPOLLONESHOT;
-  listenEvent.data.ptr = &context2;
-
+  listenEvent.data.ptr = &contextPair;
+  std::string message;
   if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, listener, &listenEvent) == -1) {
-    std::cerr << "epoll_ctl() failed, errno=" << errno << '.' << std::endl;
+    message = "epoll_ctl() failed, errno=" + std::to_string(errno);
   } else {
-    context = &context2;
-    dispatcher->yield();
+    context = &listenerContext;
+    dispatcher->dispatch();
     assert(dispatcher != nullptr);
-    assert(context2.context == dispatcher->getCurrentContext());
-    assert(context2.writeContext == nullptr);
-    assert(context == &context2);
+    assert(listenerContext.context == dispatcher->getCurrentContext());
+    assert(contextPair.writeContext == nullptr);
+    assert(context == &listenerContext);
     context = nullptr;
-    context2.context = nullptr;
-    if (context2.interrupted) {
-      if (close(listener) == -1) {
-        std::cerr << "close failed, errno=" << errno << std::endl;
-      }
+    listenerContext.context = nullptr;
+    if (listenerContext.interrupted) {
       throw InterruptedException();
+    }
+
+    if((listenerContext.events & (EPOLLERR | EPOLLHUP)) != 0) {
+      throw std::runtime_error("TcpListener::accept, accepting failed");
     }
 
     sockaddr inAddr;
     socklen_t inLen = sizeof(inAddr);
     int connection = ::accept(listener, &inAddr, &inLen);
     if (connection == -1) {
-      std::cerr << "accept() failed, errno=" << errno << '.' << std::endl;
+      message = "accept() failed, errno=" + std::to_string(errno);
     } else {
       int flags = fcntl(connection, F_GETFL, 0);
       if (flags == -1 || fcntl(connection, F_SETFL, flags | O_NONBLOCK) == -1) {
-        std::cerr << "fcntl() failed errno=" << errno << std::endl;
+        message = "fcntl() failed errno=" + std::to_string(errno);
       } else {
         return TcpConnection(*dispatcher, connection);
       }
+
+      int result = close(connection);
+      assert(result != -1);
     }
   }
 
-  throw std::runtime_error("TcpListener::accept");
+  throw std::runtime_error("TcpListener::accept, " + message);
 }
 
-void TcpListener::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (context != nullptr) {
-    ListenerContext* context2 = static_cast<ListenerContext*>(context);
-    if (!context2->interrupted) {
-      context2->interrupted = true;
-
-      epoll_event listenEvent;
-      listenEvent.data.fd = listener;
-      listenEvent.events = 0;
-      listenEvent.data.ptr = nullptr;
-
-      if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, listener, &listenEvent) == -1) {
-        std::cerr << "epoll_ctl() failed, errno=" << errno << '.' << std::endl;
-        throw std::runtime_error("TcpListener::stop");
-      }
-
-      dispatcher->pushContext(context2->context);
-    }
-  }
-
-  stopped = true;
 }

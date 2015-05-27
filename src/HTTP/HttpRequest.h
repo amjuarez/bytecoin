@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,7 @@
 #include <map>
 #include <string>
 
-namespace cryptonote {
+namespace CryptoNote {
   class HttpRequest {
   public:
     typedef std::map<std::string, std::string> Headers;

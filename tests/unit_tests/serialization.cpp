@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -26,7 +26,6 @@
 #include "serialization/serialization.h"
 #include "serialization/binary_archive.h"
 #include "serialization/json_archive.h"
-#include "serialization/debug_archive.h"
 #include "serialization/variant.h"
 #include "serialization/vector.h"
 #include "serialization/binary_utils.h"
@@ -92,9 +91,6 @@ VARIANT_TAG(binary_archive, Struct, 0xe0);
 VARIANT_TAG(binary_archive, int, 0xe1);
 VARIANT_TAG(json_archive, Struct, "struct");
 VARIANT_TAG(json_archive, int, "int");
-VARIANT_TAG(debug_archive, Struct1, "struct1");
-VARIANT_TAG(debug_archive, Struct, "struct");
-VARIANT_TAG(debug_archive, int, "int");
 
 BLOB_SERIALIZER(Blob);
 
@@ -288,7 +284,7 @@ namespace
 
 TEST(Serialization, serializes_transacion_signatures_correctly)
 {
-  using namespace cryptonote;
+  using namespace CryptoNote;
 
   Transaction tx;
   Transaction tx1;

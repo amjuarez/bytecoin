@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,7 +22,7 @@
 #include "gtest/gtest.h"
 
 extern System::Dispatcher globalSystem;
-extern cryptonote::Currency currency;
+extern CryptoNote::Currency currency;
 extern Tests::Common::BaseFunctionalTestConfig config;
 
 class TransfersTest :
@@ -33,4 +33,3 @@ public:
   TransfersTest() : BaseFunctionalTest(currency, globalSystem, config) {
   }
 };
-

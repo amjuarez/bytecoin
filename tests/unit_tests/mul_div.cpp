@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,7 +17,7 @@
 
 #include "gtest/gtest.h"
 
-#include "common/int-util.h"
+#include "Common/int-util.h"
 
 namespace
 {

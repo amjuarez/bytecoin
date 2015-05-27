@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,21 +15,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "include_base_utils.h"
-using namespace epee;
-
 #include "cryptonote_basic_impl.h"
-#include "string_tools.h"
 #include "serialization/binary_utils.h"
 #include "serialization/vector.h"
 #include "cryptonote_format_utils.h"
-#include "cryptonote_config.h"
-#include "misc_language.h"
-#include "common/base58.h"
+#include "Common/base58.h"
 #include "crypto/hash.h"
-#include "common/int-util.h"
+#include "Common/int-util.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 
   /************************************************************************/
   /* Cryptonote helper functions                                          */
@@ -84,46 +78,28 @@ namespace cryptonote {
   //-----------------------------------------------------------------------
   bool parseAccountAddressString(uint64_t& prefix, AccountPublicAddress& adr, const std::string& str) {
     blobdata data;
-    if (!tools::base58::decode_addr(str, prefix, data)) {
-      LOG_PRINT_L1("Invalid address format");
-      return false;
-    }
 
-    if (!::serialization::parse_binary(data, adr)) {
-      LOG_PRINT_L1("Account public address keys can't be parsed");
-      return false;
-    }
-
-    if (!crypto::check_key(adr.m_spendPublicKey) || !crypto::check_key(adr.m_viewPublicKey)) {
-      LOG_PRINT_L1("Failed to validate address keys");
-      return false;
-    }
-
-    return true;
+    return
+      tools::base58::decode_addr(str, prefix, data) &&
+      ::serialization::parse_binary(data, adr) &&
+      crypto::check_key(adr.m_spendPublicKey) &&
+      crypto::check_key(adr.m_viewPublicKey);
   }
   //-----------------------------------------------------------------------
-  bool operator ==(const cryptonote::Transaction& a, const cryptonote::Transaction& b) {
-    return cryptonote::get_transaction_hash(a) == cryptonote::get_transaction_hash(b);
+  bool operator ==(const CryptoNote::Transaction& a, const CryptoNote::Transaction& b) {
+    return CryptoNote::get_transaction_hash(a) == CryptoNote::get_transaction_hash(b);
   }
   //-----------------------------------------------------------------------
-  bool operator ==(const cryptonote::Block& a, const cryptonote::Block& b) {
-    return cryptonote::get_block_hash(a) == cryptonote::get_block_hash(b);
+  bool operator ==(const CryptoNote::Block& a, const CryptoNote::Block& b) {
+    return CryptoNote::get_block_hash(a) == CryptoNote::get_block_hash(b);
   }
 }
 
 //--------------------------------------------------------------------------------
-bool parse_hash256(const std::string str_hash, crypto::hash& hash)
-{
-  std::string buf;
-  bool res = epee::string_tools::parse_hexstr_to_binbuff(str_hash, buf);
-  if (!res || buf.size() != sizeof(crypto::hash))
-  {
+bool parse_hash256(const std::string& str_hash, crypto::hash& hash) {
+  if (!Common::podFromHex(str_hash, hash)) {
     std::cout << "invalid hash format: <" << str_hash << '>' << std::endl;
     return false;
   }
-  else
-  {
-    buf.copy(reinterpret_cast<char *>(&hash), sizeof(crypto::hash));
-    return true;
-  }
+  return true;
 }

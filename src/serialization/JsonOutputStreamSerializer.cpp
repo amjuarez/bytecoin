@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,24 +15,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "serialization/JsonOutputStreamSerializer.h"
-
-#include "string_tools.h"
-
+#include "JsonOutputStreamSerializer.h"
 #include <cassert>
 #include <stdexcept>
+#include "Common/StringTools.h"
 
-namespace cryptonote {
+using Common::JsonValue;
+using namespace CryptoNote;
+
+namespace CryptoNote {
+std::ostream& operator<<(std::ostream& out, const JsonOutputStreamSerializer& enumerator) {
+  out << enumerator.root;
+  return out;
+}
+}
 
 JsonOutputStreamSerializer::JsonOutputStreamSerializer() : root(JsonValue::OBJECT) {
 }
 
 JsonOutputStreamSerializer::~JsonOutputStreamSerializer() {
-}
-
-std::ostream& operator<<(std::ostream& out, const JsonOutputStreamSerializer& enumerator) {
-  out << enumerator.root;
-  return out;
 }
 
 JsonValue JsonOutputStreamSerializer::getJsonValue() const {
@@ -140,26 +141,22 @@ ISerializer& JsonOutputStreamSerializer::operator()(uint8_t& value, const std::s
 
 ISerializer& JsonOutputStreamSerializer::operator()(bool& value, const std::string& name) {
   JsonValue* val = chain.back();
-  JsonValue v;
-  v = static_cast<bool>(value);
   if (val->isArray()) {
-    val->pushBack(v);
+    val->pushBack(JsonValue(value));
   } else {
-    val->insert(name, v);
+    val->insert(name, JsonValue(value));
   }
 
   return *this;
 }
 
 ISerializer& JsonOutputStreamSerializer::binary(void* value, std::size_t size, const std::string& name) {
-  auto str = static_cast<char*>(value);
-  std::string tmpbuf(str, str + size);
-  return binary(tmpbuf, name);
+  auto hex = Common::toHex(value, size);
+  return (*this)(hex, name);
 }
 
 ISerializer& JsonOutputStreamSerializer::binary(std::string& value, const std::string& name) {
-  std::string hex = epee::string_tools::buff_to_hex(value);
-  return (*this)(hex, name);
+  return binary(const_cast<char*>(value.data()), value.size(), name);
 }
 
 bool JsonOutputStreamSerializer::hasObject(const std::string& name) {
@@ -167,6 +164,4 @@ bool JsonOutputStreamSerializer::hasObject(const std::string& name) {
   throw std::runtime_error("JsonOutputStreamSerializer doesn't support this type of serialization");
 
   return false;
-}
-
 }

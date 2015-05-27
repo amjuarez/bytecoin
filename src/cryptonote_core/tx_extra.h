@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -34,7 +34,7 @@
 
 #define TX_EXTRA_NONCE_PAYMENT_ID           0x00
 
-namespace cryptonote
+namespace CryptoNote
 {
   struct tx_extra_padding
   {
@@ -114,7 +114,7 @@ namespace cryptonote
 
       BEGIN_SERIALIZE()
         VARINT_FIELD_N("depth", mm_tag.depth)
-        FIELD_N("merkle_root", mm_tag.merkle_root)
+        FIELD_N("merkle_root", mm_tag.merkle_root);
       END_SERIALIZE()
     };
 
@@ -126,8 +126,9 @@ namespace cryptonote
     bool do_serialize(Archive<false>& ar)
     {
       std::string field;
-      if(!::do_serialize(ar, field))
+      if(!::do_serialize(ar, field)) {
         return false;
+      }
 
       std::istringstream iss(field);
       binary_archive<false> iar(iss);
@@ -157,7 +158,7 @@ namespace cryptonote
   typedef boost::variant<tx_extra_padding, tx_extra_pub_key, tx_extra_nonce, tx_extra_merge_mining_tag> tx_extra_field;
 }
 
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_padding, TX_EXTRA_TAG_PADDING);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_pub_key, TX_EXTRA_TAG_PUBKEY);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_nonce, TX_EXTRA_NONCE);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_merge_mining_tag, TX_EXTRA_MERGE_MINING_TAG);
+VARIANT_TAG(binary_archive, CryptoNote::tx_extra_padding, TX_EXTRA_TAG_PADDING);
+VARIANT_TAG(binary_archive, CryptoNote::tx_extra_pub_key, TX_EXTRA_TAG_PUBKEY);
+VARIANT_TAG(binary_archive, CryptoNote::tx_extra_nonce, TX_EXTRA_NONCE);
+VARIANT_TAG(binary_archive, CryptoNote::tx_extra_merge_mining_tag, TX_EXTRA_MERGE_MINING_TAG);

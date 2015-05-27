@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -18,15 +18,15 @@
 #include "upgrade.h"
 
 using namespace epee;
-using namespace cryptonote;
+using namespace CryptoNote;
 
 namespace {
   bool makeBlocks(std::vector<test_event_entry>& events, test_generator& generator, Block& lastBlock,
-                  const Block& parentBlock, const cryptonote::account_base& minerAcc, size_t count,
+                  const Block& parentBlock, const CryptoNote::account_base& minerAcc, size_t count,
                   uint8_t majorVersion, uint8_t minorVersion) {
-    cryptonote::Block prevBlock = parentBlock;
+    CryptoNote::Block prevBlock = parentBlock;
     for (size_t i = 0; i < count; ++i) {
-      cryptonote::Block b;
+      CryptoNote::Block b;
       bool r = generator.constructBlockManually(b, prevBlock, minerAcc, test_generator::bf_major_ver | test_generator::bf_minor_ver,
         majorVersion, minorVersion);
       if (!r) {
@@ -45,8 +45,9 @@ namespace {
 
 gen_upgrade::gen_upgrade() : m_invalidBlockIndex(0), m_checkBlockTemplateVersionCallCounter(0),
     m_coinsInCirculationBeforeUpgrade(0), m_coinsInCirculationAfterUpgrade(0) {
-  cryptonote::CurrencyBuilder currencyBuilder;
+  CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
   currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
+  currencyBuilder.upgradeHeight(UpgradeDetectorBase::UNDEF_HEIGHT);
   m_currency = currencyBuilder.currency();
 
   REGISTER_CALLBACK_METHOD(gen_upgrade, markInvalidBlock);
@@ -126,7 +127,7 @@ bool gen_upgrade::generate(std::vector<test_event_entry>& events) const {
 }
 
 bool gen_upgrade::checkBeforeUpgrade(std::vector<test_event_entry>& events, test_generator& generator,
-                                     const cryptonote::Block& parentBlock, const cryptonote::account_base& minerAcc,
+                                     const CryptoNote::Block& parentBlock, const CryptoNote::account_base& minerAcc,
                                      bool checkReward) const {
   // Checking 1: get_block_templare returns block with major version 1
   DO_CALLBACK(events, "checkBlockTemplateVersionIsV1");
@@ -151,7 +152,7 @@ bool gen_upgrade::checkBeforeUpgrade(std::vector<test_event_entry>& events, test
 }
 
 bool gen_upgrade::checkAfterUpgrade(std::vector<test_event_entry>& events, test_generator& generator,
-                                    const cryptonote::Block& parentBlock, const cryptonote::account_base& minerAcc) const {
+                                    const CryptoNote::Block& parentBlock, const CryptoNote::account_base& minerAcc) const {
   // Checking 1: get_block_templare returns block with major version 2
   DO_CALLBACK(events, "checkBlockTemplateVersionIsV2");
 
@@ -178,7 +179,7 @@ bool gen_upgrade::checkAfterUpgrade(std::vector<test_event_entry>& events, test_
   return makeBlocks(events, generator, badBlock, parentBlock, minerAcc, 1, BLOCK_MAJOR_VERSION_1, BLOCK_MINOR_VERSION_1);
 }
 
-bool gen_upgrade::check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t eventIdx, const cryptonote::Block& /*blk*/) {
+bool gen_upgrade::check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t eventIdx, const CryptoNote::Block& /*blk*/) {
   if (m_invalidBlockIndex == eventIdx) {
     m_invalidBlockIndex = 0;
     return bvc.m_verifivation_failed;
@@ -187,24 +188,24 @@ bool gen_upgrade::check_block_verification_context(const cryptonote::block_verif
   }
 }
 
-bool gen_upgrade::markInvalidBlock(cryptonote::core& /*c*/, size_t evIndex, const std::vector<test_event_entry>& /*events*/) {
+bool gen_upgrade::markInvalidBlock(CryptoNote::core& /*c*/, size_t evIndex, const std::vector<test_event_entry>& /*events*/) {
   m_invalidBlockIndex = evIndex + 1;
   return true;
 }
 
-bool gen_upgrade::checkBlockTemplateVersionIsV1(cryptonote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
+bool gen_upgrade::checkBlockTemplateVersionIsV1(CryptoNote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
   DEFINE_TESTS_ERROR_CONTEXT("gen_upgrade::checkBlockTemplateVersionIsV1");
   CHECK_TEST_CONDITION(checkBlockTemplateVersion(c, BLOCK_MAJOR_VERSION_1, BLOCK_MINOR_VERSION_1));
   return true;
 }
 
-bool gen_upgrade::checkBlockTemplateVersionIsV2(cryptonote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
+bool gen_upgrade::checkBlockTemplateVersionIsV2(CryptoNote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
   DEFINE_TESTS_ERROR_CONTEXT("gen_upgrade::checkBlockTemplateVersionIsV2");
   CHECK_TEST_CONDITION(checkBlockTemplateVersion(c, BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_0));
   return true;
 }
 
-bool gen_upgrade::checkBlockTemplateVersion(cryptonote::core& c, uint8_t expectedMajorVersion, uint8_t expectedMinorVersion) {
+bool gen_upgrade::checkBlockTemplateVersion(CryptoNote::core& c, uint8_t expectedMajorVersion, uint8_t expectedMinorVersion) {
   DEFINE_TESTS_ERROR_CONTEXT("gen_upgrade::checkBlockTemplateVersion");
 
   account_base account;
@@ -212,7 +213,7 @@ bool gen_upgrade::checkBlockTemplateVersion(cryptonote::core& c, uint8_t expecte
 
   Block b;
   difficulty_type diff;
-  uint64_t height;
+  uint32_t height;
   CHECK_TEST_CONDITION(c.get_block_template(b, account.get_keys().m_account_address, diff, height, blobdata()));
   CHECK_EQ(b.majorVersion, expectedMajorVersion);
   CHECK_EQ(b.minorVersion, expectedMinorVersion);
@@ -220,7 +221,7 @@ bool gen_upgrade::checkBlockTemplateVersion(cryptonote::core& c, uint8_t expecte
   return true;
 }
 
-bool gen_upgrade::checkBlockRewardEqFee(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events) {
+bool gen_upgrade::checkBlockRewardEqFee(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events) {
   DEFINE_TESTS_ERROR_CONTEXT("gen_upgrade::checkBlockRewardEqFee");
 
   Block blk = boost::get<Block>(events[evIndex - 1]);
@@ -232,7 +233,7 @@ bool gen_upgrade::checkBlockRewardEqFee(cryptonote::core& c, size_t evIndex, con
   return true;
 }
 
-bool gen_upgrade::checkBlockRewardIsZero(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events) {
+bool gen_upgrade::checkBlockRewardIsZero(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events) {
   DEFINE_TESTS_ERROR_CONTEXT("gen_upgrade::checkBlockRewardIsZero");
 
   Block blk = boost::get<Block>(events[evIndex - 1]);
@@ -244,12 +245,12 @@ bool gen_upgrade::checkBlockRewardIsZero(cryptonote::core& c, size_t evIndex, co
   return true;
 }
 
-bool gen_upgrade::rememberCoinsInCirculationBeforeUpgrade(cryptonote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
+bool gen_upgrade::rememberCoinsInCirculationBeforeUpgrade(CryptoNote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
   m_coinsInCirculationBeforeUpgrade = c.get_blockchain_storage().getCoinsInCirculation();
   return true;
 }
 
-bool gen_upgrade::rememberCoinsInCirculationAfterUpgrade(cryptonote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
+bool gen_upgrade::rememberCoinsInCirculationAfterUpgrade(CryptoNote::core& c, size_t /*evIndex*/, const std::vector<test_event_entry>& /*events*/) {
   m_coinsInCirculationAfterUpgrade = c.get_blockchain_storage().getCoinsInCirculation();
   return true;
 }

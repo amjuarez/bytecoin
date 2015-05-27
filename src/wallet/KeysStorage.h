@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,7 @@
 
 #include <stdint.h>
 
-namespace cryptonote {
+namespace CryptoNote {
 
 class ISerializer;
 
@@ -37,4 +37,4 @@ struct KeysStorage {
   void serialize(ISerializer& serializer, const std::string& name);
 };
 
-} //namespace cryptonote
+} //namespace CryptoNote

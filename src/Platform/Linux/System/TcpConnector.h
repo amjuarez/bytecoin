@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,17 +19,17 @@
 
 #include <cstdint>
 #include <string>
-#include <stdint.h>
 
 namespace System {
 
 class Dispatcher;
+class Ipv4Address;
 class TcpConnection;
 
 class TcpConnector {
 public:
   TcpConnector();
-  TcpConnector(Dispatcher& dispatcher, const std::string& address, uint16_t port);
+  TcpConnector(Dispatcher& dispatcher);
   TcpConnector(const TcpConnector&) = delete;
   TcpConnector(TcpConnector&& other);
   ~TcpConnector();
@@ -37,14 +37,12 @@ public:
   TcpConnector& operator=(TcpConnector&& other);
   void start();
   void stop();
-  TcpConnection connect();
+  TcpConnection connect(const Ipv4Address& address, uint16_t port);
 
 private:
-  Dispatcher* dispatcher;
-  std::string address;
-  uint16_t port;
-  bool stopped;
   void* context;
+  Dispatcher* dispatcher;
+  bool stopped;
 };
 
 }

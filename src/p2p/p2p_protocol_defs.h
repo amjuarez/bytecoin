@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,71 +17,17 @@
 
 #pragma once
 
-#include <boost/uuid/uuid.hpp>
+#include "p2p_protocol_types.h"
 
-#include "serialization/keyvalue_serialization.h"
-#include "misc_language.h"
-#include "string_tools.h"
-#include "time_helper.h"
-
-#include "cryptonote_config.h"
 #include "crypto/crypto.h"
+#include "cryptonote_config.h"
+#include "cryptonote_core/cryptonote_stat_info.h"
 
-namespace nodetool
+// epee
+#include "serialization/keyvalue_serialization.h"
+
+namespace CryptoNote
 {
-  typedef boost::uuids::uuid uuid;
-  typedef uint64_t peerid_type;
-
-#pragma pack (push, 1)
-  
-  struct net_address
-  {
-    uint32_t ip;
-    uint32_t port;
-  };
-
-  struct peerlist_entry
-  {
-    net_address adr;
-    peerid_type id;
-    time_t last_seen;
-  };
-
-  struct connection_entry
-  {
-    net_address adr;
-    peerid_type id;
-    bool is_income;
-  };
-
-#pragma pack(pop)
-
-  inline
-  bool operator < (const net_address& a, const net_address& b)
-  {
-    return  epee::misc_utils::is_less_as_pod(a, b);
-  }
-
-  inline
-    bool operator == (const net_address& a, const net_address& b)
-  {
-    return  memcmp(&a, &b, sizeof(a)) == 0;
-  }
-  inline 
-  std::string print_peerlist_to_string(const std::list<peerlist_entry>& pl)
-  {
-    time_t now_time = 0;
-    time(&now_time);
-    std::stringstream ss;
-    ss << std::setfill ('0') << std::setw (8) << std::hex << std::noshowbase;
-    BOOST_FOREACH(const peerlist_entry& pe, pl)
-    {
-      ss << pe.id << "\t" << epee::string_tools::get_ip_string_from_int32(pe.adr.ip) << ":" << boost::lexical_cast<std::string>(pe.adr.port) << " \tlast_seen: " << epee::misc_utils::get_time_interval_string(now_time - pe.last_seen) << std::endl;
-    }
-    return ss.str();
-  }
-
-
   struct network_config
   {
     BEGIN_KV_SERIALIZE_MAP()
@@ -115,21 +61,30 @@ namespace nodetool
     END_KV_SERIALIZE_MAP()
   };
   
+  struct CORE_SYNC_DATA
+  {
+    uint64_t current_height;
+    crypto::hash top_id;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(current_height)
+      KV_SERIALIZE_VAL_POD_AS_BLOB(top_id)
+    END_KV_SERIALIZE_MAP()
+  };
 
 #define P2P_COMMANDS_POOL_BASE 1000
 
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  template<class t_playload_type>
-	struct COMMAND_HANDSHAKE_T
-	{
-		const static int ID = P2P_COMMANDS_POOL_BASE + 1;
+  struct COMMAND_HANDSHAKE
+  {
+    const static int ID = P2P_COMMANDS_POOL_BASE + 1;
 
     struct request
     {
       basic_node_data node_data;
-      t_playload_type payload_data;
+      CORE_SYNC_DATA payload_data;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(node_data)
@@ -140,7 +95,7 @@ namespace nodetool
     struct response
     {
       basic_node_data node_data;
-      t_playload_type payload_data;
+      CORE_SYNC_DATA payload_data;
       std::list<peerlist_entry> local_peerlist; 
 
       BEGIN_KV_SERIALIZE_MAP()
@@ -149,20 +104,19 @@ namespace nodetool
         KV_SERIALIZE_CONTAINER_POD_AS_BLOB(local_peerlist)
       END_KV_SERIALIZE_MAP()
     };
-	};
+  };
 
 
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  template<class t_playload_type>
-  struct COMMAND_TIMED_SYNC_T
+  struct COMMAND_TIMED_SYNC
   {
     const static int ID = P2P_COMMANDS_POOL_BASE + 2;
 
     struct request
     {
-      t_playload_type payload_data;
+      CORE_SYNC_DATA payload_data;
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(payload_data)
       END_KV_SERIALIZE_MAP()
@@ -171,7 +125,7 @@ namespace nodetool
     struct response
     {
       uint64_t local_time;
-      t_playload_type payload_data;
+      CORE_SYNC_DATA payload_data;
       std::list<peerlist_entry> local_peerlist; 
 
       BEGIN_KV_SERIALIZE_MAP()
@@ -235,9 +189,14 @@ namespace nodetool
     END_KV_SERIALIZE_MAP()    
   };
 
+  inline crypto::hash get_proof_of_trust_hash(const proof_of_trust& pot) {
+    std::string s;
+    s.append(reinterpret_cast<const char*>(&pot.peer_id), sizeof(pot.peer_id));
+    s.append(reinterpret_cast<const char*>(&pot.time), sizeof(pot.time));
+    return crypto::cn_fast_hash(s.data(), s.size());
+  }
 
-  template<class payload_stat_info>
-  struct COMMAND_REQUEST_STAT_INFO_T
+  struct COMMAND_REQUEST_STAT_INFO
   {
     const static int ID = P2P_COMMANDS_POOL_BASE + 4;
 
@@ -255,7 +214,7 @@ namespace nodetool
       std::string os_version;
       uint64_t connections_count;
       uint64_t incoming_connections_count;
-      payload_stat_info payload_info;
+      core_stat_info payload_info;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(version)

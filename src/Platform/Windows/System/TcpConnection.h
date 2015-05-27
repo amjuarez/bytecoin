@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,12 +17,13 @@
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace System {
 
 class Dispatcher;
+class Ipv4Address;
 
 class TcpConnection {
 public:
@@ -35,18 +36,20 @@ public:
   void start();
   void stop();
   std::size_t read(uint8_t* data, std::size_t size);
-  void write(const uint8_t* data, std::size_t size);
+  std::size_t write(const uint8_t* data, std::size_t size);
+  std::pair<Ipv4Address, uint16_t> getPeerAddressAndPort();
 
 private:
   friend class TcpConnector;
   friend class TcpListener;
 
-  explicit TcpConnection(Dispatcher& dispatcher, std::size_t connection);
-
   Dispatcher* dispatcher;
   std::size_t connection;
   bool stopped;
-  void* context;
+  void* readContext;
+  void* writeContext;
+
+  TcpConnection(Dispatcher& dispatcher, std::size_t connection);
 };
 
 }

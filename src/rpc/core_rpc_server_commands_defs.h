@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,7 @@
 #include "cryptonote_core/difficulty.h"
 #include "crypto/hash.h"
 
-namespace cryptonote
+namespace CryptoNote
 {
   //-----------------------------------------------
 #define CORE_RPC_STATUS_OK   "OK"
@@ -340,7 +340,7 @@ namespace cryptonote
     struct response
     {
       uint64_t difficulty;
-      uint64_t height;
+      uint32_t height;
       uint64_t reserved_offset;
       blobdata blocktemplate_blob;
       std::string status;

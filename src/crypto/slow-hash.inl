@@ -25,7 +25,7 @@ cn_slow_hash_noaesni
 {
 #define ctx ((struct cn_ctx *) context)
   uint8_t ExpandedKey[256];
-  size_t i, j;
+  size_t i;
   __m128i *longoutput, *expkey, *xmminput, b_x;
   ALIGNED_DECL(uint64_t a[2], 16);
   hash_process(&ctx->state.hs, (const uint8_t*) data, length);
@@ -50,7 +50,7 @@ cn_slow_hash_noaesni
   for (i = 0; likely(i < MEMORY); i += INIT_SIZE_BYTE)
   {
 #if defined(AESNI)
-    for(j = 0; j < 10; j++)
+    for(size_t j = 0; j < 10; j++)
     {
       xmminput[0] = _mm_aesenc_si128(xmminput[0], expkey[j]);
       xmminput[1] = _mm_aesenc_si128(xmminput[1], expkey[j]);
@@ -167,7 +167,7 @@ cn_slow_hash_noaesni
     xmminput[7] = _mm_xor_si128(longoutput[(i >> 4) + 7], xmminput[7]);
 
 #if defined(AESNI)
-    for(j = 0; j < 10; j++)
+    for(size_t j = 0; j < 10; j++)
     {
       xmminput[0] = _mm_aesenc_si128(xmminput[0], expkey[j]);
       xmminput[1] = _mm_aesenc_si128(xmminput[1], expkey[j]);

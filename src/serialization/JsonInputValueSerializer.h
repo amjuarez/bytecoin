@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,10 +17,10 @@
 
 #pragma once
 
-#include "serialization/ISerializer.h"
-#include "serialization/JsonValue.h"
+#include "../Common/JsonValue.h"
+#include "ISerializer.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 
 //deserialization
 class JsonInputValueSerializer : public ISerializer {
@@ -28,7 +28,7 @@ public:
   JsonInputValueSerializer();
   virtual ~JsonInputValueSerializer();
 
-  void setJsonValue(const JsonValue* value);
+  void setJsonValue(const Common::JsonValue* value);
   SerializerType type() const;
 
   virtual ISerializer& beginObject(const std::string& name) override;
@@ -57,13 +57,12 @@ public:
   }
 
 private:
-
-  JsonValue getValue(const std::string& name);
-  int64_t getNumber(const std::string& name);
-
-  const JsonValue* root;
-  std::vector<const JsonValue*> chain;
+  const Common::JsonValue* root;
+  std::vector<const Common::JsonValue*> chain;
   std::vector<size_t> idxs;
+
+  Common::JsonValue getValue(const std::string& name);
+  int64_t getNumber(const std::string& name);
 };
 
 }

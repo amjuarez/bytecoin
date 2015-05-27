@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,71 +17,69 @@
 
 #include "RPCTestNode.h"
 
+#include <future>
 #include <vector>
 #include <thread>
 
-#include "rpc/core_rpc_server_commands_defs.h"
+#include "Common/StringTools.h"
+#include "cryptonote_core/cryptonote_format_utils.h"
 #include "node_rpc_proxy/NodeRpcProxy.h"
+#include "rpc/core_rpc_server_commands_defs.h"
+#include "rpc/HttpClient.h"
+#include "rpc/JsonRpc.h"
 
-#include "serialization/JsonOutputStreamSerializer.h"
-#include "serialization/JsonInputStreamSerializer.h"
-#include "storages/portable_storage_base.h"
-#include "storages/portable_storage_template_helper.h"
-
-#include "../contrib/epee/include/net/jsonrpc_structs.h"
-
-#include <System/TcpConnection.h>
-#include <System/TcpConnector.h>
-#include <System/TcpStream.h>
-#include "HTTP/HttpParser.h"
-
-#include "CoreRpcSerialization.h"
 #include "Logger.h"
 
-using namespace Tests;
-using namespace cryptonote;
+using namespace CryptoNote;
 using namespace System;
 
-void RPCTestNode::prepareRequest(HttpRequest& httpReq, const std::string& method, const std::string& params){
-  httpReq.setUrl(method);
-  httpReq.addHeader("Host", "127.0.0.1:" + boost::lexical_cast<std::string>(m_rpcPort));
-  httpReq.addHeader("Content-Type", "application/json-rpc");
-  httpReq.setBody(params);
-}
+namespace Tests {
 
-void RPCTestNode::sendRequest(const HttpRequest& httpReq, HttpResponse& httpResp) {
-  TcpConnector connector(m_dispatcher, "127.0.0.1", m_rpcPort);
-  TcpConnection connection = connector.connect();
-  TcpStreambuf streambuf(connection);
-  std::iostream connectionStream(&streambuf);
-  LOG_DEBUG("invoke rpc:" + httpReq.getMethod() + " " + httpReq.getBody());
-  connectionStream << httpReq;
-  connectionStream.flush();
-  HttpParser parser;
-  parser.receiveResponse(connectionStream, httpResp);  
+RPCTestNode::RPCTestNode(uint16_t port, System::Dispatcher& d) : 
+  m_rpcPort(port), m_dispatcher(d), m_httpClient(d, "127.0.0.1", port) {
 }
 
 bool RPCTestNode::startMining(size_t threadsCount, const std::string& address) { 
   LOG_DEBUG("startMining()");
-  using namespace cryptonote;
-  COMMAND_RPC_START_MINING::request req;
-  COMMAND_RPC_START_MINING::response resp;
-  req.miner_address = address;
-  req.threads_count = threadsCount;
-  std::stringstream requestStream;
-  JsonOutputStreamSerializer enumerator;
-  enumerator(req, "");
-  requestStream << enumerator;
-  HttpRequest httpReq;
-  prepareRequest(httpReq, "/start_mining", requestStream.str());
-  HttpResponse httpResp;
-  sendRequest(httpReq, httpResp);
-  if (httpResp.getStatus() != HttpResponse::STATUS_200) return false;
-  std::stringstream responseStream(httpResp.getBody());
-  JsonInputStreamSerializer en(responseStream);
-  en(resp, "");
-  if (resp.status != CORE_RPC_STATUS_OK) {
-    std::cout << "startMining() RPC call fail: " << resp.status;
+
+  try {
+    COMMAND_RPC_START_MINING::request req;
+    COMMAND_RPC_START_MINING::response resp;
+    req.miner_address = address;
+    req.threads_count = threadsCount;
+
+    invokeJsonCommand(m_httpClient, "/start_mining", req, resp);
+    if (resp.status != CORE_RPC_STATUS_OK) {
+      throw std::runtime_error(resp.status);
+    }
+  } catch (std::exception& e) {
+    std::cout << "startMining() RPC call fail: " << e.what();
+    return false;
+  }
+
+  return true;
+}
+
+bool RPCTestNode::getBlockTemplate(const std::string& minerAddress, CryptoNote::Block& blockTemplate, uint64_t& difficulty) {
+  LOG_DEBUG("getBlockTemplate()");
+
+  try {
+    COMMAND_RPC_GETBLOCKTEMPLATE::request req;
+    COMMAND_RPC_GETBLOCKTEMPLATE::response rsp;
+    req.wallet_address = minerAddress;
+    req.reserve_size = 0;
+
+    JsonRpc::invokeJsonRpcCommand(m_httpClient, "getblocktemplate", req, rsp);
+    if (rsp.status != CORE_RPC_STATUS_OK) {
+      throw std::runtime_error(rsp.status);
+    }
+
+    difficulty = rsp.difficulty;
+
+    CryptoNote::blobdata blockBlob = ::Common::asString(::Common::fromHex(rsp.blocktemplate_blob));
+    return CryptoNote::parse_and_validate_block_from_blob(blockBlob, blockTemplate);
+  } catch (std::exception& e) {
+    LOG_ERROR("JSON-RPC call startMining() failed: " + std::string(e.what()));
     return false;
   }
 
@@ -89,78 +87,56 @@ bool RPCTestNode::startMining(size_t threadsCount, const std::string& address) {
 }
 
 bool RPCTestNode::submitBlock(const std::string& block) {
-  HttpRequest httpReq;
-  httpReq.setUrl("/json_rpc");
-  httpReq.addHeader("Host", "127.0.0.1:" + boost::lexical_cast<std::string>(m_rpcPort));
-  httpReq.addHeader("Content-Type", "application/json-rpc");
-  JsonValue request(cryptonote::JsonValue::OBJECT);
-  JsonValue jsonRpc;
-  jsonRpc = "2.0";
-  request.insert("jsonrpc", jsonRpc);
-  JsonValue methodString;
-  methodString = "submitblock";
-  request.insert("method", methodString);
-  JsonValue id;
-  id = "sync";
-  request.insert("id", id);
-  JsonValue params(JsonValue::ARRAY);
-  JsonValue blockstr;
-  blockstr = block.c_str();
-  params.pushBack(blockstr);
-  request.insert("params", params);
-  std::stringstream jsonOutputStream;
-  jsonOutputStream << request;
-  httpReq.setBody(jsonOutputStream.str());
-  TcpConnector connector(m_dispatcher, "127.0.0.1", m_rpcPort);
-  TcpConnection connection = connector.connect();
-  TcpStreambuf streambuf(connection);
-  std::iostream connectionStream(&streambuf);
-  LOG_DEBUG("invoke json-rpc: " + httpReq.getBody());
-  connectionStream << httpReq;
-  connectionStream.flush();
-  HttpResponse httpResp;
-  HttpParser parser;
-  parser.receiveResponse(connectionStream, httpResp);
-  connectionStream.flush();
-  if (httpResp.getStatus() != HttpResponse::STATUS_200) return false;
+  LOG_DEBUG("submitBlock()");
 
-  epee::serialization::portable_storage ps;
-  if (!ps.load_from_json(httpResp.getBody())) {
-    LOG_ERROR("cannot parse response from daemon: " + httpResp.getBody());
+  try {
+    COMMAND_RPC_SUBMITBLOCK::request req;
+    COMMAND_RPC_SUBMITBLOCK::response res;
+    req.push_back(block);
+    JsonRpc::invokeJsonRpcCommand(m_httpClient, "submitblock", req, res);
+    if (res.status != CORE_RPC_STATUS_OK) {
+      throw std::runtime_error(res.status);
+    }
+  } catch (std::exception& e) {
+    LOG_ERROR("RPC call of submit_block returned error: " + std::string(e.what()));
     return false;
   }
 
-  epee::json_rpc::response<COMMAND_RPC_SUBMITBLOCK::response, epee::json_rpc::error> jsonRpcResponse;
-  jsonRpcResponse.load(ps);
-
-  if (jsonRpcResponse.error.code || jsonRpcResponse.error.message.size()) {
-    LOG_ERROR("RPC call of submit_block returned error: " + TO_STRING(jsonRpcResponse.error.code) + ", message: " + jsonRpcResponse.error.message);
-    return false;
-  }
-   
-  if (jsonRpcResponse.result.status != CORE_RPC_STATUS_OK)  return false;
   return true;
 }
 
 bool RPCTestNode::stopMining() { 
   LOG_DEBUG("stopMining()");
-  using namespace cryptonote;
-  COMMAND_RPC_STOP_MINING::request req;
-  COMMAND_RPC_STOP_MINING::response resp;
-  std::stringstream requestStream;
-  JsonOutputStreamSerializer enumerator;
-  enumerator(req, "");
-  requestStream << enumerator;
-  HttpRequest httpReq;
-  prepareRequest(httpReq, "/stop_mining", requestStream.str());
-  HttpResponse httpResp;
-  sendRequest(httpReq, httpResp);
-  if (httpResp.getStatus() != HttpResponse::STATUS_200) return false;
-  std::stringstream responseStream(httpResp.getBody());
-  JsonInputStreamSerializer en(responseStream);
-  en(resp, "");
-  if (resp.status != CORE_RPC_STATUS_OK) {
-    std::cout << "stopMining() RPC call fail: " << resp.status;
+
+  try {
+    COMMAND_RPC_STOP_MINING::request req;
+    COMMAND_RPC_STOP_MINING::response resp;
+    invokeJsonCommand(m_httpClient, "/stop_mining", req, resp);
+    if (resp.status != CORE_RPC_STATUS_OK) {
+      throw std::runtime_error(resp.status);
+    }
+  } catch (std::exception& e) {
+    std::cout << "stopMining() RPC call fail: " << e.what();
+    return false;
+  }
+
+  return true;
+}
+
+bool RPCTestNode::getTailBlockId(crypto::hash& tailBlockId) {
+  LOG_DEBUG("getTailBlockId()");
+
+  try {
+    COMMAND_RPC_GET_LAST_BLOCK_HEADER::request req;
+    COMMAND_RPC_GET_LAST_BLOCK_HEADER::response rsp;
+    JsonRpc::invokeJsonRpcCommand(m_httpClient, "getlastblockheader", req, rsp);
+    if (rsp.status != CORE_RPC_STATUS_OK) {
+      throw std::runtime_error(rsp.status);
+    }
+
+    return ::Common::podFromHex(rsp.block_header.hash, tailBlockId);
+  } catch (std::exception& e) {
+    LOG_ERROR("JSON-RPC call getTailBlockId() failed: " + std::string(e.what()));
     return false;
   }
 
@@ -168,41 +144,60 @@ bool RPCTestNode::stopMining() {
 }
 
 bool RPCTestNode::makeINode(std::unique_ptr<CryptoNote::INode>& node) {
-  node.reset(new cryptonote::NodeRpcProxy("127.0.0.1", m_rpcPort));
-  node->init([&](std::error_code ec) {
+  std::unique_ptr<CryptoNote::INode> newNode(new CryptoNote::NodeRpcProxy("127.0.0.1", m_rpcPort));
+
+  std::promise<std::error_code> prom;
+  std::future<std::error_code> fut(prom.get_future());
+
+  newNode->init([&](std::error_code ec) {
+    std::promise<std::error_code> localProm(std::move(prom));
+
     if (ec) {
       LOG_ERROR("init error: " + ec.message() + ':' + TO_STRING(ec.value()));
     } else {
       LOG_DEBUG("NodeRPCProxy on port " + TO_STRING(m_rpcPort) + " initialized");
     }
+
+    localProm.set_value(ec);
   });
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(2000)); //for initial update  
-  return true;
+  if (!fut.get()) {
+    node = std::move(newNode);
+    return true;
+  }
+
+  return false;
 }
 
-
 bool RPCTestNode::stopDaemon() {
-  LOG_DEBUG("stopDaemon()");
-  using namespace cryptonote;
-  COMMAND_RPC_STOP_DAEMON::request req;
-  COMMAND_RPC_STOP_DAEMON::response resp;
-  std::stringstream requestStream;
-  JsonOutputStreamSerializer enumerator;
-  enumerator(req, "");
-  requestStream << enumerator;
-  HttpRequest httpReq;
-  prepareRequest(httpReq, "/stop_daemon", requestStream.str());
-  HttpResponse httpResp;
-  sendRequest(httpReq, httpResp);
-  if (httpResp.getStatus() != HttpResponse::STATUS_200) return false;
-  std::stringstream responseStream(httpResp.getBody());
-  JsonInputStreamSerializer en(responseStream);
-  en(resp, "");
-  if (resp.status != CORE_RPC_STATUS_OK) {
-    std::cout << "stopDaemon() RPC call fail: " << resp.status;
+  try {
+    LOG_DEBUG("stopDaemon()");
+    COMMAND_RPC_STOP_DAEMON::request req;
+    COMMAND_RPC_STOP_DAEMON::response resp;
+    invokeJsonCommand(m_httpClient, "/stop_daemon", req, resp);
+    if (resp.status != CORE_RPC_STATUS_OK) {
+      throw std::runtime_error(resp.status);
+    }
+  } catch (std::exception& e) {
+    std::cout << "stopDaemon() RPC call fail: " << e.what();
     return false;
   }
 
   return true;
+}
+
+uint64_t RPCTestNode::getLocalHeight() {
+  try {
+    CryptoNote::COMMAND_RPC_GET_INFO::request req;
+    CryptoNote::COMMAND_RPC_GET_INFO::response rsp;
+    invokeJsonCommand(m_httpClient, "/getinfo", req, rsp);
+    if (rsp.status == CORE_RPC_STATUS_OK) {
+      return rsp.height;
+    }
+  } catch (std::exception&) {
+  }
+
+  return 0;
+}
+
 }

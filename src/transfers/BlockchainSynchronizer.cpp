@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -51,7 +51,7 @@ void BlockchainSynchronizer::addConsumer(IBlockchainConsumer* consumer) {
   if (!(checkIfStopped() && checkIfShouldStop())) {
     throw std::runtime_error("Can't add consumer, because BlockchainSynchronizer isn't stopped");
   }
-  
+
   m_consumers.insert(std::make_pair(consumer, std::make_shared<SynchronizationState>(m_genesisBlockHash)));
   shouldSyncConsumersPool = true;
 }
@@ -100,8 +100,8 @@ void BlockchainSynchronizer::load(std::istream& in) {
 
 bool BlockchainSynchronizer::setFutureState(State s) {
   return setFutureStateIf(s, std::bind(
-    [](State futureState, State s) -> bool { 
-      return s > futureState; 
+    [](State futureState, State s) -> bool {
+    return s > futureState;
   }, std::ref(m_futureState), s));
 }
 
@@ -177,7 +177,7 @@ void BlockchainSynchronizer::start() {
   if (!setFutureStateIf(State::blockchainSync, std::bind(
     [](State currentState, State futureState) -> bool {
     return currentState == State::stopped && futureState == State::stopped;
-  }, std::ref(m_currentState), std::ref(m_futureState))) ) {
+  }, std::ref(m_currentState), std::ref(m_futureState)))) {
     throw std::runtime_error("BlockchainSynchronizer already started");
   }
 
@@ -188,7 +188,7 @@ void BlockchainSynchronizer::start() {
 
 void BlockchainSynchronizer::stop() {
   setFutureState(State::stopped);
-  
+
   // wait for previous processing to end
   if (workingThread.get() != nullptr && workingThread->joinable()) {
     workingThread->join();
@@ -232,15 +232,15 @@ BlockchainSynchronizer::GetPoolRequest BlockchainSynchronizer::getIntersectedPoo
   GetPoolRequest request;
   {
     std::unique_lock<std::mutex> lk(m_consumersMutex);
-    auto it = m_consumers.begin(); 
+    auto it = m_consumers.begin();
 
     it->first->getKnownPoolTxIds(request.knownTxIds);
     ++it;
-   
+
     for (; it != m_consumers.end(); ++it) { //iterate over consumers
       std::vector<crypto::hash> consumerKnownIds;
       it->first->getKnownPoolTxIds(consumerKnownIds);
-      for (auto itReq = request.knownTxIds.begin(); itReq != request.knownTxIds.end(); ) { //iterate over intersection
+      for (auto itReq = request.knownTxIds.begin(); itReq != request.knownTxIds.end();) { //iterate over intersection
         if (std::count(consumerKnownIds.begin(), consumerKnownIds.end(), *itReq) == 0) { //consumer doesn't contain id from intersection, so delete this id from intersection
           itReq = request.knownTxIds.erase(itReq);
         } else {
@@ -275,7 +275,7 @@ BlockchainSynchronizer::GetBlocksRequest BlockchainSynchronizer::getCommonHistor
     syncStart.height = std::min(syncStart.height, consumerStart.height);
   }
 
-  request.knownBlocks = shortest->second->getShortHistory();
+  request.knownBlocks = shortest->second->getShortHistory(m_node.getLastLocalBlockHeight());
   request.syncStart = syncStart;
   return request;
 }
@@ -295,19 +295,19 @@ void BlockchainSynchronizer::startBlockchainSync() {
       std::error_code ec = asyncOperationWaitFuture.get();
 
       if (ec) {
+        setFutureStateIf(State::idle, std::bind(
+          [](State futureState) -> bool {
+          return futureState != State::stopped;
+        }, std::ref(m_futureState)));
         m_observerManager.notify(
           &IBlockchainSynchronizerObserver::synchronizationCompleted,
           ec);
-        setFutureStateIf(State::idle, std::bind(
-          [](State futureState) -> bool { 
-            return futureState != State::stopped; 
-        }, std::ref(m_futureState)));
       } else {
         processBlocks(response);
       }
     }
   } catch (std::exception& e) {
-    std::cout << e.what()<< std::endl;
+    std::cout << e.what() << std::endl;
     setFutureStateIf(State::idle, std::bind(
       [](State futureState) -> bool {
       return futureState != State::stopped;
@@ -338,8 +338,8 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
     completeBlock.blockHash = block.blockHash;
     interval.blocks.push_back(completeBlock.blockHash);
     if (!block.block.empty()) {
-      cryptonote::Block parsedBlock;
-      if (!cryptonote::parse_and_validate_block_from_blob(block.block, parsedBlock)) {
+      Block parsedBlock;
+      if (!parse_and_validate_block_from_blob(block.block, parsedBlock)) {
         setFutureStateIf(State::idle, std::bind(
           [](State futureState) -> bool {
           return futureState != State::stopped;
@@ -347,7 +347,7 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
         m_observerManager.notify(
           &IBlockchainSynchronizerObserver::synchronizationCompleted,
           std::make_error_code(std::errc::invalid_argument));
-        return; 
+        return;
       }
 
       completeBlock.block = std::move(parsedBlock);
@@ -392,24 +392,24 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
 
       break;
     case UpdateConsumersResult::nothingChanged:
-      if (m_node.getLastKnownBlockHeight() > newHeight) {
+      if (m_node.getLastKnownBlockHeight() != m_node.getLastLocalBlockHeight()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
       } else {
         break;
       }
     case UpdateConsumersResult::addedNewBlocks:
+      setFutureState(State::blockchainSync);
       m_observerManager.notify(
         &IBlockchainSynchronizerObserver::synchronizationProgressUpdated,
         newHeight,
-        m_node.getLastKnownBlockHeight());
-      setFutureState(State::blockchainSync);
+        std::max(m_node.getKnownBlockCount(), m_node.getLocalBlockCount()));
       break;
     }
 
     if (!blocks.empty()) {
       lastBlockId = blocks.back().blockHash;
     }
-  } 
+  }
 
   if (checkIfShouldStop()) { //Sic!
     m_observerManager.notify(
@@ -444,8 +444,8 @@ BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateCons
         smthChanged = true;
       } else {
         return UpdateConsumersResult::errorOccured;
-      } 
-    } 
+      }
+    }
   }
 
   return smthChanged ? UpdateConsumersResult::addedNewBlocks : UpdateConsumersResult::nothingChanged;
@@ -466,13 +466,13 @@ void BlockchainSynchronizer::startPoolSync() {
   std::error_code ec = asyncOperationWaitFuture.get();
 
   if (ec) {
-    m_observerManager.notify(
-      &IBlockchainSynchronizerObserver::synchronizationCompleted,
-      ec);
     setFutureStateIf(State::idle, std::bind(
       [](State futureState) -> bool {
       return futureState != State::stopped;
     }, std::ref(m_futureState)));
+    m_observerManager.notify(
+      &IBlockchainSynchronizerObserver::synchronizationCompleted,
+      ec);
   } else { //get union ok
     if (!unionResponse.isLastKnownBlockActual) { //bc outdated
       setFutureState(State::blockchainSync);
@@ -496,20 +496,20 @@ void BlockchainSynchronizer::startPoolSync() {
         std::error_code ec2 = asyncOperationWaitFuture.get();
 
         if (ec2) {
-          m_observerManager.notify(
-            &IBlockchainSynchronizerObserver::synchronizationCompleted,
-            ec2);
           setFutureStateIf(State::idle, std::bind(
             [](State futureState) -> bool {
             return futureState != State::stopped;
           }, std::ref(m_futureState)));
+          m_observerManager.notify(
+            &IBlockchainSynchronizerObserver::synchronizationCompleted,
+            ec2);
         } else { //get intersection ok
           if (!intersectionResponse.isLastKnownBlockActual) { //bc outdated
             setFutureState(State::blockchainSync);
           } else {
             intersectionResponse.deletedTxIds.assign(unionResponse.deletedTxIds.begin(), unionResponse.deletedTxIds.end());
             std::error_code ec3 = processPoolTxs(intersectionResponse);
-            
+
             //notify about error, or success
             m_observerManager.notify(
               &IBlockchainSynchronizerObserver::synchronizationCompleted,

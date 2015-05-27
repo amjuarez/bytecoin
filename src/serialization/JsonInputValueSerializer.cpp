@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,12 +15,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "serialization/JsonInputValueSerializer.h"
-
+#include "JsonInputValueSerializer.h"
 #include <cassert>
 #include <stdexcept>
+#include <Common/StringTools.h>
 
-namespace cryptonote {
+using Common::JsonValue;
+using namespace CryptoNote;
 
 JsonInputValueSerializer::JsonInputValueSerializer() : root(nullptr) {
 }
@@ -115,7 +116,7 @@ ISerializer& JsonInputValueSerializer::operator()(uint64_t& value, const std::st
 
 ISerializer& JsonInputValueSerializer::operator()(double& value, const std::string& name) {
   assert(root);
-  value = getValue(name).getDouble();
+  value = getValue(name).getReal();
   return *this;
 }
 
@@ -138,20 +139,27 @@ ISerializer& JsonInputValueSerializer::operator()(bool& value, const std::string
 }
 
 bool JsonInputValueSerializer::hasObject(const std::string& name) {
-  return chain.back()->count(name) != 0;
+  assert(root);
+
+  const Common::JsonValue* value;
+  if (chain.empty()) {
+    value = root;
+  } else {
+    value = chain.back();
+  }
+
+  return value->count(name) != 0;
 }
 
 ISerializer& JsonInputValueSerializer::binary(void* value, std::size_t size, const std::string& name) {
-  assert(false);
-  throw std::runtime_error("JsonInputValueSerializer doesn't support this type of serialization");
-
+  auto str = getValue(name).getString();
+  Common::fromHex(str, value, size);
   return *this;
 }
 
 ISerializer& JsonInputValueSerializer::binary(std::string& value, const std::string& name) {
-  assert(false);
-  throw std::runtime_error("JsonInputValueSerializer doesn't support this type of serialization");
-
+  auto str = getValue(name).getString();
+  value = Common::asString(Common::fromHex(str));
   return *this;
 }
 
@@ -161,8 +169,5 @@ JsonValue JsonInputValueSerializer::getValue(const std::string& name) {
 }
 
 int64_t JsonInputValueSerializer::getNumber(const std::string& name) {
-  return getValue(name).getNumber();
-}
-
-
+  return getValue(name).getInteger();
 }

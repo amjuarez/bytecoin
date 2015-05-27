@@ -1,20 +1,3 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
-
 #include <alloca.h>
 #include <cassert>
 #include <cstddef>
@@ -24,8 +7,7 @@
 #include <memory>
 #include <mutex>
 
-#include "common/varint.h"
-#include "warnings.h"
+#include "Common/varint.h"
 #include "crypto.h"
 #include "hash.h"
 
@@ -240,15 +222,16 @@ namespace crypto {
     ge_tobytes(&image, &point2);
   }
 
-PUSH_WARNINGS
-DISABLE_VS_WARNINGS(4200)
+#ifdef _MSC_VER
+#pragma warning(disable: 4200)
+#endif
+
   struct rs_comm {
     hash h;
     struct {
       ec_point a, b;
     } ab[];
   };
-POP_WARNINGS
 
   static inline size_t rs_comm_size(size_t pubs_count) {
     return sizeof(rs_comm) + pubs_count * sizeof(rs_comm().ab[0]);

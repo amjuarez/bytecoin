@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,31 +17,30 @@
 
 #pragma once
 
-#include <streambuf>
 #include <array>
-
-#include <System/TcpConnection.h>
+#include <cstdint>
+#include <streambuf>
 
 namespace System {
 
+class TcpConnection;
+
 class TcpStreambuf : public std::streambuf {
 public:
-  TcpStreambuf(TcpConnection& connection);
+  explicit TcpStreambuf(TcpConnection& connection);
   TcpStreambuf(const TcpStreambuf&) = delete;
-
-  virtual ~TcpStreambuf();
+  ~TcpStreambuf();
+  TcpStreambuf& operator=(const TcpStreambuf&) = delete;
 
 private:
-  std::streambuf::int_type underflow() override;
+  TcpConnection& connection;
+  std::array<char, 4096> readBuf;
+  std::array<uint8_t, 1024> writeBuf;
+
   std::streambuf::int_type overflow(std::streambuf::int_type ch) override;
   int sync() override;
-
-  bool dumpBuffer();
-
-  TcpConnection& connection;
-
-  std::array<char, 4096> readBuf;
-  std::array<uint8_t, /*1024*/ 16> writeBuf;
+  std::streambuf::int_type underflow() override;
+  bool dumpBuffer(bool finalize);
 };
 
 }

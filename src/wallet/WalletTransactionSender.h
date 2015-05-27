@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -33,9 +33,9 @@ namespace CryptoNote {
 class WalletTransactionSender
 {
 public:
-  WalletTransactionSender(const cryptonote::Currency& currency, WalletUserTransactionsCache& transactionsCache, cryptonote::account_keys keys, ITransfersContainer& transfersContainer);
+  WalletTransactionSender(const CryptoNote::Currency& currency, WalletUserTransactionsCache& transactionsCache, CryptoNote::account_keys keys, ITransfersContainer& transfersContainer);
 
-  void init(cryptonote::account_keys keys, ITransfersContainer& transfersContainer);
+  void init(CryptoNote::account_keys keys, ITransfersContainer& transfersContainer);
   void stop();
 
   std::shared_ptr<WalletRequest> makeSendRequest(TransactionId& transactionId, std::deque<std::shared_ptr<WalletEvent> >& events, const std::vector<Transfer>& transfers,
@@ -44,12 +44,12 @@ public:
 private:
   std::shared_ptr<WalletRequest> makeGetRandomOutsRequest(std::shared_ptr<SendTransactionContext> context);
   std::shared_ptr<WalletRequest> doSendTransaction(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events);
-  void prepareInputs(const std::list<TransactionOutputInformation>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
-      std::vector<cryptonote::tx_source_entry>& sources, uint64_t mixIn);
-  void splitDestinations(TransferId firstTransferId, size_t transfersCount, const cryptonote::tx_destination_entry& changeDts,
-      const TxDustPolicy& dustPolicy, std::vector<cryptonote::tx_destination_entry>& splittedDests);
-  void digitSplitStrategy(TransferId firstTransferId, size_t transfersCount, const cryptonote::tx_destination_entry& change_dst, uint64_t dust_threshold,
-    std::vector<cryptonote::tx_destination_entry>& splitted_dsts, uint64_t& dust);
+  void prepareInputs(const std::list<TransactionOutputInformation>& selectedTransfers, std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
+      std::vector<CryptoNote::tx_source_entry>& sources, uint64_t mixIn);
+  void splitDestinations(TransferId firstTransferId, size_t transfersCount, const CryptoNote::tx_destination_entry& changeDts,
+      const TxDustPolicy& dustPolicy, std::vector<CryptoNote::tx_destination_entry>& splittedDests);
+  void digitSplitStrategy(TransferId firstTransferId, size_t transfersCount, const CryptoNote::tx_destination_entry& change_dst, uint64_t dust_threshold,
+    std::vector<CryptoNote::tx_destination_entry>& splitted_dsts, uint64_t& dust);
   void sendTransactionRandomOutsByAmount(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events,
       boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec);
   void relayTransactionCallback(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events,
@@ -61,8 +61,8 @@ private:
 
   uint64_t selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<TransactionOutputInformation>& selectedTransfers);
 
-  const cryptonote::Currency& m_currency;
-  cryptonote::account_keys m_keys;
+  const CryptoNote::Currency& m_currency;
+  CryptoNote::account_keys m_keys;
   WalletUserTransactionsCache& m_transactionsCache;
   uint64_t m_upperTransactionSizeLimit;
 

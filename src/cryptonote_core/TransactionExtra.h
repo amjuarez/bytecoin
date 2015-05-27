@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -37,7 +37,7 @@ namespace CryptoNote {
 
     bool parse(const std::vector<uint8_t>& extra) {
       fields.clear();
-      return cryptonote::parse_tx_extra(extra, fields);
+      return CryptoNote::parse_tx_extra(extra, fields);
     }
 
     template <typename T>
@@ -61,7 +61,7 @@ namespace CryptoNote {
     }
 
     bool getPublicKey(crypto::public_key& pk) const {
-      cryptonote::tx_extra_pub_key extraPk;
+      CryptoNote::tx_extra_pub_key extraPk;
       if (!get(extraPk)) {
         return false;
       }
@@ -73,22 +73,22 @@ namespace CryptoNote {
       std::ostringstream out;
       binary_archive<true> ar(out);
       for (const auto& f : fields) {
-        ::do_serialize(ar, const_cast<cryptonote::tx_extra_field&>(f));
+        ::do_serialize(ar, const_cast<CryptoNote::tx_extra_field&>(f));
       }
       return stringToVector(out.str());
     }
 
   private:
 
-    std::vector<cryptonote::tx_extra_field>::const_iterator find(const std::type_info& t) const {
-      return std::find_if(fields.begin(), fields.end(), [&t](const cryptonote::tx_extra_field& f) { return t == f.type(); });
+    std::vector<CryptoNote::tx_extra_field>::const_iterator find(const std::type_info& t) const {
+      return std::find_if(fields.begin(), fields.end(), [&t](const CryptoNote::tx_extra_field& f) { return t == f.type(); });
     }
 
-    std::vector<cryptonote::tx_extra_field>::iterator find(const std::type_info& t) {
-      return std::find_if(fields.begin(), fields.end(), [&t](const cryptonote::tx_extra_field& f) { return t == f.type(); });
+    std::vector<CryptoNote::tx_extra_field>::iterator find(const std::type_info& t) {
+      return std::find_if(fields.begin(), fields.end(), [&t](const CryptoNote::tx_extra_field& f) { return t == f.type(); });
     }
 
-    std::vector<cryptonote::tx_extra_field> fields;
+    std::vector<CryptoNote::tx_extra_field> fields;
   };
 
 }

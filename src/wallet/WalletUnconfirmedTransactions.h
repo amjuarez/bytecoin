@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -28,7 +28,7 @@
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 class ISerializer;
 }
 
@@ -41,7 +41,7 @@ struct UnconfirmedTransferDetails {
   UnconfirmedTransferDetails() :
     amount(0), sentTime(0), transactionId(INVALID_TRANSACTION_ID) {}
 
-  cryptonote::Transaction tx;
+  CryptoNote::Transaction tx;
   uint64_t amount;
   uint64_t outsAmount;
   time_t sentTime;
@@ -53,11 +53,11 @@ class WalletUnconfirmedTransactions
 {
 public:
 
-  void serialize(cryptonote::ISerializer& s, const std::string& name);
+  void serialize(CryptoNote::ISerializer& s, const std::string& name);
 
   bool findTransactionId(const TransactionHash& hash, TransactionId& id);
   void erase(const TransactionHash& hash);
-  void add(const cryptonote::Transaction& tx, TransactionId transactionId, 
+  void add(const CryptoNote::Transaction& tx, TransactionId transactionId, 
     uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs);
   void updateTransactionId(const TransactionHash& hash, TransactionId id);
 

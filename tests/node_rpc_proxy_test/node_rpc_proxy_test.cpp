@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,7 +22,7 @@
 
 #include "node_rpc_proxy/NodeRpcProxy.h"
 
-using namespace cryptonote;
+using namespace CryptoNote;
 using namespace CryptoNote;
 
 
@@ -119,7 +119,7 @@ int main(int argc, const char** argv) {
     LOG_PRINT_RED_L0("shutdown error");
   }
 
-  cryptonote::Transaction tx;
+  CryptoNote::Transaction tx;
   nodeProxy.relayTransaction(tx, [](std::error_code ec) {
     if (!ec) {
       LOG_PRINT_L0("relayTransaction called successfully");

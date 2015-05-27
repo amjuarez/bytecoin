@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,17 +24,22 @@
 
 #include "crypto/hash.h"
 #include "cryptonote_protocol/blobdatatype.h"
+#include "cryptonote_protocol/cryptonote_protocol_defs.h"
 
-namespace cryptonote {
+namespace CryptoNote {
+
 struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request;
 struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response;
-struct NOTIFY_RESPONSE_CHAIN_ENTRY_request;
+
 struct Block;
 struct Transaction;
 struct i_cryptonote_protocol;
 struct tx_verification_context;
+struct block_verification_context;
+struct core_stat_info;
 struct BlockFullInfo;
 class ICoreObserver;
+class Currency;
 
 class ICore {
 public:
@@ -42,6 +47,17 @@ public:
 
   virtual bool addObserver(ICoreObserver* observer) = 0;
   virtual bool removeObserver(ICoreObserver* observer) = 0;
+
+  virtual bool have_block(const crypto::hash& id) = 0;
+  virtual bool get_short_chain_history(std::list<crypto::hash>& ids) = 0;
+  virtual bool get_stat_info(CryptoNote::core_stat_info& st_inf) = 0;
+  virtual bool on_idle() = 0;
+  virtual void pause_mining() = 0;
+  virtual void update_block_template_and_resume_mining() = 0;
+  virtual bool handle_incoming_block_blob(const CryptoNote::blobdata& block_blob, CryptoNote::block_verification_context& bvc, bool control_miner, bool relay_block) = 0;
+  virtual bool handle_get_objects(CryptoNote::NOTIFY_REQUEST_GET_OBJECTS::request& arg, CryptoNote::NOTIFY_RESPONSE_GET_OBJECTS::request& rsp) = 0;
+  virtual void on_synchronized() = 0;
+  virtual bool is_ready() = 0;
 
   virtual bool get_blockchain_top(uint64_t& height, crypto::hash& top_id) = 0;
   virtual bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::list<std::pair<Block, std::list<Transaction> > >& blocks,
@@ -58,4 +74,4 @@ public:
   virtual bool getBlockByHash(const crypto::hash &h, Block &blk) = 0;
 };
 
-} //namespace cryptonote
+} //namespace CryptoNote

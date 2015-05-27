@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -27,35 +27,32 @@
 #include "blockchain_storage.h"
 #include "cryptonote_core/i_miner_handler.h"
 #include "cryptonote_core/MinerConfig.h"
-#include "connection_context.h"
-#include "warnings.h"
 #include "crypto/hash.h"
 #include "ICore.h"
 #include "ICoreObserver.h"
-#include "common/ObserverManager.h"
+#include "Common/ObserverManager.h"
+#include <Logging/LoggerMessage.h>
 
-PUSH_WARNINGS
-DISABLE_VS_WARNINGS(4355)
+namespace CryptoNote {
 
-namespace cryptonote {
   struct core_stat_info;
   class miner;
   class CoreConfig;
 
   class core : public ICore, public i_miner_handler, public IBlockchainStorageObserver, public ITxPoolObserver {
    public:
-     core(const Currency& currency, i_cryptonote_protocol* pprotocol);
+     core(const Currency& currency, i_cryptonote_protocol* pprotocol, Logging::ILogger& logger);
      ~core();
-     bool handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS_request& arg, NOTIFY_RESPONSE_GET_OBJECTS_request& rsp, cryptonote_connection_context& context);
+
      bool on_idle();
      virtual bool handle_incoming_tx(const blobdata& tx_blob, tx_verification_context& tvc, bool keeped_by_block);
      bool handle_incoming_block_blob(const blobdata& block_blob, block_verification_context& bvc, bool control_miner, bool relay_block);
-     const Currency& currency() const { return m_currency; }
      virtual i_cryptonote_protocol* get_protocol(){return m_pprotocol;}
+     const Currency& currency() const { return m_currency; }
 
      //-------------------- i_miner_handler -----------------------
      virtual bool handle_block_found(Block& b);
-     virtual bool get_block_template(Block& b, const AccountPublicAddress& adr, difficulty_type& diffic, uint64_t& height, const blobdata& ex_nonce);
+     virtual bool get_block_template(Block& b, const AccountPublicAddress& adr, difficulty_type& diffic, uint32_t& height, const blobdata& ex_nonce);
 
      bool addObserver(ICoreObserver* observer);
      bool removeObserver(ICoreObserver* observer);
@@ -65,7 +62,16 @@ namespace cryptonote {
      bool init(const CoreConfig& config, const MinerConfig& minerConfig, bool load_existing);
      bool set_genesis_block(const Block& b);
      bool deinit();
+
+     // ICore
+     virtual bool handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS_request& arg, NOTIFY_RESPONSE_GET_OBJECTS_request& rsp) override;
+
      uint64_t get_current_blockchain_height();
+     bool have_block(const crypto::hash& id);
+     bool get_short_chain_history(std::list<crypto::hash>& ids);
+     void on_synchronized();
+     bool is_ready() override;
+
      virtual bool get_blockchain_top(uint64_t& heeight, crypto::hash& top_id);
      bool get_blocks(uint64_t start_offset, size_t count, std::list<Block>& blocks, std::list<Transaction>& txs);
      bool get_blocks(uint64_t start_offset, size_t count, std::list<Block>& blocks);
@@ -93,8 +99,6 @@ namespace cryptonote {
      size_t get_pool_transactions_count();
      size_t get_blockchain_total_transactions();
      //bool get_outs(uint64_t amount, std::list<crypto::public_key>& pkeys);
-     bool have_block(const crypto::hash& id);
-     bool get_short_chain_history(std::list<crypto::hash>& ids);
      virtual bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, NOTIFY_RESPONSE_CHAIN_ENTRY_request& resp);
      virtual bool find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::list<std::pair<Block, std::list<Transaction> > >& blocks, uint64_t& total_height, uint64_t& start_height, size_t max_count);
      bool get_stat_info(core_stat_info& st_inf);
@@ -110,7 +114,6 @@ namespace cryptonote {
      void print_blockchain_index();
      std::string print_pool(bool short_format);
      void print_blockchain_outs(const std::string& file);
-     void on_synchronized();
      virtual bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) override;
 
    private:
@@ -138,18 +141,17 @@ namespace cryptonote {
      void poolUpdated();
 
      const Currency& m_currency;
+     Logging::LoggerRef logger;
      CryptoNote::RealTimeProvider m_timeProvider;
      tx_memory_pool m_mempool;
      blockchain_storage m_blockchain_storage;
      i_cryptonote_protocol* m_pprotocol;
-     epee::critical_section m_incoming_tx_lock;
+     std::mutex m_incoming_tx_lock;
      std::unique_ptr<miner> m_miner;
      std::string m_config_folder;
      cryptonote_protocol_stub m_protocol_stub;
      friend class tx_validate_inputs;
      std::atomic<bool> m_starter_message_showed;
-     tools::ObserverManager<cryptonote::ICoreObserver> m_observerManager;
+     tools::ObserverManager<ICoreObserver> m_observerManager;
    };
 }
-
-POP_WARNINGS

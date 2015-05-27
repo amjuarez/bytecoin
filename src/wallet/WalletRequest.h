@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -63,7 +63,7 @@ private:
 class WalletRelayTransactionRequest: public WalletRequest
 {
 public:
-  WalletRelayTransactionRequest(const cryptonote::Transaction& tx, Callback cb) : m_tx(tx), m_cb(cb) {};
+  WalletRelayTransactionRequest(const CryptoNote::Transaction& tx, Callback cb) : m_tx(tx), m_cb(cb) {};
   virtual ~WalletRelayTransactionRequest() {};
 
   virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
@@ -72,7 +72,7 @@ public:
   }
 
 private:
-  cryptonote::Transaction m_tx;
+  CryptoNote::Transaction m_tx;
   Callback m_cb;
 };
 

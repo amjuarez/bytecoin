@@ -35,6 +35,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
+#include "include_base_utils.h"
 #include "string_tools.h"
 
 namespace epee

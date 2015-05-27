@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "serialization.h"
-#include "debug_archive.h"
 #include "crypto/chacha8.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
@@ -71,9 +70,3 @@ BLOB_SERIALIZER(crypto::secret_key);
 BLOB_SERIALIZER(crypto::key_derivation);
 BLOB_SERIALIZER(crypto::key_image);
 BLOB_SERIALIZER(crypto::signature);
-VARIANT_TAG(debug_archive, crypto::hash, "hash");
-VARIANT_TAG(debug_archive, crypto::public_key, "public_key");
-VARIANT_TAG(debug_archive, crypto::secret_key, "secret_key");
-VARIANT_TAG(debug_archive, crypto::key_derivation, "key_derivation");
-VARIANT_TAG(debug_archive, crypto::key_image, "key_image");
-VARIANT_TAG(debug_archive, crypto::signature, "signature");

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,10 +17,7 @@
 
 #pragma once
 
-#include "p2p/net_node_common.h"
-#include "cryptonote_core/connection_context.h"
-
-namespace cryptonote
+namespace CryptoNote
 {
   struct NOTIFY_NEW_BLOCK_request;
   struct NOTIFY_NEW_TRANSACTIONS_request;
@@ -29,19 +26,15 @@ namespace cryptonote
   /*                                                                      */
   /************************************************************************/
   struct i_cryptonote_protocol {
-    virtual void relay_block(NOTIFY_NEW_BLOCK_request& arg, cryptonote_connection_context& exclude_context)=0;
-    virtual void relay_transactions(NOTIFY_NEW_TRANSACTIONS_request& arg, cryptonote_connection_context& exclude_context)=0;
-    //virtual bool request_objects(NOTIFY_REQUEST_GET_OBJECTS::request& arg, cryptonote_connection_context& context)=0;
+    virtual void relay_block(NOTIFY_NEW_BLOCK_request& arg) = 0;
+    virtual void relay_transactions(NOTIFY_NEW_TRANSACTIONS_request& arg) = 0;
   };
 
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
   struct cryptonote_protocol_stub: public i_cryptonote_protocol {
-    virtual void relay_block(NOTIFY_NEW_BLOCK_request& arg, cryptonote_connection_context& exclude_context) override {
-    }
-
-    virtual void relay_transactions(NOTIFY_NEW_TRANSACTIONS_request& arg, cryptonote_connection_context& exclude_context) override {
-    }
+    virtual void relay_block(NOTIFY_NEW_BLOCK_request& arg) override {}
+    virtual void relay_transactions(NOTIFY_NEW_TRANSACTIONS_request& arg) override {}
   };
 }

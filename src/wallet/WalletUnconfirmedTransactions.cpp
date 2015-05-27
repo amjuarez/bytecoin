@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -28,12 +28,12 @@ inline TransactionOutputId getOutputId(const TransactionOutputInformation& out) 
   return std::make_pair(out.transactionPublicKey, out.outputInTransaction);
 }
 
-void WalletUnconfirmedTransactions::serialize(cryptonote::ISerializer& s, const std::string& name) {
+void WalletUnconfirmedTransactions::serialize(CryptoNote::ISerializer& s, const std::string& name) {
   s.beginObject(name);
   s(m_unconfirmedTxs, "transactions");
   s.endObject();
 
-  if (s.type() == cryptonote::ISerializer::INPUT) {
+  if (s.type() == CryptoNote::ISerializer::INPUT) {
     collectUsedOutputs();
   }
 }
@@ -60,10 +60,10 @@ void WalletUnconfirmedTransactions::erase(const TransactionHash& hash) {
   m_unconfirmedTxs.erase(it);
 }
 
-void WalletUnconfirmedTransactions::add(const cryptonote::Transaction& tx, TransactionId transactionId, 
+void WalletUnconfirmedTransactions::add(const CryptoNote::Transaction& tx, TransactionId transactionId, 
   uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs) {
 
-  auto cryptoHash = cryptonote::get_transaction_hash(tx);
+  auto cryptoHash = CryptoNote::get_transaction_hash(tx);
   TransactionHash hash = reinterpret_cast<const TransactionHash&>(cryptoHash);
 
   UnconfirmedTransferDetails& utd = m_unconfirmedTxs[hash];

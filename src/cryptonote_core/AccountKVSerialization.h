@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,7 +22,7 @@
 // epee
 #include "serialization/keyvalue_serialization.h"
 
-namespace cryptonote {
+namespace CryptoNote {
   template<bool is_store> struct AccountPublicAddressSerializer;
   template<bool is_store> struct AccountKeysSerializer;
   template<bool is_store> struct AccountBaseSerializer;

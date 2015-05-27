@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -28,7 +28,7 @@
 #include "include_base_utils.h"
 #include "misc_language.h"
 
-#include "common/command_line.h"
+#include "Common/command_line.h"
 #include "cryptonote_core/account_boost_serialization.h"
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
@@ -41,21 +41,20 @@
 using namespace std;
 
 using namespace epee;
-using namespace cryptonote;
-
+using namespace CryptoNote;
 
 struct output_index {
-    const cryptonote::TransactionOutputTarget out;
+    const CryptoNote::TransactionOutputTarget out;
     uint64_t amount;
     size_t blk_height; // block height
     size_t tx_no; // index of transaction in block
     size_t out_no; // index of out in transaction
     size_t idx;
     bool spent;
-    const cryptonote::Block *p_blk;
-    const cryptonote::Transaction *p_tx;
+    const CryptoNote::Block *p_blk;
+    const CryptoNote::Transaction *p_tx;
 
-    output_index(const cryptonote::TransactionOutputTarget &_out, uint64_t _a, size_t _h, size_t tno, size_t ono, const cryptonote::Block *_pb, const cryptonote::Transaction *_pt)
+    output_index(const CryptoNote::TransactionOutputTarget &_out, uint64_t _a, size_t _h, size_t tno, size_t ono, const CryptoNote::Block *_pb, const CryptoNote::Transaction *_pt)
         : out(_out), amount(_a), blk_height(_h), tx_no(tno), out_no(ono), idx(0), spent(false), p_blk(_pb), p_tx(_pt) { }
 
     output_index(const output_index &other)
@@ -100,7 +99,7 @@ namespace
   }
 }
 
-bool init_output_indices(map_output_idx_t& outs, std::map<uint64_t, std::vector<size_t> >& outs_mine, const std::vector<cryptonote::Block>& blockchain, const map_hash2tx_t& mtx, const cryptonote::account_base& from) {
+bool init_output_indices(map_output_idx_t& outs, std::map<uint64_t, std::vector<size_t> >& outs_mine, const std::vector<CryptoNote::Block>& blockchain, const map_hash2tx_t& mtx, const CryptoNote::account_base& from) {
 
     BOOST_FOREACH (const Block& blk, blockchain) {
         vector<const Transaction*> vtx;
@@ -143,7 +142,7 @@ bool init_output_indices(map_output_idx_t& outs, std::map<uint64_t, std::vector<
     return true;
 }
 
-bool init_spent_output_indices(map_output_idx_t& outs, map_output_t& outs_mine, const std::vector<cryptonote::Block>& blockchain, const map_hash2tx_t& mtx, const cryptonote::account_base& from) {
+bool init_spent_output_indices(map_output_idx_t& outs, map_output_t& outs_mine, const std::vector<CryptoNote::Block>& blockchain, const map_hash2tx_t& mtx, const CryptoNote::account_base& from) {
 
     for (const map_output_t::value_type& o: outs_mine) {
         for (size_t i = 0; i < o.second.size(); ++i) {
@@ -209,12 +208,12 @@ bool fill_output_entries(std::vector<output_index>& out_indices, size_t sender_o
 }
 
 bool fill_tx_sources(std::vector<tx_source_entry>& sources, const std::vector<test_event_entry>& events,
-                     const Block& blk_head, const cryptonote::account_base& from, uint64_t amount, size_t nmix)
+                     const Block& blk_head, const CryptoNote::account_base& from, uint64_t amount, size_t nmix)
 {
     map_output_idx_t outs;
     map_output_t outs_mine;
 
-    std::vector<cryptonote::Block> blockchain;
+    std::vector<CryptoNote::Block> blockchain;
     map_hash2tx_t mtx;
     if (!find_block_chain(events, blockchain, mtx, get_block_hash(blk_head)))
         return false;
@@ -237,7 +236,7 @@ bool fill_tx_sources(std::vector<tx_source_entry>& sources, const std::vector<te
             if (oi.spent)
                 continue;
 
-            cryptonote::tx_source_entry ts;
+            CryptoNote::tx_source_entry ts;
             ts.amount = oi.amount;
             ts.real_output_in_tx_index = oi.out_no;
             ts.real_out_tx_key = get_tx_pub_key_from_extra(*oi.p_tx); // incoming tx public key
@@ -260,14 +259,14 @@ bool fill_tx_sources(std::vector<tx_source_entry>& sources, const std::vector<te
     return sources_found;
 }
 
-bool fill_tx_destination(tx_destination_entry &de, const cryptonote::account_base &to, uint64_t amount) {
+bool fill_tx_destination(tx_destination_entry &de, const CryptoNote::account_base &to, uint64_t amount) {
     de.addr = to.get_keys().m_account_address;
     de.amount = amount;
     return true;
 }
 
 void fill_tx_sources_and_destinations(const std::vector<test_event_entry>& events, const Block& blk_head,
-                                      const cryptonote::account_base& from, const cryptonote::account_base& to,
+                                      const CryptoNote::account_base& from, const CryptoNote::account_base& to,
                                       uint64_t amount, uint64_t fee, size_t nmix, std::vector<tx_source_entry>& sources,
                                       std::vector<tx_destination_entry>& destinations)
 {
@@ -292,27 +291,27 @@ void fill_tx_sources_and_destinations(const std::vector<test_event_entry>& event
   }
 }
 
-bool construct_tx_to_key(const std::vector<test_event_entry>& events, cryptonote::Transaction& tx, const Block& blk_head,
-                         const cryptonote::account_base& from, const cryptonote::account_base& to, uint64_t amount,
+bool construct_tx_to_key(Logging::ILogger& logger, const std::vector<test_event_entry>& events, CryptoNote::Transaction& tx, const Block& blk_head,
+                         const CryptoNote::account_base& from, const CryptoNote::account_base& to, uint64_t amount,
                          uint64_t fee, size_t nmix)
 {
   vector<tx_source_entry> sources;
   vector<tx_destination_entry> destinations;
   fill_tx_sources_and_destinations(events, blk_head, from, to, amount, fee, nmix, sources, destinations);
 
-  return construct_tx(from.get_keys(), sources, destinations, std::vector<uint8_t>(), tx, 0);
+  return construct_tx(from.get_keys(), sources, destinations, std::vector<uint8_t>(), tx, 0, logger);
 }
 
-Transaction construct_tx_with_fee(std::vector<test_event_entry>& events, const Block& blk_head,
+Transaction construct_tx_with_fee(Logging::ILogger& logger, std::vector<test_event_entry>& events, const Block& blk_head,
                                   const account_base& acc_from, const account_base& acc_to, uint64_t amount, uint64_t fee)
 {
   Transaction tx;
-  construct_tx_to_key(events, tx, blk_head, acc_from, acc_to, amount, fee, 0);
+  construct_tx_to_key(logger, events, tx, blk_head, acc_from, acc_to, amount, fee, 0);
   events.push_back(tx);
   return tx;
 }
 
-uint64_t get_balance(const cryptonote::account_base& addr, const std::vector<cryptonote::Block>& blockchain, const map_hash2tx_t& mtx) {
+uint64_t get_balance(const CryptoNote::account_base& addr, const std::vector<CryptoNote::Block>& blockchain, const map_hash2tx_t& mtx) {
     uint64_t res = 0;
     std::map<uint64_t, std::vector<output_index> > outs;
     std::map<uint64_t, std::vector<size_t> > outs_mine;
@@ -338,7 +337,7 @@ uint64_t get_balance(const cryptonote::account_base& addr, const std::vector<cry
     return res;
 }
 
-void get_confirmed_txs(const std::vector<cryptonote::Block>& blockchain, const map_hash2tx_t& mtx, map_hash2tx_t& confirmed_txs)
+void get_confirmed_txs(const std::vector<CryptoNote::Block>& blockchain, const map_hash2tx_t& mtx, map_hash2tx_t& confirmed_txs)
 {
   std::unordered_set<crypto::hash> confirmed_hashes;
   for (const Block& blk : blockchain)
@@ -358,7 +357,7 @@ void get_confirmed_txs(const std::vector<cryptonote::Block>& blockchain, const m
   }
 }
 
-bool find_block_chain(const std::vector<test_event_entry>& events, std::vector<cryptonote::Block>& blockchain, map_hash2tx_t& mtx, const crypto::hash& head) {
+bool find_block_chain(const std::vector<test_event_entry>& events, std::vector<CryptoNote::Block>& blockchain, map_hash2tx_t& mtx, const crypto::hash& head) {
     std::unordered_map<crypto::hash, const Block*> block_index;
     BOOST_FOREACH(const test_event_entry& ev, events)
     {
@@ -392,7 +391,7 @@ bool find_block_chain(const std::vector<test_event_entry>& events, std::vector<c
 }
 
 
-const cryptonote::Currency& test_chain_unit_base::currency() const
+const CryptoNote::Currency& test_chain_unit_base::currency() const
 {
   return m_currency;
 }
@@ -402,7 +401,7 @@ void test_chain_unit_base::register_callback(const std::string& cb_name, verify_
   m_callbacks[cb_name] = cb;
 }
 
-bool test_chain_unit_base::verify(const std::string& cb_name, cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool test_chain_unit_base::verify(const std::string& cb_name, CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   auto cb_it = m_callbacks.find(cb_name);
   if(cb_it == m_callbacks.end())

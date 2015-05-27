@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -25,13 +25,13 @@ public:
   static bool compare(const T& t1, const T& t2) { return t1 == t2; }
 };
 
-namespace cryptonote {
+namespace CryptoNote {
 
-bool operator==(const cryptonote::TransactionOutputToScript& t1, const cryptonote::TransactionOutputToScript& t2) {
+bool operator==(const CryptoNote::TransactionOutputToScript& t1, const CryptoNote::TransactionOutputToScript& t2) {
  return true;
 }
 
-bool operator==(const cryptonote::TransactionOutputMultisignature& t1, const cryptonote::TransactionOutputMultisignature& t2) {
+bool operator==(const CryptoNote::TransactionOutputMultisignature& t1, const CryptoNote::TransactionOutputMultisignature& t2) {
   if (t1.keys != t2.keys) {
     return false;
   }
@@ -39,19 +39,19 @@ bool operator==(const cryptonote::TransactionOutputMultisignature& t1, const cry
   return t1.requiredSignatures == t2.requiredSignatures;
 }
 
-bool operator==(const cryptonote::TransactionInputGenerate& t1, const cryptonote::TransactionInputGenerate& t2) {
+bool operator==(const CryptoNote::TransactionInputGenerate& t1, const CryptoNote::TransactionInputGenerate& t2) {
   return t1.height == t2.height;
 }
 
-bool operator==(const cryptonote::TransactionInputToScript& t1, const cryptonote::TransactionInputToScript& t2) {
+bool operator==(const CryptoNote::TransactionInputToScript& t1, const CryptoNote::TransactionInputToScript& t2) {
   return true;
 }
 
-bool operator==(const cryptonote::TransactionInputToScriptHash& t1, const cryptonote::TransactionInputToScriptHash& t2) {
+bool operator==(const CryptoNote::TransactionInputToScriptHash& t1, const CryptoNote::TransactionInputToScriptHash& t2) {
   return true;
 }
 
-bool operator==(const cryptonote::TransactionInputToKey& t1, const cryptonote::TransactionInputToKey& t2) {
+bool operator==(const CryptoNote::TransactionInputToKey& t1, const CryptoNote::TransactionInputToKey& t2) {
   if (t1.amount != t2.amount) {
     return false;
   }
@@ -63,7 +63,7 @@ bool operator==(const cryptonote::TransactionInputToKey& t1, const cryptonote::T
   return t1.keyImage == t2.keyImage;
 }
 
-bool operator==(const cryptonote::TransactionInputMultisignature& t1, const cryptonote::TransactionInputMultisignature& t2) {
+bool operator==(const CryptoNote::TransactionInputMultisignature& t1, const CryptoNote::TransactionInputMultisignature& t2) {
   if (t1.amount != t2.amount) {
     return false;
   }
@@ -75,15 +75,15 @@ bool operator==(const cryptonote::TransactionInputMultisignature& t1, const cryp
   return t1.outputIndex == t2.outputIndex;
 }
 
-bool operator==(const cryptonote::TransactionOutputToScriptHash& t1, const cryptonote::TransactionOutputToScriptHash& t2) {
+bool operator==(const CryptoNote::TransactionOutputToScriptHash& t1, const CryptoNote::TransactionOutputToScriptHash& t2) {
   return true;
 }
 
-bool operator==(const cryptonote::TransactionOutputToKey& t1, const cryptonote::TransactionOutputToKey& t2) {
+bool operator==(const CryptoNote::TransactionOutputToKey& t1, const CryptoNote::TransactionOutputToKey& t2) {
   return t1.key == t2.key;
 }
 
-bool operator==(const cryptonote::TransactionOutput& t1, const cryptonote::TransactionOutput& t2) {
+bool operator==(const CryptoNote::TransactionOutput& t1, const CryptoNote::TransactionOutput& t2) {
   if (t1.amount != t2.amount) {
     return false;
   }
@@ -91,7 +91,7 @@ bool operator==(const cryptonote::TransactionOutput& t1, const cryptonote::Trans
   return t1.target == t2.target;
 }
 
-bool operator==(const cryptonote::ParentBlock& t1, const cryptonote::ParentBlock& t2) {
+bool operator==(const CryptoNote::ParentBlock& t1, const CryptoNote::ParentBlock& t2) {
   if (t1.majorVersion != t2.majorVersion) {
     return false;
   }
@@ -119,7 +119,7 @@ bool operator==(const cryptonote::ParentBlock& t1, const cryptonote::ParentBlock
   return t1.blockchainBranch == t2.blockchainBranch;
 }
 
-bool operator==(const cryptonote::AccountPublicAddress& t1, const cryptonote::AccountPublicAddress& t2) {
+bool operator==(const CryptoNote::AccountPublicAddress& t1, const CryptoNote::AccountPublicAddress& t2) {
   if (t1.m_spendPublicKey != t2.m_spendPublicKey) {
     return false;
   }
@@ -127,7 +127,7 @@ bool operator==(const cryptonote::AccountPublicAddress& t1, const cryptonote::Ac
   return t1.m_viewPublicKey == t2.m_viewPublicKey;
 }
 
-bool operator==(const cryptonote::tx_extra_merge_mining_tag& t1, const cryptonote::tx_extra_merge_mining_tag& t2) {
+bool operator==(const CryptoNote::tx_extra_merge_mining_tag& t1, const CryptoNote::tx_extra_merge_mining_tag& t2) {
   if (t1.depth != t2.depth) {
     return false;
   }

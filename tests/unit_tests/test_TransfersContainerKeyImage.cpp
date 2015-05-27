@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,12 +23,12 @@
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/TransactionApi.h"
+#include "Logging/ConsoleLogger.h"
 #include "transfers/TransfersContainer.h"
 
 #include "TransactionApiHelpers.h"
 
 using namespace CryptoNote;
-using namespace cryptonote;
 
 
 namespace {
@@ -46,7 +46,7 @@ namespace {
   }
 
   void addInput(ITransaction& tx, const AccountKeys& senderKeys, const TransactionOutputInformation& t) {
-    CryptoNote::KeyPair kp;
+    TransactionTypes::KeyPair kp;
     TransactionTypes::InputKeyInfo info;
     info.amount = t.amount;
 
@@ -91,7 +91,7 @@ namespace {
   public:
 
     TransfersContainerKeyImage() :
-      currency(CurrencyBuilder().currency()), 
+      currency(CurrencyBuilder(logger).currency()), 
       container(currency, TEST_TRANSACTION_SPENDABLE_AGE), 
       account(generateAccountKeys()),
       txTemplate(createTransaction()) {
@@ -179,6 +179,7 @@ namespace {
       return tx;
     }
 
+    Logging::ConsoleLogger logger;
     Currency currency;
     TransfersContainer container;
     AccountKeys account;

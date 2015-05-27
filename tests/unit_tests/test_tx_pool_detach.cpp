@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,6 +17,8 @@
 
 #include "gtest/gtest.h"
 
+#include "EventWaiter.h"
+#include "Logging/ConsoleLogger.h"
 #include "transfers/BlockchainSynchronizer.h"
 #include "transfers/TransfersSynchronizer.h"
 
@@ -53,21 +55,25 @@ class INodeStubWithPoolTx : public INodeTrivialRefreshStub {
 public:
   INodeStubWithPoolTx(TestBlockchainGenerator& generator) : INodeTrivialRefreshStub(generator), detached(false) {}
 
-  void relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) override {
+  void relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) override {
+    std::unique_lock<std::mutex> lk(mutex);
     relayedTxs.push_back(std::make_pair(this->getLastLocalBlockHeight(), transaction));
+    lk.unlock();
     INodeTrivialRefreshStub::relayTransaction(transaction, callback);
   }
 
   void startAlternativeChain(uint64_t height) override {
+    std::unique_lock<std::mutex> lk(mutex);
     INodeTrivialRefreshStub::startAlternativeChain(height);
     detachHeight = height;
     detached = true;
   }
 
 
-  void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override 
+  void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override 
   {
-    std::sort(relayedTxs.begin(), relayedTxs.end(), [](const std::pair<uint64_t, cryptonote::Transaction>& val1, const std::pair<uint64_t, cryptonote::Transaction>& val2)->bool {return val1.first < val2.first; });
+    std::unique_lock<std::mutex> lk(mutex);
+    std::sort(relayedTxs.begin(), relayedTxs.end(), [](const std::pair<uint64_t, CryptoNote::Transaction>& val1, const std::pair<uint64_t, CryptoNote::Transaction>& val2)->bool {return val1.first < val2.first; });
     is_bc_actual = true;
     
     if (detached) {
@@ -83,22 +89,42 @@ public:
       }
     }
 
+    lk.unlock();
     callback(std::error_code()); 
   };
 
   
-  std::vector<std::pair<uint64_t, cryptonote::Transaction>> relayedTxs;
+  std::vector<std::pair<uint64_t, CryptoNote::Transaction>> relayedTxs;
   uint64_t detachHeight;
   bool detached;
-
+  std::mutex mutex;
 };
 
+class WalletSendObserver : public CryptoNote::IWalletObserver
+{
+public:
+  WalletSendObserver() {}
+
+  bool waitForSendEnd(std::error_code& ec) {
+    if (!sent.wait_for(std::chrono::milliseconds(5000))) return false;
+    ec = sendResult;
+    return true;
+  }
+
+  virtual void sendTransactionCompleted(CryptoNote::TransactionId transactionId, std::error_code result) override {
+    sendResult = result;
+    sent.notify();
+  }
+
+  std::error_code sendResult;
+  EventWaiter sent;
+};
 
 class DetachTest : public ::testing::Test, public IBlockchainSynchronizerObserver {
 public:
 
   DetachTest() :
-    m_currency(cryptonote::CurrencyBuilder().currency()),
+    m_currency(CryptoNote::CurrencyBuilder(m_logger).currency()),
     generator(m_currency),
     m_node(generator),
     m_sync(m_node, m_currency.genesisBlockHash()),
@@ -137,19 +163,25 @@ public:
 
   void generateMoneyForAccount(size_t idx) {
     generator.getBlockRewardForAddress(
-      reinterpret_cast<const cryptonote::AccountPublicAddress&>(m_accounts[idx].address));
+      reinterpret_cast<const CryptoNote::AccountPublicAddress&>(m_accounts[idx].address));
   }
 
   std::error_code submitTransaction(ITransactionReader& tx) {
     auto data = tx.getTransactionData();
 
-    cryptonote::blobdata txblob(data.data(), data.data() + data.size());
-    cryptonote::Transaction outTx;
-    cryptonote::parse_and_validate_tx_from_blob(txblob, outTx);
+    CryptoNote::blobdata txblob(data.data(), data.data() + data.size());
+    CryptoNote::Transaction outTx;
+    CryptoNote::parse_and_validate_tx_from_blob(txblob, outTx);
 
     std::promise<std::error_code> result;
-    m_node.relayTransaction(outTx, [&result](std::error_code ec) { result.set_value(ec); });
-    return result.get_future().get();
+    std::future<std::error_code> future = result.get_future();
+
+    m_node.relayTransaction(outTx, [&result](std::error_code ec) {
+      std::promise<std::error_code> promise = std::move(result);
+      promise.set_value(ec);
+    });
+
+    return future.get();
   }
 
   void synchronizationCompleted(std::error_code result) override {
@@ -162,7 +194,8 @@ protected:
   std::vector<AccountKeys> m_accounts;
   std::vector<ITransfersSubscription*> m_subscriptions;
 
-  cryptonote::Currency m_currency;
+  Logging::ConsoleLogger m_logger;
+  CryptoNote::Currency m_currency;
   TestBlockchainGenerator generator;
   INodeStubWithPoolTx m_node;
   BlockchainSynchronizer m_sync;
@@ -197,7 +230,7 @@ namespace {
 
     auto tx = createTransaction();
 
-    std::vector<std::pair<TransactionTypes::InputKeyInfo, KeyPair>> inputs;
+    std::vector<std::pair<TransactionTypes::InputKeyInfo, TransactionTypes::KeyPair>> inputs;
 
     uint64_t foundMoney = 0;
 
@@ -215,7 +248,7 @@ namespace {
       info.realOutput.transactionIndex = 0;
       info.realOutput.transactionPublicKey = t.transactionPublicKey;
 
-      KeyPair kp;
+      TransactionTypes::KeyPair kp;
       tx->addInput(senderKeys, info, kp);
 
       inputs.push_back(std::make_pair(info, kp));
@@ -309,7 +342,8 @@ TEST_F(DetachTest, testBlockchainDetach) {
 
 struct CompletionWalletObserver : public IWalletObserver {
   virtual void synchronizationCompleted(std::error_code result) override {
-    syncCompleted.set_value(result);
+    decltype(syncCompleted) detachedPromise = std::move(syncCompleted);
+    detachedPromise.set_value(result);
   }
 
   std::promise<std::error_code> syncCompleted;
@@ -323,7 +357,8 @@ public:
   std::promise<CryptoNote::TransactionId> promise;
 
   virtual void externalTransactionCreated(CryptoNote::TransactionId transactionId) override {
-    promise.set_value(transactionId);
+    decltype(promise) detachedPromise = std::move(promise);
+    detachedPromise.set_value(transactionId);
   }
 
 };
@@ -350,7 +385,7 @@ TEST_F(DetachTest, testDetachWithWallet) {
   Bob.removeObserver(&BobCompleted);
 
 
-  cryptonote::AccountPublicAddress AliceAddr;
+  CryptoNote::AccountPublicAddress AliceAddr;
   WalletAccountKeys AliceKeys;
   Alice.getAccountKeys(AliceKeys);
   AliceAddr.m_spendPublicKey = *reinterpret_cast<crypto::public_key*>(&AliceKeys.spendPublicKey);
@@ -383,7 +418,13 @@ TEST_F(DetachTest, testDetachWithWallet) {
   tr.amount = Alice.actualBalance() / 2;
   tr.address = Bob.getAddress();
 
+  WalletSendObserver wso;
+  Alice.addObserver(&wso);
   Alice.sendTransaction(tr, fee);
+  std::error_code sendError;
+  wso.waitForSendEnd(sendError);
+  Alice.removeObserver(&wso);
+  ASSERT_FALSE(sendError);
 
   WaitForExternalTransactionObserver etxo;
   auto externalTxFuture = etxo.promise.get_future();

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,7 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <gtest/gtest.h>
-#include "common/BlockingQueue.h"
+#include "Common/BlockingQueue.h"
 
 #include <future>
 #include <vector>
@@ -192,9 +192,9 @@ TEST(BlockingQueue, CloseAndWait)
   f1.get();
   f2.get();
 
-  ASSERT_EQ(queueSize, itemsPopped.load());
-
   p.join();
+
+  ASSERT_EQ(queueSize, itemsPopped.load());
 }
 
 TEST(BlockingQueue, AllowsMoveOnly)

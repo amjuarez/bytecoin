@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -30,33 +30,42 @@
 class TestBlockchainGenerator
 {
 public:
-  TestBlockchainGenerator(const cryptonote::Currency& currency);
+  TestBlockchainGenerator(const CryptoNote::Currency& currency);
 
-  std::vector<cryptonote::Block>& getBlockchain();
+  //TODO: get rid of this method
+  std::vector<CryptoNote::Block>& getBlockchain();
+  std::vector<CryptoNote::Block> getBlockchainCopy();
   void generateEmptyBlocks(size_t count);
-  bool getBlockRewardForAddress(const cryptonote::AccountPublicAddress& address);
-  bool getSingleOutputTransaction(const cryptonote::AccountPublicAddress& address, uint64_t amount);
-  void addTxToBlockchain(const cryptonote::Transaction& transaction);
-  bool getTransactionByHash(const crypto::hash& hash, cryptonote::Transaction& tx);
-  const cryptonote::account_base& getMinerAccount() const { return miner_acc; }
+  bool getBlockRewardForAddress(const CryptoNote::AccountPublicAddress& address);
+  bool generateTransactionsInOneBlock(const CryptoNote::AccountPublicAddress& address, size_t n);
+  bool getSingleOutputTransaction(const CryptoNote::AccountPublicAddress& address, uint64_t amount);
+  void addTxToBlockchain(const CryptoNote::Transaction& transaction);
+  bool getTransactionByHash(const crypto::hash& hash, CryptoNote::Transaction& tx, bool checkTxPool = false);
+  const CryptoNote::account_base& getMinerAccount() const;
 
-  void putTxToPool(const cryptonote::Transaction& tx);
+  void putTxToPool(const CryptoNote::Transaction& tx);
   void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
-    std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids);
+    std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids);
   void putTxPoolToBlockchain();
   void clearTxPool();
+
+  void cutBlockchain(size_t height);
 
 private:
   
   void addGenesisBlock();
   void addMiningBlock();
 
-  const cryptonote::Currency& m_currency;
+  const CryptoNote::Currency& m_currency;
   test_generator generator;
-  cryptonote::account_base miner_acc;
-  std::vector<cryptonote::Block> m_blockchain;
-  std::unordered_map<crypto::hash, cryptonote::Transaction> m_txs;
-  std::unordered_map<crypto::hash, cryptonote::Transaction> m_txPool;
+  CryptoNote::account_base miner_acc;
+  std::vector<CryptoNote::Block> m_blockchain;
+  std::unordered_map<crypto::hash, CryptoNote::Transaction> m_txs;
+  std::unordered_map<crypto::hash, CryptoNote::Transaction> m_txPool;
+  mutable std::mutex m_mutex;
 
-  void addToBlockchain(cryptonote::Transaction const& tx);
+  void addToBlockchain(const CryptoNote::Transaction& tx);
+  void addToBlockchain(const std::vector<CryptoNote::Transaction>& txs);
+
+  bool doGenerateTransactionsInOneBlock(CryptoNote::AccountPublicAddress const &address, size_t n);
 };

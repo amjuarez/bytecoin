@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,7 +24,7 @@ namespace boost
 
 
     template<class archive_t>
-    void serialize(archive_t & ar, cryptonote::blockchain_storage::transaction_chain_entry& te, const unsigned int version)
+    void serialize(archive_t & ar, CryptoNote::blockchain_storage::transaction_chain_entry& te, const unsigned int version)
     {
       ar & te.tx;
       ar & te.m_keeper_block_height;
@@ -33,7 +33,7 @@ namespace boost
     }
 
     template<class archive_t>
-    void serialize(archive_t & ar, cryptonote::blockchain_storage::block_extended_info& ei, const unsigned int version)
+    void serialize(archive_t & ar, CryptoNote::blockchain_storage::block_extended_info& ei, const unsigned int version)
     {
       ar & ei.bl;
       ar & ei.height;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,11 +22,14 @@
 #include "cryptonote_core/Currency.h"
 #include "misc_language.h"
 
-using namespace cryptonote;
+#include "chaingen.h"
+
+using namespace CryptoNote;
 
 bool test_transaction_generation_and_ring_signature()
 {
-  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
+  Logging::ConsoleLogger logger;
+  CryptoNote::Currency currency = CryptoNote::CurrencyBuilder(logger).currency();
 
   account_base miner_acc1;
   miner_acc1.generate();
@@ -92,7 +95,7 @@ bool test_transaction_generation_and_ring_signature()
     oe.second = boost::get<TransactionOutputToKey>(tx_mine_6.vout[0].target).key;
     src.outputs.push_back(oe);
 
-    src.real_out_tx_key = cryptonote::get_tx_pub_key_from_extra(tx_mine_2);
+    src.real_out_tx_key = CryptoNote::get_tx_pub_key_from_extra(tx_mine_2);
     src.real_output = 1;
     src.real_output_in_tx_index = 0;
   }
@@ -104,7 +107,7 @@ bool test_transaction_generation_and_ring_signature()
   destinations.push_back(td);
 
   Transaction tx_rc1;
-  bool r = construct_tx(miner_acc2.get_keys(), sources, destinations, std::vector<uint8_t>(), tx_rc1, 0);
+  bool r = construct_tx(miner_acc2.get_keys(), sources, destinations, std::vector<uint8_t>(), tx_rc1, 0, logger);
   CHECK_AND_ASSERT_MES(r, false, "failed to construct transaction");
 
   crypto::hash pref_hash = get_transaction_prefix_hash(tx_rc1);
@@ -134,9 +137,11 @@ bool test_transaction_generation_and_ring_signature()
 
 bool test_block_creation()
 {
+  Logging::ConsoleLogger logger;
+
   uint64_t vszs[] = {80,476,476,475,475,474,475,474,474,475,472,476,476,475,475,474,475,474,474,475,472,476,476,475,475,474,475,474,474,475,9391,476,476,475,475,474,475,8819,8301,475,472,4302,5316,14347,16620,19583,19403,19728,19442,19852,19015,19000,19016,19795,19749,18087,19787,19704,19750,19267,19006,19050,19445,19407,19522,19546,19788,19369,19486,19329,19370,18853,19600,19110,19320,19746,19474,19474,19743,19494,19755,19715,19769,19620,19368,19839,19532,23424,28287,30707};
   std::vector<uint64_t> szs(&vszs[0], &vszs[90]);
-  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
+  CryptoNote::Currency currency = CryptoNote::CurrencyBuilder(logger).currency();
 
   AccountPublicAddress adr;
   bool r = currency.parseAccountAddressString("272xWzbWsP4cfNFfxY5ETN5moU8x81PKfWPwynrrqsNGDBQGLmD1kCkKCvPeDUXu5XfmZkCrQ53wsWmdfvHBGLNjGcRiDcK", adr);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,24 +19,24 @@
 
 #include "chaingen.h"
 
-const uint64_t UNDEF_HEIGHT = static_cast<uint64_t>(cryptonote::UpgradeDetectorBase::UNDEF_HEIGHT);
+const uint64_t UNDEF_HEIGHT = static_cast<uint64_t>(CryptoNote::UpgradeDetectorBase::UNDEF_HEIGHT);
 
 class CheckBlockPurged : public test_chain_unit_base {
 public:
   CheckBlockPurged(size_t invalidBlockIdx, uint8_t blockMajorVersion) :
     m_invalidBlockIdx(invalidBlockIdx),
     m_blockMajorVersion(blockMajorVersion) {
-    assert(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_2);
+    assert(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_2);
 
-    cryptonote::CurrencyBuilder currencyBuilder;
-    currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
+    currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     m_currency = currencyBuilder.currency();
 
     REGISTER_CALLBACK("check_block_purged", CheckBlockPurged::check_block_purged);
     REGISTER_CALLBACK("markInvalidBlock", CheckBlockPurged::markInvalidBlock);
   }
 
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t eventIdx, const cryptonote::Block& /*blk*/) {
+  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t eventIdx, const CryptoNote::Block& /*blk*/) {
     if (m_invalidBlockIdx == eventIdx) {
       return bvc.m_verifivation_failed;
     } else {
@@ -44,7 +44,7 @@ public:
     }
   }
 
-  bool check_block_purged(cryptonote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
+  bool check_block_purged(CryptoNote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
     DEFINE_TESTS_ERROR_CONTEXT("CheckBlockPurged::check_block_purged");
 
     CHECK_TEST_CONDITION(m_invalidBlockIdx < eventIdx);
@@ -54,7 +54,7 @@ public:
     return true;
   }
 
-  bool markInvalidBlock(cryptonote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
+  bool markInvalidBlock(CryptoNote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
     m_invalidBlockIdx = eventIdx + 1;
     return true;
   }
@@ -69,16 +69,16 @@ struct CheckBlockAccepted : public test_chain_unit_base {
   CheckBlockAccepted(size_t expectedBlockchainHeight, uint8_t blockMajorVersion) :
     m_expectedBlockchainHeight(expectedBlockchainHeight),
     m_blockMajorVersion(blockMajorVersion) {
-    assert(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_2);
+    assert(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_2);
 
-    cryptonote::CurrencyBuilder currencyBuilder;
-    currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
+    currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     m_currency = currencyBuilder.currency();
 
     REGISTER_CALLBACK("check_block_accepted", CheckBlockAccepted::check_block_accepted);
   }
 
-  bool check_block_accepted(cryptonote::core& c, size_t /*eventIdx*/, const std::vector<test_event_entry>& /*events*/) {
+  bool check_block_accepted(CryptoNote::core& c, size_t /*eventIdx*/, const std::vector<test_event_entry>& /*events*/) {
     DEFINE_TESTS_ERROR_CONTEXT("CheckBlockAccepted::check_block_accepted");
 
     CHECK_EQ(0, c.get_pool_transactions_count());
@@ -159,7 +159,7 @@ struct gen_block_invalid_prev_id : public CheckBlockPurged
     : CheckBlockPurged(1, blockMajorVersion) {}
 
   bool generate(std::vector<test_event_entry>& events) const;
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*blk*/);
+  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*blk*/);
 };
 
 struct gen_block_invalid_nonce : public CheckBlockPurged
@@ -298,8 +298,8 @@ struct gen_block_is_too_big : public CheckBlockPurged
 {
   gen_block_is_too_big(uint8_t blockMajorVersion)
       : CheckBlockPurged(1, blockMajorVersion) {
-    cryptonote::CurrencyBuilder currencyBuilder;
-    currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
+    currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
     m_currency = currencyBuilder.currency();
   }
@@ -320,9 +320,9 @@ struct gen_block_invalid_binary_format : public test_chain_unit_base
   gen_block_invalid_binary_format(uint8_t blockMajorVersion);
 
   bool generate(std::vector<test_event_entry>& events) const;
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::Block& /*blk*/);
-  bool check_all_blocks_purged(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
-  bool corrupt_blocks_boundary(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*blk*/);
+  bool check_all_blocks_purged(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool corrupt_blocks_boundary(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
 
 private:
   const uint8_t m_blockMajorVersion;
@@ -330,14 +330,14 @@ private:
 };
 
 struct TestMaxSizeOfParentBlock : public CheckBlockAccepted {
-  TestMaxSizeOfParentBlock() : CheckBlockAccepted(2, cryptonote::BLOCK_MAJOR_VERSION_2) {
+  TestMaxSizeOfParentBlock() : CheckBlockAccepted(2, CryptoNote::BLOCK_MAJOR_VERSION_2) {
   }
 
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
 struct TestBigParentBlock : public CheckBlockPurged {
-  TestBigParentBlock() : CheckBlockPurged(1, cryptonote::BLOCK_MAJOR_VERSION_2) {
+  TestBigParentBlock() : CheckBlockPurged(1, CryptoNote::BLOCK_MAJOR_VERSION_2) {
   }
 
   bool generate(std::vector<test_event_entry>& events) const;
@@ -345,21 +345,21 @@ struct TestBigParentBlock : public CheckBlockPurged {
 
 struct TestBlock2ExtraEmpty : public CheckBlockPurged {
 
-  TestBlock2ExtraEmpty() : CheckBlockPurged(1, cryptonote::BLOCK_MAJOR_VERSION_2) {}
+  TestBlock2ExtraEmpty() : CheckBlockPurged(1, CryptoNote::BLOCK_MAJOR_VERSION_2) {}
 
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
 struct TestBlock2ExtraWithoutMMTag : public CheckBlockPurged {
 
-  TestBlock2ExtraWithoutMMTag() : CheckBlockPurged(1, cryptonote::BLOCK_MAJOR_VERSION_2) {}
+  TestBlock2ExtraWithoutMMTag() : CheckBlockPurged(1, CryptoNote::BLOCK_MAJOR_VERSION_2) {}
 
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
 struct TestBlock2ExtraWithGarbage : public CheckBlockAccepted {
 
-  TestBlock2ExtraWithGarbage() : CheckBlockAccepted(2, cryptonote::BLOCK_MAJOR_VERSION_2) {}
+  TestBlock2ExtraWithGarbage() : CheckBlockAccepted(2, CryptoNote::BLOCK_MAJOR_VERSION_2) {}
 
   bool generate(std::vector<test_event_entry>& events) const;
 };

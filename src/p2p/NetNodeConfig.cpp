@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,17 +15,21 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include <common/util.h>
 #include "NetNodeConfig.h"
 
-#include "cryptonote_config.h"
-#include "common/command_line.h"
+#include <boost/utility/value_init.hpp>
 
-namespace nodetool {
+#include <Common/util.h>
+#include "Common/command_line.h"
+#include "Common/StringTools.h"
+#include "crypto/crypto.h"
+#include "cryptonote_config.h"
+
+namespace CryptoNote {
 namespace {
 
 const command_line::arg_descriptor<std::string> arg_p2p_bind_ip        = {"p2p-bind-ip", "Interface for p2p network protocol", "0.0.0.0"};
-const command_line::arg_descriptor<std::string> arg_p2p_bind_port      = {"p2p-bind-port", "Port for p2p network protocol", std::to_string(cryptonote::P2P_DEFAULT_PORT)};
+const command_line::arg_descriptor<std::string> arg_p2p_bind_port      = {"p2p-bind-port", "Port for p2p network protocol", std::to_string(P2P_DEFAULT_PORT)};
 const command_line::arg_descriptor<uint32_t>    arg_p2p_external_port  = {"p2p-external-port", "External port for p2p network protocol (if port forwarding used with NAT)", 0};
 const command_line::arg_descriptor<bool>        arg_p2p_allow_local_ip = {"allow-local-ip", "Allow local ip add to peer list, mostly in debug purposes"};
 const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer   = {"add-peer", "Manually add peer to local peerlist"};
@@ -35,18 +39,17 @@ const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_exclus
 const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_seed_node   = {"seed-node", "Connect to a node to retrieve peer addresses, and disconnect"};
 const command_line::arg_descriptor<bool> arg_p2p_hide_my_port   =    {"hide-my-port", "Do not announce yourself as peerlist candidate", false, true};
 
-bool parsePeerFromString(nodetool::net_address& pe, const std::string& node_addr) {
-  return epee::string_tools::parse_peer_from_string(pe.ip, pe.port, node_addr);
+bool parsePeerFromString(net_address& pe, const std::string& node_addr) {
+  return Common::parseIpAddressAndPort(pe.ip, pe.port, node_addr);
 }
 
 bool parsePeersAndAddToContainer(const boost::program_options::variables_map& vm,
-    const command_line::arg_descriptor<std::vector<std::string>>& arg,
-    std::vector<nodetool::net_address>& container)
+    const command_line::arg_descriptor<std::vector<std::string>>& arg, std::vector<net_address>& container)
 {
   std::vector<std::string> peers = command_line::get_arg(vm, arg);
 
   for(const std::string& str: peers) {
-    nodetool::net_address na = boost::value_initialized<nodetool::net_address>();
+    net_address na = boost::value_initialized<net_address>();
     if (!parsePeerFromString(na, str)) {
       return false;
     }
@@ -72,7 +75,7 @@ void NetNodeConfig::initOptions(boost::program_options::options_description& des
 
 NetNodeConfig::NetNodeConfig() {
   bindIp = "0.0.0.0";
-  bindPort = std::to_string(cryptonote::P2P_DEFAULT_PORT);
+  bindPort = std::to_string(P2P_DEFAULT_PORT);
   externalPort = 0;
   allowLocalIp = false;
   hideMyPort = false;
@@ -92,7 +95,7 @@ bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
     std::vector<std::string> perrs = command_line::get_arg(vm, arg_p2p_add_peer);
     for(const std::string& pr_str: perrs)
     {
-      nodetool::peerlist_entry pe = boost::value_initialized<nodetool::peerlist_entry>();
+      peerlist_entry pe = boost::value_initialized<peerlist_entry>();
       pe.id = crypto::rand<uint64_t>();
       if (!parsePeerFromString(pe.adr, pr_str)) {
         return false;
@@ -123,4 +126,3 @@ bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
 }
 
 } //namespace nodetool
-

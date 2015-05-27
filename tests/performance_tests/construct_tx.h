@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -38,7 +38,7 @@ public:
 
   bool init()
   {
-    using namespace cryptonote;
+    using namespace CryptoNote;
 
     if (!base_class::init())
       return false;
@@ -55,11 +55,11 @@ public:
 
   bool test()
   {
-    return cryptonote::construct_tx(this->m_miners[this->real_source_idx].get_keys(), this->m_sources, m_destinations, std::vector<uint8_t>(), m_tx, 0);
+    return CryptoNote::construct_tx(this->m_miners[this->real_source_idx].get_keys(), this->m_sources, m_destinations, std::vector<uint8_t>(), m_tx, 0, this->m_logger);
   }
 
 private:
-  cryptonote::account_base m_alice;
-  std::vector<cryptonote::tx_destination_entry> m_destinations;
-  cryptonote::Transaction m_tx;
+  CryptoNote::account_base m_alice;
+  std::vector<CryptoNote::tx_destination_entry> m_destinations;
+  CryptoNote::Transaction m_tx;
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -37,14 +37,14 @@ bool verifyKeys(const crypto::secret_key& sec, const crypto::public_key& expecte
 
 void throwIfKeysMissmatch(const crypto::secret_key& sec, const crypto::public_key& expected_pub) {
   if (!verifyKeys(sec, expected_pub))
-    throw std::system_error(make_error_code(cryptonote::error::WRONG_PASSWORD));
+    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
 }
 
 }
 
 namespace CryptoNote {
 
-WalletSerializer::WalletSerializer(cryptonote::account_base& account, WalletUserTransactionsCache& transactionsCache) :
+WalletSerializer::WalletSerializer(CryptoNote::account_base& account, WalletUserTransactionsCache& transactionsCache) :
   account(account),
   transactionsCache(transactionsCache),
   walletSerializationVersion(1)
@@ -53,7 +53,7 @@ WalletSerializer::WalletSerializer(cryptonote::account_base& account, WalletUser
 
 void WalletSerializer::serialize(std::ostream& stream, const std::string& password, bool saveDetailed, const std::string& cache) {
   std::stringstream plainArchive;
-  cryptonote::BinaryOutputStreamSerializer serializer(plainArchive);
+  CryptoNote::BinaryOutputStreamSerializer serializer(plainArchive);
   saveKeys(serializer);
 
   serializer(saveDetailed, "has_details");
@@ -70,17 +70,19 @@ void WalletSerializer::serialize(std::ostream& stream, const std::string& passwo
   crypto::chacha8_iv iv = encrypt(plain, password, cipher);
 
   uint32_t version = walletSerializationVersion;
-  cryptonote::BinaryOutputStreamSerializer s(stream);
+  CryptoNote::BinaryOutputStreamSerializer s(stream);
   s.beginObject("wallet");
   s(version, "version");
   s(iv, "iv");
   s(cipher, "data");
   s.endObject();
+
+  stream.flush();
 }
 
-void WalletSerializer::saveKeys(cryptonote::ISerializer& serializer) {
-  cryptonote::KeysStorage keys;
-  cryptonote::account_keys acc = account.get_keys();
+void WalletSerializer::saveKeys(CryptoNote::ISerializer& serializer) {
+  CryptoNote::KeysStorage keys;
+  CryptoNote::account_keys acc = account.get_keys();
 
   keys.creationTimestamp = account.get_createtime();
   keys.spendPublicKey = acc.m_account_address.m_spendPublicKey;
@@ -106,7 +108,7 @@ crypto::chacha8_iv WalletSerializer::encrypt(const std::string& plain, const std
 
 
 void WalletSerializer::deserialize(std::istream& stream, const std::string& password, std::string& cache) {
-  cryptonote::BinaryInputStreamSerializer serializerEncrypted(stream);
+  CryptoNote::BinaryInputStreamSerializer serializerEncrypted(stream);
 
   serializerEncrypted.beginObject("wallet");
 
@@ -126,7 +128,7 @@ void WalletSerializer::deserialize(std::istream& stream, const std::string& pass
 
   std::stringstream decryptedStream(plain);
 
-  cryptonote::BinaryInputStreamSerializer serializer(decryptedStream);
+  CryptoNote::BinaryInputStreamSerializer serializer(decryptedStream);
 
   try
   {
@@ -135,7 +137,7 @@ void WalletSerializer::deserialize(std::istream& stream, const std::string& pass
     throwIfKeysMissmatch(account.get_keys().m_spend_secret_key, account.get_keys().m_account_address.m_spendPublicKey);
   }
   catch (std::exception&) {
-    throw std::system_error(make_error_code(cryptonote::error::WRONG_PASSWORD));
+    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
   }
 
   bool detailsSaved;
@@ -159,12 +161,12 @@ void WalletSerializer::decrypt(const std::string& cipher, std::string& plain, cr
   crypto::chacha8(cipher.data(), cipher.size(), key, iv, &plain[0]);
 }
 
-void WalletSerializer::loadKeys(cryptonote::ISerializer& serializer) {
-  cryptonote::KeysStorage keys;
+void WalletSerializer::loadKeys(CryptoNote::ISerializer& serializer) {
+  CryptoNote::KeysStorage keys;
 
   keys.serialize(serializer, "keys");
 
-  cryptonote::account_keys acc;
+  CryptoNote::account_keys acc;
   acc.m_account_address.m_spendPublicKey = keys.spendPublicKey;
   acc.m_spend_secret_key = keys.spendSecretKey;
   acc.m_account_address.m_viewPublicKey = keys.viewPublicKey;
@@ -175,5 +177,3 @@ void WalletSerializer::loadKeys(cryptonote::ISerializer& serializer) {
 }
 
 }
-
-

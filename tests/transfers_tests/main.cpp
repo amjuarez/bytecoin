@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -18,8 +18,11 @@
 #include "gtest/gtest.h"
 #include "globals.h"
 
+#include <Logging/ConsoleLogger.h>
+
+Logging::ConsoleLogger logger;
 System::Dispatcher globalSystem;
-cryptonote::Currency currency = cryptonote::CurrencyBuilder().testnet(true).currency();
+CryptoNote::Currency currency = CryptoNote::CurrencyBuilder(logger).testnet(true).currency();
 Tests::Common::BaseFunctionalTestConfig config;
 
 

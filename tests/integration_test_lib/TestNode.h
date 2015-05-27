@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,18 +20,20 @@
 #include <system_error>
 #include <INode.h>
 
-
 namespace Tests {
-  namespace Common {
 
-    class TestNode {
-    public:
-      virtual bool startMining(size_t threadsCount, const std::string& address) = 0;
-      virtual bool stopMining() = 0;
-      virtual bool stopDaemon() = 0;
-      virtual bool submitBlock(const std::string& block) = 0;
-      virtual bool makeINode(std::unique_ptr<CryptoNote::INode>& node) = 0;
-      virtual ~TestNode() { }
-    };
-  }
+class TestNode {
+public:
+  virtual bool startMining(size_t threadsCount, const std::string &address) = 0;
+  virtual bool stopMining() = 0;
+  virtual bool stopDaemon() = 0;
+  virtual bool getBlockTemplate(const std::string &minerAddress, CryptoNote::Block &blockTemplate, uint64_t &difficulty) = 0;
+  virtual bool submitBlock(const std::string &block) = 0;
+  virtual bool getTailBlockId(crypto::hash &tailBlockId) = 0;
+  virtual bool makeINode(std::unique_ptr<CryptoNote::INode> &node) = 0;
+  virtual uint64_t getLocalHeight() = 0;
+
+  virtual ~TestNode() {}
+};
+
 }

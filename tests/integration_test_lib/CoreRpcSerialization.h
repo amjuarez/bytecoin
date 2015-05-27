@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,15 +22,15 @@
 #include "../../src/serialization/ISerializer.h"
 #include "../../src/rpc/core_rpc_server_commands_defs.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 
-void serialize(COMMAND_RPC_START_MINING::request& value, const std::string& name, cryptonote::ISerializer& serializer);
-void serialize(COMMAND_RPC_START_MINING::response& value, const std::string& name, cryptonote::ISerializer& serializer);
+void serialize(COMMAND_RPC_START_MINING::request& value, const std::string& name, CryptoNote::ISerializer& serializer);
+void serialize(COMMAND_RPC_START_MINING::response& value, const std::string& name, CryptoNote::ISerializer& serializer);
 
-void serialize(COMMAND_RPC_STOP_MINING::request& value, const std::string& name, cryptonote::ISerializer& serializer);
-void serialize(COMMAND_RPC_STOP_MINING::response& value, const std::string& name, cryptonote::ISerializer& serializer);
+void serialize(COMMAND_RPC_STOP_MINING::request& value, const std::string& name, CryptoNote::ISerializer& serializer);
+void serialize(COMMAND_RPC_STOP_MINING::response& value, const std::string& name, CryptoNote::ISerializer& serializer);
 
-void serialize(COMMAND_RPC_STOP_DAEMON::request& value, const std::string& name, cryptonote::ISerializer& serializer);
-void serialize(COMMAND_RPC_STOP_DAEMON::response& value, const std::string& name, cryptonote::ISerializer& serializer);
+void serialize(COMMAND_RPC_STOP_DAEMON::request& value, const std::string& name, CryptoNote::ISerializer& serializer);
+void serialize(COMMAND_RPC_STOP_DAEMON::response& value, const std::string& name, CryptoNote::ISerializer& serializer);
 
-} //namespace cryptonote
+} //namespace CryptoNote

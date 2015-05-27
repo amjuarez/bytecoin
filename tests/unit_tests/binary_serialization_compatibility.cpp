@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,12 +15,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-
 #include "gtest/gtest.h"
 
 #include <sstream>
 #include <limits>
-#include <boost/variant/get.hpp>
 
 #include "serialization/BinaryOutputStreamSerializer.h"
 #include "serialization/BinaryInputStreamSerializer.h"
@@ -39,7 +37,7 @@ void checkEqualBinary(Struct& original) {
   std::stringstream newStream;
   std::stringstream oldStream;
 
-  cryptonote::BinaryOutputStreamSerializer binarySerializer(newStream);
+  CryptoNote::BinaryOutputStreamSerializer binarySerializer(newStream);
   binarySerializer(original, "");
 
   binary_archive<true> ba(oldStream);
@@ -53,7 +51,7 @@ template <typename Struct>
 void checkEnumeratorToLegacy(Struct& original) {
   std::stringstream archive;
 
-  cryptonote::BinaryOutputStreamSerializer binarySerializer(archive);
+  CryptoNote::BinaryOutputStreamSerializer binarySerializer(archive);
   binarySerializer(original, "");
 
   //std::cout << "enumerated string: " << epee::string_tools::buff_to_hex_nodelimer(archive.str()) << std::endl;
@@ -78,7 +76,7 @@ void checkLegacyToEnumerator(Struct& original) {
 
   Struct restored;
 
-  cryptonote::BinaryInputStreamSerializer binarySerializer(archive);
+  CryptoNote::BinaryInputStreamSerializer binarySerializer(archive);
   binarySerializer(restored, "");
 
   ASSERT_EQ(original, restored);
@@ -88,11 +86,11 @@ template <typename Struct>
 void checkEnumeratorToEnumerator(Struct& original) {
   std::stringstream archive;
 
-  cryptonote::BinaryOutputStreamSerializer output(archive);
+  CryptoNote::BinaryOutputStreamSerializer output(archive);
   output(original, "");
 
   Struct restored;
-  cryptonote::BinaryInputStreamSerializer input(archive);
+  CryptoNote::BinaryInputStreamSerializer input(archive);
   input(restored, "");
 
   ASSERT_EQ(original, restored);
@@ -128,7 +126,7 @@ void fillSignature(crypto::signature& sig, char startByte = 120) {
   fillData(reinterpret_cast<char *>(&sig), sizeof(crypto::signature), startByte);
 }
 
-void fillTransactionOutputMultisignature(cryptonote::TransactionOutputMultisignature& s) {
+void fillTransactionOutputMultisignature(CryptoNote::TransactionOutputMultisignature& s) {
   crypto::public_key key;
   fillPublicKey(key, 0);
   s.keys.push_back(key);
@@ -153,29 +151,29 @@ void fillTransactionOutputMultisignature(cryptonote::TransactionOutputMultisigna
   s.requiredSignatures = 12;
 }
 
-void fillTransaction(cryptonote::Transaction& tx) {
+void fillTransaction(CryptoNote::Transaction& tx) {
   tx.version = 1;
   tx.unlockTime = 0x7f1234560089ABCD;
 
-  cryptonote::TransactionInputGenerate gen;
-  gen.height = 0xABCD123456EF;
+  CryptoNote::TransactionInputGenerate gen;
+  gen.height = 0xABCDEF12;
   tx.vin.push_back(gen);
 
-  cryptonote::TransactionInputToKey key;
+  CryptoNote::TransactionInputToKey key;
   key.amount = 500123;
   key.keyOffsets = {12,3323,0x7f0000000000, std::numeric_limits<uint64_t>::max(), 0};
   fillKeyImage(key.keyImage);
   tx.vin.push_back(key);
 
-  cryptonote::TransactionInputMultisignature multisig;
+  CryptoNote::TransactionInputMultisignature multisig;
   multisig.amount = 490000000;
   multisig.outputIndex = 424242;
   multisig.signatures = 4;
   tx.vin.push_back(multisig);
 
-  cryptonote::TransactionOutput txOutput;
+  CryptoNote::TransactionOutput txOutput;
   txOutput.amount = 0xfff000ffff778822;
-  cryptonote::TransactionOutputToKey out;
+  CryptoNote::TransactionOutputToKey out;
   fillPublicKey(out.key);
   txOutput.target = out;
   tx.vout.push_back(txOutput);
@@ -184,20 +182,20 @@ void fillTransaction(cryptonote::Transaction& tx) {
 
   tx.signatures.resize(3);
 
-  for (size_t i = 0; i < boost::get<cryptonote::TransactionInputToKey>(tx.vin[1]).keyOffsets.size(); ++i) {
+  for (size_t i = 0; i < boost::get<CryptoNote::TransactionInputToKey>(tx.vin[1]).keyOffsets.size(); ++i) {
     crypto::signature sig;
-    fillSignature(sig, i);
+    fillSignature(sig, static_cast<char>(i));
     tx.signatures[1].push_back(sig);
   }
 
-  for (size_t i = 0; i < boost::get<cryptonote::TransactionInputMultisignature>(tx.vin[2]).signatures; ++i) {
+  for (size_t i = 0; i < boost::get<CryptoNote::TransactionInputMultisignature>(tx.vin[2]).signatures; ++i) {
     crypto::signature sig;
-    fillSignature(sig, i+120);
+    fillSignature(sig, static_cast<char>(i + 120));
     tx.signatures[2].push_back(sig);
   }
 }
 
-void fillParentBlock(cryptonote::ParentBlock& pb) {
+void fillParentBlock(CryptoNote::ParentBlock& pb) {
   pb.majorVersion = 1;
   pb.minorVersion = 1;
 
@@ -207,29 +205,29 @@ void fillParentBlock(cryptonote::ParentBlock& pb) {
   size_t branchSize = crypto::tree_depth(pb.numberOfTransactions);
   for (size_t i = 0; i < branchSize; ++i) {
     crypto::hash hash;
-    fillHash(hash, i);
+    fillHash(hash, static_cast<char>(i));
     pb.minerTxBranch.push_back(hash);
   }
 
   fillTransaction(pb.minerTx);
 
-  cryptonote::tx_extra_merge_mining_tag mmTag;
+  CryptoNote::tx_extra_merge_mining_tag mmTag;
   mmTag.depth = 10;
   fillHash(mmTag.merkle_root);
   pb.minerTx.extra.clear();
-  cryptonote::append_mm_tag_to_extra(pb.minerTx.extra, mmTag);
+  CryptoNote::append_mm_tag_to_extra(pb.minerTx.extra, mmTag);
 
   std::string my;
   std::copy(pb.minerTx.extra.begin(), pb.minerTx.extra.end(), std::back_inserter(my));
 
   for (size_t i = 0; i < mmTag.depth; ++i) {
     crypto::hash hash;
-    fillHash(hash, i);
+    fillHash(hash, static_cast<char>(i));
     pb.blockchainBranch.push_back(hash);
   }
 }
 
-void fillBlockHeaderVersion1(cryptonote::BlockHeader& header) {
+void fillBlockHeaderVersion1(CryptoNote::BlockHeader& header) {
   header.majorVersion = 1;
   header.minorVersion = 1;
   header.nonce = 0x807F00AB;
@@ -237,13 +235,13 @@ void fillBlockHeaderVersion1(cryptonote::BlockHeader& header) {
   fillHash(header.prevId);
 }
 
-void fillBlockHeaderVersion2(cryptonote::BlockHeader& header) {
+void fillBlockHeaderVersion2(CryptoNote::BlockHeader& header) {
   fillBlockHeaderVersion1(header);
   header.majorVersion = 2;
 }
 
 TEST(BinarySerializationCompatibility, TransactionOutputMultisignature) {
-  cryptonote::TransactionOutputMultisignature s;
+  CryptoNote::TransactionOutputMultisignature s;
 
   fillTransactionOutputMultisignature(s);
 
@@ -251,11 +249,11 @@ TEST(BinarySerializationCompatibility, TransactionOutputMultisignature) {
 }
 
 TEST(BinarySerializationCompatibility, TransactionInputGenerate) {
-  cryptonote::TransactionInputGenerate s;
-  s.height = 0x8000000000000001;
+  CryptoNote::TransactionInputGenerate s;
+  s.height = 0x80000001;
   checkCompatibility(s);
 
-  s.height = 0x7FFFFFFFFFFFFFFF;
+  s.height = 0x7FFFFFFF;
   checkCompatibility(s);
 
   s.height = 0;
@@ -263,7 +261,7 @@ TEST(BinarySerializationCompatibility, TransactionInputGenerate) {
 };
 
 TEST(BinarySerializationCompatibility, TransactionInputToKey) {
-  cryptonote::TransactionInputToKey s;
+  CryptoNote::TransactionInputToKey s;
 
   s.amount = 123456987032;
   s.keyOffsets = {12,3323,0x7f00000000000000, std::numeric_limits<uint64_t>::max(), 0};
@@ -273,7 +271,7 @@ TEST(BinarySerializationCompatibility, TransactionInputToKey) {
 }
 
 TEST(BinarySerializationCompatibility, TransactionInputMultisignature) {
-  cryptonote::TransactionInputMultisignature s;
+  CryptoNote::TransactionInputMultisignature s;
   s.amount = 0xfff000ffff778822;
   s.signatures = 0x7f259200;
   s.outputIndex = 0;
@@ -282,10 +280,10 @@ TEST(BinarySerializationCompatibility, TransactionInputMultisignature) {
 }
 
 TEST(BinarySerializationCompatibility, TransactionOutput_TransactionOutputToKey) {
-  cryptonote::TransactionOutput s;
+  CryptoNote::TransactionOutput s;
   s.amount = 0xfff000ffff778822;
 
-  cryptonote::TransactionOutputToKey out;
+  CryptoNote::TransactionOutputToKey out;
   fillPublicKey(out.key);
   s.target = out;
 
@@ -293,10 +291,10 @@ TEST(BinarySerializationCompatibility, TransactionOutput_TransactionOutputToKey)
 }
 
 TEST(BinarySerializationCompatibility, TransactionOutput_TransactionOutputMultisignature) {
-  cryptonote::TransactionOutput s;
+  CryptoNote::TransactionOutput s;
   s.amount = 0xfff000ffff778822;
 
-  cryptonote::TransactionOutputMultisignature out;
+  CryptoNote::TransactionOutputMultisignature out;
   fillTransactionOutputMultisignature(out);
   s.target = out;
 
@@ -304,14 +302,14 @@ TEST(BinarySerializationCompatibility, TransactionOutput_TransactionOutputMultis
 }
 
 TEST(BinarySerializationCompatibility, Transaction) {
-  cryptonote::Transaction tx;
+  CryptoNote::Transaction tx;
 
   fillTransaction(tx);
 
   checkCompatibility(tx);
 }
 
-void compareParentBlocks(cryptonote::ParentBlock& pb, cryptonote::ParentBlock& restoredPb, bool headerOnly) {
+void compareParentBlocks(CryptoNote::ParentBlock& pb, CryptoNote::ParentBlock& restoredPb, bool headerOnly) {
   EXPECT_EQ(pb.majorVersion, restoredPb.majorVersion);
   EXPECT_EQ(pb.minorVersion, restoredPb.minorVersion);
   EXPECT_EQ(pb.prevId, restoredPb.prevId);
@@ -326,18 +324,18 @@ void compareParentBlocks(cryptonote::ParentBlock& pb, cryptonote::ParentBlock& r
   EXPECT_EQ(pb.blockchainBranch, restoredPb.blockchainBranch);
 }
 
-void checkEnumeratorToLegacy(cryptonote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
+void checkEnumeratorToLegacy(CryptoNote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
   std::stringstream archive;
 
-  cryptonote::ParentBlockSerializer original(pb, ts, nonce, hashingSerialization, headerOnly);
-  cryptonote::BinaryOutputStreamSerializer output(archive);
+  CryptoNote::ParentBlockSerializer original(pb, ts, nonce, hashingSerialization, headerOnly);
+  CryptoNote::BinaryOutputStreamSerializer output(archive);
   output(original, "");
 
-  cryptonote::ParentBlock restoredPb;
+  CryptoNote::ParentBlock restoredPb;
   uint64_t restoredTs;
   uint32_t restoredNonce;
 
-  cryptonote::ParentBlockSerializer restored(restoredPb, restoredTs, restoredNonce, hashingSerialization, headerOnly);
+  CryptoNote::ParentBlockSerializer restored(restoredPb, restoredTs, restoredNonce, hashingSerialization, headerOnly);
   binary_archive<false> ba(archive);
   bool r = ::serialization::serialize(ba, restored);
   ASSERT_TRUE(r);
@@ -348,21 +346,21 @@ void checkEnumeratorToLegacy(cryptonote::ParentBlock& pb, uint64_t ts, uint32_t 
   ASSERT_NO_FATAL_FAILURE(compareParentBlocks(pb, restoredPb, headerOnly));
 }
 
-void checkLegacyToEnumerator(cryptonote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
+void checkLegacyToEnumerator(CryptoNote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
   std::stringstream archive;
 
-  cryptonote::ParentBlockSerializer original(pb, ts, nonce, hashingSerialization, headerOnly);
+  CryptoNote::ParentBlockSerializer original(pb, ts, nonce, hashingSerialization, headerOnly);
   binary_archive<true> ba(archive);
   bool r = ::serialization::serialize(ba, original);
   ASSERT_TRUE(r);
 
-  cryptonote::ParentBlock restoredPb;
+  CryptoNote::ParentBlock restoredPb;
   uint64_t restoredTs;
   uint32_t restoredNonce;
 
-  cryptonote::ParentBlockSerializer restored(restoredPb, restoredTs, restoredNonce, hashingSerialization, headerOnly);
+  CryptoNote::ParentBlockSerializer restored(restoredPb, restoredTs, restoredNonce, hashingSerialization, headerOnly);
 
-  cryptonote::BinaryInputStreamSerializer input(archive);
+  CryptoNote::BinaryInputStreamSerializer input(archive);
   input(restored, "");
 
   EXPECT_EQ(nonce, restoredNonce);
@@ -371,20 +369,20 @@ void checkLegacyToEnumerator(cryptonote::ParentBlock& pb, uint64_t ts, uint32_t 
   ASSERT_NO_FATAL_FAILURE(compareParentBlocks(pb, restoredPb, headerOnly));
 }
 
-void checkEnumeratorToEnumerator(cryptonote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
+void checkEnumeratorToEnumerator(CryptoNote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
   std::stringstream archive;
 
-  cryptonote::ParentBlockSerializer original(pb, ts, nonce, hashingSerialization, headerOnly);
-  cryptonote::BinaryOutputStreamSerializer output(archive);
+  CryptoNote::ParentBlockSerializer original(pb, ts, nonce, hashingSerialization, headerOnly);
+  CryptoNote::BinaryOutputStreamSerializer output(archive);
   output(original, "");
 
-  cryptonote::ParentBlock restoredPb;
+  CryptoNote::ParentBlock restoredPb;
   uint64_t restoredTs;
   uint32_t restoredNonce;
 
-  cryptonote::ParentBlockSerializer restored(restoredPb, restoredTs, restoredNonce, hashingSerialization, headerOnly);
+  CryptoNote::ParentBlockSerializer restored(restoredPb, restoredTs, restoredNonce, hashingSerialization, headerOnly);
 
-  cryptonote::BinaryInputStreamSerializer input(archive);
+  CryptoNote::BinaryInputStreamSerializer input(archive);
   input(restored, "");
 
   EXPECT_EQ(nonce, restoredNonce);
@@ -393,14 +391,14 @@ void checkEnumeratorToEnumerator(cryptonote::ParentBlock& pb, uint64_t ts, uint3
   ASSERT_NO_FATAL_FAILURE(compareParentBlocks(pb, restoredPb, headerOnly));
 }
 
-void checkCompatibility(cryptonote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
+void checkCompatibility(CryptoNote::ParentBlock& pb, uint64_t ts, uint32_t nonce, bool hashingSerialization, bool headerOnly) {
   ASSERT_NO_FATAL_FAILURE(checkEnumeratorToEnumerator(pb, ts, nonce, hashingSerialization, headerOnly));
   ASSERT_NO_FATAL_FAILURE(checkEnumeratorToLegacy(pb, ts, nonce, hashingSerialization, headerOnly));
   ASSERT_NO_FATAL_FAILURE(checkLegacyToEnumerator(pb, ts, nonce, hashingSerialization, headerOnly));
 }
 
 TEST(BinarySerializationCompatibility, ParentBlockSerializer) {
-  cryptonote::ParentBlock pb;
+  CryptoNote::ParentBlock pb;
   fillParentBlock(pb);
   uint64_t timestamp = 1408106672;
   uint32_t nonce = 1234567;
@@ -410,14 +408,14 @@ TEST(BinarySerializationCompatibility, ParentBlockSerializer) {
   checkCompatibility(pb, timestamp, nonce, false, true);
 }
 
-void compareBlocks(cryptonote::Block& block, cryptonote::Block& restoredBlock) {
+void compareBlocks(CryptoNote::Block& block, CryptoNote::Block& restoredBlock) {
   ASSERT_EQ(block.majorVersion, restoredBlock.majorVersion);
   ASSERT_EQ(block.minorVersion, restoredBlock.minorVersion);
-  if (block.majorVersion == cryptonote::BLOCK_MAJOR_VERSION_1) {
+  if (block.majorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1) {
     ASSERT_EQ(block.timestamp, restoredBlock.timestamp);
     ASSERT_EQ(block.prevId, restoredBlock.prevId);
     ASSERT_EQ(block.nonce, restoredBlock.nonce);
-  } else if (block.majorVersion == cryptonote::BLOCK_MAJOR_VERSION_2) {
+  } else if (block.majorVersion == CryptoNote::BLOCK_MAJOR_VERSION_2) {
     ASSERT_EQ(block.prevId, restoredBlock.prevId);
     ASSERT_NO_FATAL_FAILURE(compareParentBlocks(block.parentBlock, restoredBlock.parentBlock, false));
   } else {
@@ -427,13 +425,13 @@ void compareBlocks(cryptonote::Block& block, cryptonote::Block& restoredBlock) {
   ASSERT_EQ(block.txHashes, restoredBlock.txHashes);
 }
 
-void checkEnumeratorToLegacy(cryptonote::Block& block) {
+void checkEnumeratorToLegacy(CryptoNote::Block& block) {
   std::stringstream archive;
 
-  cryptonote::BinaryOutputStreamSerializer output(archive);
+  CryptoNote::BinaryOutputStreamSerializer output(archive);
   output(block, "");
 
-  cryptonote::Block restoredBlock;
+  CryptoNote::Block restoredBlock;
 
   binary_archive<false> ba(archive);
   bool r = ::serialization::serialize(ba, restoredBlock);
@@ -442,52 +440,52 @@ void checkEnumeratorToLegacy(cryptonote::Block& block) {
   ASSERT_NO_FATAL_FAILURE(compareBlocks(block, restoredBlock));
 }
 
-void checkLegacyToEnumerator(cryptonote::Block& block) {
+void checkLegacyToEnumerator(CryptoNote::Block& block) {
   std::stringstream archive;
 
   binary_archive<true> ba(archive);
   bool r = ::serialization::serialize(ba, block);
   ASSERT_TRUE(r);
 
-  cryptonote::Block restoredBlock;
+  CryptoNote::Block restoredBlock;
 
-  cryptonote::BinaryInputStreamSerializer output(archive);
+  CryptoNote::BinaryInputStreamSerializer output(archive);
   output(restoredBlock, "");
 
   ASSERT_NO_FATAL_FAILURE(compareBlocks(block, restoredBlock));
 }
 
-void checkEnumeratorToEnumerator(cryptonote::Block& block) {
+void checkEnumeratorToEnumerator(CryptoNote::Block& block) {
   std::stringstream archive;
 
-  cryptonote::BinaryOutputStreamSerializer output(archive);
+  CryptoNote::BinaryOutputStreamSerializer output(archive);
   output(block, "");
 
-  cryptonote::Block restoredBlock;
+  CryptoNote::Block restoredBlock;
 
 //  std::cout << "enumerated string: " << epee::string_tools::buff_to_hex_nodelimer(archive.str()) << std::endl;
 
-  cryptonote::BinaryInputStreamSerializer input(archive);
+  CryptoNote::BinaryInputStreamSerializer input(archive);
   input(restoredBlock, "");
 
   ASSERT_NO_FATAL_FAILURE(compareBlocks(block, restoredBlock));
 }
 
-void checkCompatibility(cryptonote::Block& block) {
+void checkCompatibility(CryptoNote::Block& block) {
   ASSERT_NO_FATAL_FAILURE(checkEnumeratorToEnumerator(block));
   ASSERT_NO_FATAL_FAILURE(checkEnumeratorToLegacy(block));
   ASSERT_NO_FATAL_FAILURE(checkLegacyToEnumerator(block));
 }
 
 TEST(BinarySerializationCompatibility, BlockVersion1) {
-  cryptonote::Block block;
+  CryptoNote::Block block;
   fillBlockHeaderVersion1(block);
   fillParentBlock(block.parentBlock);
   fillTransaction(block.minerTx);
 
   for (size_t i = 0; i < 7; ++i) {
     crypto::hash hash;
-    fillHash(hash, 0x7F + i);
+    fillHash(hash, static_cast<char>(0x7F + i));
     block.txHashes.push_back(hash);
   }
 
@@ -495,14 +493,14 @@ TEST(BinarySerializationCompatibility, BlockVersion1) {
 }
 
 TEST(BinarySerializationCompatibility, BlockVersion2) {
-  cryptonote::Block block;
+  CryptoNote::Block block;
   fillBlockHeaderVersion2(block);
   fillParentBlock(block.parentBlock);
   fillTransaction(block.minerTx);
 
   for (size_t i = 0; i < 7; ++i) {
     crypto::hash hash;
-    fillHash(hash, 0x7F + i);
+    fillHash(hash, static_cast<char>(0x7F + i));
     block.txHashes.push_back(hash);
   }
 
@@ -510,16 +508,16 @@ TEST(BinarySerializationCompatibility, BlockVersion2) {
 }
 
 TEST(BinarySerializationCompatibility, account_public_address) {
-  cryptonote::AccountPublicAddress addr;
+  CryptoNote::AccountPublicAddress addr;
 
-  fillPublicKey(addr.m_spendPublicKey, 0x50);
-  fillPublicKey(addr.m_viewPublicKey, 0xAA);
+  fillPublicKey(addr.m_spendPublicKey, '\x50');
+  fillPublicKey(addr.m_viewPublicKey, '\xAA');
 
   checkCompatibility(addr);
 }
 
 TEST(BinarySerializationCompatibility, tx_extra_merge_mining_tag) {
-  cryptonote::tx_extra_merge_mining_tag tag;
+  CryptoNote::tx_extra_merge_mining_tag tag;
   tag.depth = 0xdeadbeef;
   fillHash(tag.merkle_root);
 
@@ -527,17 +525,17 @@ TEST(BinarySerializationCompatibility, tx_extra_merge_mining_tag) {
 }
 
 TEST(BinarySerializationCompatibility, readFromEmptyStream) {
-  cryptonote::TransactionOutput t;
+  CryptoNote::TransactionOutput t;
   std::stringstream emptyStream;
-  cryptonote::BinaryInputStreamSerializer s(emptyStream);
+  CryptoNote::BinaryInputStreamSerializer s(emptyStream);
 
   ASSERT_ANY_THROW(s(t, ""));
 }
 
 TEST(BinarySerializationCompatibility, writeToBadStream) {
-  cryptonote::TransactionOutput t;
+  CryptoNote::TransactionOutput t;
   std::stringstream badStream;
-  cryptonote::BinaryOutputStreamSerializer s(badStream);
+  CryptoNote::BinaryOutputStreamSerializer s(badStream);
 
   badStream.setstate(std::ios::badbit);
   ASSERT_ANY_THROW(s(t, ""));

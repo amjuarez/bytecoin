@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,7 +16,6 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
-#include "include_base_utils.h"
 
 #include <set>
 #include <unordered_map>
@@ -31,14 +30,9 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/member.hpp>
 
-// epee
-#include "math_helper.h"
-#include "string_tools.h"
-#include "syncobj.h"
-
-#include "common/util.h"
-#include "common/int-util.h"
-#include "common/ObserverManager.h"
+#include "Common/util.h"
+#include "Common/int-util.h"
+#include "Common/ObserverManager.h"
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
 #include "cryptonote_core/Currency.h"
@@ -47,8 +41,9 @@
 #include "cryptonote_core/ITxPoolObserver.h"
 #include "cryptonote_core/verification_context.h"
 
+#include <Logging/LoggerRef.h>
 
-namespace cryptonote {
+namespace CryptoNote {
 
 
   class OnceInTimeInterval {
@@ -85,8 +80,11 @@ namespace cryptonote {
   /************************************************************************/
   class tx_memory_pool: boost::noncopyable {
   public:
-    tx_memory_pool(const cryptonote::Currency& currency, CryptoNote::ITransactionValidator& validator,
-      CryptoNote::ITimeProvider& timeProvider);
+    tx_memory_pool(
+      const CryptoNote::Currency& currency, 
+      CryptoNote::ITransactionValidator& validator,
+      CryptoNote::ITimeProvider& timeProvider,
+      Logging::ILogger& log);
 
     bool addObserver(ITxPoolObserver* observer);
     bool removeObserver(ITxPoolObserver* observer);
@@ -117,7 +115,7 @@ namespace cryptonote {
 
     template<class t_ids_container, class t_tx_container, class t_missed_container>
     void getTransactions(const t_ids_container& txsIds, t_tx_container& txs, t_missed_container& missedTxs) {
-      CRITICAL_REGION_LOCAL(m_transactions_lock);
+      std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
 
       for (const auto& id : txsIds) {
         auto it = m_transactions.find(id);
@@ -137,7 +135,7 @@ namespace cryptonote {
         return;
       }
 
-      CRITICAL_REGION_LOCAL(m_transactions_lock);
+      std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
       a & m_transactions;
       a & m_spent_key_images;
       a & m_spentOutputs;
@@ -202,10 +200,9 @@ namespace cryptonote {
     bool is_transaction_ready_to_go(const Transaction& tx, TransactionCheckInfo& txd) const;
 
     tools::ObserverManager<ITxPoolObserver> m_observerManager;
-
-    const cryptonote::Currency& m_currency;
+    const CryptoNote::Currency& m_currency;
     OnceInTimeInterval m_txCheckInterval;
-    mutable epee::critical_section m_transactions_lock;
+    mutable std::recursive_mutex m_transactions_lock;
     key_images_container m_spent_key_images;
     GlobalOutputsContainer m_spentOutputs;
 
@@ -216,6 +213,8 @@ namespace cryptonote {
     tx_container_t m_transactions;  
     tx_container_t::nth_index<1>::type& m_fee_index;
 
+    Logging::LoggerRef logger;
+
 #if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
     friend class blockchain_storage;
 #endif
@@ -225,7 +224,7 @@ namespace cryptonote {
 namespace boost {
   namespace serialization {
     template<class archive_t>
-    void serialize(archive_t & ar, cryptonote::tx_memory_pool::TransactionDetails& td, const unsigned int version) {
+    void serialize(archive_t & ar, CryptoNote::tx_memory_pool::TransactionDetails& td, const unsigned int version) {
       ar & td.id;
       ar & td.blobSize;
       ar & td.fee;
@@ -240,4 +239,4 @@ namespace boost {
   }
 }
 
-BOOST_CLASS_VERSION(cryptonote::tx_memory_pool, CURRENT_MEMPOOL_ARCHIVE_VER)
+BOOST_CLASS_VERSION(CryptoNote::tx_memory_pool, CURRENT_MEMPOOL_ARCHIVE_VER)
