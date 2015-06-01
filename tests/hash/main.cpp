@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,6 @@
 #include <ios>
 #include <string>
 
-#include "warnings.h"
 #include "crypto/hash.h"
 #include "../io.h"
 
@@ -32,16 +31,16 @@ typedef crypto::hash chash;
 cn_context *context;
 
 extern "C" {
+#ifdef _MSC_VER
+#pragma warning(disable: 4297)
+#endif
 
-PUSH_WARNINGS
-DISABLE_VS_WARNINGS(4297)
   static void hash_tree(const void *data, size_t length, char *hash) {
     if ((length & 31) != 0) {
       throw ios_base::failure("Invalid input length for tree_hash");
     }
     tree_hash((const char (*)[32]) data, length >> 5, hash);
   }
-POP_WARNINGS
 
   static void slow_hash(const void *data, size_t length, char *hash) {
     cn_slow_hash(*context, data, length, *reinterpret_cast<chash *>(hash));

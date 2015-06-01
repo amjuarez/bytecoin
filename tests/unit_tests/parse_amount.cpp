@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,8 +19,9 @@
 
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/Currency.h"
+#include <Logging/LoggerGroup.h>
 
-using namespace cryptonote;
+using namespace CryptoNote;
 
 namespace
 {
@@ -28,7 +29,8 @@ namespace
 
   void do_pos_test(uint64_t expected, const std::string& str)
   {
-    cryptonote::Currency currency = cryptonote::CurrencyBuilder().numberOfDecimalPlaces(TEST_NUMBER_OF_DECIMAL_PLACES).currency();
+    Logging::LoggerGroup logger;
+    CryptoNote::Currency currency = CryptoNote::CurrencyBuilder(logger).numberOfDecimalPlaces(TEST_NUMBER_OF_DECIMAL_PLACES).currency();
     uint64_t val;
     std::string number_str = str;
     std::replace(number_str.begin(), number_str.end(), '_', '.');
@@ -39,7 +41,8 @@ namespace
 
   void do_neg_test(const std::string& str)
   {
-    cryptonote::Currency currency = cryptonote::CurrencyBuilder().numberOfDecimalPlaces(TEST_NUMBER_OF_DECIMAL_PLACES).currency();
+    Logging::LoggerGroup logger;
+    CryptoNote::Currency currency = CryptoNote::CurrencyBuilder(logger).numberOfDecimalPlaces(TEST_NUMBER_OF_DECIMAL_PLACES).currency();
     uint64_t val;
     std::string number_str = str;
     std::replace(number_str.begin(), number_str.end(), '_', '.');

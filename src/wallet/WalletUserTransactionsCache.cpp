@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,9 +15,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-// epee
-#include "misc_log_ex.h"
-
 #include "WalletErrors.h"
 #include "WalletUserTransactionsCache.h"
 #include "WalletSerialization.h"
@@ -30,10 +27,10 @@
 namespace CryptoNote {
 
 
-void WalletUserTransactionsCache::serialize(cryptonote::ISerializer& s, const std::string& name) {
+void WalletUserTransactionsCache::serialize(CryptoNote::ISerializer& s, const std::string& name) {
   s.beginObject(name);
 
-  if (s.type() == cryptonote::ISerializer::INPUT) {
+  if (s.type() == CryptoNote::ISerializer::INPUT) {
     s(m_transactions, "transactions");
     s(m_transfers, "transfers");
     s(m_unconfirmedTransactions, "unconfirmed");
@@ -88,14 +85,17 @@ TransactionId WalletUserTransactionsCache::addNewTransaction(
 }
 
 void WalletUserTransactionsCache::updateTransaction(
-  TransactionId transactionId, const cryptonote::Transaction& tx, uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs) {
+  TransactionId transactionId, const CryptoNote::Transaction& tx, uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs) {
+  // update extra field from created transaction
+  auto& txInfo = m_transactions.at(transactionId);
+  txInfo.extra.assign(tx.extra.begin(), tx.extra.end());
   m_unconfirmedTransactions.add(tx, transactionId, amount, usedOutputs);
 }
 
 void WalletUserTransactionsCache::updateTransactionSendingState(TransactionId transactionId, std::error_code ec) {
   auto& txInfo = m_transactions.at(transactionId);
   if (ec) {
-    txInfo.state = ec.value() == cryptonote::error::TX_CANCELLED ? TransactionState::Cancelled : TransactionState::Failed;
+    txInfo.state = ec.value() == error::TX_CANCELLED ? TransactionState::Cancelled : TransactionState::Failed;
     m_unconfirmedTransactions.erase(txInfo.hash);
   } else {
     txInfo.sentTime = time(nullptr); // update sending time

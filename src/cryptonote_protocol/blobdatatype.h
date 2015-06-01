@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,7 +17,23 @@
 
 #pragma once
 
-namespace cryptonote
+#include "Common/StringTools.h"
+
+namespace CryptoNote
 {
   typedef std::string blobdata;
+
+  inline bool hexToBlob(const std::string& hexStr, blobdata& blob) {
+    std::vector<uint8_t> data;
+    if (Common::fromHex(hexStr, data)) {
+      blob = Common::asString(data);
+      return true;
+    }
+    return false;
+  }
+
+  inline std::string blobToHex(const blobdata& blob) {
+    return Common::toHex(blob.data(), blob.size());
+  }
+
 }

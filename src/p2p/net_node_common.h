@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,56 +17,26 @@
 
 #pragma once
 
-#include <boost/uuid/uuid.hpp>
-#include "net/net_utils_base.h"
+#include "p2p_protocol_types.h"
 
-namespace nodetool
-{
+namespace CryptoNote {
 
-  typedef boost::uuids::uuid uuid;
-  typedef boost::uuids::uuid net_connection_id;
-  typedef uint64_t peerid_type;
+  struct cryptonote_connection_context;
 
-  template<class t_connection_context>
-  struct i_p2p_endpoint
-  {
-    virtual void relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)=0;
-    virtual bool invoke_command_to_peer(int command, const std::string& req_buff, std::string& resp_buff, const epee::net_utils::connection_context_base& context)=0;
-    virtual bool invoke_notify_to_peer(int command, const std::string& req_buff, const epee::net_utils::connection_context_base& context)=0;
-    virtual bool drop_connection(const epee::net_utils::connection_context_base& context)=0;
-    virtual void request_callback(const epee::net_utils::connection_context_base& context)=0;
+  struct i_p2p_endpoint {
+    virtual void relay_notify_to_all(int command, const std::string& data_buff, const net_connection_id* excludeConnection) = 0;
+    virtual bool invoke_notify_to_peer(int command, const std::string& req_buff, const CryptoNote::cryptonote_connection_context& context) = 0;
     virtual uint64_t get_connections_count()=0;
-    virtual void for_each_connection(std::function<bool(t_connection_context&, peerid_type)> f)=0;
+    virtual void for_each_connection(std::function<void(CryptoNote::cryptonote_connection_context&, peerid_type)> f) = 0;
+    // can be called from external threads
+    virtual void externalRelayNotifyToAll(int command, const std::string& data_buff) = 0;
   };
 
-  template<class t_connection_context>
-  struct p2p_endpoint_stub: public i_p2p_endpoint<t_connection_context>
-  {
-    virtual void relay_notify_to_all(int command, const std::string& data_buff, const epee::net_utils::connection_context_base& context)
-    {
-    }
-    virtual bool invoke_command_to_peer(int command, const std::string& req_buff, std::string& resp_buff, const epee::net_utils::connection_context_base& context)
-    {
-      return false;
-    }
-    virtual bool invoke_notify_to_peer(int command, const std::string& req_buff, const epee::net_utils::connection_context_base& context)
-    {
-      return true;
-    }
-    virtual bool drop_connection(const epee::net_utils::connection_context_base& context)
-    {
-      return false;
-    }
-    virtual void request_callback(const epee::net_utils::connection_context_base& context)
-    {
-    }
-    virtual void for_each_connection(std::function<bool(t_connection_context&,peerid_type)> f)
-    {
-    }
-
-    virtual uint64_t get_connections_count()    
-    {
-      return false;
-    }
+  struct p2p_endpoint_stub: public i_p2p_endpoint {
+    virtual void relay_notify_to_all(int command, const std::string& data_buff, const net_connection_id* excludeConnection) {}
+    virtual bool invoke_notify_to_peer(int command, const std::string& req_buff, const CryptoNote::cryptonote_connection_context& context) { return true; }
+    virtual void for_each_connection(std::function<void(CryptoNote::cryptonote_connection_context&, peerid_type)> f) {}
+    virtual uint64_t get_connections_count() { return 0; }   
+    virtual void externalRelayNotifyToAll(int command, const std::string& data_buff) {}
   };
 }

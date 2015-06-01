@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,7 +23,7 @@
 
 namespace CryptoNote {
 
-void serialize(AccountAddress& acc, const std::string& name, cryptonote::ISerializer& s) {
+void serialize(AccountAddress& acc, const std::string& name, CryptoNote::ISerializer& s) {
   s.beginObject(name);
   s(acc.spendPublicKey, "spendKey");
   s(acc.viewPublicKey, "viewKey");
@@ -32,7 +32,7 @@ void serialize(AccountAddress& acc, const std::string& name, cryptonote::ISerial
 
 const uint32_t TRANSFERS_STORAGE_ARCHIVE_VERSION = 0;
 
-TransfersSyncronizer::TransfersSyncronizer(const cryptonote::Currency& currency, IBlockchainSynchronizer& sync, INode& node) :
+TransfersSyncronizer::TransfersSyncronizer(const CryptoNote::Currency& currency, IBlockchainSynchronizer& sync, INode& node) :
   m_currency(currency), m_sync(sync), m_node(node) {
 }
 
@@ -83,7 +83,7 @@ ITransfersSubscription* TransfersSyncronizer::getSubscription(const AccountAddre
 void TransfersSyncronizer::save(std::ostream& os) {
   m_sync.save(os);
 
-  cryptonote::BinaryOutputStreamSerializer s(os);
+  CryptoNote::BinaryOutputStreamSerializer s(os);
   s(const_cast<uint32_t&>(TRANSFERS_STORAGE_ARCHIVE_VERSION), "version");
 
   size_t subscriptionCount = m_consumers.size();
@@ -146,7 +146,7 @@ void setObjectState(IStreamSerializable& obj, const std::string& state) {
 void TransfersSyncronizer::load(std::istream& is) {
   m_sync.load(is);
 
-  cryptonote::BinaryInputStreamSerializer s(is);
+  CryptoNote::BinaryInputStreamSerializer s(is);
   uint32_t version = 0;
 
   s(version, "version");

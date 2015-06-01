@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,16 +17,7 @@
 
 #include "account.h"
 
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <fstream>
-
-#include "include_base_utils.h"
-#include "warnings.h"
-
-DISABLE_VS_WARNINGS(4244 4345)
-
-namespace cryptonote
+namespace CryptoNote
 {
   //-----------------------------------------------------------------
   account_base::account_base()

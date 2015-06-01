@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,17 +16,14 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "KVBinaryInputStreamSerializer.h"
-#include "KVBinaryCommon.h"
-
-#include "JsonValue.h"
-
 #include <algorithm>
 #include <cassert>
-#include <stdexcept>
 #include <cstring>
+#include <stdexcept>
+#include "KVBinaryCommon.h"
 
+using Common::JsonValue;
 using namespace CryptoNote;
-using namespace cryptonote;
 
 namespace {
 
@@ -38,16 +35,16 @@ T readPod(std::istream& s) {
 }
 
 template <typename T, typename JsonT = T>
-cryptonote::JsonValue readPodJson(std::istream& s) {
+JsonValue readPodJson(std::istream& s) {
   T v;
   s.read(reinterpret_cast<char*>(&v), sizeof(T));
-  cryptonote::JsonValue jv;
+  JsonValue jv;
   jv = static_cast<JsonT>(v);
   return jv;
 }
 
 template <typename T>
-cryptonote::JsonValue readIntegerJson(std::istream& s) {
+JsonValue readIntegerJson(std::istream& s) {
   return readPodJson<T, int64_t>(s);
 }
 
@@ -97,9 +94,6 @@ void readName(std::istream& s, std::string& name) {
 }
 
 }
-
-
-namespace cryptonote {
 
 void KVBinaryInputStreamSerializer::parse() {
   auto hdr = readPod<KVBinaryStorageBlockHeader>(stream);
@@ -164,7 +158,7 @@ JsonValue KVBinaryInputStreamSerializer::loadValue(uint8_t type) {
   case BIN_KV_SERIALIZE_TYPE_UINT16: return readIntegerJson<uint16_t>(stream);
   case BIN_KV_SERIALIZE_TYPE_UINT8:  return readIntegerJson<uint8_t>(stream);
   case BIN_KV_SERIALIZE_TYPE_DOUBLE: return readPodJson<double>(stream);
-  case BIN_KV_SERIALIZE_TYPE_BOOL:   return readPodJson<uint8_t, bool>(stream);
+  case BIN_KV_SERIALIZE_TYPE_BOOL:   return JsonValue(stream.get() != 0);
   case BIN_KV_SERIALIZE_TYPE_STRING: return readStringJson(stream);
   case BIN_KV_SERIALIZE_TYPE_OBJECT: return loadSection();
   case BIN_KV_SERIALIZE_TYPE_ARRAY:  return loadArray(type);
@@ -194,7 +188,4 @@ JsonValue KVBinaryInputStreamSerializer::loadArray(uint8_t itemType) {
   }
 
   return arr;
-}
-
-
 }

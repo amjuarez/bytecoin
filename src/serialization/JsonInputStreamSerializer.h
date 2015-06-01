@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,12 +20,10 @@
 #include <iosfwd>
 #include <string>
 #include <vector>
+#include "../Common/JsonValue.h"
+#include "JsonInputValueSerializer.h"
 
-//#include "serialization/Enumerator.h"
-#include "serialization/JsonInputValueSerializer.h"
-#include "serialization/JsonValue.h"
-
-namespace cryptonote {
+namespace CryptoNote {
 
 //deserialization
 class JsonInputStreamSerializer : public JsonInputValueSerializer {
@@ -34,7 +32,7 @@ public:
   virtual ~JsonInputStreamSerializer();
 
 private:
-  JsonValue root;
+  Common::JsonValue root;
 };
 
 }

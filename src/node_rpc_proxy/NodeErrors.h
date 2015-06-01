@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,7 +20,7 @@
 #include <string>
 #include <system_error>
 
-namespace cryptonote {
+namespace CryptoNote {
 namespace error {
 
 // custom error conditions enum type:
@@ -66,6 +66,6 @@ private:
 }
 }
  
-inline std::error_code make_error_code(cryptonote::error::NodeErrorCodes e) {
-  return std::error_code(static_cast<int>(e), cryptonote::error::NodeErrorCategory::INSTANCE);
+inline std::error_code make_error_code(CryptoNote::error::NodeErrorCodes e) {
+  return std::error_code(static_cast<int>(e), CryptoNote::error::NodeErrorCategory::INSTANCE);
 }

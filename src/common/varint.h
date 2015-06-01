@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -18,10 +18,10 @@
 #pragma once
 
 #include <limits>
-#include <type_traits>
-#include <utility>
 #include <sstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 namespace tools {
 

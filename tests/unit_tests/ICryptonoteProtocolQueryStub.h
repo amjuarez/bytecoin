@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,12 +22,12 @@
 #include "cryptonote_protocol/ICryptonoteProtocolObserver.h"
 #include "cryptonote_protocol/ICryptonoteProtocolQuery.h"
 
-class ICryptonoteProtocolQueryStub: public cryptonote::ICryptonoteProtocolQuery {
+class ICryptonoteProtocolQueryStub: public CryptoNote::ICryptonoteProtocolQuery {
 public:
   ICryptonoteProtocolQueryStub() : peers(0), observedHeight(0) {}
 
-  virtual bool addObserver(cryptonote::ICryptonoteProtocolObserver* observer);
-  virtual bool removeObserver(cryptonote::ICryptonoteProtocolObserver* observer);
+  virtual bool addObserver(CryptoNote::ICryptonoteProtocolObserver* observer);
+  virtual bool removeObserver(CryptoNote::ICryptonoteProtocolObserver* observer);
   virtual uint64_t getObservedHeight() const;
   virtual size_t getPeerCount() const;
   void setPeerCount(uint32_t count);
@@ -37,4 +37,3 @@ private:
   size_t peers;
   uint64_t observedHeight;
 };
-

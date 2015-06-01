@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -18,14 +18,15 @@
 #pragma once
 #include <map>
 #include "cryptonote_basic_impl.h"
+#include <Logging/LoggerRef.h>
 
-
-namespace cryptonote
+namespace CryptoNote
 {
   class checkpoints
   {
   public:
-    checkpoints();
+    checkpoints(Logging::ILogger& log);
+
     bool add_checkpoint(uint64_t height, const std::string& hash_str);
     bool is_in_checkpoint_zone(uint64_t height) const;
     bool check_block(uint64_t height, const crypto::hash& h) const;
@@ -34,5 +35,6 @@ namespace cryptonote
 
   private:
     std::map<uint64_t, crypto::hash> m_points;
+    Logging::LoggerRef logger;
   };
 }

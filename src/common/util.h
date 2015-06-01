@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,18 +20,10 @@
 #include <string>
 #include <system_error>
 
-#include "crypto/hash.h"
-
-
-namespace nodetool {
-  struct proof_of_trust;
-}
-
 namespace tools
 {
   std::string get_default_data_dir();
   std::string get_os_version_string();
   bool create_directories_if_necessary(const std::string& path);
   std::error_code replace_file(const std::string& replacement_name, const std::string& replaced_name);
-  crypto::hash get_proof_of_trust_hash(const nodetool::proof_of_trust& pot);
 }

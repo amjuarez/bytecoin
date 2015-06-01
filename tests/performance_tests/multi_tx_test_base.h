@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -25,6 +25,8 @@
 #include "cryptonote_core/Currency.h"
 #include "crypto/crypto.h"
 
+#include "Logging/ConsoleLogger.h"
+
 template<size_t a_ring_size>
 class multi_tx_test_base
 {
@@ -36,9 +38,9 @@ public:
 
   bool init()
   {
-    using namespace cryptonote;
+    using namespace CryptoNote;
 
-    Currency currency = CurrencyBuilder().currency();
+    Currency currency = CurrencyBuilder(m_logger).currency();
 
     std::vector<tx_source_entry::output_entry> output_entries;
     for (size_t i = 0; i < ring_size; ++i)
@@ -69,11 +71,12 @@ public:
   }
 
 protected:
-  cryptonote::account_base m_miners[ring_size];
-  cryptonote::Transaction m_miner_txs[ring_size];
+  CryptoNote::account_base m_miners[ring_size];
+  CryptoNote::Transaction m_miner_txs[ring_size];
   uint64_t m_source_amount;
+  Logging::ConsoleLogger m_logger;
 
-  std::vector<cryptonote::tx_source_entry> m_sources;
+  std::vector<CryptoNote::tx_source_entry> m_sources;
   crypto::public_key m_public_keys[ring_size];
   const crypto::public_key* m_public_key_ptrs[ring_size];
 };

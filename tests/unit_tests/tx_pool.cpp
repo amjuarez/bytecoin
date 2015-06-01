@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,19 +24,22 @@
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/tx_pool.h"
 
-using namespace cryptonote;
+#include <Logging/ConsoleLogger.h>
+#include <Logging/LoggerGroup.h>
+
+using namespace CryptoNote;
 using namespace CryptoNote;
 
 class TransactionValidator : public CryptoNote::ITransactionValidator {
-  virtual bool checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock) {
+  virtual bool checkTransactionInputs(const CryptoNote::Transaction& tx, BlockInfo& maxUsedBlock) {
     return true;
   }
 
-  virtual bool checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock, BlockInfo& lastFailed) {
+  virtual bool checkTransactionInputs(const CryptoNote::Transaction& tx, BlockInfo& maxUsedBlock, BlockInfo& lastFailed) {
     return true;
   }
 
-  virtual bool haveSpentKeyImages(const cryptonote::Transaction& tx) {
+  virtual bool haveSpentKeyImages(const CryptoNote::Transaction& tx) {
     return false;
   }
 };
@@ -55,7 +58,7 @@ class TestTransactionGenerator {
 
 public:
 
-  TestTransactionGenerator(const cryptonote::Currency& currency, size_t ringSize) :
+  TestTransactionGenerator(const CryptoNote::Currency& currency, size_t ringSize) :
     m_currency(currency),
     m_ringSize(ringSize),
     m_miners(ringSize), 
@@ -110,7 +113,7 @@ public:
       destinations.push_back(tx_destination_entry(amountPerOut, rv_acc.get_keys().m_account_address));
     }
 
-    construct_tx(m_realSenderKeys, m_sources, destinations, std::vector<uint8_t>(), tx, 0);
+    construct_tx(m_realSenderKeys, m_sources, destinations, std::vector<uint8_t>(), tx, 0, m_logger);
   }
 
   std::vector<account_base> m_miners;
@@ -119,20 +122,30 @@ public:
   std::vector<crypto::public_key> m_public_keys;
   std::vector<const crypto::public_key*> m_public_key_ptrs;
 
-  const cryptonote::Currency& m_currency;
+  Logging::LoggerGroup m_logger;
+  const CryptoNote::Currency& m_currency;
   const size_t m_ringSize;
   account_keys m_realSenderKeys;
   uint64_t m_source_amount;
   account_base rv_acc;
 };
 
+class tx_pool : public ::testing::Test {
+public:
 
+  tx_pool() : 
+    currency(CryptoNote::CurrencyBuilder(logger).currency()) {}
+
+protected:
+  Logging::ConsoleLogger logger;
+  CryptoNote::Currency currency;
+};
 
 namespace
 {
   static const size_t textMaxCumulativeSize = std::numeric_limits<size_t>::max();
 
-  void GenerateTransaction(const cryptonote::Currency& currency, Transaction& tx, uint64_t fee, size_t outputs) {
+  void GenerateTransaction(const CryptoNote::Currency& currency, Transaction& tx, uint64_t fee, size_t outputs) {
     TestTransactionGenerator txGenerator(currency, 1);
     txGenerator.createSources();
     txGenerator.construct(txGenerator.m_source_amount, fee, outputs, tx);
@@ -145,16 +158,16 @@ namespace
     Validator validator;
     TimeProvider timeProvider;
 
-    TestPool(const cryptonote::Currency& m_currency) :
-      tx_memory_pool(m_currency, validator, timeProvider) {}
+    TestPool(const CryptoNote::Currency& currency, Logging::ILogger& logger) :
+      tx_memory_pool(currency, validator, timeProvider, logger) {}
   };
 
   class TxTestBase {
   public:
     TxTestBase(size_t ringSize) :
-      m_currency(cryptonote::CurrencyBuilder().currency()),
+      m_currency(CryptoNote::CurrencyBuilder(m_logger).currency()),
       txGenerator(m_currency, ringSize),
-      pool(m_currency, validator, m_time) 
+      pool(m_currency, validator, m_time, m_logger)
     {
       txGenerator.createSources();
     }
@@ -163,7 +176,8 @@ namespace
       txGenerator.construct(txGenerator.m_source_amount, fee, outputs, tx);
     }
 
-    cryptonote::Currency m_currency;
+    Logging::ConsoleLogger m_logger;
+    CryptoNote::Currency m_currency;
     CryptoNote::RealTimeProvider m_time;
     TestTransactionGenerator txGenerator;
     TransactionValidator validator;
@@ -180,7 +194,7 @@ namespace
 
 }
 
-TEST(tx_pool, add_one_tx)
+TEST_F(tx_pool, add_one_tx)
 {
   TxTestBase test(1);
   Transaction tx;
@@ -193,7 +207,7 @@ TEST(tx_pool, add_one_tx)
   ASSERT_FALSE(tvc.m_verifivation_failed);
 };
 
-TEST(tx_pool, take_tx)
+TEST_F(tx_pool, take_tx)
 {
   TxTestBase test(1);
   Transaction tx;
@@ -217,7 +231,7 @@ TEST(tx_pool, take_tx)
 };
 
 
-TEST(tx_pool, double_spend_tx)
+TEST_F(tx_pool, double_spend_tx)
 {
   TxTestBase test(1);
   Transaction tx, tx_double;
@@ -237,10 +251,9 @@ TEST(tx_pool, double_spend_tx)
 }
 
 
-TEST(tx_pool, fillblock_same_fee)
+TEST_F(tx_pool, fillblock_same_fee)
 {
-  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
-  TestPool<TransactionValidator, RealTimeProvider> pool(currency);
+  TestPool<TransactionValidator, RealTimeProvider> pool(currency, logger);
   uint64_t fee = currency.minimumFee();
 
   std::unordered_map<crypto::hash, std::unique_ptr<Transaction>> transactions;
@@ -292,10 +305,9 @@ TEST(tx_pool, fillblock_same_fee)
 }
 
 
-TEST(tx_pool, fillblock_same_size)
+TEST_F(tx_pool, fillblock_same_size)
 {
-  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
-  TestPool<TransactionValidator, RealTimeProvider> pool(currency);
+  TestPool<TransactionValidator, RealTimeProvider> pool(currency, logger);
 
   const uint64_t fee = currency.minimumFee();
   const size_t totalTransactions = 50;
@@ -352,10 +364,9 @@ TEST(tx_pool, fillblock_same_size)
 }
 
 
-TEST(tx_pool, cleanup_stale_tx)
+TEST_F(tx_pool, cleanup_stale_tx)
 {
-  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
-  TestPool<TransactionValidator, FakeTimeProvider> pool(currency);
+  TestPool<TransactionValidator, FakeTimeProvider> pool(currency, logger);
   const uint64_t fee = currency.minimumFee();
 
   time_t startTime = pool.timeProvider.now();
@@ -396,10 +407,9 @@ TEST(tx_pool, cleanup_stale_tx)
   ASSERT_EQ(3, pool.get_transactions_count());
 }
 
-TEST(tx_pool, add_tx_after_cleanup)
+TEST_F(tx_pool, add_tx_after_cleanup)
 {
-  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
-  TestPool<TransactionValidator, FakeTimeProvider> pool(currency);
+  TestPool<TransactionValidator, FakeTimeProvider> pool(currency, logger);
   const uint64_t fee = currency.minimumFee();
 
   time_t startTime = pool.timeProvider.now();

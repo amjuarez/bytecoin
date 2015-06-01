@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,12 +20,12 @@
 #include <memory>
 #include "ITransaction.h"
 
-namespace cryptonote {
+namespace CryptoNote {
   struct Transaction;
 }
 
 namespace CryptoNote {
   std::unique_ptr<ITransaction> createTransaction();
   std::unique_ptr<ITransaction> createTransaction(const Blob& transactionBlob);
-  std::unique_ptr<ITransaction> createTransaction(const cryptonote::Transaction& tx);
+  std::unique_ptr<ITransaction> createTransaction(const CryptoNote::Transaction& tx);
 }

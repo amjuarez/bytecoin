@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,12 +21,12 @@
 #include "serialization/keyvalue_serialization.h"
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_protocol/blobdatatype.h"
-namespace cryptonote
+
+
+namespace CryptoNote
 {
 
-
 #define BC_COMMANDS_POOL_BASE 2000
-
 
   /************************************************************************/
   /*                                                                      */
@@ -131,18 +131,6 @@ namespace cryptonote
   {
     const static int ID = BC_COMMANDS_POOL_BASE + 4;
     typedef NOTIFY_RESPONSE_GET_OBJECTS_request request;
-  };
-
-
-  struct CORE_SYNC_DATA
-  {
-    uint64_t current_height;
-    crypto::hash  top_id;
-
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(current_height)
-      KV_SERIALIZE_VAL_POD_AS_BLOB(top_id)
-    END_KV_SERIALIZE_MAP()
   };
 
   struct NOTIFY_REQUEST_CHAIN

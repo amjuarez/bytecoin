@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -26,7 +26,7 @@ namespace CryptoNote {
 class TransfersSubscription : public IObservableImpl < ITransfersObserver, ITransfersSubscription > {
 public:
 
-  TransfersSubscription(const cryptonote::Currency& currency, const AccountSubscription& sub);
+  TransfersSubscription(const CryptoNote::Currency& currency, const AccountSubscription& sub);
 
   SynchronizationStart getSyncStart();
   void onBlockchainDetach(uint64_t height);
@@ -47,7 +47,7 @@ private:
 
   TransfersContainer m_transfers;
   AccountSubscription m_subscription;
-  const cryptonote::Currency& m_currency;
+  const CryptoNote::Currency& m_currency;
 };
 
 }

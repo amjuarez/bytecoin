@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,6 +22,7 @@
 
 #include "cryptonote_core/TransactionApi.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
+#include "Logging/ConsoleLogger.h"
 
 #include "INodeStubs.h"
 #include "TestBlockchainGenerator.h"
@@ -30,12 +31,12 @@
 using namespace CryptoNote;
 
 namespace {
-cryptonote::Transaction createTx(ITransactionReader& tx) {
+CryptoNote::Transaction createTx(ITransactionReader& tx) {
   auto data = tx.getTransactionData();
 
-  cryptonote::blobdata txblob(data.data(), data.data() + data.size());
-  cryptonote::Transaction outTx;
-  cryptonote::parse_and_validate_tx_from_blob(txblob, outTx);
+  CryptoNote::blobdata txblob(data.data(), data.data() + data.size());
+  CryptoNote::Transaction outTx;
+  CryptoNote::parse_and_validate_tx_from_blob(txblob, outTx);
 
   return outTx;
 }
@@ -52,7 +53,7 @@ public:
   }
 
   virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
-    std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override {
+    std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override {
     poolWasQueried = true;
     INodeTrivialRefreshStub::getPoolSymmetricDifference(std::move(known_pool_tx_ids), known_block_id, is_bc_actual, new_txs, deleted_tx_ids, callback);
   }
@@ -72,7 +73,7 @@ public:
   INodeFunctorialStub(TestBlockchainGenerator& generator)
     : INodeNonTrivialRefreshStub(generator)
     , queryBlocksFunctor([](const std::list<crypto::hash>&, uint64_t, std::list<CryptoNote::BlockCompleteEntry>&, uint64_t&, const Callback&)->bool {return true; })
-    , getPoolSymmetricDifferenceFunctor([](const std::vector<crypto::hash>&, crypto::hash, bool&, std::vector<cryptonote::Transaction>&, std::vector<crypto::hash>&, const Callback&)->bool {return true; }) {
+    , getPoolSymmetricDifferenceFunctor([](const std::vector<crypto::hash>&, crypto::hash, bool&, std::vector<CryptoNote::Transaction>&, std::vector<crypto::hash>&, const Callback&)->bool {return true; }) {
   }
 
   virtual void queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) override {
@@ -82,14 +83,14 @@ public:
   }
 
   virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
-    std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override {
+    std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override {
     if (getPoolSymmetricDifferenceFunctor(known_pool_tx_ids, known_block_id, is_bc_actual, new_txs, deleted_tx_ids, callback)) {
       INodeNonTrivialRefreshStub::getPoolSymmetricDifference(std::move(known_pool_tx_ids), known_block_id, is_bc_actual, new_txs, deleted_tx_ids, callback);
     }
   }
 
   std::function<bool(const std::list<crypto::hash>&, uint64_t, std::list<CryptoNote::BlockCompleteEntry>&, uint64_t&, const Callback&)> queryBlocksFunctor;
-  std::function<bool(const std::vector<crypto::hash>&, crypto::hash, bool&, std::vector<cryptonote::Transaction>&, std::vector<crypto::hash>&, const Callback&)> getPoolSymmetricDifferenceFunctor;
+  std::function<bool(const std::vector<crypto::hash>&, crypto::hash, bool&, std::vector<CryptoNote::Transaction>&, std::vector<crypto::hash>&, const Callback&)> getPoolSymmetricDifferenceFunctor;
 
 };
 
@@ -147,15 +148,15 @@ public:
   virtual void getKnownPoolTxIds(std::vector<crypto::hash>& ids) override {
     ids.clear();
     for (auto& tx : m_pool) {
-      ids.push_back(cryptonote::get_transaction_hash(tx));
+      ids.push_back(CryptoNote::get_transaction_hash(tx));
     }
   }
 
-  virtual std::error_code onPoolUpdated(const std::vector<cryptonote::Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override {
+  virtual std::error_code onPoolUpdated(const std::vector<CryptoNote::Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override {
     m_pool.insert(m_pool.end(), addedTransactions.begin(), addedTransactions.end());
 
     for (auto& hash : deletedTransactions) {
-      auto pos = std::find_if(m_pool.begin(), m_pool.end(), [&hash](const cryptonote::Transaction& t)->bool { return hash == cryptonote::get_transaction_hash(t); });
+      auto pos = std::find_if(m_pool.begin(), m_pool.end(), [&hash](const CryptoNote::Transaction& t)->bool { return hash == CryptoNote::get_transaction_hash(t); });
       if (pos != m_pool.end()) {
         m_pool.erase(pos);
       }
@@ -165,14 +166,14 @@ public:
   }
 
 private:
-  std::vector<cryptonote::Transaction> m_pool;
+  std::vector<CryptoNote::Transaction> m_pool;
   std::vector<crypto::hash> m_blockchain;
 };
 
 class BcSTest : public ::testing::Test, public IBlockchainSynchronizerObserver {
 public:
   BcSTest() :
-    m_currency(cryptonote::CurrencyBuilder().currency()),
+    m_currency(CryptoNote::CurrencyBuilder(m_logger).currency()),
     generator(m_currency),
     m_node(generator),
     m_sync(m_node, m_currency.genesisBlockHash()) {
@@ -193,7 +194,7 @@ public:
       generator.getBlockchain().begin(),
       generator.getBlockchain().end(),
       std::back_inserter(generatorBlockchain),
-      [](const cryptonote::Block& b) { return cryptonote::get_block_hash(b); });
+      [](const CryptoNote::Block& b) { return CryptoNote::get_block_hash(b); });
 
     for (const auto& consumer : m_consumers) {
       ASSERT_EQ(consumer->getBlockchain(), generatorBlockchain);
@@ -224,7 +225,8 @@ public:
   }
 
 protected:
-  cryptonote::Currency m_currency;
+  Logging::ConsoleLogger m_logger;
+  CryptoNote::Currency m_currency;
   TestBlockchainGenerator generator;
 
   INodeFunctorialStub m_node;
@@ -488,12 +490,12 @@ public:
     getKnownPoolTxIdsFunctor(ids);
   }
 
-  virtual std::error_code onPoolUpdated(const std::vector<cryptonote::Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override {
+  virtual std::error_code onPoolUpdated(const std::vector<CryptoNote::Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override {
     return onPoolUpdatedFunctor(addedTransactions, deletedTransactions);
   }
 
   std::function<void(std::vector<crypto::hash>&)> getKnownPoolTxIdsFunctor;
-  std::function<std::error_code(const std::vector<cryptonote::Transaction>&, const std::vector<crypto::hash>&)> onPoolUpdatedFunctor;
+  std::function<std::error_code(const std::vector<CryptoNote::Transaction>&, const std::vector<crypto::hash>&)> onPoolUpdatedFunctor;
 };
 
 TEST_F(BcSTest, firstPoolSynchronizationCheck) {
@@ -505,9 +507,9 @@ TEST_F(BcSTest, firstPoolSynchronizationCheck) {
   auto tx2 = ::createTx(*tx2ptr.get());
   auto tx3 = ::createTx(*tx3ptr.get());
 
-  auto tx1hash = cryptonote::get_transaction_hash(tx1);
-  auto tx2hash = cryptonote::get_transaction_hash(tx2);
-  auto tx3hash = cryptonote::get_transaction_hash(tx3);
+  auto tx1hash = CryptoNote::get_transaction_hash(tx1);
+  auto tx2hash = CryptoNote::get_transaction_hash(tx2);
+  auto tx3hash = CryptoNote::get_transaction_hash(tx3);
 
   std::vector<crypto::hash> consumer1Pool = { tx1hash, tx2hash };
   std::vector<crypto::hash> consumer2Pool = { tx2hash, tx3hash };
@@ -515,7 +517,7 @@ TEST_F(BcSTest, firstPoolSynchronizationCheck) {
   std::unordered_set<crypto::hash> secondExpectedPool = { tx2hash };
 
   std::vector<crypto::hash> expectedDeletedPoolAnswer = { tx3hash };
-  std::vector<cryptonote::Transaction> expectedNewPoolAnswer = { tx1 };
+  std::vector<CryptoNote::Transaction> expectedNewPoolAnswer = { tx1 };
 
   FunctorialPoolConsumerStub c1(m_currency.genesisBlockHash());
   FunctorialPoolConsumerStub c2(m_currency.genesisBlockHash());
@@ -525,17 +527,17 @@ TEST_F(BcSTest, firstPoolSynchronizationCheck) {
 
   std::vector<crypto::hash> c1ResponseDeletedPool;
   std::vector<crypto::hash> c2ResponseDeletedPool;
-  std::vector<cryptonote::Transaction> c1ResponseNewPool;
-  std::vector<cryptonote::Transaction> c2ResponseNewPool;
+  std::vector<CryptoNote::Transaction> c1ResponseNewPool;
+  std::vector<CryptoNote::Transaction> c2ResponseNewPool;
 
 
-  c1.onPoolUpdatedFunctor = [&](const std::vector<cryptonote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
+  c1.onPoolUpdatedFunctor = [&](const std::vector<CryptoNote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
     c1ResponseDeletedPool.assign(deleted.begin(), deleted.end());
     c1ResponseNewPool.assign(new_txs.begin(), new_txs.end());
     return std::error_code();
   };
 
-  c2.onPoolUpdatedFunctor = [&](const std::vector<cryptonote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
+  c2.onPoolUpdatedFunctor = [&](const std::vector<CryptoNote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
     c2ResponseDeletedPool.assign(deleted.begin(), deleted.end());
     c2ResponseNewPool.assign(new_txs.begin(), new_txs.end());
     return std::error_code();
@@ -549,7 +551,7 @@ TEST_F(BcSTest, firstPoolSynchronizationCheck) {
   std::unordered_set<crypto::hash> secondKnownPool;
 
 
-  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
     is_actual = true;
     requestsCount++;
 
@@ -596,7 +598,7 @@ TEST_F(BcSTest, firstPoolSynchronizationCheckNonActual) {
 
   int requestsCount = 0;
 
-  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
     is_actual = true;
     requestsCount++;
 
@@ -630,7 +632,7 @@ TEST_F(BcSTest, firstPoolSynchronizationCheckGetPoolErr) {
 
   int requestsCount = 0;
 
-  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
     is_actual = true;
     requestsCount++;
 
@@ -676,7 +678,7 @@ TEST_F(BcSTest, poolSynchronizationCheckActual) {
 
   int requestsCount = 0;
 
-  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
     is_actual = true;
     requestsCount++;
 
@@ -714,7 +716,7 @@ TEST_F(BcSTest, poolSynchronizationCheckError) {
 
   int requestsCount = 0;
 
-  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
     is_actual = true;
     requestsCount++;
 
@@ -741,9 +743,9 @@ TEST_F(BcSTest, poolSynchronizationCheckError) {
 TEST_F(BcSTest, poolSynchronizationCheckTxAdded) {
   auto tx1ptr = CryptoNote::createTransaction();
   auto tx1 = ::createTx(*tx1ptr.get());
-  auto tx1hash = cryptonote::get_transaction_hash(tx1);
+  auto tx1hash = CryptoNote::get_transaction_hash(tx1);
 
-  std::vector<cryptonote::Transaction> newPoolAnswer = { tx1 };
+  std::vector<CryptoNote::Transaction> newPoolAnswer = { tx1 };
   std::vector<crypto::hash> expectedKnownPoolHashes = { tx1hash };
 
 
@@ -762,7 +764,7 @@ TEST_F(BcSTest, poolSynchronizationCheckTxAdded) {
   int requestsCount = 0;
   std::vector<crypto::hash> knownPool;
 
-  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
     is_actual = true;
     requestsCount++;
 
@@ -795,9 +797,9 @@ TEST_F(BcSTest, poolSynchronizationCheckTxAdded) {
 TEST_F(BcSTest, poolSynchronizationCheckTxDeleted) {
   auto tx1ptr = CryptoNote::createTransaction();
   auto tx1 = ::createTx(*tx1ptr.get());
-  auto tx1hash = cryptonote::get_transaction_hash(tx1);
+  auto tx1hash = CryptoNote::get_transaction_hash(tx1);
 
-  std::vector<cryptonote::Transaction> newPoolAnswer = { tx1 };
+  std::vector<CryptoNote::Transaction> newPoolAnswer = { tx1 };
   std::vector<crypto::hash> deletedPoolAnswer = { tx1hash };
   std::vector<crypto::hash> expectedKnownPoolHashes = {};
 
@@ -817,7 +819,7 @@ TEST_F(BcSTest, poolSynchronizationCheckTxDeleted) {
   int requestsCount = 0;
   std::vector<crypto::hash> knownPool;
 
-  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<crypto::hash>& known, crypto::hash last, bool& is_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted, const INode::Callback& callback) {
     is_actual = true;
     requestsCount++;
 
@@ -877,12 +879,12 @@ TEST_F(BcSTest, poolSynchronizationCheckConsumersNotififcation) {
 
   bool c1Notified = false;
   bool c2Notified = false;
-  c1.onPoolUpdatedFunctor = [&](const std::vector<cryptonote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
+  c1.onPoolUpdatedFunctor = [&](const std::vector<CryptoNote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
     c1Notified = true;
     return std::error_code();
   };
 
-  c2.onPoolUpdatedFunctor = [&](const std::vector<cryptonote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
+  c2.onPoolUpdatedFunctor = [&](const std::vector<CryptoNote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
     c2Notified = true;
     return std::error_code();
   };
@@ -915,12 +917,12 @@ TEST_F(BcSTest, poolSynchronizationCheckConsumerReturnError) {
 
   bool c1Notified = false;
   bool c2Notified = false;
-  c1.onPoolUpdatedFunctor = [&](const std::vector<cryptonote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
+  c1.onPoolUpdatedFunctor = [&](const std::vector<CryptoNote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
     c1Notified = true;
     return std::make_error_code(std::errc::invalid_argument);
   };
 
-  c2.onPoolUpdatedFunctor = [&](const std::vector<cryptonote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
+  c2.onPoolUpdatedFunctor = [&](const std::vector<CryptoNote::Transaction>& new_txs, const std::vector<crypto::hash>& deleted)->std::error_code {
     c2Notified = true;
     return std::make_error_code(std::errc::invalid_argument);
   };
@@ -1059,8 +1061,8 @@ TEST_F(BcSTest, checkINodeReturnBadTx) {
   CryptoNote::BlockCompleteEntry bce;
 
   auto last_block = generator.getBlockchain().back();
-  bce.blockHash = cryptonote::get_block_hash(last_block);
-  bce.block = cryptonote::block_to_blob(last_block);
+  bce.blockHash = CryptoNote::get_block_hash(last_block);
+  bce.block = CryptoNote::block_to_blob(last_block);
   bce.txs.push_back("badtx");
   
 
@@ -1263,7 +1265,7 @@ TEST_F(BcSTest, checkStatePreservingBetweenSynchronizations) {
 
   generator.generateEmptyBlocks(20);
 
-  crypto::hash lastBlockHash = cryptonote::get_block_hash(generator.getBlockchain().back());
+  crypto::hash lastBlockHash = CryptoNote::get_block_hash(generator.getBlockchain().back());
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -1377,9 +1379,9 @@ TEST_F(BcSTest, checkTxOrder) {
   auto tx2 = ::createTx(*tx2ptr.get());
   auto tx3 = ::createTx(*tx3ptr.get());
 
-  auto tx1hash = cryptonote::get_transaction_hash(tx1);
-  auto tx2hash = cryptonote::get_transaction_hash(tx2);
-  auto tx3hash = cryptonote::get_transaction_hash(tx3);
+  auto tx1hash = CryptoNote::get_transaction_hash(tx1);
+  auto tx2hash = CryptoNote::get_transaction_hash(tx2);
+  auto tx3hash = CryptoNote::get_transaction_hash(tx3);
 
 
   generator.generateEmptyBlocks(2);
@@ -1387,14 +1389,14 @@ TEST_F(BcSTest, checkTxOrder) {
   CryptoNote::BlockCompleteEntry bce;
 
   auto last_block = generator.getBlockchain().back();
-  bce.blockHash = cryptonote::get_block_hash(last_block);
-  bce.block = cryptonote::block_to_blob(last_block);
-  bce.txs.push_back(cryptonote::tx_to_blob(tx1));
-  bce.txs.push_back(cryptonote::tx_to_blob(tx2));
-  bce.txs.push_back(cryptonote::tx_to_blob(tx3));
+  bce.blockHash = CryptoNote::get_block_hash(last_block);
+  bce.block = CryptoNote::block_to_blob(last_block);
+  bce.txs.push_back(CryptoNote::tx_to_blob(tx1));
+  bce.txs.push_back(CryptoNote::tx_to_blob(tx2));
+  bce.txs.push_back(CryptoNote::tx_to_blob(tx3));
 
 
-  std::vector<crypto::hash> expectedTxHashes = { cryptonote::get_transaction_hash(last_block.minerTx), tx1hash, tx2hash, tx3hash };
+  std::vector<crypto::hash> expectedTxHashes = { CryptoNote::get_transaction_hash(last_block.minerTx), tx1hash, tx2hash, tx3hash };
 
   int requestNumber = 0;
 

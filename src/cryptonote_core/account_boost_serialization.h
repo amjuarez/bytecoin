@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,13 +20,13 @@
 #include "account.h"
 #include "cryptonote_core/cryptonote_boost_serialization.h"
 
-//namespace cryptonote {
+//namespace CryptoNote {
 namespace boost
 {
   namespace serialization
   {
     template <class Archive>
-    inline void serialize(Archive &a, cryptonote::account_keys &x, const boost::serialization::version_type ver)
+    inline void serialize(Archive &a, CryptoNote::account_keys &x, const boost::serialization::version_type ver)
     {
       a & x.m_account_address;
       a & x.m_spend_secret_key;
@@ -34,7 +34,7 @@ namespace boost
     }
 
     template <class Archive>
-    inline void serialize(Archive &a, cryptonote::AccountPublicAddress &x, const boost::serialization::version_type ver)
+    inline void serialize(Archive &a, CryptoNote::AccountPublicAddress &x, const boost::serialization::version_type ver)
     {
       a & x.m_spendPublicKey;
       a & x.m_viewPublicKey;

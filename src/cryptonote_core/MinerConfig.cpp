@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,9 +17,9 @@
 
 #include "MinerConfig.h"
 
-#include "common/command_line.h"
+#include "Common/command_line.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 
 namespace {
 const command_line::arg_descriptor<std::string> arg_extra_messages =  {"extra-messages-file", "Specify file for extra messages to include into coinbase transactions", "", true};
@@ -52,4 +52,3 @@ void MinerConfig::init(const boost::program_options::variables_map& options) {
 }
 
 } //namespace cryptonote
-

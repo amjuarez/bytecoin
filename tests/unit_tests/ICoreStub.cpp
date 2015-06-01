@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,11 +17,11 @@
 
 #include "ICoreStub.h"
 
-bool ICoreStub::addObserver(cryptonote::ICoreObserver* observer) {
+bool ICoreStub::addObserver(CryptoNote::ICoreObserver* observer) {
   return true;
 }
 
-bool ICoreStub::removeObserver(cryptonote::ICoreObserver* observer) {
+bool ICoreStub::removeObserver(CryptoNote::ICoreObserver* observer) {
   return true;
 }
 
@@ -31,18 +31,18 @@ bool ICoreStub::get_blockchain_top(uint64_t& height, crypto::hash& top_id) {
   return topResult;
 }
 
-bool ICoreStub::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::list<std::pair<cryptonote::Block, std::list<cryptonote::Transaction> > >& blocks,
+bool ICoreStub::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, std::list<std::pair<CryptoNote::Block, std::list<CryptoNote::Transaction> > >& blocks,
     uint64_t& total_height, uint64_t& start_height, size_t max_count)
 {
   return true;
 }
 
-bool ICoreStub::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, cryptonote::NOTIFY_RESPONSE_CHAIN_ENTRY_request& resp) {
+bool ICoreStub::find_blockchain_supplement(const std::list<crypto::hash>& qblock_ids, CryptoNote::NOTIFY_RESPONSE_CHAIN_ENTRY_request& resp) {
   return true;
 }
 
-bool ICoreStub::get_random_outs_for_amounts(const cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request& req,
-    cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res) {
+bool ICoreStub::get_random_outs_for_amounts(const CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request& req,
+    CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res) {
   res = randomOuts;
   return randomOutsResult;
 }
@@ -52,11 +52,11 @@ bool ICoreStub::get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<ui
   return globalIndicesResult;
 }
 
-cryptonote::i_cryptonote_protocol* ICoreStub::get_protocol() {
+CryptoNote::i_cryptonote_protocol* ICoreStub::get_protocol() {
   return nullptr;
 }
 
-bool ICoreStub::handle_incoming_tx(cryptonote::blobdata const& tx_blob, cryptonote::tx_verification_context& tvc, bool keeped_by_block) {
+bool ICoreStub::handle_incoming_tx(CryptoNote::blobdata const& tx_blob, CryptoNote::tx_verification_context& tvc, bool keeped_by_block) {
   return true;
 }
 
@@ -72,23 +72,22 @@ void ICoreStub::set_outputs_gindexs(const std::vector<uint64_t>& indexs, bool re
   globalIndicesResult = result;
 }
 
-void ICoreStub::set_random_outs(const cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& resp, bool result) {
+void ICoreStub::set_random_outs(const CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& resp, bool result) {
   randomOuts = resp;
   randomOutsResult = result;
 }
 
-bool ICoreStub::getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) {
+bool ICoreStub::getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) {
   return true;
 }
 
 bool ICoreStub::queryBlocks(const std::list<crypto::hash>& block_ids, uint64_t timestamp,
-    uint64_t& start_height, uint64_t& current_height, uint64_t& full_offset, std::list<cryptonote::BlockFullInfo>& entries) {
+    uint64_t& start_height, uint64_t& current_height, uint64_t& full_offset, std::list<CryptoNote::BlockFullInfo>& entries) {
   //stub
   return true;
 }
 
-bool ICoreStub::getBlockByHash(const crypto::hash &h, cryptonote::Block &blk) {
+bool ICoreStub::getBlockByHash(const crypto::hash &h, CryptoNote::Block &blk) {
   //stub
   return true;
 }
-

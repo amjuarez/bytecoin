@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -36,7 +36,7 @@ class TransfersConsumer : public IBlockchainConsumer {
 
 public:
 
-  TransfersConsumer(const cryptonote::Currency& currency, INode& node, const SecretKey& viewSecret);
+  TransfersConsumer(const CryptoNote::Currency& currency, INode& node, const SecretKey& viewSecret);
 
   ITransfersSubscription& addSubscription(const AccountSubscription& subscription);
   // returns true if no subscribers left
@@ -48,7 +48,7 @@ public:
   virtual SynchronizationStart getSyncStart() override;
   virtual void onBlockchainDetach(uint64_t height) override;
   virtual bool onNewBlocks(const CompleteBlock* blocks, uint64_t startHeight, size_t count) override;
-  virtual std::error_code onPoolUpdated(const std::vector<cryptonote::Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override;
+  virtual std::error_code onPoolUpdated(const std::vector<Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override;
   virtual void getKnownPoolTxIds(std::vector<crypto::hash>& ids) override;
 
 private:
@@ -61,7 +61,7 @@ private:
   }
 
   struct PreprocessInfo {
-    std::unordered_map<PublicKey, std::vector<uint32_t>> outputs;
+    std::unordered_map<PublicKey, std::vector<TransactionOutputInformationIn>> outputs;
     std::vector<uint64_t> globalIdxs;
   };
 
@@ -69,7 +69,7 @@ private:
   std::error_code processTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx);
   std::error_code processTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info);
   std::error_code processOutputs(const BlockInfo& blockInfo, TransfersSubscription& sub, const ITransactionReader& tx,
-    const std::vector<uint32_t>& outputs, const std::vector<uint64_t>& globalIdxs);
+    const std::vector<TransactionOutputInformationIn>& outputs, const std::vector<uint64_t>& globalIdxs);
 
   std::error_code getGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices);
 
@@ -82,7 +82,7 @@ private:
   std::unordered_set<PublicKey> m_spendKeys;
 
   INode& m_node;
-  const cryptonote::Currency& m_currency;
+  const CryptoNote::Currency& m_currency;
 };
 
 }

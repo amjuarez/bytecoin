@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,39 +17,23 @@
 
 #include "Timer.h"
 #include <cassert>
-#include <iostream>
+#include <string>
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
-#include "InterruptedException.h"
+#include <System/InterruptedException.h>
 #include "Dispatcher.h"
-
-using namespace System;
 
 namespace System {
 
-class DispatcherAccessor {
-public:
-  DispatcherAccessor(Dispatcher* dispatcher, void* context) {
-    dispatcher->pushContext(context);
-  }
-};
-
-}
-
 namespace {
 
-struct Context {
-  Dispatcher* dispatcher;
+struct TimerContext {
+  uint64_t time;
   void* context;
   bool interrupted;
 };
-
-void __stdcall callbackProcedure(void* lpArgToCompletionRoutine, DWORD dwTimerLowValue, DWORD dwTimerHighValue) {
-  Context* context = static_cast<Context*>(lpArgToCompletionRoutine);
-  assert(context->context != nullptr);
-  DispatcherAccessor(context->dispatcher, context->context);
-  context->context = nullptr;
-}
 
 }
 
@@ -57,36 +41,28 @@ Timer::Timer() : dispatcher(nullptr) {
 }
 
 Timer::Timer(Dispatcher& dispatcher) : dispatcher(&dispatcher), stopped(false), context(nullptr) {
-  timer = dispatcher.getTimer();
 }
 
 Timer::Timer(Timer&& other) : dispatcher(other.dispatcher) {
-  if (other.dispatcher != nullptr) {
-    timer = other.timer;
+  if (dispatcher != nullptr) {
+    assert(other.context == nullptr);
     stopped = other.stopped;
-    context = other.context;
+    context = nullptr;
     other.dispatcher = nullptr;
   }
 }
 
 Timer::~Timer() {
-  if (dispatcher != nullptr) {
-    assert(context == nullptr);
-    dispatcher->pushTimer(timer);
-  }
+  assert(dispatcher == nullptr || context == nullptr);
 }
 
 Timer& Timer::operator=(Timer&& other) {
-  if (dispatcher != nullptr) {
-    assert(context == nullptr);
-    dispatcher->pushTimer(timer);
-  }
-
+  assert(dispatcher == nullptr || context == nullptr);
   dispatcher = other.dispatcher;
-  if (other.dispatcher != nullptr) {
-    timer = other.timer;
+  if (dispatcher != nullptr) {
+    assert(other.context == nullptr);
     stopped = other.stopped;
-    context = other.context;
+    context = nullptr;
     other.dispatcher = nullptr;
   }
 
@@ -103,44 +79,41 @@ void Timer::stop() {
   assert(dispatcher != nullptr);
   assert(!stopped);
   if (context != nullptr) {
-    Context* context2 = static_cast<Context*>(context);
-    if (context2->context != nullptr) {
-      if (CancelWaitableTimer(timer) != TRUE) {
-        std::cerr << "CancelWaitableTimer failed, result=" << GetLastError() << '.' << std::endl;
-        throw std::runtime_error("Timer::stop");
-      }
-
-      dispatcher->pushContext(context2->context);
-      context2->context = nullptr;
-      context2->interrupted = true;
+    TimerContext* timerContext = static_cast<TimerContext*>(context);
+    if (!timerContext->interrupted) {
+      dispatcher->interruptTimer(timerContext->time, timerContext->context);
+      timerContext->interrupted = true;
     }
   }
 
   stopped = true;
 }
 
-void Timer::sleep(std::chrono::nanoseconds duration) {
+void Timer::sleep(std::chrono::milliseconds duration) {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
   if (stopped) {
     throw InterruptedException();
   }
 
-  LARGE_INTEGER duration2;
-  duration2.QuadPart = static_cast<LONGLONG>(duration.count() / -100);
-  Context context2 = {dispatcher, GetCurrentFiber(), false};
-  if (SetWaitableTimer(timer, &duration2, 0, callbackProcedure, &context2, FALSE) != TRUE) {
-    std::cerr << "SetWaitableTimer failed, result=" << GetLastError() << '.' << std::endl;
-    throw std::runtime_error("Timer::sleep");
-  }
-
-  context = &context2;
-  dispatcher->yield();
+  LARGE_INTEGER frequency;
+  LARGE_INTEGER ticks;
+  QueryPerformanceCounter(&ticks);
+  QueryPerformanceFrequency(&frequency);
+  uint64_t currentTime = ticks.QuadPart / (frequency.QuadPart / 1000);
+  uint64_t time = currentTime + duration.count();
+  void* fiber = GetCurrentFiber();
+  TimerContext timerContext{ time, fiber, false };
+  context = &timerContext;
+  dispatcher->addTimer(time, fiber);
+  dispatcher->dispatch();
+  assert(timerContext.context == GetCurrentFiber());
   assert(dispatcher != nullptr);
-  assert(context2.context == nullptr);
-  assert(context == &context2);
+  assert(context == &timerContext);
   context = nullptr;
-  if (context2.interrupted) {
+  if (timerContext.interrupted) {
     throw InterruptedException();
   }
+}
+
 }

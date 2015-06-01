@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -29,7 +29,7 @@
 
 #include "INodeStubs.h"
 #include "TestBlockchainGenerator.h"
-
+#include <Logging/ConsoleLogger.h>
 
 class TrivialWalletObserver : public CryptoNote::IWalletObserver
 {
@@ -59,8 +59,8 @@ public:
   }
 
   virtual void synchronizationCompleted(std::error_code result) override {
-    synced.notify();
-  }
+      synced.notify();
+    }
 
   virtual void sendTransactionCompleted(CryptoNote::TransactionId transactionId, std::error_code result) override {
     sendResult = result;
@@ -152,7 +152,7 @@ void WaitWalletLoad(TrivialWalletObserver* observer) {
 class WalletApi : public ::testing::Test
 {
 public:
-  WalletApi() : m_currency(cryptonote::CurrencyBuilder().currency()), generator(m_currency) {
+  WalletApi() : m_currency(CryptoNote::CurrencyBuilder(m_logger).currency()), generator(m_currency) {
   }
 
   void SetUp();
@@ -167,7 +167,9 @@ protected:
   void TestSendMoney(int64_t transferAmount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "");
   void performTransferWithErrorTx(const std::array<int64_t, 5>& amounts, uint64_t fee);
 
-  cryptonote::Currency m_currency;
+
+  Logging::ConsoleLogger m_logger;
+  CryptoNote::Currency m_currency;
 
   TestBlockchainGenerator generator;
 
@@ -216,7 +218,7 @@ void WalletApi::prepareCarolWallet() {
 }
 
 void WalletApi::GetOneBlockReward(CryptoNote::Wallet& wallet) {
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(wallet.getAddress(), address));
   generator.getBlockRewardForAddress(address);
 }
@@ -266,7 +268,7 @@ void WalletApi::TestSendMoney(int64_t transferAmount, uint64_t fee, uint64_t mix
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
   ASSERT_NO_FATAL_FAILURE(GetOneBlockReward(*alice));
 
-  //unblock Alice's money
+  //unlock Alice's money
   generator.generateEmptyBlocks(10);
   uint64_t expectedBalance = TEST_BLOCK_REWARD;
 
@@ -283,8 +285,8 @@ void WalletApi::TestSendMoney(int64_t transferAmount, uint64_t fee, uint64_t mix
   bob->initAndGenerate("pass2");
 
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
-
   ASSERT_NO_FATAL_FAILURE(TransferMoney(*alice, *bob, transferAmount, fee, 0, ""));
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
 
   generator.generateEmptyBlocks(10);
 
@@ -324,7 +326,7 @@ TEST_F(WalletApi, refreshWithMoney) {
   ASSERT_EQ(alice->actualBalance(), 0);
   ASSERT_EQ(alice->pendingBalance(), 0);
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
   generator.getBlockRewardForAddress(address);
 
@@ -349,7 +351,7 @@ TEST_F(WalletApi, initWithMoney) {
   ASSERT_EQ(alice->actualBalance(), 0);
   ASSERT_EQ(alice->pendingBalance(), 0);
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
 
   alice->shutdown();
@@ -678,7 +680,7 @@ TEST_F(WalletApi, wrongPassword) {
 
   std::error_code result;
   ASSERT_NO_FATAL_FAILURE(WaitWalletLoad(aliceWalletObserver.get(), result));
-  EXPECT_EQ(result.value(), cryptonote::error::WRONG_PASSWORD);
+  EXPECT_EQ(result.value(), CryptoNote::error::WRONG_PASSWORD);
 }
 
 TEST_F(WalletApi, detachBlockchain) {
@@ -837,7 +839,7 @@ TEST_F(WalletApi, mineSaveNoCacheNoDetailsRefresh) {
 
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
   generator.getBlockRewardForAddress(address);
   generator.getBlockRewardForAddress(address);
@@ -868,7 +870,7 @@ TEST_F(WalletApi, sendMoneyToMyself) {
 
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
   generator.getBlockRewardForAddress(address);
   generator.generateEmptyBlocks(10);
@@ -878,6 +880,8 @@ TEST_F(WalletApi, sendMoneyToMyself) {
 
   CryptoNote::TransactionId txId = TransferMoney(*alice, *alice, 100000000, 100);
   ASSERT_NE(txId, CryptoNote::INVALID_TRANSACTION_ID);
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+
   generator.generateEmptyBlocks(10);
 
   aliceNode->updateObservers();
@@ -1035,7 +1039,7 @@ TEST_F(WalletApi, checkChange) {
   uint64_t sendAmount = 50000;
   uint64_t fee = m_currency.minimumFee();
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
   generator.getSingleOutputTransaction(address, banknote);
   generator.generateEmptyBlocks(10);
@@ -1065,7 +1069,7 @@ TEST_F(WalletApi, checkBalanceAfterSend) {
 
   uint64_t banknote = 1000000000;
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
 
   //Once wallet takes outputs in random fashion we don't know for sure which outputs will be taken.
@@ -1099,7 +1103,7 @@ TEST_F(WalletApi, moneyInPoolDontAffectActualBalance) {
 
   uint64_t banknote = 1000000000;
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
   generator.getSingleOutputTransaction(address, banknote);
   generator.generateEmptyBlocks(10);
@@ -1135,7 +1139,7 @@ TEST_F(WalletApi, balanceAfterTransactionsPlacedInBlockchain) {
 
   uint64_t banknote = 1000000000;
 
-  cryptonote::AccountPublicAddress address;
+  CryptoNote::AccountPublicAddress address;
   ASSERT_TRUE(m_currency.parseAccountAddressString(alice->getAddress(), address));
   generator.getSingleOutputTransaction(address, banknote);
   generator.generateEmptyBlocks(10);
@@ -1284,7 +1288,7 @@ TEST_F(WalletApi, sendAfterFailedTransaction) {
   alice->shutdown();
 }
 
-TEST_F(WalletApi, loadingBrokenCache) {
+TEST_F(WalletApi, DISABLED_loadingBrokenCache) {
   alice->initAndGenerate("pass");
 
   std::error_code result;

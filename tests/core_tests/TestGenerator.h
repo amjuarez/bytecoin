@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,10 +21,13 @@
 
 #include "cryptonote_core/Currency.h"
 #include "TransactionBuilder.h"
+#include <Logging/LoggerGroup.h>
 
 class TestGenerator {
 public:
-  TestGenerator(const cryptonote::Currency& currency, std::vector<test_event_entry>& eventsRef) :
+  TestGenerator(
+    const CryptoNote::Currency& currency, 
+    std::vector<test_event_entry>& eventsRef) :
       generator(currency),
       events(eventsRef) {
     minerAccount.generate();
@@ -33,17 +36,17 @@ public:
     lastBlock = genesisBlock;
   }
 
-  const cryptonote::Currency& currency() const { return generator.currency(); }
+  const CryptoNote::Currency& currency() const { return generator.currency(); }
 
-  void makeNextBlock(const std::list<cryptonote::Transaction>& txs = std::list<cryptonote::Transaction>()) {
-    cryptonote::Block block;
+  void makeNextBlock(const std::list<CryptoNote::Transaction>& txs = std::list<CryptoNote::Transaction>()) {
+    CryptoNote::Block block;
     generator.constructBlock(block, lastBlock, minerAccount, txs);
     events.push_back(block);
     lastBlock = block;
   }
 
-  void makeNextBlock(const cryptonote::Transaction& tx) {
-    std::list<cryptonote::Transaction> txs;
+  void makeNextBlock(const CryptoNote::Transaction& tx) {
+    std::list<CryptoNote::Transaction> txs;
     txs.push_back(tx);
     makeNextBlock(txs);
   }
@@ -52,19 +55,19 @@ public:
     generateBlocks(currency().minedMoneyUnlockWindow());
   }
 
-  void generateBlocks(size_t count, uint8_t majorVersion = cryptonote::BLOCK_MAJOR_VERSION_1) {
+  void generateBlocks(size_t count, uint8_t majorVersion = CryptoNote::BLOCK_MAJOR_VERSION_1) {
     while (count--) {
-      cryptonote::Block next;
+      CryptoNote::Block next;
       generator.constructBlockManually(next, lastBlock, minerAccount, test_generator::bf_major_ver, majorVersion);
       lastBlock = next;
       events.push_back(next);
     }
   }
 
-  TransactionBuilder createTxBuilder(const cryptonote::account_base& from, const cryptonote::account_base& to, uint64_t amount, uint64_t fee) {
+  TransactionBuilder createTxBuilder(const CryptoNote::account_base& from, const CryptoNote::account_base& to, uint64_t amount, uint64_t fee) {
 
-    std::vector<cryptonote::tx_source_entry> sources;
-    std::vector<cryptonote::tx_destination_entry> destinations;
+    std::vector<CryptoNote::tx_source_entry> sources;
+    std::vector<CryptoNote::tx_destination_entry> destinations;
 
     fillTxSourcesAndDestinations(sources, destinations, from, to, amount, fee);
 
@@ -77,20 +80,20 @@ public:
   }
 
   void fillTxSourcesAndDestinations(
-    std::vector<cryptonote::tx_source_entry>& sources, 
-    std::vector<cryptonote::tx_destination_entry>& destinations,
-    const cryptonote::account_base& from, const cryptonote::account_base& to, uint64_t amount, uint64_t fee, size_t nmix = 0) {
+    std::vector<CryptoNote::tx_source_entry>& sources, 
+    std::vector<CryptoNote::tx_destination_entry>& destinations,
+    const CryptoNote::account_base& from, const CryptoNote::account_base& to, uint64_t amount, uint64_t fee, size_t nmix = 0) {
     fill_tx_sources_and_destinations(events, lastBlock, from, to, amount, fee, nmix, sources, destinations);
   }
 
   void constructTxToKey(
-    cryptonote::Transaction& tx,
-    const cryptonote::account_base& from,
-    const cryptonote::account_base& to,
+    CryptoNote::Transaction& tx,
+    const CryptoNote::account_base& from,
+    const CryptoNote::account_base& to,
     uint64_t amount,
     uint64_t fee,
     size_t nmix = 0) {
-    construct_tx_to_key(events, tx, lastBlock, from, to, amount, fee, nmix);
+    construct_tx_to_key(logger, events, tx, lastBlock, from, to, amount, fee, nmix);
   }
 
   void addEvent(const test_event_entry& e) {
@@ -111,9 +114,10 @@ public:
     addCallback("check_block_purged");
   }
 
+  Logging::LoggerGroup logger;
   test_generator generator;
-  cryptonote::Block genesisBlock;
-  cryptonote::Block lastBlock;
-  cryptonote::account_base minerAccount;
+  CryptoNote::Block genesisBlock;
+  CryptoNote::Block lastBlock;
+  CryptoNote::account_base minerAccount;
   std::vector<test_event_entry>& events;
 };

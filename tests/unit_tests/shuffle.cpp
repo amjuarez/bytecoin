@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,7 @@
 
 #include <unordered_set>
 #include "crypto/crypto.h"
-#include "common/ShuffleGenerator.h"
+#include "Common/ShuffleGenerator.h"
 
 class ShuffleTest : public ::testing::Test {
 public:
@@ -75,4 +75,3 @@ TEST_F(ShuffleTest, correctness_fractionalSize) {
 TEST_F(ShuffleTest, cryptoGenerator) {
   checkEngine<CryptoShuffleGenerator>(ITERATIONS * 3, ITERATIONS, false);
 }
-

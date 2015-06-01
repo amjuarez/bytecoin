@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,7 +20,7 @@
 
 using namespace epee;
 using namespace crypto;
-using namespace cryptonote;
+using namespace CryptoNote;
 
 namespace
 {
@@ -32,7 +32,7 @@ namespace
       m_tx.vout.clear();
       m_tx.signatures.clear();
 
-      m_tx.version = version;
+      m_tx.version = static_cast<uint8_t>(version);
       m_tx.unlockTime = unlock_time;
 
       m_tx_key = KeyPair::generate();
@@ -116,7 +116,7 @@ namespace
   };
 
   Transaction make_simple_tx_with_unlock_time(const std::vector<test_event_entry>& events,
-    const cryptonote::Block& blk_head, const cryptonote::account_base& from, const cryptonote::account_base& to,
+    const CryptoNote::Block& blk_head, const CryptoNote::account_base& from, const CryptoNote::account_base& to,
     uint64_t amount, uint64_t fee, uint64_t unlock_time)
   {
     std::vector<tx_source_entry> sources;

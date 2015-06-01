@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,14 +17,15 @@
 
 #include "gtest/gtest.h"
 
-#include "cryptonote_core/checkpoints.cpp"
+#include "cryptonote_core/checkpoints.h"
+#include <Logging/LoggerGroup.h>
 
-using namespace cryptonote;
-
+using namespace CryptoNote;
 
 TEST(checkpoints_is_alternative_block_allowed, handles_empty_checkpoins)
 {
-  checkpoints cp;
+  Logging::LoggerGroup logger;
+  checkpoints cp(logger);
 
   ASSERT_FALSE(cp.is_alternative_block_allowed(0, 0));
 
@@ -35,7 +36,8 @@ TEST(checkpoints_is_alternative_block_allowed, handles_empty_checkpoins)
 
 TEST(checkpoints_is_alternative_block_allowed, handles_one_checkpoint)
 {
-  checkpoints cp;
+  Logging::LoggerGroup logger;
+  checkpoints cp(logger);
   cp.add_checkpoint(5, "0000000000000000000000000000000000000000000000000000000000000000");
 
   ASSERT_FALSE(cp.is_alternative_block_allowed(0, 0));
@@ -73,7 +75,8 @@ TEST(checkpoints_is_alternative_block_allowed, handles_one_checkpoint)
 
 TEST(checkpoints_is_alternative_block_allowed, handles_two_and_more_checkpoints)
 {
-  checkpoints cp;
+  Logging::LoggerGroup logger;
+  checkpoints cp(logger);
   cp.add_checkpoint(5, "0000000000000000000000000000000000000000000000000000000000000000");
   cp.add_checkpoint(9, "0000000000000000000000000000000000000000000000000000000000000000");
 

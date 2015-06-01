@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,10 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "Wallet.h"
-#include "wallet_errors.h"
-#include "string_tools.h"
 #include "serialization/binary_utils.h"
-#include "storages/portable_storage_template_helper.h"
 #include "WalletUtils.h"
 #include "WalletSerializer.h"
 
@@ -29,6 +26,8 @@
 #include "WalletSerialization.h"
 
 namespace {
+
+const uint64_t ACCOUN_CREATE_TIME_ACCURACY = 24 * 60 * 60;
 
 void throwNotDefined() {
   throw std::runtime_error("The behavior is not defined!");
@@ -42,7 +41,7 @@ bool verifyKeys(const crypto::secret_key& sec, const crypto::public_key& expecte
 
 void throwIfKeysMissmatch(const crypto::secret_key& sec, const crypto::public_key& expected_pub) {
   if (!verifyKeys(sec, expected_pub))
-    throw std::system_error(make_error_code(cryptonote::error::WRONG_PASSWORD));
+    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
 }
 
 class ContextCounterHolder
@@ -112,11 +111,13 @@ public:
   BlockchainSynchronizer& m_sync;
 };
 
-Wallet::Wallet(const cryptonote::Currency& currency, INode& node) :
+Wallet::Wallet(const CryptoNote::Currency& currency, INode& node) :
   m_state(NOT_INITIALIZED),
   m_currency(currency),
   m_node(node),
   m_isStopping(false),
+  m_lastNotifiedActualBalance(0),
+  m_lastNotifiedPendingBalance(0),
   m_blockchainSync(node, currency.genesisBlockHash()),
   m_transfersSync(currency, m_blockchainSync, node),
   m_transferDetails(nullptr),
@@ -157,7 +158,7 @@ void Wallet::initAndGenerate(const std::string& password) {
     std::unique_lock<std::mutex> stateLock(m_cacheMutex);
 
     if (m_state != NOT_INITIALIZED) {
-      throw std::system_error(make_error_code(cryptonote::error::ALREADY_INITIALIZED));
+      throw std::system_error(make_error_code(error::ALREADY_INITIALIZED));
     }
 
     m_account.generate();
@@ -174,10 +175,10 @@ void Wallet::initWithKeys(const WalletAccountKeys& accountKeys, const std::strin
     std::unique_lock<std::mutex> stateLock(m_cacheMutex);
 
     if (m_state != NOT_INITIALIZED) {
-      throw std::system_error(make_error_code(cryptonote::error::ALREADY_INITIALIZED));
+      throw std::system_error(make_error_code(error::ALREADY_INITIALIZED));
     }
 
-    cryptonote::account_keys keys;
+    account_keys keys;
 
     std::copy(accountKeys.spendPublicKey.begin(),
       accountKeys.spendPublicKey.end(),
@@ -196,7 +197,7 @@ void Wallet::initWithKeys(const WalletAccountKeys& accountKeys, const std::strin
       reinterpret_cast<uint8_t*>(&keys.m_view_secret_key));
 
     m_account.set_keys(keys);
-    m_account.set_createtime(0);
+    m_account.set_createtime(ACCOUN_CREATE_TIME_ACCURACY);
     m_password = password;
 
     initSync();
@@ -209,7 +210,7 @@ void Wallet::initAndLoad(std::istream& source, const std::string& password) {
   std::unique_lock<std::mutex> stateLock(m_cacheMutex);
 
   if (m_state != NOT_INITIALIZED) {
-    throw std::system_error(make_error_code(cryptonote::error::ALREADY_INITIALIZED));
+    throw std::system_error(make_error_code(error::ALREADY_INITIALIZED));
   }
 
   m_password = password;
@@ -225,7 +226,7 @@ void Wallet::initSync() {
   sub.keys = reinterpret_cast<const AccountKeys&>(m_account.get_keys());
   sub.transactionSpendableAge = 1;
   sub.syncStart.height = 0;
-  sub.syncStart.timestamp = m_account.get_createtime() - (60 * 60 * 24);
+  sub.syncStart.timestamp = m_account.get_createtime() - ACCOUN_CREATE_TIME_ACCURACY;
   
   auto& subObject = m_transfersSync.addSubscription(sub);
   m_transferDetails = &subObject.getContainer();
@@ -247,13 +248,13 @@ void Wallet::doLoad(std::istream& source) {
     initSync();
 
     try {
-      if (!cache.empty()) {
-        std::stringstream stream(cache);
-        m_transfersSync.load(stream);
-      }
+    if (!cache.empty()) {
+      std::stringstream stream(cache);
+      m_transfersSync.load(stream);
+    }
     } catch (const std::exception&) {
       // ignore cache loading errors
-    }
+  }
   }
   catch (std::system_error& e) {
     runAtomic(m_cacheMutex, [this] () {this->m_state = Wallet::NOT_INITIALIZED;} );
@@ -262,21 +263,11 @@ void Wallet::doLoad(std::istream& source) {
   }
   catch (std::exception&) {
     runAtomic(m_cacheMutex, [this] () {this->m_state = Wallet::NOT_INITIALIZED;} );
-    m_observerManager.notify(&IWalletObserver::initCompleted, make_error_code(cryptonote::error::INTERNAL_WALLET_ERROR));
+    m_observerManager.notify(&IWalletObserver::initCompleted, make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR));
     return;
   }
 
   m_observerManager.notify(&IWalletObserver::initCompleted, std::error_code());
-}
-
-void Wallet::decrypt(const std::string& cipher, std::string& plain, crypto::chacha8_iv iv, const std::string& password) {
-  crypto::chacha8_key key;
-  crypto::cn_context context;
-  crypto::generate_chacha8_key(context, password, key);
-
-  plain.resize(cipher.size());
-
-  crypto::chacha8(cipher.data(), cipher.size(), key, iv, &plain[0]);
 }
 
 void Wallet::shutdown() {
@@ -316,14 +307,14 @@ void Wallet::reset() {
 
   std::stringstream ss;
   try {
-    save(ss, false, false);
+  save(ss, false, false);
 
     auto saveError = saveWaiter.waitSave();
-    if (!saveError) {
-      shutdown();
-      initAndLoad(ss, m_password);
+  if (!saveError) {
+    shutdown();
+    initAndLoad(ss, m_password);
       initWaiter.waitInit();
-    }
+  }
   } catch (std::exception&) {
   }
 
@@ -333,14 +324,14 @@ void Wallet::reset() {
 
 void Wallet::save(std::ostream& destination, bool saveDetailed, bool saveCache) {
   if(m_isStopping) {
-    m_observerManager.notify(&IWalletObserver::saveCompleted, make_error_code(cryptonote::error::OPERATION_CANCELLED));
+    m_observerManager.notify(&IWalletObserver::saveCompleted, make_error_code(CryptoNote::error::OPERATION_CANCELLED));
     return;
   }
 
   {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
 
-    throwIf(m_state != INITIALIZED, cryptonote::error::WRONG_STATE);
+    throwIf(m_state != INITIALIZED, CryptoNote::error::WRONG_STATE);
 
     m_state = SAVING;
   }
@@ -370,7 +361,7 @@ void Wallet::doSave(std::ostream& destination, bool saveDetailed, bool saveCache
 
     m_state = INITIALIZED;
     m_blockchainSync.start(); //XXX: start can throw. what to do in this case?
-  }
+    }
   catch (std::system_error& e) {
     runAtomic(m_cacheMutex, [this] () {this->m_state = Wallet::INITIALIZED;} );
     m_observerManager.notify(&IWalletObserver::saveCompleted, e.code());
@@ -378,24 +369,11 @@ void Wallet::doSave(std::ostream& destination, bool saveDetailed, bool saveCache
   }
   catch (std::exception&) {
     runAtomic(m_cacheMutex, [this] () {this->m_state = Wallet::INITIALIZED;} );
-    m_observerManager.notify(&IWalletObserver::saveCompleted, make_error_code(cryptonote::error::INTERNAL_WALLET_ERROR));
+    m_observerManager.notify(&IWalletObserver::saveCompleted, make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR));
     return;
   }
 
   m_observerManager.notify(&IWalletObserver::saveCompleted, std::error_code());
-}
-
-crypto::chacha8_iv Wallet::encrypt(const std::string& plain, std::string& cipher) {
-  crypto::chacha8_key key;
-  crypto::cn_context context;
-  crypto::generate_chacha8_key(context, m_password, key);
-
-  cipher.resize(plain.size());
-
-  crypto::chacha8_iv iv = crypto::rand<crypto::chacha8_iv>();
-  crypto::chacha8(plain.data(), plain.size(), key, iv, &cipher[0]);
-
-  return iv;
 }
 
 std::error_code Wallet::changePassword(const std::string& oldPassword, const std::string& newPassword) {
@@ -404,7 +382,7 @@ std::error_code Wallet::changePassword(const std::string& oldPassword, const std
   throwIfNotInitialised();
 
   if (m_password.compare(oldPassword))
-    return make_error_code(cryptonote::error::WRONG_PASSWORD);
+    return make_error_code(CryptoNote::error::WRONG_PASSWORD);
 
   //we don't let the user to change the password while saving
   m_password = newPassword;
@@ -536,7 +514,7 @@ void Wallet::synchronizationCallback(WalletRequest::Callback callback, std::erro
 }
 
 std::error_code Wallet::cancelTransaction(size_t transactionId) {
-  return make_error_code(cryptonote::error::TX_CANCEL_IMPOSSIBLE);
+  return make_error_code(CryptoNote::error::TX_CANCEL_IMPOSSIBLE);
 }
 
 void Wallet::synchronizationProgressUpdated(uint64_t current, uint64_t total) {
@@ -576,7 +554,7 @@ void Wallet::onTransactionDeleted(ITransfersSubscription* object, const Hash& tr
   std::shared_ptr<WalletEvent> event;
 
   {
-    std::unique_lock<std::mutex> lock(m_cacheMutex);
+  std::unique_lock<std::mutex> lock(m_cacheMutex);
     event = m_transactionsCache.onTransactionDeleted(transactionHash);
   }
 
@@ -586,8 +564,9 @@ void Wallet::onTransactionDeleted(ITransfersSubscription* object, const Hash& tr
 }
 
 void Wallet::throwIfNotInitialised() {
-  if (m_state == NOT_INITIALIZED || m_state == LOADING)
-    throw std::system_error(make_error_code(cryptonote::error::NOT_INITIALIZED));
+  if (m_state == NOT_INITIALIZED || m_state == LOADING) {
+    throw std::system_error(make_error_code(CryptoNote::error::NOT_INITIALIZED));
+  }
   assert(m_transferDetails);
 }
 
@@ -618,10 +597,10 @@ void Wallet::notifyIfBalanceChanged() {
 
 void Wallet::getAccountKeys(WalletAccountKeys& keys) {
   if (m_state == NOT_INITIALIZED) {
-    throw std::system_error(make_error_code(cryptonote::error::NOT_INITIALIZED));
+    throw std::system_error(make_error_code(CryptoNote::error::NOT_INITIALIZED));
   }
 
-  const cryptonote::account_keys& accountKeys = m_account.get_keys();
+  const CryptoNote::account_keys& accountKeys = m_account.get_keys();
   std::copy(reinterpret_cast<const uint8_t*>(&accountKeys.m_account_address.m_spendPublicKey),
     reinterpret_cast<const uint8_t*>(&accountKeys.m_account_address.m_spendPublicKey) + sizeof(crypto::public_key),
     keys.spendPublicKey.begin());

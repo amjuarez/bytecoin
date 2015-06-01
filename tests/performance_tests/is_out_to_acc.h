@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -29,7 +29,7 @@ public:
 
   bool test()
   {
-    const cryptonote::TransactionOutputToKey& tx_out = boost::get<cryptonote::TransactionOutputToKey>(m_tx.vout[0].target);
-    return cryptonote::is_out_to_acc(m_bob.get_keys(), tx_out, m_tx_pub_key, 0);
+    const CryptoNote::TransactionOutputToKey& tx_out = boost::get<CryptoNote::TransactionOutputToKey>(m_tx.vout[0].target);
+    return CryptoNote::is_out_to_acc(m_bob.get_keys(), tx_out, m_tx_pub_key, 0);
   }
 };

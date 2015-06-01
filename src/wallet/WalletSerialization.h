@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,7 +23,7 @@
 
 #include "IWallet.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 class ISerializer;
 }
 
@@ -33,9 +33,8 @@ struct UnconfirmedTransferDetails;
 struct TransactionInfo;
 struct Transfer;
 
-void serialize(UnconfirmedTransferDetails& utd, const std::string& name, cryptonote::ISerializer& serializer);
-void serialize(TransactionInfo& txi, const std::string& name, cryptonote::ISerializer& serializer);
-void serialize(Transfer& tr, const std::string& name, cryptonote::ISerializer& serializer);
+void serialize(UnconfirmedTransferDetails& utd, const std::string& name, CryptoNote::ISerializer& serializer);
+void serialize(TransactionInfo& txi, const std::string& name, CryptoNote::ISerializer& serializer);
+void serialize(Transfer& tr, const std::string& name, CryptoNote::ISerializer& serializer);
 
 }
-

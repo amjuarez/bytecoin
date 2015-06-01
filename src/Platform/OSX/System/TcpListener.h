@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,12 +23,13 @@
 namespace System {
 
 class Dispatcher;
+class Ipv4Address;
 class TcpConnection;
 
 class TcpListener {
 public:
   TcpListener();
-  TcpListener(Dispatcher& dispatcher, const std::string& address, uint16_t port);
+  TcpListener(Dispatcher& dispatcher, const Ipv4Address& address, uint16_t port);
   TcpListener(const TcpListener&) = delete;
   TcpListener(TcpListener&& other);
   ~TcpListener();

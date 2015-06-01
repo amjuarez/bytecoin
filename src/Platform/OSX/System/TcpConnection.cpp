@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,37 +16,31 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "TcpConnection.h"
-#include <unistd.h>
-#include <assert.h>
-#include <iostream>
-#include <sys/socket.h>
+#include <cassert>
+
+#include <netinet/in.h>
 #include <sys/event.h>
+#include <sys/errno.h>
 #include <sys/socket.h>
+#include <unistd.h>
+
 #include "Dispatcher.h"
-#include "InterruptedException.h"
+#include <System/InterruptedException.h>
+#include <System/Ipv4Address.h>
 
-using namespace System;
-
-namespace {
-
-struct ConnectionContext : public Dispatcher::ContextExt {
-  bool interrupted;
-};
-
-}
+namespace System {
 
 TcpConnection::TcpConnection() : dispatcher(nullptr) {
 }
 
-TcpConnection::TcpConnection(Dispatcher& dispatcher, int socket) : dispatcher(&dispatcher), connection(socket), stopped(false), readContext(nullptr), writeContext(nullptr) {
-}
-
 TcpConnection::TcpConnection(TcpConnection&& other) : dispatcher(other.dispatcher) {
   if (other.dispatcher != nullptr) {
+    assert(other.readContext == nullptr);
+    assert(other.writeContext == nullptr);
     connection = other.connection;
     stopped = other.stopped;
-    readContext = other.readContext;
-    writeContext = other.writeContext;
+    readContext = nullptr;
+    writeContext = nullptr;
     other.dispatcher = nullptr;
   }
 }
@@ -55,9 +49,8 @@ TcpConnection::~TcpConnection() {
   if (dispatcher != nullptr) {
     assert(readContext == nullptr);
     assert(writeContext == nullptr);
-    if (close(connection) == -1) {
-      std::cerr << "close() failed, errno=" << errno << '.' << std::endl;
-    }
+    int result = close(connection);
+    assert(result != -1);
   }
 }
 
@@ -66,17 +59,18 @@ TcpConnection& TcpConnection::operator=(TcpConnection&& other) {
     assert(readContext == nullptr);
     assert(writeContext == nullptr);
     if (close(connection) == -1) {
-      std::cerr << "close() failed, errno=" << errno << '.' << std::endl;
-      throw std::runtime_error("TcpConnection::operator=");
+      throw std::runtime_error("TcpConnection::operator=, close() failed, errno=" + std::to_string(errno));
     }
   }
 
   dispatcher = other.dispatcher;
   if (other.dispatcher != nullptr) {
+    assert(other.readContext == nullptr);
+    assert(other.writeContext == nullptr);
     connection = other.connection;
     stopped = other.stopped;
-    readContext = other.readContext;
-    writeContext = other.writeContext;
+    readContext = nullptr;
+    writeContext = nullptr;
     other.dispatcher = nullptr;
   }
 
@@ -89,6 +83,42 @@ void TcpConnection::start() {
   stopped = false;
 }
 
+void TcpConnection::stop() {
+  assert(dispatcher != nullptr);
+  assert(!stopped);
+  if (writeContext != nullptr) {
+    Dispatcher::OperationContext* context = static_cast<Dispatcher::OperationContext*>(writeContext);
+    if (!context->interrupted) {
+      struct kevent event;
+      EV_SET(&event, connection, EVFILT_WRITE, EV_DELETE | EV_DISABLE, 0, 0, NULL);
+
+      if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
+        throw std::runtime_error("TcpListener::stop, kevent() failed, errno=" + std::to_string(errno));
+      }
+
+      context->interrupted = true;
+      dispatcher->pushContext(context->context);
+    }
+  }
+
+  if (readContext != nullptr) {
+    Dispatcher::OperationContext* context = static_cast<Dispatcher::OperationContext*>(readContext);
+    if (!context->interrupted) {
+      struct kevent event;
+      EV_SET(&event, connection, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, NULL);
+
+      if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
+        throw std::runtime_error("TcpListener::stop, kevent() failed, errno=" + std::to_string(errno));
+      }
+
+      context->interrupted = true;
+      dispatcher->pushContext(context->context);
+    }
+  }
+
+  stopped = true;
+}
+
 size_t TcpConnection::read(uint8_t* data, size_t size) {
   assert(dispatcher != nullptr);
   assert(readContext == nullptr);
@@ -96,152 +126,121 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
     throw InterruptedException();
   }
 
+  std::string message;
   ssize_t transferred = ::recv(connection, (void *)data, size, 0);
   if (transferred == -1) {
     if (errno != EAGAIN  && errno != EWOULDBLOCK) {
-      std::cerr << "recv failed, result=" << errno << '.' << std::endl;
+      message = "recv failed, errno=" + std::to_string(errno);
     } else {
-      ConnectionContext context2;
-      context2.context = dispatcher->getCurrentContext();
-      context2.interrupted = false;
+      Dispatcher::OperationContext context;
+      context.context = dispatcher->getCurrentContext();
+      context.interrupted = false;
       struct kevent event;
-      EV_SET(&event, connection, EVFILT_READ, EV_ADD | EV_ENABLE | EV_CLEAR | EV_ONESHOT, 0, 0, &context2);
+      EV_SET(&event, connection, EVFILT_READ, EV_ADD | EV_ENABLE | EV_CLEAR | EV_ONESHOT, 0, 0, &context);
       if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        std::cerr << "kevent() failed, errno=" << errno << '.' << std::endl;
+        message = "kevent() failed, errno=" + std::to_string(errno);
       } else {
-        readContext = &context2;
-        dispatcher->yield();
+        readContext = &context;
+        dispatcher->dispatch();
         assert(dispatcher != nullptr);
-        assert(context2.context == dispatcher->getCurrentContext());
-        assert(readContext == &context2);
+        assert(context.context == dispatcher->getCurrentContext());
+        assert(readContext == &context);
         readContext = nullptr;
-        context2.context = nullptr;
-        if (context2.interrupted) {
+        context.context = nullptr;
+        if (context.interrupted) {
           throw InterruptedException();
         }
 
         ssize_t transferred = ::recv(connection, (void *)data, size, 0);
         if (transferred == -1) {
-          std::cerr << "recv failed, errno=" << errno << '.' << std::endl;
+          message = "recv failed, errno=" + std::to_string(errno);
         } else {
-          if (transferred == 0) {
-            std::cerr << "recv return after yield with 0 bytes" << std::endl;
-
-            int retval = -1;
-            socklen_t retValLen = sizeof(retval);
-            int s = getsockopt(connection, SOL_SOCKET, SO_ERROR, &retval, &retValLen);
-            if (s == -1) {
-              std::cerr << "getsockopt() failed, errno=" << errno << '.' << std::endl;
-            } else {
-              std::cerr << "recv getsockopt retval = " << retval << std::endl;
-            }
-          }
-
-          assert(transferred <= size);
+          assert(transferred <= static_cast<ssize_t>(size));
           return transferred;
         }
       }
     }
 
-    throw std::runtime_error("TcpConnection::read");
+    throw std::runtime_error("TcpConnection::read, " + message);
   }
 
-  assert(transferred <= size);
+  assert(transferred <= static_cast<ssize_t>(size));
   return transferred;
 }
 
-void TcpConnection::write(const uint8_t* data, size_t size) {
+size_t TcpConnection::write(const uint8_t* data, size_t size) {
   assert(dispatcher != nullptr);
   assert(writeContext == nullptr);
   if (stopped) {
     throw InterruptedException();
   }
 
+  std::string message;
   if (size == 0) {
     if (shutdown(connection, SHUT_WR) == -1) {
-      std::cerr << "shutdown failed, errno=" << errno << '.' << std::endl;
-      throw std::runtime_error("TcpConnection::write");
+      throw std::runtime_error("TcpConnection::write, shutdown failed, result=" + std::to_string(errno));
     }
 
-    return;
+    return 0;
   }
 
   ssize_t transferred = ::send(connection, (void *)data, size, 0);
   if (transferred == -1) {
     if (errno != EAGAIN  && errno != EWOULDBLOCK) {
-      std::cerr << "send failed, result=" << errno << '.' << std::endl;
+      message = "send failed, result=" + std::to_string(errno);
     } else {
-      ConnectionContext context2;
-      context2.context = dispatcher->getCurrentContext();
-      context2.interrupted = false;
+      Dispatcher::OperationContext context;
+      context.context = dispatcher->getCurrentContext();
+      context.interrupted = false;
       struct kevent event;
-      EV_SET(&event, connection, EVFILT_WRITE, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, &context2);
+      EV_SET(&event, connection, EVFILT_WRITE, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, &context);
       if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        std::cerr << "kevent() failed, errno=" << errno << '.' << std::endl;
+        message = "kevent() failed, errno=" + std::to_string(errno);
       } else {
-        writeContext = &context2;
-        dispatcher->yield();
+        writeContext = &context;
+        dispatcher->dispatch();
         assert(dispatcher != nullptr);
-        assert(context2.context == dispatcher->getCurrentContext());
-        assert(writeContext == &context2);
+        assert(context.context == dispatcher->getCurrentContext());
+        assert(writeContext == &context);
         writeContext = nullptr;
-        context2.context = nullptr;
-        if (context2.interrupted) {
+        context.context = nullptr;
+        if (context.interrupted) {
           throw InterruptedException();
         }
 
         ssize_t transferred = ::send(connection, (void *)data, size, 0);
         if (transferred == -1) {
-          std::cerr << "recv failed, errno=" << errno << '.' << std::endl;
+          message = "send failed, errno=" + std::to_string(errno);
         } else {
-          if (transferred == 0) {
-            throw std::runtime_error("send transferred 0 bytes.");
-          }
-
-          assert(transferred == size);
-          return;
+          assert(transferred <= static_cast<ssize_t>(size));
+          return transferred;
         }
       }
     }
 
-    throw std::runtime_error("TcpConnection::write");
+    throw std::runtime_error("TcpConnection::write, " + message);
+  }
+
+  assert(transferred <= static_cast<ssize_t>(size));
+  return transferred;
+}
+
+std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() {
+  sockaddr_in addr;
+  socklen_t size = sizeof(addr);
+  if (getpeername(connection, reinterpret_cast<sockaddr*>(&addr), &size) != 0) {
+    throw std::runtime_error("TcpConnection::getPeerAddress, getpeername failed, result=" + std::to_string(errno));
+  }
+
+  assert(size == sizeof(sockaddr_in));
+  return std::make_pair(Ipv4Address(htonl(addr.sin_addr.s_addr)), htons(addr.sin_port));
+}
+
+TcpConnection::TcpConnection(Dispatcher& dispatcher, int socket) : dispatcher(&dispatcher), connection(socket), stopped(false), readContext(nullptr), writeContext(nullptr) {
+  int val = 1;
+  if (setsockopt(connection, SOL_SOCKET, SO_NOSIGPIPE, (void*)&val, sizeof val) == -1) {
+    throw std::runtime_error("TcpConnection::TcpConnection, setsockopt failed, result=" + std::to_string(errno));
   }
 }
 
-void TcpConnection::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (writeContext != nullptr && static_cast<ConnectionContext*>(writeContext)->context != nullptr) {
-    ConnectionContext* context2 = static_cast<ConnectionContext*>(writeContext);
-    if (!context2->interrupted) {
-      struct kevent event;
-      EV_SET(&event, connection, EVFILT_WRITE, EV_DELETE | EV_DISABLE, 0, 0, NULL);
-
-      if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        std::cerr << "kevent() failed, errno=" << errno << '.' << std::endl;
-        throw std::runtime_error("TcpListener::stop");
-      }
-
-      context2->interrupted = true;
-      dispatcher->pushContext(context2->context);
-    }
-  }
-
-  if (readContext != nullptr && static_cast<ConnectionContext*>(readContext)->context != nullptr) {
-    ConnectionContext* context2 = static_cast<ConnectionContext*>(readContext);
-    if (!context2->interrupted) {
-      struct kevent event;
-      EV_SET(&event, connection, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, NULL);
-
-      if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        std::cerr << "kevent() failed, errno=" << errno << '.' << std::endl;
-        throw std::runtime_error("TcpListener::stop");
-      }
-
-      context2->interrupted = true;
-      dispatcher->pushContext(context2->context);
-    }
-  }
-
-  stopped = true;
 }

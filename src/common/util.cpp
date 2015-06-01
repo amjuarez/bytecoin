@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -16,15 +16,10 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "util.h"
-
 #include <cstdio>
 
 #include <boost/filesystem.hpp>
 
-#include "include_base_utils.h"
-using namespace epee;
-
-#include "p2p/p2p_protocol_defs.h"
 #include "cryptonote_config.h"
 
 #ifdef WIN32
@@ -293,12 +288,10 @@ std::string get_nix_version_display_string()
     namespace fs = boost::filesystem;
     char psz_path[MAX_PATH] = "";
 
-    if(SHGetSpecialFolderPathA(NULL, psz_path, nfolder, iscreate))
-    {
+    if(SHGetSpecialFolderPathA(NULL, psz_path, nfolder, iscreate)) {
       return psz_path;
     }
 
-    LOG_ERROR("SHGetSpecialFolderPathA() failed, could not obtain requested path.");
     return "";
   }
 #endif
@@ -313,7 +306,7 @@ std::string get_nix_version_display_string()
     std::string config_folder;
 #ifdef WIN32
     // Windows
-    config_folder = get_special_folder_path(CSIDL_APPDATA, true) + "/" + cryptonote::CRYPTONOTE_NAME;
+    config_folder = get_special_folder_path(CSIDL_APPDATA, true) + "/" + CryptoNote::CRYPTONOTE_NAME;
 #else
     std::string pathRet;
     char* pszHome = getenv("HOME");
@@ -324,10 +317,10 @@ std::string get_nix_version_display_string()
 #ifdef MAC_OSX
     // Mac
     pathRet /= "Library/Application Support";
-    config_folder =  (pathRet + "/" + cryptonote::CRYPTONOTE_NAME);
+    config_folder =  (pathRet + "/" + CryptoNote::CRYPTONOTE_NAME);
 #else
     // Unix
-    config_folder = (pathRet + "/." + cryptonote::CRYPTONOTE_NAME);
+    config_folder = (pathRet + "/." + CryptoNote::CRYPTONOTE_NAME);
 #endif
 #endif
 
@@ -339,22 +332,11 @@ std::string get_nix_version_display_string()
     namespace fs = boost::filesystem;
     boost::system::error_code ec;
     fs::path fs_path(path);
-    if (fs::is_directory(fs_path, ec))
-    {
+    if (fs::is_directory(fs_path, ec)) {
       return true;
     }
 
-    bool res = fs::create_directories(fs_path, ec);
-    if (res)
-    {
-      LOG_PRINT_L2("Created directory: " << path);
-    }
-    else
-    {
-      LOG_PRINT_L2("Can't create directory: " << path << ", err: "<< ec.message());
-    }
-
-    return res;
+    return fs::create_directories(fs_path, ec);
   }
 
   std::error_code replace_file(const std::string& replacement_name, const std::string& replaced_name)
@@ -377,11 +359,4 @@ std::string get_nix_version_display_string()
     return std::error_code(code, std::system_category());
   }
 
-  crypto::hash get_proof_of_trust_hash(const nodetool::proof_of_trust& pot)
-  {
-    std::string s;
-    s.append(reinterpret_cast<const char*>(&pot.peer_id), sizeof(pot.peer_id));
-    s.append(reinterpret_cast<const char*>(&pot.time), sizeof(pot.time));
-    return crypto::cn_fast_hash(s.data(), s.size());
-  }
 }

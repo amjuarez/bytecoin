@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -44,7 +44,7 @@ public:
   virtual void getKnownPoolTxIds(std::vector<crypto::hash>& ids) = 0;
   virtual void onBlockchainDetach(uint64_t height) = 0;
   virtual bool onNewBlocks(const CompleteBlock* blocks, uint64_t startHeight, size_t count) = 0;
-  virtual std::error_code onPoolUpdated(const std::vector<cryptonote::Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) = 0;
+  virtual std::error_code onPoolUpdated(const std::vector<Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) = 0;
 };
 
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -14,6 +14,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+
 #pragma once
 
 #include "ITransfersSynchronizer.h"
@@ -24,7 +25,7 @@
 #include <memory>
 #include <cstring>
 
-namespace cryptonote {
+namespace CryptoNote {
 class Currency;
 }
 
@@ -36,7 +37,7 @@ class INode;
 class TransfersSyncronizer : public ITransfersSynchronizer {
 public:
 
-  TransfersSyncronizer(const cryptonote::Currency& currency, IBlockchainSynchronizer& sync, INode& node);
+  TransfersSyncronizer(const CryptoNote::Currency& currency, IBlockchainSynchronizer& sync, INode& node);
   ~TransfersSyncronizer();
 
   // ITransfersSynchronizer
@@ -57,7 +58,7 @@ private:
   // std::unordered_map<AccountAddress, std::unique_ptr<TransfersConsumer>> m_subscriptions;
   IBlockchainSynchronizer& m_sync;
   INode& m_node;
-  const cryptonote::Currency& m_currency;
+  const CryptoNote::Currency& m_currency;
 };
 
 }

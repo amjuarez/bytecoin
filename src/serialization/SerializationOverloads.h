@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,17 +19,18 @@
 
 #include "ISerializer.h"
 
+#include <array>
+#include <cstring>
+#include <list>
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <array>
-#include <cstring>
 
-namespace cryptonote {
+namespace CryptoNote {
 
 template<typename T>
 typename std::enable_if<std::is_trivial<T>::value>::type
-serializeAsBinary(std::vector<T>& value, const std::string& name, cryptonote::ISerializer& serializer) {
+serializeAsBinary(std::vector<T>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
   std::string blob;
   if (serializer.type() == ISerializer::INPUT) {
     serializer.binary(blob, name);
@@ -46,26 +47,40 @@ serializeAsBinary(std::vector<T>& value, const std::string& name, cryptonote::IS
 }
 
 template<typename T>
-void serialize(std::vector<T>& value, const std::string& name, cryptonote::ISerializer& serializer) {
+void serialize(std::vector<T>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
   std::size_t size = value.size();
   serializer.beginArray(size, name);
   value.resize(size);
 
-  for (size_t i = 0; i < size; ++i) {
-    serializer(value[i], "");
+  for (auto& item : value) {
+    serializer(item, "");
   }
 
   serializer.endArray();
 }
 
+template<typename T>
+void serialize(std::list<T>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
+  std::size_t size = value.size();
+  serializer.beginArray(size, name);
+  value.resize(size);
+
+  for (auto& item : value) {
+    serializer(item, "");
+  }
+
+  serializer.endArray();
+}
+
+
 template<typename K, typename V, typename Hash>
-void serialize(std::unordered_map<K, V, Hash>& value, const std::string& name, cryptonote::ISerializer& serializer) {
+void serialize(std::unordered_map<K, V, Hash>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
   std::size_t size;
   size = value.size();
 
   serializer.beginArray(size, name);
 
-  if (serializer.type() == cryptonote::ISerializer::INPUT) {
+  if (serializer.type() == CryptoNote::ISerializer::INPUT) {
     value.reserve(size);
 
     for (size_t i = 0; i < size; ++i) {
@@ -93,7 +108,7 @@ void serialize(std::unordered_map<K, V, Hash>& value, const std::string& name, c
 }
 
 template<std::size_t size>
-void serialize(std::array<uint8_t, size>& value, const std::string& name, cryptonote::ISerializer& s) {
+void serialize(std::array<uint8_t, size>& value, const std::string& name, CryptoNote::ISerializer& s) {
   s.binary(value.data(), value.size(), name);
 }
 

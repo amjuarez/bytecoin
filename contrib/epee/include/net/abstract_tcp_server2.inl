@@ -757,6 +757,7 @@ POP_WARNINGS
     boost::asio::ip::tcp::endpoint remote_endpoint(*iterator);
      
     sock_.open(remote_endpoint.protocol());
+
     if(bind_ip != "0.0.0.0" && bind_ip != "0" && bind_ip != "" )
     {
       boost::asio::ip::tcp::endpoint local_endpoint(boost::asio::ip::address::from_string(adr.c_str()), 0);

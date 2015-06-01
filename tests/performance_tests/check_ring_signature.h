@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -39,7 +39,7 @@ public:
 
   bool init()
   {
-    using namespace cryptonote;
+    using namespace CryptoNote;
 
     if (!base_class::init())
       return false;
@@ -49,7 +49,7 @@ public:
     std::vector<tx_destination_entry> destinations;
     destinations.push_back(tx_destination_entry(this->m_source_amount, m_alice.get_keys().m_account_address));
 
-    if (!construct_tx(this->m_miners[this->real_source_idx].get_keys(), this->m_sources, destinations, std::vector<uint8_t>(), m_tx, 0))
+    if (!construct_tx(this->m_miners[this->real_source_idx].get_keys(), this->m_sources, destinations, std::vector<uint8_t>(), m_tx, 0, this->m_logger))
       return false;
 
     get_transaction_prefix_hash(m_tx, m_tx_prefix_hash);
@@ -59,12 +59,12 @@ public:
 
   bool test()
   {
-    const cryptonote::TransactionInputToKey& txin = boost::get<cryptonote::TransactionInputToKey>(m_tx.vin[0]);
+    const CryptoNote::TransactionInputToKey& txin = boost::get<CryptoNote::TransactionInputToKey>(m_tx.vin[0]);
     return crypto::check_ring_signature(m_tx_prefix_hash, txin.keyImage, this->m_public_key_ptrs, ring_size, m_tx.signatures[0].data());
   }
 
 private:
-  cryptonote::account_base m_alice;
-  cryptonote::Transaction m_tx;
+  CryptoNote::account_base m_alice;
+  CryptoNote::Transaction m_tx;
   crypto::hash m_tx_prefix_hash;
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -96,7 +96,7 @@ public:
     return true;
   }
 
-  std::error_code onPoolUpdated(const std::vector<cryptonote::Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override {
+  std::error_code onPoolUpdated(const std::vector<Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) override {
     //stub
     return std::error_code();
   }
@@ -128,7 +128,8 @@ public:
       std::lock_guard<std::mutex> lk(m_mutex);
       m_transfers.push_back(transactionHash);
 
-      auto address = epee::string_tools::pod_to_hex(object->getAddress().spendPublicKey);
+      auto key = object->getAddress().spendPublicKey;
+      std::string address = Common::toHex(&key, sizeof(key));
       LOG_DEBUG("Transfer to " + address);
     }
     m_cv.notify_all();
@@ -175,7 +176,7 @@ public:
     m_sync(sync) {}
 
   void generateAccounts(size_t count) {
-    cryptonote::account_base acc;
+    CryptoNote::account_base acc;
 
     while (count--) {
       acc.generate();
@@ -237,7 +238,7 @@ TEST_F(TransfersTest, base) {
   nodeDaemons[0]->makeINode(node1);
   nodeDaemons[1]->makeINode(node2);
 
-  cryptonote::account_base dstAcc;
+  CryptoNote::account_base dstAcc;
   dstAcc.generate();
 
   AccountKeys dstKeys = reinterpret_cast<const AccountKeys&>(dstAcc.get_keys());
@@ -306,7 +307,7 @@ std::unique_ptr<ITransaction> createTransferToMultisignature(
 
   auto tx = createTransaction();
 
-  std::vector<std::pair<TransactionTypes::InputKeyInfo, KeyPair>> inputs;
+  std::vector<std::pair<TransactionTypes::InputKeyInfo, TransactionTypes::KeyPair>> inputs;
 
   uint64_t foundMoney = 0;
 
@@ -324,7 +325,7 @@ std::unique_ptr<ITransaction> createTransferToMultisignature(
     info.realOutput.transactionIndex = 0;
     info.realOutput.transactionPublicKey = t.transactionPublicKey;
 
-    KeyPair kp;
+    TransactionTypes::KeyPair kp;
     tx->addInput(senderKeys, info, kp);
 
     inputs.push_back(std::make_pair(info, kp));
@@ -355,9 +356,9 @@ std::unique_ptr<ITransaction> createTransferToMultisignature(
 std::error_code submitTransaction(INode& node, ITransactionReader& tx) {
   auto data = tx.getTransactionData();
 
-  cryptonote::blobdata txblob(data.data(), data.data() + data.size());
-  cryptonote::Transaction outTx;
-  cryptonote::parse_and_validate_tx_from_blob(txblob, outTx);
+  CryptoNote::blobdata txblob(data.data(), data.data() + data.size());
+  CryptoNote::Transaction outTx;
+  CryptoNote::parse_and_validate_tx_from_blob(txblob, outTx);
 
   LOG_DEBUG("Submitting transaction " + bin2str(tx.getTransactionHash()));
 

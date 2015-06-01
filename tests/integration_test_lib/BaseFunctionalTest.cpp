@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,15 +24,19 @@
 #include <sstream>
 #include <cstdlib>
 
-#include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
+
+#include <System/Event.h>
+#include <System/Timer.h>
+#include <System/InterruptedException.h>
 
 #include "p2p/NetNodeConfig.h"
 #include "cryptonote_core/CoreConfig.h"
-
-#include "RPCTestNode.h"
 #include "wallet/Wallet.h"
-#include "Logger.h"
+
+#include "InProcTestNode.h"
+#include "RPCTestNode.h"
+
 
 #if defined __linux__
 #include <sys/wait.h>
@@ -40,242 +44,249 @@
 #include <errno.h>
 #endif
 
-using namespace Tests::Common;
+#include "Logger.h"
 
-void BaseFunctionalTest::launchTestnet(size_t count, Topology t) {
-  if (count < 1) LOG_WARNING("Testnet has no nodes");
-  for (uint16_t i = 0; i < count; ++i) {
-    std::string dataDirPath = m_dataDir + "/node";
-    dataDirPath += boost::lexical_cast<std::string>(i);
-    boost::filesystem::create_directory(dataDirPath);
-
-    std::ofstream config(dataDirPath + "/daemon.conf", std::ios_base::trunc | std::ios_base::out);
-
-    uint16_t rpcPort = RPC_FIRST_PORT + i;
-    uint16_t p2pPort = P2P_FIRST_PORT + i;
-
-    config
-      << "rpc-bind-port=" << rpcPort << std::endl
-      << "p2p-bind-port=" << p2pPort << std::endl
-      << "log-level=2" << std::endl
-      << "log-file=test_bytecoind_" << i + 1 << ".log" << std::endl;
-
-    switch (t) {
-    case Line:
-      if (i != count - 1) config << "add-exclusive-node=127.0.0.1:" << p2pPort + 1 << std::endl;
-      if (i != 0)         config << "add-exclusive-node=127.0.0.1:" << p2pPort - 1 << std::endl;
-      break;
-    case Ring: {
-      uint16_t p2pExternalPort = P2P_FIRST_PORT + (i + 1) % count;
-      config << "add-exclusive-node=127.0.0.1:" << p2pExternalPort + 1 << std::endl;
-    }
-      break;
-    case Star:
-      if (i == 0) {
-        for (size_t node = 1; node < count; ++node)
-          config << "add-exclusive-node=127.0.0.1:" << P2P_FIRST_PORT + node << std::endl;
-      }
-      else {
-        config << "add-exclusive-node=127.0.0.1:" << P2P_FIRST_PORT << std::endl;
-      }
-      break;
-    }
-    config.close();
-#if defined WIN32
-    std::string commandLine = "start /MIN \"bytecoind\" \"" + m_daemonDir + "\\bytecoind.exe\" --testnet --data-dir=\"" + dataDirPath + "\" --config-file=daemon.conf";
-    LOG_DEBUG(commandLine);
-    system(commandLine.c_str());
-#elif defined __linux__
-    auto pid = fork();
-    if(  pid == 0 ) {
-        std::string pathToDaemon = "" + m_daemonDir + "/bytecoind";
-        close(1);
-        close(2);
-        std::string dataDir = "--data-dir=" + dataDirPath + "";
-        if(execl(pathToDaemon.c_str(), "bytecoind", "--testnet", dataDir.c_str(), "--config-file=daemon.conf", NULL) == -1) {
-            LOG_ERROR(TO_STRING(errno));
-        }
-        throw std::runtime_error("failed to start daemon");
-    } else if(pid > 0) {
-        pids.push_back(pid);
-    }
+#ifdef _WIN32
+const std::string DAEMON_FILENAME = "bytecoind.exe";
 #else
-
+const std::string DAEMON_FILENAME = "bytecoind";
 #endif
 
-    nodeDaemons.push_back(
-      std::unique_ptr<TestNode>(new RPCTestNode(rpcPort, m_dispatcher))
-      );
+using namespace Tests::Common;
+using namespace Tests;
+
+void BaseFunctionalTest::launchTestnet(size_t count, Topology t) {
+  if (count < 1) {
+    LOG_WARNING("Testnet has no nodes");
   }
-  std::this_thread::sleep_for(std::chrono::milliseconds(10000)); //for initial update
+
+  m_testnetSize = count;
+  m_topology = t;
+
+  nodeDaemons.resize(m_testnetSize);
+
+  for (size_t i = 0; i < m_testnetSize; ++i) {
+    startNode(i);
+  }
+
+  waitDaemonsReady();
+
+  nodeDaemons[0]->makeINode(mainNode);
+  makeWallet(workingWallet, mainNode);
+}
+
+void BaseFunctionalTest::launchInprocTestnet(size_t count, Topology t) {
+  m_testnetSize = count;
+  m_topology = t;
+
+  for (size_t i = 0; i < m_testnetSize; ++i) {
+    auto cfg = createNodeConfiguration(i);
+    nodeDaemons.emplace_back(new InProcTestNode(cfg, m_currency));
+  }
+
+  waitDaemonsReady();
+
   nodeDaemons[0]->makeINode(mainNode);
   makeWallet(workingWallet, mainNode);
 }
 
 void BaseFunctionalTest::launchTestnetWithInprocNode(size_t count, Topology t) {
-  if (count < 1) LOG_WARNING("Testnet has no nodes");
-  for (uint16_t i = 0; i < count-1; ++i) {
-    std::string dataDirPath = m_dataDir + "/node";
-    dataDirPath += boost::lexical_cast<std::string>(i);
-    boost::filesystem::create_directory(dataDirPath);
-
-    std::ofstream config(dataDirPath + "/daemon.conf", std::ios_base::trunc | std::ios_base::out);
-
-    uint16_t rpcPort = RPC_FIRST_PORT + i;
-    uint16_t p2pPort = P2P_FIRST_PORT + i;
-
-    config
-      << "rpc-bind-port=" << rpcPort << std::endl
-      << "p2p-bind-port=" << p2pPort << std::endl
-      << "log-level=2" << std::endl
-      << "log-file=test_bytecoind_" << i + 1 << ".log" << std::endl;
-
-    switch (t) {
-    case Line:
-      config << "add-exclusive-node=127.0.0.1:" << p2pPort + 1 << std::endl;
-      if (i != 0)         config << "add-exclusive-node=127.0.0.1:" << p2pPort - 1 << std::endl;
-      break;
-    case Ring: {
-      uint16_t p2pExternalPort = P2P_FIRST_PORT + (i + 1) % count;
-      config << "add-exclusive-node=127.0.0.1:" << p2pExternalPort + 1 << std::endl;
-    }
-      break;
-    case Star:
-      if (i == 0) {
-        for (size_t node = 1; node < count; ++node)
-          config << "add-exclusive-node=127.0.0.1:" << P2P_FIRST_PORT + node << std::endl;
-      } else {
-        config << "add-exclusive-node=127.0.0.1:" << P2P_FIRST_PORT << std::endl;
-      }
-      break;
-    }
-    config.close();
-#if defined WIN32
-    std::string commandLine = "start /MIN \"bytecoind\" \"" + m_daemonDir + "\\bytecoind.exe\" --testnet --data-dir=\"" + dataDirPath + "\" --config-file=daemon.conf";
-    LOG_DEBUG(commandLine);
-    system(commandLine.c_str());
-#elif defined __linux__
-    auto pid = fork();
-    if (pid == 0) {
-      std::string pathToDaemon = "" + m_daemonDir + "/bytecoind";
-      close(1);
-      close(2);
-      std::string dataDir = "--data-dir=" + dataDirPath + "";
-      if (execl(pathToDaemon.c_str(), "bytecoind", "--testnet", dataDir.c_str(), "--config-file=daemon.conf", NULL) == -1) {
-        LOG_ERROR(TO_STRING(errno));
-      }
-      throw std::runtime_error("failed to start daemon");
-    } else if (pid > 0) {
-      pids.push_back(pid);
-    }
-#else
-
-#endif
-
-    nodeDaemons.push_back(
-      std::unique_ptr<TestNode>(new RPCTestNode(rpcPort, m_dispatcher))
-      );
-  }
-    
-  this->core.reset(new cryptonote::core(m_currency, NULL));
-  this->protocol.reset(new cryptonote::t_cryptonote_protocol_handler<cryptonote::core>(*core, NULL));
-  this->p2pNode.reset(new nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>>(*protocol));
-  protocol->set_p2p_endpoint(p2pNode.get());
-  core->set_cryptonote_protocol(protocol.get());
-
-  std::string dataDirPath = m_dataDir + "/node";
-  dataDirPath += boost::lexical_cast<std::string>(count - 1);
-  boost::filesystem::create_directory(dataDirPath);
-
-  uint16_t p2pPort = P2P_FIRST_PORT + static_cast<uint16_t>(count) - 1;
-
-  nodetool::NetNodeConfig p2pConfig;
-  p2pConfig.bindIp = "127.0.0.1";
-  p2pConfig.bindPort = boost::lexical_cast<std::string>(p2pPort);
-  nodetool::net_address addr;
-  addr.ip = 0x7f000001;
-
-  p2pConfig.externalPort = 0;
-  p2pConfig.allowLocalIp = false;
-  p2pConfig.hideMyPort = false;
-  p2pConfig.configFolder = dataDirPath;
-
-
-  switch (t) {
-  case Line:
-    addr.port = p2pPort - 1;
-    p2pConfig.exclusiveNodes.push_back(addr);
-    break;
-  case Ring:
-    addr.port = p2pPort - 1;
-    p2pConfig.exclusiveNodes.push_back(addr);
-    addr.port = P2P_FIRST_PORT;
-    p2pConfig.exclusiveNodes.push_back(addr);
-    break;
-  case Star:
-    addr.port = P2P_FIRST_PORT;
-    p2pConfig.exclusiveNodes.push_back(addr);
-    break;
+  if (count < 1) {
+    LOG_WARNING("Testnet has no nodes");
   }
 
-  if (!p2pNode->init(p2pConfig, true)) {
-    throw std::runtime_error("Failed to init p2pNode");
+  m_testnetSize = count;
+  m_topology = t;
+
+  nodeDaemons.resize(m_testnetSize);
+
+  for (size_t i = 0; i < m_testnetSize - 1; ++i) {
+    startNode(i);
   }
 
-  protocol->init();
+  auto cfg = createNodeConfiguration(m_testnetSize - 1);
+  nodeDaemons[m_testnetSize - 1].reset(new InProcTestNode(cfg, m_currency));
 
-  cryptonote::MinerConfig emptyMiner;
-  cryptonote::CoreConfig coreConfig;
-  coreConfig.configFolder = dataDirPath;
-  core->init(coreConfig, emptyMiner, true);
+  waitDaemonsReady();
 
-  inprocNode.reset(new CryptoNote::InProcessNode(*core, *protocol));
-  std::promise<void> p;
-  auto future = p.get_future();
-  inprocNode->init([&p](std::error_code ec) {
-    p.set_value();
-    if (ec) {
-      std::cout << ec.message() << std::endl;
-    } 
-  });
-
-  future.get();
-  
-  std::thread serverThread(
-    std::bind(
-    &nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>>::run,
-    p2pNode.get()
-    )
-    );
-  serverThread.detach();
-
-
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(10000)); //for initial update
   nodeDaemons[0]->makeINode(mainNode);
   makeWallet(workingWallet, mainNode);
-
-
-
-
 }
 
+
+Tests::TestNodeConfiguration BaseFunctionalTest::createNodeConfiguration(size_t index) {
+  Tests::TestNodeConfiguration cfg;
+
+  std::string dataDirPath = m_dataDir + "/node" + std::to_string(index);
+  boost::filesystem::create_directory(dataDirPath);
+
+  cfg.dataDir = dataDirPath;
+
+  uint16_t rpcPort = static_cast<uint16_t>(RPC_FIRST_PORT + index);
+  uint16_t p2pPort = static_cast<uint16_t>(P2P_FIRST_PORT + index);
+
+  cfg.p2pPort = p2pPort;
+  cfg.rpcPort = rpcPort;
+
+  switch (m_topology) {
+  case Line:
+    if (index != 0) {
+      cfg.exclusiveNodes.push_back("127.0.0.1:" + std::to_string(p2pPort - 1));
+    }
+    break;
+
+  case Ring: {
+    uint16_t p2pExternalPort = static_cast<uint16_t>(P2P_FIRST_PORT + (index + 1) % m_testnetSize);
+    cfg.exclusiveNodes.push_back("127.0.0.1:" + std::to_string(p2pExternalPort + 1));
+    break;
+  }
+
+  case Star:
+    if (index == 0) {
+      for (size_t node = 1; node < m_testnetSize; ++node) {
+        cfg.exclusiveNodes.push_back("127.0.0.1:" + std::to_string(P2P_FIRST_PORT + node));
+      }
+    }
+    break;
+  }
+
+  return cfg;
+}
+
+void BaseFunctionalTest::startNode(size_t index) {
+  std::string dataDirPath = m_dataDir + "/node" + std::to_string(index);
+  boost::filesystem::create_directory(dataDirPath);
+
+  std::ofstream config(dataDirPath + "/daemon.conf", std::ios_base::trunc | std::ios_base::out);
+
+  uint16_t rpcPort = static_cast<uint16_t>(RPC_FIRST_PORT + index);
+  uint16_t p2pPort = static_cast<uint16_t>(P2P_FIRST_PORT + index);
+
+  config
+    << "rpc-bind-port=" << rpcPort << std::endl
+    << "p2p-bind-port=" << p2pPort << std::endl
+    << "log-level=4" << std::endl
+    << "log-file=test_bytecoind_" << index << ".log" << std::endl;
+
+  switch (m_topology) {
+  case Line:
+    if (index != 0) {
+      config << "add-exclusive-node=127.0.0.1:" << p2pPort - 1 << std::endl;
+    }
+    break;
+
+  case Ring: {
+    uint16_t p2pExternalPort = static_cast<uint16_t>(P2P_FIRST_PORT + (index + 1) % m_testnetSize);
+    config << "add-exclusive-node=127.0.0.1:" << (p2pExternalPort + 1) << std::endl;
+    break;
+  }
+  case Star:
+    if (index == 0) {
+      for (size_t node = 1; node < m_testnetSize; ++node) {
+        config << "add-exclusive-node=127.0.0.1:" << (P2P_FIRST_PORT + node) << std::endl;
+      }
+    }
+    break;
+  }
+  config.close();
+
+  boost::filesystem::path daemonPath = index < m_config.daemons.size() ?
+    boost::filesystem::path(m_config.daemons[index]) : (boost::filesystem::path(m_daemonDir) / DAEMON_FILENAME);
+  boost::system::error_code ignoredEc;
+  if (!boost::filesystem::exists(daemonPath, ignoredEc)) {
+    throw std::runtime_error("daemon binary wasn't found");
+  }
+
+#if defined WIN32
+  std::string commandLine = "start /MIN \"bytecoind" + std::to_string(index) + "\" \"" + daemonPath.string() +
+    "\" --testnet --data-dir=\"" + dataDirPath + "\" --config-file=daemon.conf";
+  LOG_DEBUG(commandLine);
+  system(commandLine.c_str());
+#elif defined __linux__
+  auto pid = fork();
+  if (pid == 0) {
+    std::string pathToDaemon = daemonPath.string();
+    close(1);
+    close(2);
+    std::string dataDir = "--data-dir=" + dataDirPath + "";
+    LOG_TRACE(pathToDaemon);
+    if (execl(pathToDaemon.c_str(), "bytecoind", "--testnet", dataDir.c_str(), "--config-file=daemon.conf", NULL) == -1) {
+      LOG_ERROR(TO_STRING(errno));
+    }
+    abort();
+//    throw std::runtime_error("failed to start daemon");
+  } else if (pid > 0) {
+    pids.resize(m_testnetSize, 0);
+    assert(pids[index] == 0);
+    pids[index] = pid;
+  }
+#else
+  assert(false);
+#endif
+
+  assert(nodeDaemons.size() > index);
+  nodeDaemons[index] = std::unique_ptr<TestNode>(new RPCTestNode(rpcPort, m_dispatcher));
+}
+
+void BaseFunctionalTest::stopNode(size_t index) {
+  assert(nodeDaemons[index].get() != nullptr);
+  bool ok = nodeDaemons[index]->stopDaemon();
+  assert(ok);
+  std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
+  nodeDaemons[index].release();
+
+#ifdef __linux__
+  int status;
+  assert(pids[index] != 0);
+  while (-1 == waitpid(pids[index], &status, 0));
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    std::cerr << "Process " << " (pid " << pids[index] << ") failed" << std::endl;
+    exit(1);
+  }
+  pids[index] = 0;
+#endif
+}
+
+bool BaseFunctionalTest::waitDaemonsReady() {
+  for (size_t i = 0; i < nodeDaemons.size(); ++i) {
+    bool ok = waitDaemonReady(i);
+    if (!ok) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool BaseFunctionalTest::waitDaemonReady(size_t nodeIndex) {
+  assert(nodeIndex < nodeDaemons.size() && nodeDaemons[nodeIndex].get() != nullptr);
+
+  for (size_t i = 0; ; ++i) {
+    if (nodeDaemons[nodeIndex]->getLocalHeight() > 0) {
+      break;
+    } else if (i < 2 * 60) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    } else {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 BaseFunctionalTest::~BaseFunctionalTest() {
   if (mainNode) {
     mainNode->shutdown();
   }
 
-  if (inprocNode) {
-    inprocNode->shutdown();
-  }
-
-  if (p2pNode) {
-    p2pNode->send_stop_signal();
-  }
-
-  std::this_thread::sleep_for(std::chrono::seconds(2));
   stopTestnet();
+
+  for (size_t i = 0; i < m_testnetSize; ++i) {
+    boost::system::error_code ignoredErrorCode;
+    auto nodeDataDir = boost::filesystem::path(m_dataDir) / boost::filesystem::path("node" + std::to_string(i));
+    boost::filesystem::remove_all(nodeDataDir, ignoredErrorCode);
+  }
 }
 
 namespace {
@@ -292,19 +303,71 @@ namespace {
   };
 }
 
-bool BaseFunctionalTest::mineBlock(std::unique_ptr<CryptoNote::IWallet>& wallet) {
-  if (nodeDaemons.empty() || !wallet) return false;
-  if (!nodeDaemons.front()->stopMining()) return false;
+bool BaseFunctionalTest::mineBlocks(TestNode& node, const CryptoNote::AccountPublicAddress& address, size_t blockCount) {
+  for (size_t i = 0; i < blockCount; ++i) {
+    Block blockTemplate;
+    uint64_t difficulty;
+
+    account_base accBase;
+    account_keys accKeys;
+    accKeys.m_account_address = address;
+    accBase.set_keys(accKeys);
+
+    if (!node.getBlockTemplate(m_currency.accountAddressAsString(accBase), blockTemplate, difficulty)) {
+      return false;
+    }
+
+    if (difficulty != 1) {
+      return false;
+    }
+
+    blockTemplate.timestamp = m_nextTimestamp;
+    m_nextTimestamp += 2 * m_currency.difficultyTarget();
+
+    if (blockTemplate.majorVersion == BLOCK_MAJOR_VERSION_2) {
+      blockTemplate.parentBlock.majorVersion = BLOCK_MAJOR_VERSION_1;
+      blockTemplate.parentBlock.minorVersion = BLOCK_MINOR_VERSION_0;
+      blockTemplate.parentBlock.numberOfTransactions = 1;
+
+      CryptoNote::tx_extra_merge_mining_tag mmTag;
+      mmTag.depth = 0;
+      if (!CryptoNote::get_aux_block_header_hash(blockTemplate, mmTag.merkle_root)) {
+        return false;
+      }
+
+      blockTemplate.parentBlock.minerTx.extra.clear();
+      if (!CryptoNote::append_mm_tag_to_extra(blockTemplate.parentBlock.minerTx.extra, mmTag)) {
+        return false;
+      }
+    }
+
+    blobdata blockBlob = block_to_blob(blockTemplate);
+    if (!node.submitBlock(::Common::toHex(blockBlob.data(), blockBlob.size()))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool BaseFunctionalTest::mineBlock(std::unique_ptr<CryptoNote::IWallet> &wallet) {
+  if (nodeDaemons.empty() || !wallet)
+    return false;
+  if (!nodeDaemons.front()->stopMining())
+    return false;
   std::this_thread::sleep_for(std::chrono::milliseconds(10000));
   Semaphore gotReward;
   WaitForCoinBaseObserver cbo(gotReward, *wallet.get());
   wallet->addObserver(&cbo);
-  if(!nodeDaemons.front()->startMining(1, wallet->getAddress())) return false;
+  if (!nodeDaemons.front()->startMining(1, wallet->getAddress()))
+    return false;
   gotReward.wait();
-  if (!nodeDaemons.front()->stopMining()) return false;
+  if (!nodeDaemons.front()->stopMining())
+    return false;
   wallet->removeObserver(&cbo);
   return true;
 }
+
 bool BaseFunctionalTest::mineBlock() {
   return mineBlock(workingWallet);
 }
@@ -328,18 +391,181 @@ bool BaseFunctionalTest::makeWallet(std::unique_ptr<CryptoNote::IWallet> & walle
 }
 
 void BaseFunctionalTest::stopTestnet() {
-  for (auto& Daemon : nodeDaemons) {
-    Daemon->stopDaemon();
+  if (nodeDaemons.empty()) {
+    return;
   }
-  std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
+  // WORKAROUND: Make sure all contexts, that use daemons, are finished before these daemons will be destroyed
+  // TODO: There is should be used context groups
+  m_dispatcher.yield();
+
+  for (auto& daemon : nodeDaemons) {
+    if (daemon) {
+      daemon->stopDaemon();
+    }
+  }
+  
+  // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
+  nodeDaemons.clear();
+
 #ifdef __linux__
   for (auto& pid : pids) {
+    if (pid != 0) {
       int status;
       while (-1 == waitpid(pid, &status, 0));
       if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-          std::cerr << "Process " << " (pid " << pid << ") failed" << std::endl;
-          exit(1);
+        std::cerr << "Process " << " (pid " << pid << ") failed" << std::endl;
+        exit(1);
       }
+    }
   }
+
+  pids.clear();
 #endif
+}
+
+namespace {
+  struct PeerCountWaiter : CryptoNote::INodeObserver {
+    System::Dispatcher& m_dispatcher;
+    System::Event m_event;
+    System::Timer m_timer;
+    bool m_timedout = false;
+    bool m_waiting = false;
+    size_t m_expectedPeerCount;
+
+    PeerCountWaiter(System::Dispatcher& dispatcher) : m_dispatcher(dispatcher), m_event(m_dispatcher), m_timer(m_dispatcher) {
+    }
+
+    void wait(size_t expectedPeerCount) {
+      m_waiting = true;
+      m_expectedPeerCount = expectedPeerCount;
+      m_dispatcher.spawn([this] {
+        try {
+          m_timer.sleep(std::chrono::minutes(2));
+          m_timedout = true;
+          m_event.set();
+        } catch (System::InterruptedException&) {
+        }
+      });
+      m_event.wait();
+      m_timer.stop();
+      m_waiting = false;
+    }
+
+    virtual void peerCountUpdated(size_t count) override {
+      m_dispatcher.remoteSpawn([this, count]() {
+        if (m_waiting && count == m_expectedPeerCount) {
+          m_event.set();
+        }
+      });
+    }
+  };
+}
+
+bool BaseFunctionalTest::waitForPeerCount(CryptoNote::INode& node, size_t expectedPeerCount) {
+  PeerCountWaiter peerCountWaiter(m_dispatcher);
+  node.addObserver(&peerCountWaiter);
+  if (node.getPeerCount() != expectedPeerCount) {
+    peerCountWaiter.wait(expectedPeerCount);
+  }
+  node.removeObserver(&peerCountWaiter);
+  // TODO workaround: make sure ObserverManager doesn't have local pointers to peerCountWaiter, so it can be destroyed
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  // Run all spawned handlers from PeerCountWaiter::peerCountUpdated
+  m_dispatcher.yield();
+
+  return !peerCountWaiter.m_timedout;
+}
+
+namespace {
+  struct PoolUpdateWaiter : public INodeObserver {
+    System::Dispatcher& m_dispatcher;
+    System::Event& m_event;
+
+    PoolUpdateWaiter(System::Dispatcher& dispatcher, System::Event& event) : m_dispatcher(dispatcher), m_event(event) {
+    }
+
+    virtual void poolChanged() override {
+      m_dispatcher.remoteSpawn([this]() { m_event.set(); });
+    }
+  };
+}
+
+bool BaseFunctionalTest::waitForPoolSize(size_t nodeIndex, CryptoNote::INode& node, size_t expectedPoolSize,
+                                         std::vector<CryptoNote::Transaction>& txPool) {
+  System::Event event(m_dispatcher);
+  PoolUpdateWaiter poolUpdateWaiter(m_dispatcher, event);
+  node.addObserver(&poolUpdateWaiter);
+
+  bool ok;
+  for (size_t i = 0; ; ++i) {
+    ok = getNodeTransactionPool(nodeIndex, node, txPool);
+    if (!ok) {
+      break;
+    }
+    if (txPool.size() == expectedPoolSize) {
+      break;
+    }
+
+    // TODO NodeRpcProxy doesn't send poolChanged() notification!!!
+    //event.wait();
+    //event.clear();
+    // WORKAROUND
+    if (i < 3 * P2P_DEFAULT_HANDSHAKE_INTERVAL) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    } else {
+      ok = false;
+      break;
+    }
+  }
+
+  node.removeObserver(&poolUpdateWaiter);
+  // TODO workaround: make sure ObserverManager doesn't have local pointers to poolUpdateWaiter, so it can be destroyed
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  // Run all spawned handlers from PoolUpdateWaiter::poolChanged
+  m_dispatcher.yield();
+
+  return ok;
+}
+
+bool BaseFunctionalTest::getNodeTransactionPool(size_t nodeIndex, CryptoNote::INode& node,
+                                                std::vector<CryptoNote::Transaction>& txPool) {
+  assert(nodeIndex < nodeDaemons.size() && nodeDaemons[nodeIndex].get() != nullptr);
+  auto& daemon = *nodeDaemons[nodeIndex];
+
+  crypto::hash tailBlockId;
+  bool updateTailBlockId = true;
+  while (true) {
+    if (updateTailBlockId) {
+      if (!daemon.getTailBlockId(tailBlockId)) {
+        return false;
+      }
+      updateTailBlockId = false;
+    }
+
+    System::Event poolReceivedEvent(m_dispatcher);
+    std::error_code ec;
+    bool isTailBlockActual;
+    std::vector<CryptoNote::Transaction> addedTxs;
+    std::vector<crypto::hash> deletedTxsIds;
+    node.getPoolSymmetricDifference(std::vector<crypto::hash>(), tailBlockId, isTailBlockActual, addedTxs, deletedTxsIds,
+      [this, &poolReceivedEvent, &ec](std::error_code result) {
+        ec = result;
+        m_dispatcher.remoteSpawn([&poolReceivedEvent]() { poolReceivedEvent.set(); });
+      }
+    );
+    poolReceivedEvent.wait();
+
+    if (ec) {
+      return false;
+    } else if (!isTailBlockActual) {
+      updateTailBlockId = true;
+    } else {
+      txPool = std::move(addedTxs);
+      break;
+    }
+  }
+
+  return true;
 }

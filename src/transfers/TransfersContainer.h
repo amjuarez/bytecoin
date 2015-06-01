@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -86,7 +86,7 @@ struct TransactionOutputInformationEx : public TransactionOutputInformationIn {
   SpentOutputDescriptor getSpentOutputDescriptor() const { return SpentOutputDescriptor(*this); }
   const Hash& getTransactionHash() const { return transactionHash; }
 
-  void serialize(cryptonote::ISerializer& s, const std::string& name) {
+  void serialize(CryptoNote::ISerializer& s, const std::string& name) {
     s(reinterpret_cast<uint8_t&>(type), "type");
     s(amount, "");
     s(globalOutputIndex, "");
@@ -112,7 +112,7 @@ struct BlockInfo {
   uint64_t timestamp;
   uint32_t transactionIndex;
 
-  void serialize(cryptonote::ISerializer& s, const std::string& name) {
+  void serialize(ISerializer& s, const std::string& name) {
     s(height, "height");
     s(timestamp, "timestamp");
     s(transactionIndex, "transactionIndex");
@@ -128,7 +128,7 @@ struct SpentTransactionOutput : TransactionOutputInformationEx {
     return spendingTransactionHash;
   }
 
-  void serialize(cryptonote::ISerializer& s, const std::string& name) {
+  void serialize(ISerializer& s, const std::string& name) {
     TransactionOutputInformationEx::serialize(s, name);
     s(spendingBlock, "spendingBlock");
     s(spendingTransactionHash, "spendingTransactionHash");
@@ -151,7 +151,7 @@ class TransfersContainer : public ITransfersContainer {
 
 public:
 
-  TransfersContainer(const cryptonote::Currency& currency, size_t transactionSpendableAge);
+  TransfersContainer(const CryptoNote::Currency& currency, size_t transactionSpendableAge);
 
   bool addTransaction(const BlockInfo& block, const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers);
   bool deleteUnconfirmedTransaction(const Hash& transactionHash);
@@ -235,7 +235,7 @@ private:
       boost::multi_index::hashed_unique<
         boost::multi_index::tag<SpentOutputDescriptorIndex>,
         boost::multi_index::const_mem_fun<
-          TransactionOutputInformationEx,
+    TransactionOutputInformationEx,
           SpentOutputDescriptor,
           &TransactionOutputInformationEx::getSpentOutputDescriptor>,
         SpentOutputDescriptorHasher
@@ -279,7 +279,7 @@ private:
 
   uint64_t m_currentHeight; // current height is needed to check if a transfer is unlocked
   size_t m_transactionSpendableAge;
-  const cryptonote::Currency& m_currency;
+  const CryptoNote::Currency& m_currency;
   std::mutex m_mutex;
 };
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,7 +22,7 @@
 
 #include "crypto/hash.h"
 
-namespace cryptonote
+namespace CryptoNote
 {
     typedef std::uint64_t difficulty_type;
 

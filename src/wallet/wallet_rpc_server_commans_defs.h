@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -37,12 +37,12 @@ namespace wallet_rpc
 
     struct response
     {
-      uint64_t balance;
-      uint64_t unlocked_balance;
+      uint64_t locked_amount;
+      uint64_t available_balance;
 
       BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(balance)
-        KV_SERIALIZE(unlocked_balance)
+        KV_SERIALIZE(locked_amount)
+        KV_SERIALIZE(available_balance)
       END_KV_SERIALIZE_MAP()
     };
   };

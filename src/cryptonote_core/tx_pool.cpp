@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,23 +24,17 @@
 
 #include <boost/filesystem.hpp>
 
-// epee
-#include "misc_language.h"
-#include "misc_log_ex.h"
-#include "warnings.h"
-
-#include "common/boost_serialization_helper.h"
-#include "common/int-util.h"
-#include "common/util.h"
+#include "Common/boost_serialization_helper.h"
+#include "Common/int-util.h"
+#include "Common/util.h"
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_boost_serialization.h"
 #include "cryptonote_config.h"
 
+using namespace Logging;
 
-DISABLE_VS_WARNINGS(4244 4345 4503) //'boost::foreach_detail_::or_' : decorated name length exceeded, name was truncated
-
-namespace cryptonote {
+namespace CryptoNote {
 
   //---------------------------------------------------------------------------------
   // BlockTemplate
@@ -99,12 +93,17 @@ namespace cryptonote {
   using CryptoNote::BlockInfo;
 
   //---------------------------------------------------------------------------------
-  tx_memory_pool::tx_memory_pool(const cryptonote::Currency& currency, CryptoNote::ITransactionValidator& validator, CryptoNote::ITimeProvider& timeProvider) :
+  tx_memory_pool::tx_memory_pool(
+    const CryptoNote::Currency& currency, 
+    CryptoNote::ITransactionValidator& validator, 
+    CryptoNote::ITimeProvider& timeProvider,
+    Logging::ILogger& log) :
     m_currency(currency),
     m_validator(validator), 
     m_timeProvider(timeProvider), 
     m_txCheckInterval(60, timeProvider),
-    m_fee_index(boost::get<1>(m_transactions)) {
+    m_fee_index(boost::get<1>(m_transactions)),
+    logger(log, "txpool") {
   }
 
   //---------------------------------------------------------------------------------
@@ -123,16 +122,16 @@ namespace cryptonote {
     uint64_t outputs_amount = get_outs_money_amount(tx);
 
     if (outputs_amount >= inputs_amount) {
-      LOG_PRINT_L0("transaction use more money then it has: use " << m_currency.formatAmount(outputs_amount) <<
-        ", have " << m_currency.formatAmount(inputs_amount));
+      logger(INFO) << "transaction use more money then it has: use " << m_currency.formatAmount(outputs_amount) <<
+        ", have " << m_currency.formatAmount(inputs_amount);
       tvc.m_verifivation_failed = true;
       return false;
     }
 
     const uint64_t fee = inputs_amount - outputs_amount;
     if (!keptByBlock && fee < m_currency.minimumFee()) {
-      LOG_PRINT_L0("transaction fee is not enought: " << m_currency.formatAmount(fee) <<
-        ", minumim fee: " << m_currency.formatAmount(m_currency.minimumFee()));
+      logger(INFO) << "transaction fee is not enought: " << m_currency.formatAmount(fee) <<
+        ", minumim fee: " << m_currency.formatAmount(m_currency.minimumFee());
       tvc.m_verifivation_failed = true;
       tvc.m_tx_fee_too_small = true;
       return false;
@@ -140,9 +139,9 @@ namespace cryptonote {
 
     //check key images for transaction if it is not kept by block
     if (!keptByBlock) {
-      CRITICAL_REGION_LOCAL(m_transactions_lock);
+      std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
       if (haveSpentInputs(tx)) {
-        LOG_PRINT_L0("Transaction with id= " << id << " used already spent inputs");
+        logger(INFO) << "Transaction with id= " << id << " used already spent inputs";
         tvc.m_verifivation_failed = true;
         return false;
       }
@@ -155,7 +154,7 @@ namespace cryptonote {
 
     if (!inputsValid) {
       if (!keptByBlock) {
-        LOG_PRINT_L0("tx used wrong inputs, rejected");
+        logger(INFO) << "tx used wrong inputs, rejected";
         tvc.m_verifivation_failed = true;
         return false;
       }
@@ -164,7 +163,7 @@ namespace cryptonote {
       tvc.m_verifivation_impossible = true;
     }
 
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
 
     // add to pool
     {
@@ -181,7 +180,7 @@ namespace cryptonote {
       txd.lastFailedBlock.clear();
 
       auto txd_p = m_transactions.insert(std::move(txd));
-      CHECK_AND_ASSERT_MES(txd_p.second, false, "transaction already exists at inserting in memory pool");
+      if (!(txd_p.second)) { logger(ERROR, BRIGHT_RED) << "transaction already exists at inserting in memory pool"; return false; }
     }
 
     tvc.m_added_to_pool = true;
@@ -207,7 +206,7 @@ namespace cryptonote {
   }
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::take_tx(const crypto::hash &id, Transaction &tx, size_t& blobSize, uint64_t& fee) {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
     auto it = m_transactions.find(id);
     if (it == m_transactions.end()) {
       return false;
@@ -224,19 +223,19 @@ namespace cryptonote {
   }
   //---------------------------------------------------------------------------------
   size_t tx_memory_pool::get_transactions_count() const {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
     return m_transactions.size();
   }
   //---------------------------------------------------------------------------------
   void tx_memory_pool::get_transactions(std::list<Transaction>& txs) const {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
     for (const auto& tx_vt : m_transactions) {
       txs.push_back(tx_vt.tx);
     }
   }
   //---------------------------------------------------------------------------------
   void tx_memory_pool::get_difference(const std::vector<crypto::hash>& known_tx_ids, std::vector<crypto::hash>& new_tx_ids, std::vector<crypto::hash>& deleted_tx_ids) const {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
     std::unordered_set<crypto::hash> ready_tx_ids;
     for (const auto& tx : m_transactions) {
       TransactionCheckInfo checkInfo(tx);
@@ -270,7 +269,7 @@ namespace cryptonote {
   }
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::have_tx(const crypto::hash &id) const {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
     if (m_transactions.count(id)) {
       return true;
     }
@@ -300,7 +299,7 @@ namespace cryptonote {
   //---------------------------------------------------------------------------------
   std::string tx_memory_pool::print_pool(bool short_format) const {
     std::stringstream ss;
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
     for (const auto& txd : m_fee_index) {
       ss << "id: " << txd.id << std::endl;
       if (!short_format) {
@@ -321,7 +320,7 @@ namespace cryptonote {
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::fill_block_template(Block& bl, size_t median_size, size_t maxCumulativeSize,
                                            uint64_t already_generated_coins, size_t& total_size, uint64_t& fee) {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
 
     total_size = 0;
     fee = 0;
@@ -357,7 +356,7 @@ namespace cryptonote {
   }
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::init(const std::string& config_folder) {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
 
     m_config_folder = config_folder;
     std::string state_file_path = config_folder + "/" + m_currency.txPoolFileName();
@@ -367,7 +366,7 @@ namespace cryptonote {
     }
     bool res = tools::unserialize_obj_from_file(*this, state_file_path);
     if (!res) {
-      LOG_ERROR("Failed to load memory pool from file " << state_file_path);
+      logger(ERROR) << "Failed to load memory pool from file " << state_file_path;
 
       m_transactions.clear();
       m_spent_key_images.clear();
@@ -379,14 +378,14 @@ namespace cryptonote {
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::deinit() {
     if (!tools::create_directories_if_necessary(m_config_folder)) {
-      LOG_PRINT_L0("Failed to create data directory: " << m_config_folder);
+      logger(INFO) << "Failed to create data directory: " << m_config_folder;
       return false;
     }
 
     std::string state_file_path = m_config_folder + "/" + m_currency.txPoolFileName();
     bool res = tools::serialize_obj_to_file(*this, state_file_path);
     if (!res) {
-      LOG_PRINT_L0("Failed to serialize memory pool to file " << state_file_path);
+      logger(INFO) << "Failed to serialize memory pool to file " << state_file_path;
     }
     return true;
   }
@@ -400,22 +399,22 @@ namespace cryptonote {
   bool tx_memory_pool::removeExpiredTransactions() {
     bool somethingRemoved = false;
     {
-      CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
 
-      auto now = m_timeProvider.now();
+    auto now = m_timeProvider.now();
 
-      for (auto it = m_transactions.begin(); it != m_transactions.end();) {
-        uint64_t txAge = now - it->receiveTime;
-        bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
+    for (auto it = m_transactions.begin(); it != m_transactions.end();) {
+      uint64_t txAge = now - it->receiveTime;
+      bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
 
-        if (remove) {
-          LOG_PRINT_L2("Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge);
-          it = removeTransaction(it);
+      if (remove) {
+        logger(TRACE) << "Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge;
+        it = removeTransaction(it);
           somethingRemoved = true;
-        } else {
-          ++it;
-        }
+      } else {
+        ++it;
       }
+    }
     }
 
     if (somethingRemoved) {
@@ -435,15 +434,15 @@ namespace cryptonote {
       if (in.type() == typeid(TransactionInputToKey)) {
         const auto& txin = boost::get<TransactionInputToKey>(in);
         auto it = m_spent_key_images.find(txin.keyImage);
-        CHECK_AND_ASSERT_MES(it != m_spent_key_images.end(), false, "failed to find transaction input in key images. img=" << txin.keyImage << std::endl
-          << "transaction id = " << tx_id);
+        if (!(it != m_spent_key_images.end())) { logger(ERROR, BRIGHT_RED) << "failed to find transaction input in key images. img=" << txin.keyImage << std::endl
+          << "transaction id = " << tx_id; return false; }
         std::unordered_set<crypto::hash>& key_image_set = it->second;
-        CHECK_AND_ASSERT_MES(!key_image_set.empty(), false, "empty key_image set, img=" << txin.keyImage << std::endl
-          << "transaction id = " << tx_id);
+        if (!(!key_image_set.empty())) { logger(ERROR, BRIGHT_RED) << "empty key_image set, img=" << txin.keyImage << std::endl
+          << "transaction id = " << tx_id; return false; }
 
         auto it_in_set = key_image_set.find(tx_id);
-        CHECK_AND_ASSERT_MES(it_in_set != key_image_set.end(), false, "transaction id not found in key_image set, img=" << txin.keyImage << std::endl
-          << "transaction id = " << tx_id);
+        if (!(it_in_set != key_image_set.end())) { logger(ERROR, BRIGHT_RED) << "transaction id not found in key_image set, img=" << txin.keyImage << std::endl
+          << "transaction id = " << tx_id; return false; }
         key_image_set.erase(it_in_set);
         if (key_image_set.empty()) {
           //it is now empty hash container for this key_image
@@ -469,11 +468,18 @@ namespace cryptonote {
       if (in.type() == typeid(TransactionInputToKey)) {
         const auto& txin = boost::get<TransactionInputToKey>(in);
         std::unordered_set<crypto::hash>& kei_image_set = m_spent_key_images[txin.keyImage];
-        CHECK_AND_ASSERT_MES(keptByBlock || kei_image_set.size() == 0, false, "internal error: keptByBlock=" << keptByBlock
-          << ",  kei_image_set.size()=" << kei_image_set.size() << ENDL << "txin.keyImage=" << txin.keyImage << ENDL
-          << "tx_id=" << id);
+        if (!(keptByBlock || kei_image_set.size() == 0)) {
+          logger(ERROR, BRIGHT_RED)
+              << "internal error: keptByBlock=" << keptByBlock
+              << ",  kei_image_set.size()=" << kei_image_set.size() << ENDL
+              << "txin.keyImage=" << txin.keyImage << ENDL << "tx_id=" << id;
+          return false;
+        }
         auto ins_res = kei_image_set.insert(id);
-        CHECK_AND_ASSERT_MES(ins_res.second, false, "internal error: try to insert duplicate iterator in key_image set");
+        if (!(ins_res.second)) {
+          logger(ERROR, BRIGHT_RED) << "internal error: try to insert duplicate iterator in key_image set";
+          return false;
+        }
       } else if (in.type() == typeid(TransactionInputMultisignature)) {
         if (!keptByBlock) {
           const auto& msig = boost::get<TransactionInputMultisignature>(in);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -18,42 +18,12 @@
 #pragma once 
 
 #include <functional>
-#include <signal.h>
-
-#include "misc_os_dependent.h"
 
 namespace tools {
+  
   class SignalHandler
   {
   public:
-    template<typename T>
-    static bool install(T t)
-    {
-#if defined(WIN32)
-      bool r = TRUE == ::SetConsoleCtrlHandler(&winHandler, TRUE);
-      if (r)
-      {
-        m_handler = t;
-      }
-      return r;
-#else
-      signal(SIGINT, posixHandler);
-      signal(SIGTERM, posixHandler);
-      m_handler = t;
-      return true;
-#endif
-    }
-
-  private:
-#if defined(WIN32)
-    static BOOL WINAPI winHandler(DWORD type);
-#else
-    static void posixHandler(int /*type*/);
-#endif
-
-    static void handleSignal();
-
-  private:
-    static std::function<void(void)> m_handler;
+    static bool install(std::function<void(void)> t);
   };
 }

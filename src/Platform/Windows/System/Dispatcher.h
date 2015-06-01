@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,7 +17,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
+#include <map>
 #include <queue>
 #include <stack>
 
@@ -29,29 +31,32 @@ public:
   Dispatcher(const Dispatcher&) = delete;
   ~Dispatcher();
   Dispatcher& operator=(const Dispatcher&) = delete;
+  void clear();
+  void dispatch();
+  void* getCurrentContext() const;
+  void pushContext(void* context);
+  void remoteSpawn(std::function<void()>&& procedure);
   void spawn(std::function<void()>&& procedure);
   void yield();
-  void clear();
+
+  // Platform-specific
+  void addTimer(uint64_t time, void* context);
+  void* getCompletionPort() const;
+  void interruptTimer(uint64_t time, void* context);
 
 private:
-  friend class Event;
-  friend class DispatcherAccessor;
-  friend class TcpConnection;
-  friend class TcpConnector;
-  friend class TcpListener;
-  friend class Timer;
-
   void* completionPort;
   std::size_t contextCount;
+  uint8_t criticalSection[2 * sizeof(long) + 4 * sizeof(void*)];
   std::queue<void*> resumingContexts;
+  bool remoteNotificationSent;
+  std::queue<std::function<void()>> remoteSpawningProcedures;
+  uint8_t remoteSpawnOverlapped[4 * sizeof(void*)];
   std::stack<void*> reusableContexts;
   std::queue<std::function<void()>> spawningProcedures;
-  std::stack<void*> timers;
-
-  void* getCompletionPort() const;
-  void* getTimer();
-  void pushTimer(void* timer);
-  void pushContext(void* context);
+  void* threadHandle;
+  uint32_t threadId;
+  std::multimap<uint64_t, void*> timers;
 
   void contextProcedure();
   static void __stdcall contextProcedureStatic(void* context);

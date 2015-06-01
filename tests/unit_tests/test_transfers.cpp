@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -30,6 +30,8 @@
 #include <future>
 #include <algorithm>
 
+#include <Logging/ConsoleLogger.h>
+
 using namespace CryptoNote;
 
 class TransfersObserver : public ITransfersObserver {
@@ -48,7 +50,7 @@ class TransfersApi : public ::testing::Test, public IBlockchainSynchronizerObser
 public:
 
   TransfersApi() :
-    m_currency(cryptonote::CurrencyBuilder().currency()),
+    m_currency(CryptoNote::CurrencyBuilder(m_logger).currency()),
     generator(m_currency),
     m_node(generator),
     m_sync(m_node, m_currency.genesisBlockHash()),
@@ -117,15 +119,15 @@ public:
 
   void generateMoneyForAccount(size_t idx) {
     generator.getBlockRewardForAddress(
-      reinterpret_cast<const cryptonote::AccountPublicAddress&>(m_accounts[idx].address));
+      reinterpret_cast<const CryptoNote::AccountPublicAddress&>(m_accounts[idx].address));
   }
 
   std::error_code submitTransaction(ITransactionReader& tx) {
     auto data = tx.getTransactionData();
 
-    cryptonote::blobdata txblob(data.data(), data.data() + data.size());
-    cryptonote::Transaction outTx;
-    cryptonote::parse_and_validate_tx_from_blob(txblob, outTx);
+    CryptoNote::blobdata txblob(data.data(), data.data() + data.size());
+    CryptoNote::Transaction outTx;
+    CryptoNote::parse_and_validate_tx_from_blob(txblob, outTx);
 
     std::promise<std::error_code> result;
     m_node.relayTransaction(outTx, [&result](std::error_code ec) {
@@ -141,7 +143,8 @@ protected:
   std::vector<AccountKeys> m_accounts;
   std::vector<ITransfersSubscription*> m_subscriptions;
 
-  cryptonote::Currency m_currency;
+  Logging::ConsoleLogger m_logger;
+  CryptoNote::Currency m_currency;
   TestBlockchainGenerator generator;
   INodeTrivialRefreshStub m_node;
   BlockchainSynchronizer m_sync;
@@ -188,7 +191,7 @@ TEST_F(TransfersApi, syncOneBlock) {
   addAccounts(2);
   subscribeAccounts();
 
-  generator.getBlockRewardForAddress(reinterpret_cast<const cryptonote::AccountPublicAddress&>(m_accounts[0].address));
+  generator.getBlockRewardForAddress(reinterpret_cast<const CryptoNote::AccountPublicAddress&>(m_accounts[0].address));
   generator.generateEmptyBlocks(15);
 
   startSync();
@@ -221,57 +224,57 @@ namespace {
     uint64_t amount,
     uint64_t fee,
     const AccountKeys& senderKeys,
-    const AccountAddress& reciever,
-    ITransfersContainer& tc) {
+  const AccountAddress& reciever,
+  ITransfersContainer& tc) {
 
-    std::vector<TransactionOutputInformation> transfers;
-    tc.getOutputs(transfers, ITransfersContainer::IncludeAllUnlocked);
+  std::vector<TransactionOutputInformation> transfers;
+  tc.getOutputs(transfers, ITransfersContainer::IncludeAllUnlocked);
 
-    auto tx = createTransaction();
+  auto tx = createTransaction();
 
-    std::vector<std::pair<TransactionTypes::InputKeyInfo, KeyPair>> inputs;
+  std::vector<std::pair<TransactionTypes::InputKeyInfo, TransactionTypes::KeyPair>> inputs;
 
-    uint64_t foundMoney = 0;
+  uint64_t foundMoney = 0;
 
-    for (const auto& t : transfers) {
-      TransactionTypes::InputKeyInfo info;
+  for (const auto& t : transfers) {
+    TransactionTypes::InputKeyInfo info;
 
-      info.amount = t.amount;
+    info.amount = t.amount;
 
-      TransactionTypes::GlobalOutput globalOut;
-      globalOut.outputIndex = t.globalOutputIndex;
-      globalOut.targetKey = t.outputKey;
-      info.outputs.push_back(globalOut);
+    TransactionTypes::GlobalOutput globalOut;
+    globalOut.outputIndex = t.globalOutputIndex;
+    globalOut.targetKey = t.outputKey;
+    info.outputs.push_back(globalOut);
 
-      info.realOutput.outputInTransaction = t.outputInTransaction;
-      info.realOutput.transactionIndex = 0;
-      info.realOutput.transactionPublicKey = t.transactionPublicKey;
+    info.realOutput.outputInTransaction = t.outputInTransaction;
+    info.realOutput.transactionIndex = 0;
+    info.realOutput.transactionPublicKey = t.transactionPublicKey;
 
-      KeyPair kp;
-      tx->addInput(senderKeys, info, kp);
+    TransactionTypes::KeyPair kp;
+    tx->addInput(senderKeys, info, kp);
 
-      inputs.push_back(std::make_pair(info, kp));
+    inputs.push_back(std::make_pair(info, kp));
 
-      foundMoney += info.amount;
+    foundMoney += info.amount;
 
-      if (foundMoney >= amount + fee) {
-        break;
-      }
+    if (foundMoney >= amount + fee) {
+      break;
+  }
     }
 
-    // output to reciever
-    tx->addOutput(amount, reciever);
-    // change
-    uint64_t change = foundMoney - amount - fee;
-    if (change) {
-      tx->addOutput(change, senderKeys.address);
-    }
+  // output to reciever
+  tx->addOutput(amount, reciever);
+  // change
+  uint64_t change = foundMoney - amount - fee;
+  if (change) {
+    tx->addOutput(change, senderKeys.address);
+  }
 
-    for (size_t inputIdx = 0; inputIdx < inputs.size(); ++inputIdx) {
-      tx->signInputKey(inputIdx, inputs[inputIdx].first, inputs[inputIdx].second);
-    }
+  for (size_t inputIdx = 0; inputIdx < inputs.size(); ++inputIdx) {
+    tx->signInputKey(inputIdx, inputs[inputIdx].first, inputs[inputIdx].second);
+  }
 
-    return tx;
+  return tx;
   }
 }
 
@@ -283,7 +286,7 @@ TEST_F(TransfersApi, moveMoney) {
   generator.generateEmptyBlocks(2 * m_currency.minedMoneyUnlockWindow());
 
   // sendAmount is an even number
-  uint64_t sendAmount = (cryptonote::get_outs_money_amount(generator.getBlockchain()[1].minerTx) / 4) * 2;
+  uint64_t sendAmount = (get_outs_money_amount(generator.getBlockchain()[1].minerTx) / 4) * 2;
   auto fee = m_currency.minimumFee();
 
   startSync();
@@ -426,4 +429,3 @@ TEST_F(TransfersApi, sameTrackingKey) {
   }
 
 }
-

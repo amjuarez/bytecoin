@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,7 +24,7 @@
 
 namespace CryptoNote {
 
-void serialize(TransactionInformation& ti, const std::string& name, cryptonote::ISerializer& s) {
+void serialize(TransactionInformation& ti, const std::string& name, CryptoNote::ISerializer& s) {
   s(ti.transactionHash, "");
   s(ti.publicKey, "");
   s(ti.blockHeight, "");
@@ -159,14 +159,14 @@ size_t SpentOutputDescriptor::hash() const {
 }
 
 
-TransfersContainer::TransfersContainer(const cryptonote::Currency& currency, size_t transactionSpendableAge) :
+TransfersContainer::TransfersContainer(const Currency& currency, size_t transactionSpendableAge) :
   m_currentHeight(0),
   m_currency(currency),
   m_transactionSpendableAge(transactionSpendableAge) {
 }
 
 bool TransfersContainer::addTransaction(const BlockInfo& block, const ITransactionReader& tx,
-                                        const std::vector<TransactionOutputInformationIn>& transfers) {
+  const std::vector<TransactionOutputInformationIn>& transfers) {
   std::unique_lock<std::mutex> lock(m_mutex);
 
   if (block.height < m_currentHeight) {
@@ -205,6 +205,7 @@ void TransfersContainer::addTransaction(const BlockInfo& block, const ITransacti
   txInfo.publicKey = tx.getTransactionPublicKey();
   txInfo.totalAmountIn = tx.getInputTotalAmount();
   txInfo.totalAmountOut = tx.getOutputTotalAmount();
+  txInfo.extra = tx.getExtra();
 
   if (!tx.getPaymentId(txInfo.paymentId)) {
     txInfo.paymentId.fill(0);
@@ -246,11 +247,11 @@ bool TransfersContainer::addTransactionOutputs(const BlockInfo& block, const ITr
       assert(result.second);
     } else {
       if (info.type == TransactionTypes::OutputType::Multisignature) {
-        SpentOutputDescriptor descriptor(transfer);
-        if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
-            m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
-          throw std::runtime_error("Transfer already exists");
-        }
+      SpentOutputDescriptor descriptor(transfer);
+      if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
+          m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
+        throw std::runtime_error("Transfer already exists");
+      }
       }
 
       auto result = m_availableTransfers.emplace(std::move(info));
@@ -330,10 +331,10 @@ bool TransfersContainer::addTransactionInputs(const BlockInfo& block, const ITra
         outputDescriptorIndex.erase(availableOutputIt);
 
         inputsAdded = true;
-      }
+    }
     } else {
       assert(inputType == TransactionTypes::InputType::Generating);
-    }
+  }
   }
 
   return inputsAdded;
@@ -350,7 +351,7 @@ bool TransfersContainer::deleteUnconfirmedTransaction(const Hash& transactionHas
   } else {
     deleteTransactionTransfers(it->transactionHash);
     m_transactions.erase(it);
-    return true;
+  return true;
   }
 }
 
@@ -390,12 +391,12 @@ bool TransfersContainer::markTransactionConfirmed(const BlockInfo& block, const 
     transfer.globalOutputIndex = globalIndices[transfer.outputInTransaction];
 
     if (transfer.type == TransactionTypes::OutputType::Multisignature) {
-      SpentOutputDescriptor descriptor(transfer);
-      if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
-          m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
-        // This exception breaks TransfersContainer consistency
-        throw std::runtime_error("Transfer already exists");
-      }
+    SpentOutputDescriptor descriptor(transfer);
+    if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
+        m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
+      // This exception breaks TransfersContainer consistency
+      throw std::runtime_error("Transfer already exists");
+    }
     }
 
     auto result = m_availableTransfers.emplace(std::move(transfer));
@@ -405,7 +406,7 @@ bool TransfersContainer::markTransactionConfirmed(const BlockInfo& block, const 
 
     if (transfer.type == TransactionTypes::OutputType::Key) {
       updateTransfersVisibility(transfer.keyImage);
-    }
+  }
   }
 
   auto& spendingTransactionIndex = m_spentTransfers.get<SpendingTransactionIndex>();
@@ -418,7 +419,7 @@ bool TransfersContainer::markTransactionConfirmed(const BlockInfo& block, const 
     spendingTransactionIndex.replace(transferIt, transfer);
   }
 
-  return true;
+        return true;
 }
 
 /**
@@ -456,11 +457,11 @@ void TransfersContainer::deleteTransactionTransfers(const Hash& transactionHash)
   for (auto it = transactionTransfersRange.first; it != transactionTransfersRange.second;) {
     if (it->type == TransactionTypes::OutputType::Key) {
       KeyImage keyImage = it->keyImage;
-      it = transactionTransfersIndex.erase(it);
+    it = transactionTransfersIndex.erase(it);
       updateTransfersVisibility(keyImage);
     } else {
       it = transactionTransfersIndex.erase(it);
-    }
+  }
   }
 }
 
@@ -501,8 +502,8 @@ std::vector<Hash> TransfersContainer::detach(uint64_t height) {
         if (spentTransferIt->blockHeight >= height) {
           doDelete = true;
           break;
-        }
-      }
+    }
+  }
     } else if (it->blockHeight >= height) {
       doDelete = true;
     } else {
@@ -513,7 +514,7 @@ std::vector<Hash> TransfersContainer::detach(uint64_t height) {
       deleteTransactionTransfers(it->transactionHash);
       deletedTransactions.emplace_back(it->transactionHash);
       it = blockHeightIndex.erase(it);
-    }
+  }
   }
 
   // TODO: notification on detach
@@ -575,7 +576,7 @@ bool TransfersContainer::advanceHeight(uint64_t height) {
   std::lock_guard<std::mutex> lk(m_mutex);
 
   if (m_currentHeight <= height) {
-    m_currentHeight = height;
+  m_currentHeight = height;
     return true;
   }
 
@@ -729,20 +730,20 @@ std::vector<TransactionSpentOutputInformation> TransfersContainer::getSpentOutpu
 
 void TransfersContainer::save(std::ostream& os) {
   std::lock_guard<std::mutex> lk(m_mutex);
-  cryptonote::BinaryOutputStreamSerializer s(os);
+  CryptoNote::BinaryOutputStreamSerializer s(os);
 
   s(const_cast<uint32_t&>(TRANSFERS_CONTAINER_STORAGE_VERSION), "version");
 
   s(m_currentHeight, "height");
-  cryptonote::writeSequence<TransactionInformation>(m_transactions.begin(), m_transactions.end(), "transactions", s);
-  cryptonote::writeSequence<TransactionOutputInformationEx>(m_unconfirmedTransfers.begin(), m_unconfirmedTransfers.end(), "unconfirmedTransfers", s);
-  cryptonote::writeSequence<TransactionOutputInformationEx>(m_availableTransfers.begin(), m_availableTransfers.end(), "availableTransfers", s);
-  cryptonote::writeSequence<SpentTransactionOutput>(m_spentTransfers.begin(), m_spentTransfers.end(), "spentTransfers", s);
+  writeSequence<TransactionInformation>(m_transactions.begin(), m_transactions.end(), "transactions", s);
+  writeSequence<TransactionOutputInformationEx>(m_unconfirmedTransfers.begin(), m_unconfirmedTransfers.end(), "unconfirmedTransfers", s);
+  writeSequence<TransactionOutputInformationEx>(m_availableTransfers.begin(), m_availableTransfers.end(), "availableTransfers", s);
+  writeSequence<SpentTransactionOutput>(m_spentTransfers.begin(), m_spentTransfers.end(), "spentTransfers", s);
 }
 
 void TransfersContainer::load(std::istream& in) {
   std::lock_guard<std::mutex> lk(m_mutex);
-  cryptonote::BinaryInputStreamSerializer s(in);
+  CryptoNote::BinaryInputStreamSerializer s(in);
 
   uint32_t version = 0;
   s(version, "version");
@@ -758,10 +759,10 @@ void TransfersContainer::load(std::istream& in) {
   SpentTransfersMultiIndex spentTransfers;
 
   s(currentHeight, "height");
-  cryptonote::readSequence<TransactionInformation>(std::inserter(transactions, transactions.end()), "transactions", s);
-  cryptonote::readSequence<TransactionOutputInformationEx>(std::inserter(unconfirmedTransfers, unconfirmedTransfers.end()), "unconfirmedTransfers", s);
-  cryptonote::readSequence<TransactionOutputInformationEx>(std::inserter(availableTransfers, availableTransfers.end()), "availableTransfers", s);
-  cryptonote::readSequence<SpentTransactionOutput>(std::inserter(spentTransfers, spentTransfers.end()), "spentTransfers", s);
+  readSequence<TransactionInformation>(std::inserter(transactions, transactions.end()), "transactions", s);
+  readSequence<TransactionOutputInformationEx>(std::inserter(unconfirmedTransfers, unconfirmedTransfers.end()), "unconfirmedTransfers", s);
+  readSequence<TransactionOutputInformationEx>(std::inserter(availableTransfers, availableTransfers.end()), "availableTransfers", s);
+  readSequence<SpentTransactionOutput>(std::inserter(spentTransfers, spentTransfers.end()), "spentTransfers", s);
 
   m_currentHeight = currentHeight;
   m_transactions = std::move(transactions);

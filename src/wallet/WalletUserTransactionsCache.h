@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,7 +24,7 @@
 #include "WalletEvent.h"
 #include "WalletUnconfirmedTransactions.h"
 
-namespace cryptonote {
+namespace CryptoNote {
 class ISerializer;
 }
 
@@ -35,7 +35,7 @@ class WalletUserTransactionsCache
 public:
   WalletUserTransactionsCache() {}
 
-  void serialize(cryptonote::ISerializer& serializer, const std::string& name);
+  void serialize(CryptoNote::ISerializer& serializer, const std::string& name);
 
   uint64_t unconfirmedTransactionsAmount() const;
   uint64_t unconfrimedOutsAmount() const;
@@ -43,7 +43,7 @@ public:
   size_t getTransferCount() const;
 
   TransactionId addNewTransaction(uint64_t amount, uint64_t fee, const std::string& extra, const std::vector<Transfer>& transfers, uint64_t unlockTime);
-  void updateTransaction(TransactionId transactionId, const cryptonote::Transaction& tx, uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs);
+  void updateTransaction(TransactionId transactionId, const CryptoNote::Transaction& tx, uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs);
   void updateTransactionSendingState(TransactionId transactionId, std::error_code ec);
 
   std::shared_ptr<WalletEvent> onTransactionUpdated(const TransactionInformation& txInfo, int64_t txBalance);

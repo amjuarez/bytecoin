@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,7 +23,6 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include "include_base_utils.h"
 
 namespace command_line
 {
@@ -96,9 +95,9 @@ namespace command_line
   template<typename T, bool required>
   void add_arg(boost::program_options::options_description& description, const arg_descriptor<T, required>& arg, bool unique = true)
   {
-    if (0 != description.find_nothrow(arg.name, false))
+    if (unique && 0 != description.find_nothrow(arg.name, false))
     {
-      CHECK_AND_ASSERT_MES(!unique, void(), "Argument already exists: " << arg.name);
+      std::cerr << "Argument already exists: " << arg.name << std::endl;
       return;
     }
 
@@ -108,9 +107,9 @@ namespace command_line
   template<typename T>
   void add_arg(boost::program_options::options_description& description, const arg_descriptor<T, false>& arg, const T& def, bool unique = true)
   {
-    if (0 != description.find_nothrow(arg.name, false))
+    if (unique && 0 != description.find_nothrow(arg.name, false))
     {
-      CHECK_AND_ASSERT_MES(!unique, void(), "Argument already exists: " << arg.name);
+      std::cerr << "Argument already exists: " << arg.name << std::endl;
       return;
     }
 
@@ -120,9 +119,9 @@ namespace command_line
   template<>
   inline void add_arg(boost::program_options::options_description& description, const arg_descriptor<bool, false>& arg, bool unique)
   {
-    if (0 != description.find_nothrow(arg.name, false))
+    if (unique && 0 != description.find_nothrow(arg.name, false))
     {
-      CHECK_AND_ASSERT_MES(!unique, void(), "Argument already exists: " << arg.name);
+      std::cerr << "Argument already exists: " << arg.name << std::endl;
       return;
     }
 

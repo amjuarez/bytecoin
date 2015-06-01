@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,6 +19,7 @@
 #include <tuple>
 
 #include "cryptonote_core/TransactionApi.h"
+#include "Logging/ConsoleLogger.h"
 #include "transfers/TransfersSubscription.h"
 #include "transfers/TypeHelpers.h"
 #include "ITransfersContainer.h"
@@ -27,7 +28,6 @@
 #include "TransfersObserver.h"
 
 using namespace CryptoNote;
-using namespace cryptonote;
 
 namespace {
 
@@ -42,7 +42,7 @@ class TransfersSubscriptionTest : public ::testing::Test {
 public:
 
   TransfersSubscriptionTest() :
-    currency(CurrencyBuilder().currency()),
+    currency(CurrencyBuilder(m_logger).currency()),
     account(generateAccountKeys()),
     syncStart(SynchronizationStart{ 0, 0 }),
     sub(currency, AccountSubscription{ account, syncStart, 10 }) {
@@ -58,6 +58,7 @@ public:
     return tx;
   }
 
+  Logging::ConsoleLogger m_logger;
   Currency currency;
   AccountKeys account;
   SynchronizationStart syncStart;
@@ -153,4 +154,3 @@ TEST_F(TransfersSubscriptionTest, deleteUnconfirmedTransaction) {
   ASSERT_EQ(1, observer.deleted.size());
   ASSERT_EQ(txHash, observer.deleted[0]);
 }
-

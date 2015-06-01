@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -26,15 +26,17 @@ namespace {
 
   using namespace CryptoNote;
 
-  KeyPair generateKeys() {
-    KeyPair kp;
+  inline TransactionTypes::KeyPair generateKeys() {
+    TransactionTypes::KeyPair kp;
     crypto::generate_keys(
       reinterpret_cast<crypto::public_key&>(kp.publicKey),
       reinterpret_cast<crypto::secret_key&>(kp.secretKey));
     return kp;
   }
 
-  AccountKeys accountKeysFromKeypairs(const KeyPair& viewKeys, const KeyPair& spendKeys) {
+  inline AccountKeys accountKeysFromKeypairs(
+    const TransactionTypes::KeyPair& viewKeys, 
+    const TransactionTypes::KeyPair& spendKeys) {
     AccountKeys ak;
     ak.address.spendPublicKey = spendKeys.publicKey;
     ak.address.viewPublicKey = viewKeys.publicKey;
@@ -43,7 +45,7 @@ namespace {
     return ak;
   }
 
-  AccountKeys generateAccountKeys() {
+  inline AccountKeys generateAccountKeys() {
     return accountKeysFromKeypairs(generateKeys(), generateKeys());
   }
 
@@ -53,9 +55,9 @@ namespace {
 
   KeyImage generateKeyImage(const AccountKeys& keys, size_t idx, const PublicKey& txPubKey) {
     KeyImage keyImage;
-    cryptonote::KeyPair in_ephemeral;
-    cryptonote::generate_key_image_helper(
-      reinterpret_cast<const cryptonote::account_keys&>(keys),
+    CryptoNote::KeyPair in_ephemeral;
+    CryptoNote::generate_key_image_helper(
+      reinterpret_cast<const CryptoNote::account_keys&>(keys),
       reinterpret_cast<const crypto::public_key&>(txPubKey),
       idx,
       in_ephemeral,

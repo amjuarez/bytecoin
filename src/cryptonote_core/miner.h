@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,21 +20,24 @@
 #include <atomic>
 
 #include <boost/program_options.hpp>
+#include <boost/thread.hpp>
 
 // epee
 #include "serialization/keyvalue_serialization.h"
-#include "math_helper.h"
 
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/difficulty.h"
 #include "cryptonote_core/i_miner_handler.h"
 #include "cryptonote_core/MinerConfig.h"
+#include "cryptonote_core/OnceInInterval.h"
 
-namespace cryptonote {
+#include <Logging/LoggerRef.h>
+
+namespace CryptoNote {
   class miner {
   public:
-    miner(const Currency& currency, i_miner_handler* phandler);
+    miner(const Currency& currency, i_miner_handler& handler, Logging::ILogger& log);
     ~miner();
 
     bool init(const MinerConfig& config);
@@ -54,7 +57,7 @@ namespace cryptonote {
     void do_print_hashrate(bool do_hr);
 
   private:
-    bool worker_thread();
+    bool worker_thread(uint32_t th_local_index);
     bool request_block_template();
     void  merge_hr();
 
@@ -69,30 +72,36 @@ namespace cryptonote {
 
 
     const Currency& m_currency;
-    volatile uint32_t m_stop;
-    epee::critical_section m_template_lock;
+    Logging::LoggerRef logger;
+
+    std::atomic<bool> m_stop;
+    std::mutex m_template_lock;
     Block m_template;
     std::atomic<uint32_t> m_template_no;
     std::atomic<uint32_t> m_starter_nonce;
     difficulty_type m_diffic;
-    volatile uint32_t m_thread_index;
-    volatile uint32_t m_threads_total;
+
+    // volatile uint32_t m_thread_index;
+    std::atomic<uint32_t> m_threads_total;
     std::atomic<int32_t> m_pausers_count;
-    epee::critical_section m_miners_count_lock;
+    std::mutex m_miners_count_lock;
 
     std::list<boost::thread> m_threads;
-    epee::critical_section m_threads_lock;
-    i_miner_handler* m_phandler;
+    std::mutex m_threads_lock;
+    i_miner_handler& m_handler;
     AccountPublicAddress m_mine_address;
-    epee::math_helper::once_a_time_seconds<5> m_update_block_template_interval;
-    epee::math_helper::once_a_time_seconds<2> m_update_merge_hr_interval;
+    //epee::math_helper::once_a_time_seconds<5> m_update_block_template_interval;
+    //epee::math_helper::once_a_time_seconds<2> m_update_merge_hr_interval;
+    OnceInInterval m_update_block_template_interval;
+    OnceInInterval m_update_merge_hr_interval;
+
     std::vector<blobdata> m_extra_messages;
     miner_config m_config;
     std::string m_config_folder_path;
     std::atomic<uint64_t> m_last_hr_merge_time;
     std::atomic<uint64_t> m_hashes;
     std::atomic<uint64_t> m_current_hash_rate;
-    epee::critical_section m_last_hash_rates_lock;
+    std::mutex m_last_hash_rates_lock;
     std::list<uint64_t> m_last_hash_rates;
     bool m_do_print_hashrate;
     bool m_do_mining;

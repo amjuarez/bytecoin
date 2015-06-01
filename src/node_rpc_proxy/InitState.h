@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,8 +19,6 @@
 
 #include <atomic>
 
-#include "include_base_utils.h"
-
 namespace tools {
 
 class InitState {
@@ -35,7 +33,6 @@ public:
   bool beginInit() volatile {
     State state = STATE_NOT_INITIALIZED;
     if (!m_state.compare_exchange_strong(state, STATE_INITIALIZING, std::memory_order_seq_cst)) {
-      LOG_ERROR("object has been already initialized");
       return false;
     }
     return true;
@@ -44,7 +41,6 @@ public:
   bool endInit() volatile {
     State expectedState = STATE_INITIALIZING;
     if (!m_state.compare_exchange_strong(expectedState, STATE_INITIALIZED, std::memory_order_seq_cst)) {
-      LOG_ERROR("Unexpected state: " << expectedState);
       return false;
     }
     return true;
@@ -56,17 +52,14 @@ public:
       if (STATE_NOT_INITIALIZED == state) {
         return true;
       } else if (STATE_INITIALIZING == state) {
-        LOG_ERROR("Object is being initialized");
         return false;
       } else if (STATE_INITIALIZED == state) {
         if (m_state.compare_exchange_strong(state, STATE_SHUTTING_DOWN, std::memory_order_seq_cst)) {
           return true;
         }
       } else if (STATE_SHUTTING_DOWN == state) {
-        LOG_ERROR("Object is being shutting down");
         return false;
       } else {
-        LOG_ERROR("Unknown state " << state);
         return false;
       }
     }
@@ -75,7 +68,6 @@ public:
   bool endShutdown() volatile {
     State expectedState = STATE_SHUTTING_DOWN;
     if (!m_state.compare_exchange_strong(expectedState, STATE_NOT_INITIALIZED, std::memory_order_seq_cst)) {
-      LOG_ERROR("Unexpected state: " << expectedState);
       return false;
     }
     return true;

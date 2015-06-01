@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,10 +20,10 @@
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/difficulty.h"
 
-namespace cryptonote {
+namespace CryptoNote {
   struct i_miner_handler {
     virtual bool handle_block_found(Block& b) = 0;
-    virtual bool get_block_template(Block& b, const AccountPublicAddress& adr, difficulty_type& diffic, uint64_t& height, const blobdata& ex_nonce) = 0;
+    virtual bool get_block_template(Block& b, const AccountPublicAddress& adr, difficulty_type& diffic, uint32_t& height, const blobdata& ex_nonce) = 0;
 
   protected:
     ~i_miner_handler(){};

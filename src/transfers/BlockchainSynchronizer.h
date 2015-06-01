@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -72,7 +72,7 @@ private:
 
   struct GetPoolResponse {
     bool isLastKnownBlockActual;
-    std::vector<cryptonote::Transaction> newTxs;
+    std::vector<Transaction> newTxs;
     std::vector<crypto::hash> deletedTxIds;
   };
 

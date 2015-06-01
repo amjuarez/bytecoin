@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -53,30 +53,36 @@ bool INodeDummyStub::removeObserver(CryptoNote::INodeObserver* observer) {
   return observerManager.remove(observer);
 }
 
-void INodeTrivialRefreshStub::getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback)
+void INodeTrivialRefreshStub::getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<CryptoNote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback)
 {
   m_asyncCounter.addAsyncContext();
-  std::thread task(std::bind(&INodeTrivialRefreshStub::doGetNewBlocks, this, std::move(knownBlockIds), std::ref(newBlocks), std::ref(startHeight), callback));
+
+  std::unique_lock<std::mutex> lock(m_multiWalletLock);
+  auto blockchain = m_blockchainGenerator.getBlockchainCopy();
+  lock.unlock();
+
+  std::thread task(std::bind(&INodeTrivialRefreshStub::doGetNewBlocks, this, std::move(knownBlockIds), std::ref(newBlocks),
+          std::ref(startHeight), std::move(blockchain), callback));
   task.detach();
 }
 
-void INodeTrivialRefreshStub::doGetNewBlocks(std::list<crypto::hash> knownBlockIds, std::list<cryptonote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback)
+void INodeTrivialRefreshStub::doGetNewBlocks(std::list<crypto::hash> knownBlockIds, std::list<CryptoNote::block_complete_entry>& newBlocks,
+        uint64_t& startHeight, std::vector<CryptoNote::Block> blockchain, const Callback& callback)
 {
   ContextCounterHolder counterHolder(m_asyncCounter);
   std::unique_lock<std::mutex> lock(m_multiWalletLock);
 
-  auto& blockchain = m_blockchainGenerator.getBlockchain();
-
-  std::vector<cryptonote::Block>::iterator start = blockchain.end();
+  std::vector<CryptoNote::Block>::iterator start = blockchain.end();
 
   for (const auto& id : knownBlockIds) {
     start = std::find_if(blockchain.begin(), blockchain.end(), 
-      [&id](cryptonote::Block& block) { return get_block_hash(block) == id; });
+      [&id](CryptoNote::Block& block) { return get_block_hash(block) == id; });
     if (start != blockchain.end())
       break;
   }
 
   if (start == blockchain.end()) {
+    lock.unlock();
     callback(std::error_code());
     return;
   }
@@ -86,12 +92,12 @@ void INodeTrivialRefreshStub::doGetNewBlocks(std::list<crypto::hash> knownBlockI
 
   for (; m_lastHeight < blockchain.size(); ++m_lastHeight)
   {
-    cryptonote::block_complete_entry e;
-    e.block = cryptonote::t_serializable_object_to_blob(blockchain[m_lastHeight]);
+    CryptoNote::block_complete_entry e;
+    e.block = CryptoNote::t_serializable_object_to_blob(blockchain[m_lastHeight]);
 
     for (auto hash : blockchain[m_lastHeight].txHashes)
     {
-      cryptonote::Transaction tx;
+      CryptoNote::Transaction tx;
       if (!m_blockchainGenerator.getTransactionByHash(hash, tx))
         continue;
 
@@ -108,6 +114,7 @@ void INodeTrivialRefreshStub::doGetNewBlocks(std::list<crypto::hash> knownBlockI
   m_lastHeight = startHeight + newBlocks.size();
   // m_lastHeight = startHeight + blockchain.size() - 1;
 
+  lock.unlock();
   callback(std::error_code());
 }
 
@@ -125,7 +132,7 @@ void INodeTrivialRefreshStub::doGetTransactionOutsGlobalIndices(const crypto::ha
   ContextCounterHolder counterHolder(m_asyncCounter);
   std::unique_lock<std::mutex> lock(m_multiWalletLock);
 
-  cryptonote::Transaction tx;
+  CryptoNote::Transaction tx;
   
   if (m_blockchainGenerator.getTransactionByHash(transactionHash, tx)) {
     outsGlobalIndices.resize(tx.vout.size());
@@ -133,17 +140,18 @@ void INodeTrivialRefreshStub::doGetTransactionOutsGlobalIndices(const crypto::ha
     outsGlobalIndices.resize(20); //random
   }
 
+  lock.unlock();
   callback(std::error_code());
 }
 
-void INodeTrivialRefreshStub::relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback)
+void INodeTrivialRefreshStub::relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback)
 {
   m_asyncCounter.addAsyncContext();
   std::thread task(&INodeTrivialRefreshStub::doRelayTransaction, this, transaction, callback);
   task.detach();
 }
 
-void INodeTrivialRefreshStub::doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback)
+void INodeTrivialRefreshStub::doRelayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback)
 {
   ContextCounterHolder counterHolder(m_asyncCounter);
   std::unique_lock<std::mutex> lock(m_multiWalletLock);
@@ -151,35 +159,38 @@ void INodeTrivialRefreshStub::doRelayTransaction(const cryptonote::Transaction& 
   if (m_nextTxError)
   {
     m_nextTxError = false;
-    callback(make_error_code(cryptonote::error::INTERNAL_WALLET_ERROR));
+    lock.unlock();
+    callback(make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR));
     return;
   }
 
   if (m_nextTxToPool) {
     m_nextTxToPool = false;
     m_blockchainGenerator.putTxToPool(transaction);
+    lock.unlock();
     callback(std::error_code());
     return;
   }
 
   m_blockchainGenerator.addTxToBlockchain(transaction);
+  lock.unlock();
   callback(std::error_code());
 }
 
-void INodeTrivialRefreshStub::getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback)
+void INodeTrivialRefreshStub::getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback)
 {
   m_asyncCounter.addAsyncContext();
   std::thread task(&INodeTrivialRefreshStub::doGetRandomOutsByAmounts, this, amounts, outsCount, std::ref(result), callback);
   task.detach();
 }
 
-void INodeTrivialRefreshStub::doGetRandomOutsByAmounts(std::vector<uint64_t> amounts, uint64_t outsCount, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback)
+void INodeTrivialRefreshStub::doGetRandomOutsByAmounts(std::vector<uint64_t> amounts, uint64_t outsCount, std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback)
 {
   ContextCounterHolder counterHolder(m_asyncCounter);
   std::unique_lock<std::mutex> lock(m_multiWalletLock);
   for (uint64_t amount: amounts)
   {
-    cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount out;
+    CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount out;
     out.amount = amount;
 
     for (uint64_t i = 0; i < outsCount; ++i)
@@ -188,32 +199,35 @@ void INodeTrivialRefreshStub::doGetRandomOutsByAmounts(std::vector<uint64_t> amo
       crypto::secret_key sk;
       generate_keys(key, sk);
 
-      cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry e;
+      CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry e;
       e.global_amount_index = i;
       e.out_key = key;
 
       out.outs.push_back(e);
     }
+
+    result.push_back(std::move(out));
   }
 
+  lock.unlock();
   callback(std::error_code());
 }
 
 void INodeTrivialRefreshStub::queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t timestamp, 
   std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
 
-  auto resultHolder = std::make_shared<std::list<cryptonote::block_complete_entry>>();
+  auto resultHolder = std::make_shared<std::list<CryptoNote::block_complete_entry>>();
 
   getNewBlocks(std::move(knownBlockIds), *resultHolder, startHeight, [resultHolder, callback, &startHeight, &newBlocks](std::error_code ec)
   {
-    if (ec == std::error_code()) {
+    if (!ec) {
       for (const auto& item : *resultHolder) {
         CryptoNote::BlockCompleteEntry entry;
-        cryptonote::Block block;
+        CryptoNote::Block block;
 
-        cryptonote::parse_and_validate_block_from_blob(item.block, block);
+        CryptoNote::parse_and_validate_block_from_blob(item.block, block);
 
-        entry.blockHash = cryptonote::get_block_hash(block);
+        entry.blockHash = CryptoNote::get_block_hash(block);
         entry.block = item.block;
         entry.txs = std::move(item.txs);
 
@@ -228,16 +242,7 @@ void INodeTrivialRefreshStub::queryBlocks(std::list<crypto::hash>&& knownBlockId
 
 void INodeTrivialRefreshStub::startAlternativeChain(uint64_t height)
 {
-  std::vector<cryptonote::Block>& blockchain = m_blockchainGenerator.getBlockchain();
-
-  assert(height < blockchain.size());
-  //assert(height > m_lastHeight);
-
-  auto it = blockchain.begin();
-  std::advance(it, height);
-
-  blockchain.erase(it, blockchain.end());
-
+  m_blockchainGenerator.cutBlockchain(height);
   m_lastHeight = height;
 }
 
@@ -251,7 +256,7 @@ void INodeTrivialRefreshStub::setNextTransactionToPool() {
 }
 
 void INodeTrivialRefreshStub::getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
-  std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback)
+  std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback)
 {
   m_asyncCounter.addAsyncContext();
   std::thread task(
@@ -268,12 +273,13 @@ void INodeTrivialRefreshStub::getPoolSymmetricDifference(std::vector<crypto::has
 }
 
 void INodeTrivialRefreshStub::doGetPoolSymmetricDifference(std::vector<crypto::hash>& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
-  std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback)
+  std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback)
 {
   ContextCounterHolder counterHolder(m_asyncCounter);
   std::unique_lock<std::mutex> lock(m_multiWalletLock);
 
   m_blockchainGenerator.getPoolSymmetricDifference(std::move(known_pool_tx_ids), known_block_id, is_bc_actual, new_txs, deleted_tx_ids);
+  lock.unlock();
   callback(std::error_code());
 }
 

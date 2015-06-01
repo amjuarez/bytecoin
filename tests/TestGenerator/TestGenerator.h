@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -62,8 +62,8 @@ public:
     bf_diffic    = 1 << 6
   };
 
-  test_generator(const cryptonote::Currency& currency, uint8_t majorVersion = cryptonote::BLOCK_MAJOR_VERSION_1,
-                 uint8_t minorVersion = cryptonote::BLOCK_MINOR_VERSION_0)
+  test_generator(const CryptoNote::Currency& currency, uint8_t majorVersion = CryptoNote::BLOCK_MAJOR_VERSION_1,
+                 uint8_t minorVersion = CryptoNote::BLOCK_MINOR_VERSION_0)
     : m_currency(currency), defaultMajorVersion(majorVersion), defaultMinorVersion(minorVersion) {
   }
 
@@ -71,45 +71,45 @@ public:
   uint8_t defaultMajorVersion;
   uint8_t defaultMinorVersion;
 
-  const cryptonote::Currency& currency() const { return m_currency; }
+  const CryptoNote::Currency& currency() const { return m_currency; }
 
   void getBlockchain(std::vector<BlockInfo>& blockchain, const crypto::hash& head, size_t n) const;
   void getLastNBlockSizes(std::vector<size_t>& blockSizes, const crypto::hash& head, size_t n) const;
   uint64_t getAlreadyGeneratedCoins(const crypto::hash& blockId) const;
-  uint64_t getAlreadyGeneratedCoins(const cryptonote::Block& blk) const;
+  uint64_t getAlreadyGeneratedCoins(const CryptoNote::Block& blk) const;
 
-  void addBlock(const cryptonote::Block& blk, size_t tsxSize, uint64_t fee, std::vector<size_t>& blockSizes,
+  void addBlock(const CryptoNote::Block& blk, size_t tsxSize, uint64_t fee, std::vector<size_t>& blockSizes,
     uint64_t alreadyGeneratedCoins);
-  bool constructBlock(cryptonote::Block& blk, uint64_t height, const crypto::hash& prevId,
-    const cryptonote::account_base& minerAcc, uint64_t timestamp, uint64_t alreadyGeneratedCoins,
-    std::vector<size_t>& blockSizes, const std::list<cryptonote::Transaction>& txList);
-  bool constructBlock(cryptonote::Block& blk, const cryptonote::account_base& minerAcc, uint64_t timestamp);
-  bool constructBlock(cryptonote::Block& blk, const cryptonote::Block& blkPrev, const cryptonote::account_base& minerAcc,
-    const std::list<cryptonote::Transaction>& txList = std::list<cryptonote::Transaction>());
+  bool constructBlock(CryptoNote::Block& blk, uint32_t height, const crypto::hash& prevId,
+    const CryptoNote::account_base& minerAcc, uint64_t timestamp, uint64_t alreadyGeneratedCoins,
+    std::vector<size_t>& blockSizes, const std::list<CryptoNote::Transaction>& txList);
+  bool constructBlock(CryptoNote::Block& blk, const CryptoNote::account_base& minerAcc, uint64_t timestamp);
+  bool constructBlock(CryptoNote::Block& blk, const CryptoNote::Block& blkPrev, const CryptoNote::account_base& minerAcc,
+    const std::list<CryptoNote::Transaction>& txList = std::list<CryptoNote::Transaction>());
 
-  bool constructBlockManually(cryptonote::Block& blk, const cryptonote::Block& prevBlock,
-    const cryptonote::account_base& minerAcc, int actualParams = bf_none, uint8_t majorVer = 0,
+  bool constructBlockManually(CryptoNote::Block& blk, const CryptoNote::Block& prevBlock,
+    const CryptoNote::account_base& minerAcc, int actualParams = bf_none, uint8_t majorVer = 0,
     uint8_t minorVer = 0, uint64_t timestamp = 0, const crypto::hash& prevId = crypto::hash(),
-    const cryptonote::difficulty_type& diffic = 1, const cryptonote::Transaction& minerTx = cryptonote::Transaction(),
+    const CryptoNote::difficulty_type& diffic = 1, const CryptoNote::Transaction& minerTx = CryptoNote::Transaction(),
     const std::vector<crypto::hash>& txHashes = std::vector<crypto::hash>(), size_t txsSizes = 0, uint64_t fee = 0);
-  bool constructBlockManuallyTx(cryptonote::Block& blk, const cryptonote::Block& prevBlock,
-    const cryptonote::account_base& minerAcc, const std::vector<crypto::hash>& txHashes, size_t txsSize);
-  bool constructMaxSizeBlock(cryptonote::Block& blk, const cryptonote::Block& blkPrev,
-    const cryptonote::account_base& minerAccount, size_t medianBlockCount = 0,
-    const std::list<cryptonote::Transaction>& txList = std::list<cryptonote::Transaction>());
+  bool constructBlockManuallyTx(CryptoNote::Block& blk, const CryptoNote::Block& prevBlock,
+    const CryptoNote::account_base& minerAcc, const std::vector<crypto::hash>& txHashes, size_t txsSize);
+  bool constructMaxSizeBlock(CryptoNote::Block& blk, const CryptoNote::Block& blkPrev,
+    const CryptoNote::account_base& minerAccount, size_t medianBlockCount = 0,
+    const std::list<CryptoNote::Transaction>& txList = std::list<CryptoNote::Transaction>());
 
 private:
-  const cryptonote::Currency& m_currency;
+  const CryptoNote::Currency& m_currency;
   std::unordered_map<crypto::hash, BlockInfo> m_blocksInfo;
 };
 
-inline cryptonote::difficulty_type getTestDifficulty() { return 1; }
-void fillNonce(cryptonote::Block& blk, const cryptonote::difficulty_type& diffic);
+inline CryptoNote::difficulty_type getTestDifficulty() { return 1; }
+void fillNonce(CryptoNote::Block& blk, const CryptoNote::difficulty_type& diffic);
 
-bool constructMinerTxManually(const cryptonote::Currency& currency, size_t height, uint64_t alreadyGeneratedCoins,
-  const cryptonote::AccountPublicAddress& minerAddress, cryptonote::Transaction& tx, uint64_t fee,
-  cryptonote::KeyPair* pTxKey = 0);
-bool constructMinerTxBySize(const cryptonote::Currency& currency, cryptonote::Transaction& minerTx, uint64_t height,
-  uint64_t alreadyGeneratedCoins, const cryptonote::AccountPublicAddress& minerAddress,
+bool constructMinerTxManually(const CryptoNote::Currency& currency, uint32_t height, uint64_t alreadyGeneratedCoins,
+  const CryptoNote::AccountPublicAddress& minerAddress, CryptoNote::Transaction& tx, uint64_t fee,
+  CryptoNote::KeyPair* pTxKey = 0);
+bool constructMinerTxBySize(const CryptoNote::Currency& currency, CryptoNote::Transaction& minerTx, uint32_t height,
+  uint64_t alreadyGeneratedCoins, const CryptoNote::AccountPublicAddress& minerAddress,
   std::vector<size_t>& blockSizes, size_t targetTxSize, size_t targetBlockSize, uint64_t fee = 0,
   bool penalizeFee = false);

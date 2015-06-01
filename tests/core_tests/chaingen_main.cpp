@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,7 +17,7 @@
 
 #include "chaingen.h"
 
-#include "common/command_line.h"
+#include "Common/command_line.h"
 
 #include "block_reward.h"
 #include "block_validation.h"
@@ -46,7 +46,7 @@ namespace
 int main(int argc, char* argv[])
 {
   TRY_ENTRY();
-  epee::string_tools::set_module_name_and_folder(argv[0]);
+  // epee::string_tools::set_module_name_and_folder(argv[0]);
 
   //set up logging options
   epee::log_space::get_set_log_detalisation_level(true, LOG_LEVEL_3);
@@ -94,8 +94,8 @@ int main(int argc, char* argv[])
   else if (command_line::get_arg(vm, arg_generate_and_play_test_data))
   {
 #define GENERATE_AND_PLAY_EX_2VER(TestCase) \
-  GENERATE_AND_PLAY_EX(TestCase(cryptonote::BLOCK_MAJOR_VERSION_1)) \
-  GENERATE_AND_PLAY_EX(TestCase(cryptonote::BLOCK_MAJOR_VERSION_2))
+  GENERATE_AND_PLAY_EX(TestCase(CryptoNote::BLOCK_MAJOR_VERSION_1)) \
+  GENERATE_AND_PLAY_EX(TestCase(CryptoNote::BLOCK_MAJOR_VERSION_2))
 
     GENERATE_AND_PLAY(gen_simple_chain_001);
     GENERATE_AND_PLAY(gen_simple_chain_split_1);
@@ -107,9 +107,9 @@ int main(int argc, char* argv[])
 
     // Block verification tests
     GENERATE_AND_PLAY_EX_2VER(TestBlockMajorVersionAccepted);
-    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(cryptonote::BLOCK_MAJOR_VERSION_1, cryptonote::BLOCK_MAJOR_VERSION_2));
-    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(cryptonote::BLOCK_MAJOR_VERSION_2, cryptonote::BLOCK_MAJOR_VERSION_1));
-    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(cryptonote::BLOCK_MAJOR_VERSION_2, cryptonote::BLOCK_MAJOR_VERSION_2 + 1));
+    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(CryptoNote::BLOCK_MAJOR_VERSION_1, CryptoNote::BLOCK_MAJOR_VERSION_2));
+    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(CryptoNote::BLOCK_MAJOR_VERSION_2, CryptoNote::BLOCK_MAJOR_VERSION_1));
+    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(CryptoNote::BLOCK_MAJOR_VERSION_2, CryptoNote::BLOCK_MAJOR_VERSION_2 + 1));
     GENERATE_AND_PLAY_EX_2VER(TestBlockBigMinorVersion);
     GENERATE_AND_PLAY_EX_2VER(gen_block_ts_not_checked);
     GENERATE_AND_PLAY_EX_2VER(gen_block_ts_in_past);
@@ -134,7 +134,7 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY_EX_2VER(gen_block_has_invalid_tx);
     GENERATE_AND_PLAY_EX_2VER(gen_block_is_too_big);
     GENERATE_AND_PLAY_EX_2VER(TestBlockCumulativeSizeExceedsLimit);
-    GENERATE_AND_PLAY_EX_2VER(gen_block_invalid_binary_format); // Takes up to 30 minutes, if CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW == 10
+    //GENERATE_AND_PLAY_EX_2VER(gen_block_invalid_binary_format); // Takes up to 30 minutes, if CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW == 10
 
     GENERATE_AND_PLAY(TestMaxSizeOfParentBlock);
     GENERATE_AND_PLAY(TestBigParentBlock);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -22,8 +22,8 @@
 #include "google/sparse_hash_set"
 #include "google/sparse_hash_map"
 
-#include "common/ObserverManager.h"
-#include "common/util.h"
+#include "Common/ObserverManager.h"
+#include "Common/util.h"
 #include "cryptonote_core/BlockIndex.h"
 #include "cryptonote_core/checkpoints.h"
 #include "cryptonote_core/Currency.h"
@@ -35,7 +35,11 @@
 #include "cryptonote_core/tx_pool.h"
 
 
-namespace cryptonote {
+#include <Logging/LoggerRef.h>
+
+#undef ERROR
+
+namespace CryptoNote {
   struct NOTIFY_RESPONSE_CHAIN_ENTRY_request;
   struct NOTIFY_REQUEST_GET_OBJECTS_request;
   struct NOTIFY_RESPONSE_GET_OBJECTS_request;
@@ -46,15 +50,15 @@ namespace cryptonote {
   using CryptoNote::BlockInfo;
   class blockchain_storage : public CryptoNote::ITransactionValidator {
   public:
-    blockchain_storage(const Currency& currency, tx_memory_pool& tx_pool);
+    blockchain_storage(const Currency& currency, tx_memory_pool& tx_pool, Logging::ILogger& logger);
 
     bool addObserver(IBlockchainStorageObserver* observer);
     bool removeObserver(IBlockchainStorageObserver* observer);
 
     // ITransactionValidator
-    virtual bool checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock);
-    virtual bool checkTransactionInputs(const cryptonote::Transaction& tx, BlockInfo& maxUsedBlock, BlockInfo& lastFailed);
-    virtual bool haveSpentKeyImages(const cryptonote::Transaction& tx);
+    virtual bool checkTransactionInputs(const CryptoNote::Transaction& tx, BlockInfo& maxUsedBlock);
+    virtual bool checkTransactionInputs(const CryptoNote::Transaction& tx, BlockInfo& maxUsedBlock, BlockInfo& lastFailed);
+    virtual bool haveSpentKeyImages(const CryptoNote::Transaction& tx);
 
     bool init() { return init(tools::get_default_data_dir(), true); }
     bool init(const std::string& config_folder, bool load_existing);
@@ -84,7 +88,7 @@ namespace cryptonote {
     uint8_t get_block_major_version_for_height(uint64_t height) const;
     bool add_new_block(const Block& bl_, block_verification_context& bvc);
     bool reset_and_set_genesis_block(const Block& b);
-    bool create_block_template(Block& b, const AccountPublicAddress& miner_address, difficulty_type& di, uint64_t& height, const blobdata& ex_nonce);
+    bool create_block_template(Block& b, const AccountPublicAddress& miner_address, difficulty_type& di, uint32_t& height, const blobdata& ex_nonce);
     bool have_block(const crypto::hash& id);
     size_t get_total_transactions();
     bool get_short_chain_history(std::list<crypto::hash>& ids);
@@ -104,15 +108,15 @@ namespace cryptonote {
 
     template<class t_ids_container, class t_blocks_container, class t_missed_container>
     bool get_blocks(const t_ids_container& block_ids, t_blocks_container& blocks, t_missed_container& missed_bs) {
-      CRITICAL_REGION_LOCAL(m_blockchain_lock);
+      std::lock_guard<std::recursive_mutex> lk(m_blockchain_lock);
 
       for (const auto& bl_id : block_ids) {
         uint64_t height = 0;
         if (!m_blockIndex.getBlockHeight(bl_id, height)) {
           missed_bs.push_back(bl_id);
         } else {
-          CHECK_AND_ASSERT_MES(height < m_blocks.size(), false, "Internal error: bl_id=" << epee::string_tools::pod_to_hex(bl_id)
-            << " have index record with offset=" << height << ", bigger then m_blocks.size()=" << m_blocks.size());
+          if (!(height < m_blocks.size())) { logger(Logging::ERROR, Logging::BRIGHT_RED) << "Internal error: bl_id=" << Common::podToHex(bl_id)
+            << " have index record with offset=" << height << ", bigger then m_blocks.size()=" << m_blocks.size(); return false; }
             blocks.push_back(m_blocks[height].bl);
         }
       }
@@ -122,7 +126,7 @@ namespace cryptonote {
 
     template<class t_ids_container, class t_tx_container, class t_missed_container>
     void get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, bool checkTxPool = false) {
-      CRITICAL_REGION_LOCAL(m_blockchain_lock);
+      std::lock_guard<std::recursive_mutex> lk(m_blockchain_lock);
 
       for (const auto& tx_id : txs_ids) {
         auto it = m_transactionMap.find(tx_id);
@@ -200,7 +204,7 @@ namespace cryptonote {
 
     const Currency& m_currency;
     tx_memory_pool& m_tx_pool;
-    epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
+    std::recursive_mutex m_blockchain_lock; // TODO: add here reader/writer lock
     crypto::cn_context m_cn_context;
     tools::ObserverManager<IBlockchainStorageObserver> m_observerManager;
 
@@ -226,6 +230,8 @@ namespace cryptonote {
     TransactionMap m_transactionMap;
     MultisignatureOutputsContainer m_multisignatureOutputs;
     UpgradeDetector m_upgradeDetector;
+
+    Logging::LoggerRef logger;
 
     bool storeCache();
     template<class visitor_t> bool scan_outputkeys_for_indexes(const TransactionInputToKey& tx_in_to_key, visitor_t& vis, uint64_t* pmax_related_block_height = NULL);
@@ -278,11 +284,11 @@ namespace cryptonote {
   private:
 
     blockchain_storage& m_bc;
-    epee::critical_region_t<epee::critical_section> m_lock;
+    std::lock_guard<std::recursive_mutex> m_lock;
   };
 
   template<class visitor_t> bool blockchain_storage::scan_outputkeys_for_indexes(const TransactionInputToKey& tx_in_to_key, visitor_t& vis, uint64_t* pmax_related_block_height) {
-    CRITICAL_REGION_LOCAL(m_blockchain_lock);
+    std::lock_guard<std::recursive_mutex> lk(m_blockchain_lock);
     auto it = m_outputs.find(tx_in_to_key.amount);
     if (it == m_outputs.end() || !tx_in_to_key.keyOffsets.size())
       return false;
@@ -292,18 +298,25 @@ namespace cryptonote {
     size_t count = 0;
     for (uint64_t i : absolute_offsets) {
       if(i >= amount_outs_vec.size() ) {
-        LOG_PRINT_L0("Wrong index in transaction inputs: " << i << ", expected maximum " << amount_outs_vec.size() - 1);
+        logger(Logging::INFO) << "Wrong index in transaction inputs: " << i << ", expected maximum " << amount_outs_vec.size() - 1;
         return false;
       }
 
       //auto tx_it = m_transactionMap.find(amount_outs_vec[i].first);
-      //CHECK_AND_ASSERT_MES(tx_it != m_transactionMap.end(), false, "Wrong transaction id in output indexes: " << epee::string_tools::pod_to_hex(amount_outs_vec[i].first));
+      //if (!(tx_it != m_transactionMap.end())) { logger(ERROR, BRIGHT_RED) << "Wrong transaction id in output indexes: " << Common::podToHex(amount_outs_vec[i].first); return false; }
 
       const TransactionEntry& tx = transactionByIndex(amount_outs_vec[i].first);
-      CHECK_AND_ASSERT_MES(amount_outs_vec[i].second < tx.tx.vout.size(), false,
-        "Wrong index in transaction outputs: " << amount_outs_vec[i].second << ", expected less then " << tx.tx.vout.size());
+
+      if (!(amount_outs_vec[i].second < tx.tx.vout.size())) {
+        logger(Logging::ERROR, Logging::BRIGHT_RED)
+            << "Wrong index in transaction outputs: "
+            << amount_outs_vec[i].second << ", expected less then "
+            << tx.tx.vout.size();
+        return false;
+      }
+
       if (!vis.handle_output(tx.tx, tx.tx.vout[amount_outs_vec[i].second])) {
-        LOG_PRINT_L0("Failed to handle_output for output no = " << count << ", with absolute offset " << i);
+        logger(Logging::INFO) << "Failed to handle_output for output no = " << count << ", with absolute offset " << i;
         return false;
       }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -68,12 +68,13 @@ namespace {
     virtual void SetUp() override {
       sender = generateAccountKeys();
       tx = createTransaction();
+      txHash = tx->getTransactionHash();
     }
 
     TransactionTypes::InputKeyInfo createInputInfo(uint64_t amount) {
       TransactionTypes::InputKeyInfo info;
 
-      cryptonote::KeyPair srcTxKeys = cryptonote::KeyPair::generate();
+      CryptoNote::KeyPair srcTxKeys = CryptoNote::KeyPair::generate();
 
       PublicKey targetKey;
 
@@ -91,17 +92,32 @@ namespace {
       return info;
     }
 
+    void checkHashChanged() {
+      auto txNewHash = tx->getTransactionHash();
+      EXPECT_NE(txHash, txNewHash);
+      txHash = txNewHash;
+    }
+
+    void checkHashUnchanged() {
+      EXPECT_EQ(txHash, tx->getTransactionHash());
+    }
+
+
     AccountKeys sender;
     std::unique_ptr<ITransaction> tx;
+    Hash txHash;
   };
 
 }
 
 TEST_F(TransactionApi, createEmptyReload) {
+  auto hash = tx->getTransactionHash();
   auto pk = tx->getTransactionPublicKey();
   checkTxReload(tx);
   // transaction key should not change on reload
-  ASSERT_EQ(pk, reloadedTx(tx)->getTransactionPublicKey());
+  auto reloaded = reloadedTx(tx);
+  ASSERT_EQ(pk, reloaded->getTransactionPublicKey());
+  ASSERT_EQ(hash, reloaded->getTransactionHash());
 }
 
 TEST_F(TransactionApi, addAndSignInput) {
@@ -109,7 +125,7 @@ TEST_F(TransactionApi, addAndSignInput) {
   ASSERT_EQ(0, tx->getInputTotalAmount());
 
   TransactionTypes::InputKeyInfo info = createInputInfo(1000);
-  KeyPair ephKeys;
+  TransactionTypes::KeyPair ephKeys;
   size_t index = tx->addInput(sender, info, ephKeys);
 
   ASSERT_EQ(0, index);
@@ -127,6 +143,8 @@ TEST_F(TransactionApi, addAndSignInput) {
 
   auto txBlob = tx->getTransactionData();
   ASSERT_FALSE(txBlob.empty());
+
+  EXPECT_NO_FATAL_FAILURE(checkHashChanged());
 }
 
 TEST_F(TransactionApi, addAndSignInputMsig) {
@@ -159,6 +177,7 @@ TEST_F(TransactionApi, addAndSignInputMsig) {
 
   auto txBlob = tx->getTransactionData();
   ASSERT_FALSE(txBlob.empty());
+  EXPECT_NO_FATAL_FAILURE(checkHashChanged());
 }
 
 TEST_F(TransactionApi, addOutputKey) {
@@ -171,6 +190,7 @@ TEST_F(TransactionApi, addOutputKey) {
   ASSERT_EQ(1, tx->getOutputCount());
   ASSERT_EQ(1000, tx->getOutputTotalAmount());
   ASSERT_EQ(TransactionTypes::OutputType::Key, tx->getOutputType(index));
+  EXPECT_NO_FATAL_FAILURE(checkHashChanged());
 }
 
 TEST_F(TransactionApi, addOutputMsig) {
@@ -189,6 +209,7 @@ TEST_F(TransactionApi, addOutputMsig) {
   ASSERT_EQ(1, tx->getOutputCount());
   ASSERT_EQ(1000, tx->getOutputTotalAmount());
   ASSERT_EQ(TransactionTypes::OutputType::Multisignature, tx->getOutputType(index));
+  EXPECT_NO_FATAL_FAILURE(checkHashChanged());
 }
 
 TEST_F(TransactionApi, secretKey) {
@@ -244,6 +265,8 @@ TEST_F(TransactionApi, setGetPaymentId) {
 
   tx->setPaymentId(paymentId);
 
+  EXPECT_NO_FATAL_FAILURE(checkHashChanged());
+
   Hash paymentId2;
   ASSERT_TRUE(tx->getPaymentId(paymentId2));
   ASSERT_EQ(paymentId, paymentId2);
@@ -274,7 +297,7 @@ TEST_F(TransactionApi, setExtraNonce) {
 TEST_F(TransactionApi, doubleSpendInTransactionKey) {
   TransactionTypes::InputKeyInfo info = createInputInfo(1000);
 
-  KeyPair ephKeys;
+  TransactionTypes::KeyPair ephKeys;
   tx->addInput(sender, info, ephKeys);
   ASSERT_TRUE(tx->validateInputs());
   // now, add the same output again
@@ -308,10 +331,13 @@ TEST_F(TransactionApi, unableToModifySignedTransaction) {
   // from now on, we cannot modify transaction prefix
   ASSERT_ANY_THROW(tx->addInput(inputMsig));
   ASSERT_ANY_THROW(tx->addOutput(500, sender.address));
+
   Hash paymentId;
   ASSERT_ANY_THROW(tx->setPaymentId(paymentId));
   ASSERT_ANY_THROW(tx->setExtraNonce("smth"));
 
   // but can add more signatures
   tx->signInputMultisignature(index, srcTxKey, 0, generateAccountKeys());
+
+  EXPECT_NO_FATAL_FAILURE(checkHashChanged());
 }

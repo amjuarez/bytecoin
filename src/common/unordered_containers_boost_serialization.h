@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -46,6 +46,7 @@ namespace boost
       x.clear();
       size_t s = 0;
       a >> s;
+      x.reserve(s);
       for(size_t i = 0; i != s; i++)
       {
         h_key k;
@@ -75,7 +76,8 @@ namespace boost
       x.clear();
       size_t s = 0;
       a >> s;
-      for(size_t i = 0; i != s; i++)
+      x.reserve(s);
+      for (size_t i = 0; i != s; i++)
       {
         h_key k;
         hval v;
@@ -103,7 +105,8 @@ namespace boost
       x.clear();
       size_t s = 0;
       a >> s;
-      for(size_t i = 0; i != s; i++)
+      x.reserve(s);
+      for (size_t i = 0; i != s; i++)
       {
         hval v;
         a >> v;

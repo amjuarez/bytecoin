@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,14 +21,16 @@
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 
+#include <Logging/LoggerGroup.h>
+
 class single_tx_test_base
 {
 public:
   bool init()
   {
-    using namespace cryptonote;
+    using namespace CryptoNote;
 
-    Currency currency = CurrencyBuilder().currency();
+    Currency currency = CurrencyBuilder(m_nullLog).currency();
     m_bob.generate();
 
     if (!currency.constructMinerTx(0, 0, 0, 2, 0, m_bob.get_keys().m_account_address, m_tx))
@@ -39,7 +41,9 @@ public:
   }
 
 protected:
-  cryptonote::account_base m_bob;
-  cryptonote::Transaction m_tx;
+
+  Logging::LoggerGroup m_nullLog;
+  CryptoNote::account_base m_bob;
+  CryptoNote::Transaction m_tx;
   crypto::public_key m_tx_pub_key;
 };

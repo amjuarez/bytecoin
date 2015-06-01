@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -25,6 +25,7 @@
 #include "cryptonote_config.h"
 #include "cryptonote_core/difficulty.h"
 #include "cryptonote_core/Currency.h"
+#include "Logging/ConsoleLogger.h"
 
 using namespace std;
 
@@ -33,12 +34,13 @@ int main(int argc, char *argv[]) {
         cerr << "Wrong arguments" << endl;
         return 1;
     }
-    cryptonote::CurrencyBuilder currencyBuilder;
+    Logging::ConsoleLogger logger;
+    CryptoNote::CurrencyBuilder currencyBuilder(logger);
     currencyBuilder.difficultyTarget(120);
     currencyBuilder.difficultyWindow(720);
     currencyBuilder.difficultyCut(60);
     currencyBuilder.difficultyLag(15);
-    cryptonote::Currency currency = currencyBuilder.currency();
+    CryptoNote::Currency currency = currencyBuilder.currency();
     vector<uint64_t> timestamps, cumulative_difficulties;
     fstream data(argv[1], fstream::in);
     data.exceptions(fstream::badbit);

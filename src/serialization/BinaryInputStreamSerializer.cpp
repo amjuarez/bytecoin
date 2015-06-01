@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -62,7 +62,7 @@ void readVarintAs(std::istream& s, T &i) {
 
 }
 
-namespace cryptonote {
+namespace CryptoNote {
 
 ISerializer::SerializerType BinaryInputStreamSerializer::type() const {
   return ISerializer::INPUT;
@@ -111,7 +111,7 @@ ISerializer& BinaryInputStreamSerializer::operator()(uint64_t& value, const std:
 }
 
 ISerializer& BinaryInputStreamSerializer::operator()(bool& value, const std::string& name) {
-  value = static_cast<bool>(stream.get());
+  value = stream.get() != 0;
   return *this;
 }
 

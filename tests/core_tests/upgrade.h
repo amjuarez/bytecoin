@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,22 +24,22 @@ struct gen_upgrade : public test_chain_unit_base
 
   bool generate(std::vector<test_event_entry>& events) const;
 
-  bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t eventIdx, const cryptonote::Block& blk);
+  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t eventIdx, const CryptoNote::Block& blk);
 
-  bool markInvalidBlock(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
-  bool checkBlockTemplateVersionIsV1(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
-  bool checkBlockTemplateVersionIsV2(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
-  bool checkBlockRewardEqFee(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
-  bool checkBlockRewardIsZero(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
-  bool rememberCoinsInCirculationBeforeUpgrade(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
-  bool rememberCoinsInCirculationAfterUpgrade(cryptonote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
+  bool markInvalidBlock(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
+  bool checkBlockTemplateVersionIsV1(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
+  bool checkBlockTemplateVersionIsV2(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
+  bool checkBlockRewardEqFee(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
+  bool checkBlockRewardIsZero(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
+  bool rememberCoinsInCirculationBeforeUpgrade(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
+  bool rememberCoinsInCirculationAfterUpgrade(CryptoNote::core& c, size_t evIndex, const std::vector<test_event_entry>& events);
 
 private:
   bool checkBeforeUpgrade(std::vector<test_event_entry>& events, test_generator& generator,
-                          const cryptonote::Block& parentBlock, const cryptonote::account_base& minerAcc, bool checkReward) const;
+                          const CryptoNote::Block& parentBlock, const CryptoNote::account_base& minerAcc, bool checkReward) const;
   bool checkAfterUpgrade(std::vector<test_event_entry>& events, test_generator& generator,
-                         const cryptonote::Block& parentBlock, const cryptonote::account_base& minerAcc) const;
-  bool checkBlockTemplateVersion(cryptonote::core& c, uint8_t expectedMajorVersion, uint8_t expectedMinorVersion);
+                         const CryptoNote::Block& parentBlock, const CryptoNote::account_base& minerAcc) const;
+  bool checkBlockTemplateVersion(CryptoNote::core& c, uint8_t expectedMajorVersion, uint8_t expectedMinorVersion);
 
 private:
   size_t m_invalidBlockIndex;

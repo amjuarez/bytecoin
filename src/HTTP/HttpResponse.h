@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,7 @@
 #include <string>
 #include <map>
 
-namespace cryptonote {
+namespace CryptoNote {
 
   class HttpResponse {
   public:
@@ -54,4 +54,4 @@ namespace cryptonote {
     return resp.printHttpResponse(os);
   }
 
-} //namespace cryptonote
+} //namespace CryptoNote

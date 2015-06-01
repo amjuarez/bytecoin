@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -15,9 +15,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-/* binary_archive.h
- *
- * Portable (low-endian) binary archive */
 #pragma once
 
 #include <cassert>
@@ -25,11 +22,7 @@
 #include <iterator>
 #include <boost/type_traits/make_unsigned.hpp>
 
-#include "common/varint.h"
-#include "warnings.h"
-
-PUSH_WARNINGS
-DISABLE_VS_WARNINGS(4244)
+#include "Common/varint.h"
 
 //TODO: fix size_t warning in x32 platform
 
@@ -178,5 +171,3 @@ struct binary_archive<true> : public binary_archive_base<std::ostream, true>
     serialize_int(t);
   }
 };
-
-POP_WARNINGS

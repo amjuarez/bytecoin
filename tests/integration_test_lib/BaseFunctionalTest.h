@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -27,17 +27,14 @@
 #include <boost/noncopyable.hpp>
 #include <boost/program_options.hpp>
 
-#include "TestNode.h"
 #include <System/Dispatcher.h>
+#include <Logging/ConsoleLogger.h>
+
 #include "cryptonote_core/Currency.h"
-#include "inprocess_node/InProcessNode.h"
-
-#include "../../cryptonote_core/cryptonote_core.h"
-#include "cryptonote_protocol/cryptonote_protocol_handler.h"
-#include "p2p/net_node.h"
-
 #include "IWallet.h"
 #include "INode.h"
+#include "TestNode.h"
+#include "NetworkConfiguration.h"
 
 namespace Tests {
   namespace Common {
@@ -72,8 +69,8 @@ namespace Tests {
       }
     };
 
-    const uint16_t P2P_FIRST_PORT = 8000;
-    const uint16_t RPC_FIRST_PORT = 8200;
+    const uint16_t P2P_FIRST_PORT = 9000;
+    const uint16_t RPC_FIRST_PORT = 9200;
 
 
     class BaseFunctionalTestConfig {
@@ -83,7 +80,8 @@ namespace Tests {
       void init(po::options_description& desc) {
         desc.add_options()
           ("daemon-dir,d", po::value<std::string>()->default_value("."), "path to bytecoind.exe")
-          ("data-dir,n", po::value<std::string>()->default_value("."), "path to daemon's data directory");
+          ("data-dir,n", po::value<std::string>()->default_value("."), "path to daemon's data directory")
+          ("add-daemons,a", po::value<std::vector<std::string>>()->multitoken(), "add daemon to topology");
       }
 
       bool handleCommandLine(const po::variables_map& vm) {
@@ -94,27 +92,39 @@ namespace Tests {
         if (vm.count("data-dir")) {
           dataDir = vm["data-dir"].as<std::string>();
         }
+
+        if (vm.count("add-daemons")) {
+          daemons = vm["add-daemons"].as<std::vector<std::string>>();
+        }
+
         return true;
       }
 
-
-    protected:
-      friend class BaseFunctionalTest;
-
       std::string daemonDir;
       std::string dataDir;
+      std::vector<std::string> daemons;
     };
 
 
 
     class BaseFunctionalTest : boost::noncopyable {
     public:
-      BaseFunctionalTest(const cryptonote::Currency& currency, System::Dispatcher& d, const BaseFunctionalTestConfig& config) : m_currency(currency), m_dataDir(config.dataDir), m_daemonDir(config.daemonDir), m_dispatcher(d), inprocNode(nullptr) {
-        if (m_dataDir.empty()) m_dataDir = ".";
-        if (m_daemonDir.empty()) m_daemonDir = ".";
+      BaseFunctionalTest(const CryptoNote::Currency& currency, System::Dispatcher& d, const BaseFunctionalTestConfig& config) :
+          m_dispatcher(d),
+          m_currency(currency),
+          m_nextTimestamp(time(nullptr) - 365 * 24 * 60 * 60),
+          m_config(config),
+          m_dataDir(config.dataDir),
+          m_daemonDir(config.daemonDir) {
+        if (m_dataDir.empty()) {
+          m_dataDir = ".";
+        }
+        if (m_daemonDir.empty()) {
+          m_daemonDir = ".";
+        }
       };
 
-      ~BaseFunctionalTest(); 
+      ~BaseFunctionalTest();
 
       enum Topology {
         Ring,
@@ -122,39 +132,53 @@ namespace Tests {
         Star
       };
 
-    private:
-      std::unique_ptr<cryptonote::core> core;
-      std::unique_ptr<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>> protocol;
-      std::unique_ptr<nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<cryptonote::core>>> p2pNode;
-
     protected:
+
+      TestNodeConfiguration createNodeConfiguration(size_t i);
+
       std::vector< std::unique_ptr<TestNode> > nodeDaemons;
       System::Dispatcher& m_dispatcher;
-      const cryptonote::Currency& m_currency;
-      std::unique_ptr<CryptoNote::INode> inprocNode;
+      const CryptoNote::Currency& m_currency;
 
       void launchTestnet(size_t count, Topology t = Line);
       void launchTestnetWithInprocNode(size_t count, Topology t = Line);
+      void launchInprocTestnet(size_t count, Topology t = Line);
       void stopTestnet();
+
+      void startNode(size_t index);
+      void stopNode(size_t index);
+
       bool makeWallet(std::unique_ptr<CryptoNote::IWallet> & wallet, std::unique_ptr<CryptoNote::INode>& node, const std::string& password = "pass");
+      bool mineBlocks(TestNode& node, const CryptoNote::AccountPublicAddress& address, size_t blockCount);
       bool mineBlock(std::unique_ptr<CryptoNote::IWallet>& wallet);
       bool mineBlock();
       bool startMining(size_t threads);
       bool stopMining();
+
+      bool getNodeTransactionPool(size_t nodeIndex, CryptoNote::INode& node, std::vector<CryptoNote::Transaction>& txPool);
+
+      bool waitDaemonsReady();
+      bool waitDaemonReady(size_t nodeIndex);
+      bool waitForPeerCount(CryptoNote::INode& node, size_t expectedPeerCount);
+      bool waitForPoolSize(size_t nodeIndex, CryptoNote::INode& node, size_t expectedPoolSize,
+                           std::vector<CryptoNote::Transaction>& txPool);
 
     private:
 #ifdef __linux__
       std::vector<__pid_t> pids;
 #endif
 
-      cryptonote::CurrencyBuilder currencyBuilder;
+      Logging::ConsoleLogger logger;
       std::unique_ptr<CryptoNote::INode> mainNode;
       std::unique_ptr<CryptoNote::IWallet> workingWallet;
-      
+      uint64_t m_nextTimestamp;
+      Topology m_topology;
+      size_t m_testnetSize;
 
+      BaseFunctionalTestConfig m_config;
       std::string m_dataDir;
       std::string m_daemonDir;
-      uint16_t m_mainDaemonRPCPort;  
+      uint16_t m_mainDaemonRPCPort;
     };
   }
 }

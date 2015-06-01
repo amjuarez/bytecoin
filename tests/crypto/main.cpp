@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -21,7 +21,6 @@
 #include <string>
 #include <vector>
 
-#include "warnings.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "crypto-tests.h"
@@ -46,8 +45,6 @@ bool operator !=(const secret_key &a, const secret_key &b) {
 bool operator !=(const key_derivation &a, const key_derivation &b) {
   return 0 != memcmp(&a, &b, sizeof(key_derivation));
 }
-
-DISABLE_GCC_WARNING(maybe-uninitialized)
 
 int main(int argc, char *argv[]) {
   fstream input;

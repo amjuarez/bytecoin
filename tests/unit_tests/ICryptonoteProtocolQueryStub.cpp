@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -17,11 +17,11 @@
 
 #include "ICryptonoteProtocolQueryStub.h"
 
-bool ICryptonoteProtocolQueryStub::addObserver(cryptonote::ICryptonoteProtocolObserver* observer) {
+bool ICryptonoteProtocolQueryStub::addObserver(CryptoNote::ICryptonoteProtocolObserver* observer) {
   return false;
 }
 
-bool ICryptonoteProtocolQueryStub::removeObserver(cryptonote::ICryptonoteProtocolObserver* observer) {
+bool ICryptonoteProtocolQueryStub::removeObserver(CryptoNote::ICryptonoteProtocolObserver* observer) {
   return false;
 }
 
