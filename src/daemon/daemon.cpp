@@ -334,11 +334,8 @@ if (command_line::has_arg(vm, arg_CHECKPOINT) && checkpoint_args.size() != 0)
 }
 else
 {
-  if (!command_line::has_arg(vm, arg_UPGRADE_HEIGHT) || command_line::get_arg(vm, arg_UPGRADE_HEIGHT) == 0) {
-    for(int i = 0; i < sizeof(CryptoNote::CHECKPOINTS)/sizeof(*(CryptoNote::CHECKPOINTS)); i++)
-    {
-      checkpoint_input.push_back(CryptoNote::CHECKPOINTS[i]);
-    }
+  if (!command_line::has_arg(vm, arg_UPGRADE_HEIGHT) || command_line::get_arg(vm, arg_UPGRADE_HEIGHT) == 0 || command_line::get_arg(vm, arg_UPGRADE_HEIGHT) == 1) {
+      checkpoint_input = CryptoNote::CHECKPOINTS;
   }
 }
 for (const auto& cp : checkpoint_input) {
