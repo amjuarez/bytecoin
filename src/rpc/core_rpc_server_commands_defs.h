@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
@@ -279,6 +267,24 @@ namespace cryptonote
     };
   };
 
+  //-----------------------------------------------
+  struct COMMAND_RPC_STOP_DAEMON {
+    struct request {
+
+      BEGIN_KV_SERIALIZE_MAP()
+      END_KV_SERIALIZE_MAP()
+    };
+
+
+    struct response {
+      std::string status;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(status)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
 
   //
   struct COMMAND_RPC_GETBLOCKCOUNT
@@ -480,18 +486,6 @@ namespace cryptonote
       END_KV_SERIALIZE_MAP()
     };
 
-    struct response_item : public block_complete_entry
-    {
-      crypto::hash block_id;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_VAL_POD_AS_BLOB(block_id)
-        KV_SERIALIZE(block)
-        KV_SERIALIZE(txs)
-      END_KV_SERIALIZE_MAP()
-
-    };
-
     struct response
     {     
       std::string status;
@@ -499,7 +493,7 @@ namespace cryptonote
       uint64_t current_height;
       uint64_t full_offset;
 
-      std::list<response_item> items;
+      std::list<BlockFullInfo> items;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)

@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "block_reward.h"
 
@@ -127,12 +115,12 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
   MAKE_NEXT_BLOCK_TX_LIST(events, blk_7, blk_6, miner_account, txs_0);
   DO_CALLBACK(events, "mark_checked_block");
 
-  // Test: block reward == transactions fee
+  // Test: block reward == 0
   {
     Transaction tx_1 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 11 * m_currency.minimumFee());
     Transaction tx_2 = construct_tx_with_fee(events, blk_5, miner_account, bob_account, MK_COINS(1), 13 * m_currency.minimumFee());
     size_t txs_1_size = get_object_blobsize(tx_1) + get_object_blobsize(tx_2);
-    uint64_t txs_fee = get_tx_fee(tx_1) + get_tx_fee(tx_2);
+    uint64_t txs_fee = m_currency.getTransactionFee(tx_1) + m_currency.getTransactionFee(tx_2);
 
     std::vector<size_t> block_sizes;
     generator.getLastNBlockSizes(block_sizes, get_block_hash(blk_7), m_currency.rewardBlocksWindow());

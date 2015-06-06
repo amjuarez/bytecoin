@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 #include "include_base_utils.h"
@@ -38,11 +26,13 @@
 
 #include "common/util.h"
 #include "common/int-util.h"
+#include "common/ObserverManager.h"
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/ITimeProvider.h"
 #include "cryptonote_core/ITransactionValidator.h"
+#include "cryptonote_core/ITxPoolObserver.h"
 #include "cryptonote_core/verification_context.h"
 
 
@@ -86,6 +76,9 @@ namespace cryptonote {
     tx_memory_pool(const cryptonote::Currency& currency, CryptoNote::ITransactionValidator& validator,
       CryptoNote::ITimeProvider& timeProvider);
 
+    bool addObserver(ITxPoolObserver* observer);
+    bool removeObserver(ITxPoolObserver* observer);
+
     // load/store operations
     bool init(const std::string& config_folder);
     bool deinit();
@@ -105,6 +98,7 @@ namespace cryptonote {
     bool fill_block_template(Block &bl, size_t median_size, size_t maxCumulativeSize, uint64_t already_generated_coins, size_t &total_size, uint64_t &fee);
 
     void get_transactions(std::list<Transaction>& txs) const;
+    void get_difference(const std::vector<crypto::hash>& known_tx_ids, std::vector<crypto::hash>& new_tx_ids, std::vector<crypto::hash>& deleted_tx_ids) const;
     size_t get_transactions_count() const;
     std::string print_pool(bool short_format) const;
     void on_idle();
@@ -194,6 +188,8 @@ namespace cryptonote {
     tx_container_t::iterator removeTransaction(tx_container_t::iterator i);
     bool removeExpiredTransactions();
     bool is_transaction_ready_to_go(const Transaction& tx, TransactionCheckInfo& txd) const;
+
+    tools::ObserverManager<ITxPoolObserver> m_observerManager;
 
     const cryptonote::Currency& m_currency;
     OnceInTimeInterval m_txCheckInterval;

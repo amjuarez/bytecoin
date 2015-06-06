@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "block_validation.h"
 #include "TestGenerator.h"
@@ -26,37 +14,38 @@ using namespace cryptonote;
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, 1338224400);
 
 namespace {
-bool lift_up_difficulty(const cryptonote::Currency& currency, std::vector<test_event_entry>& events,
-                        std::vector<uint64_t>& timestamps,
-                        std::vector<cryptonote::difficulty_type>& cummulative_difficulties, test_generator& generator,
-                        size_t new_block_count, const cryptonote::Block blk_last,
-                        const cryptonote::account_base& miner_account, uint8_t block_major_version) {
-  cryptonote::difficulty_type commulative_diffic = cummulative_difficulties.empty() ? 0 : cummulative_difficulties.back();
-  cryptonote::Block blk_prev = blk_last;
-  for (size_t i = 0; i < new_block_count; ++i) {
-    cryptonote::Block blk_next;
-    cryptonote::difficulty_type diffic = currency.nextDifficulty(timestamps, cummulative_difficulties);
-    if (!generator.constructBlockManually(blk_next, blk_prev, miner_account,
-      test_generator::bf_major_ver | test_generator::bf_timestamp | test_generator::bf_diffic,
-      block_major_version, 0, blk_prev.timestamp, crypto::hash(), diffic)) {
-      return false;
+  bool lift_up_difficulty(const cryptonote::Currency& currency, std::vector<test_event_entry>& events,
+                          std::vector<uint64_t>& timestamps,
+                          std::vector<cryptonote::difficulty_type>& cummulative_difficulties, test_generator& generator,
+                          size_t new_block_count, const cryptonote::Block blk_last,
+                          const cryptonote::account_base& miner_account, uint8_t block_major_version) {
+    cryptonote::difficulty_type commulative_diffic = cummulative_difficulties.empty() ? 0 : cummulative_difficulties.back();
+    cryptonote::Block blk_prev = blk_last;
+    for (size_t i = 0; i < new_block_count; ++i) {
+      cryptonote::Block blk_next;
+      cryptonote::difficulty_type diffic = currency.nextDifficulty(timestamps, cummulative_difficulties);
+      if (!generator.constructBlockManually(blk_next, blk_prev, miner_account,
+        test_generator::bf_major_ver | test_generator::bf_timestamp | test_generator::bf_diffic, 
+        block_major_version, 0, blk_prev.timestamp, crypto::hash(), diffic)) {
+        return false;
+      }
+
+      commulative_diffic += diffic;
+      if (timestamps.size() == currency.difficultyWindow()) {
+        timestamps.erase(timestamps.begin());
+        cummulative_difficulties.erase(cummulative_difficulties.begin());
+      }
+      timestamps.push_back(blk_next.timestamp);
+      cummulative_difficulties.push_back(commulative_diffic);
+
+      events.push_back(blk_next);
+      blk_prev = blk_next;
     }
 
-    commulative_diffic += diffic;
-    if (timestamps.size() == currency.difficultyWindow()) {
-      timestamps.erase(timestamps.begin());
-      cummulative_difficulties.erase(cummulative_difficulties.begin());
-    }
-    timestamps.push_back(blk_next.timestamp);
-    cummulative_difficulties.push_back(commulative_diffic);
-
-    events.push_back(blk_next);
-    blk_prev = blk_next;
+    return true;
   }
+}
 
-  return true;
-}
-}
 
 bool TestBlockMajorVersionAccepted::generate(std::vector<test_event_entry>& events) const {
   TestGenerator bg(m_currency, events);
@@ -581,6 +570,7 @@ gen_block_invalid_binary_format::gen_block_invalid_binary_format(uint8_t blockMa
     m_corrupt_blocks_begin_idx(0),
     m_blockMajorVersion(blockMajorVersion) {
   cryptonote::CurrencyBuilder currencyBuilder;
+  currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : 0);
   m_currency = currencyBuilder.currency();
 
   REGISTER_CALLBACK("check_all_blocks_purged", gen_block_invalid_binary_format::check_all_blocks_purged);
@@ -682,4 +672,3 @@ bool gen_block_invalid_binary_format::check_all_blocks_purged(cryptonote::core& 
 
   return true;
 }
-

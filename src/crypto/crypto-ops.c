@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <assert.h>
 #include <stdint.h>
@@ -32,7 +20,6 @@ static void ge_madd(ge_p1p1 *, const ge_p3 *, const ge_precomp *);
 static void ge_msub(ge_p1p1 *, const ge_p3 *, const ge_precomp *);
 static void ge_p2_0(ge_p2 *);
 static void ge_p3_dbl(ge_p1p1 *, const ge_p3 *);
-static void ge_sub(ge_p1p1 *, const ge_p3 *, const ge_cached *);
 static void fe_divpowm1(fe, const fe, const fe);
 
 /* Common functions */
@@ -1578,7 +1565,7 @@ void ge_scalarmult_base(ge_p3 *h, const unsigned char *a) {
 r = p - q
 */
 
-static void ge_sub(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q) {
+void ge_sub(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q) {
   fe t0;
   fe_add(r->X, p->Y, p->X);
   fe_sub(r->Y, p->Y, p->X);

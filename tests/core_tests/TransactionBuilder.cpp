@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "TransactionBuilder.h"
 
@@ -21,17 +9,31 @@ using namespace cryptonote;
 
 
 TransactionBuilder::TransactionBuilder(const cryptonote::Currency& currency, uint64_t unlockTime)
-  : m_currency(currency), m_version(cryptonote::CURRENT_TRANSACTION_VERSION), m_unlockTime(unlockTime), m_txKey(KeyPair::generate()) {}
+  : m_currency(currency), m_version(cryptonote::TRANSACTION_VERSION_1), m_unlockTime(unlockTime), m_txKey(KeyPair::generate()) {}
 
 TransactionBuilder& TransactionBuilder::newTxKeys() {
   m_txKey = KeyPair::generate();
   return *this;
 }
 
+cryptonote::KeyPair TransactionBuilder::getTxKeys() const {
+  return m_txKey;
+}
+
+TransactionBuilder& TransactionBuilder::setTxKeys(const cryptonote::KeyPair& txKeys) {
+  m_txKey = txKeys;
+  return *this;
+}
 
 TransactionBuilder& TransactionBuilder::setInput(const std::vector<cryptonote::tx_source_entry>& sources, const cryptonote::account_keys& senderKeys) {
   m_sources = sources;
   m_senderKeys = senderKeys;
+  return *this;
+}
+
+TransactionBuilder& TransactionBuilder::addMultisignatureInput(const MultisignatureSource& source) {
+  m_msigSources.push_back(source);
+  m_version = cryptonote::TRANSACTION_VERSION_2;
   return *this;
 }
 
@@ -42,6 +44,21 @@ TransactionBuilder& TransactionBuilder::setOutput(const std::vector<cryptonote::
 
 TransactionBuilder& TransactionBuilder::addOutput(const cryptonote::tx_destination_entry& dest) {
   m_destinations.push_back(dest);
+  return *this;
+}
+
+TransactionBuilder& TransactionBuilder::addMultisignatureOut(uint64_t amount, const KeysVector& keys, uint32_t required, uint32_t term) {
+
+  MultisignatureDestination dst;
+
+  dst.amount = amount;
+  dst.keys = keys;
+  dst.requiredSignatures = required;
+  dst.term = term;
+
+  m_msigDestinations.push_back(dst);
+  m_version = cryptonote::TRANSACTION_VERSION_2;
+
   return *this;
 }
 
@@ -86,6 +103,10 @@ void TransactionBuilder::fillInputs(Transaction& tx, std::vector<cryptonote::Key
     input_to_key.keyOffsets = absolute_output_offsets_to_relative(input_to_key.keyOffsets);
     tx.vin.push_back(input_to_key);
   }
+
+  for (const auto& msrc : m_msigSources) {
+    tx.vin.push_back(msrc.input);
+  }
 }
 
 void TransactionBuilder::fillOutputs(Transaction& tx) const {
@@ -105,8 +126,31 @@ void TransactionBuilder::fillOutputs(Transaction& tx) const {
     tx.vout.push_back(out);
     output_index++;
   }
+
+  for (const auto& mdst : m_msigDestinations) {   
+    TransactionOutput out;
+    TransactionOutputMultisignature target;
+
+    target.requiredSignatures = mdst.requiredSignatures;
+    target.term = mdst.term;
+
+    for (const auto& key : mdst.keys) {
+      crypto::key_derivation derivation;
+      crypto::public_key ephemeralPublicKey;
+      crypto::generate_key_derivation(key.m_account_address.m_viewPublicKey, m_txKey.sec, derivation);
+      crypto::derive_public_key(derivation, output_index, key.m_account_address.m_spendPublicKey, ephemeralPublicKey);
+      target.keys.push_back(ephemeralPublicKey);
+    }
+    out.amount = mdst.amount;
+    out.target = target;
+    tx.vout.push_back(out);
+    output_index++;
+  }
 }
 
+void TransactionBuilder::setVersion(std::size_t version) {
+  m_version = version;
+}
 
 void TransactionBuilder::signSources(const crypto::hash& prefixHash, const std::vector<cryptonote::KeyPair>& contexts, Transaction& tx) const {
   
@@ -127,5 +171,25 @@ void TransactionBuilder::signSources(const crypto::hash& prefixHash, const std::
     sigs.resize(src_entr.outputs.size());
     generate_ring_signature(prefixHash, boost::get<TransactionInputToKey>(tx.vin[i]).keyImage, keys_ptrs, contexts[i].sec, src_entr.real_output, sigs.data());
     i++;
+  }
+
+  // sign multisignature source
+  for (const auto& msrc : m_msigSources) {
+    tx.signatures.resize(tx.signatures.size() + 1);
+    auto& outsigs = tx.signatures.back();
+
+    for (const auto& key : msrc.keys) {
+      crypto::key_derivation derivation;
+      crypto::public_key ephemeralPublicKey;
+      crypto::secret_key ephemeralSecretKey;
+
+      crypto::generate_key_derivation(msrc.srcTxPubKey, key.m_view_secret_key, derivation);
+      crypto::derive_public_key(derivation, msrc.srcOutputIndex, key.m_account_address.m_spendPublicKey, ephemeralPublicKey);
+      crypto::derive_secret_key(derivation, msrc.srcOutputIndex, key.m_spend_secret_key, ephemeralSecretKey);
+
+      crypto::signature sig;
+      crypto::generate_signature(prefixHash, ephemeralPublicKey, ephemeralSecretKey, sig);
+      outsigs.push_back(sig);
+    }
   }
 }

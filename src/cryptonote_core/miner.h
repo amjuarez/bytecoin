@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
@@ -29,14 +17,15 @@
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/difficulty.h"
 #include "cryptonote_core/i_miner_handler.h"
+#include "cryptonote_core/MinerConfig.h"
 
 namespace cryptonote {
   class miner {
   public:
     miner(const Currency& currency, i_miner_handler* phandler);
     ~miner();
-    bool init(const boost::program_options::variables_map& vm);
-    static void init_options(boost::program_options::options_description& desc);
+
+    bool init(const MinerConfig& config);
     bool set_block_template(const Block& bl, const difficulty_type& diffic);
     bool on_block_chain_update();
     bool start(const AccountPublicAddress& adr, size_t threads_count, const boost::thread::attributes& attrs);

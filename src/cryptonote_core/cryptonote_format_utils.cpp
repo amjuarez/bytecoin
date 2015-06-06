@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <set>
 
@@ -21,6 +9,7 @@
 #include "include_base_utils.h"
 #include "misc_language.h"
 
+#include "common/int-util.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "cryptonote_core/account.h"
@@ -95,34 +84,6 @@ namespace cryptonote
     for(uint64_t i = 1; i != b; i++)
       total *= a;
     return total;
-  }
-  //---------------------------------------------------------------
-  bool get_tx_fee(const Transaction& tx, uint64_t & fee)
-  {
-    uint64_t amount_in = 0;
-    uint64_t amount_out = 0;
-
-    for (const auto& in : tx.vin) {
-      if (in.type() == typeid(TransactionInputToKey)) {
-        amount_in += boost::get<TransactionInputToKey>(in).amount;
-      }
-    }
-
-    for (const auto& o : tx.vout) {
-      amount_out += o.amount;
-    }
-
-    CHECK_AND_ASSERT_MES(amount_in >= amount_out, false, "transaction spend (" <<amount_in << ") more than it has (" << amount_out << ")");
-    fee = amount_in - amount_out;
-    return true;
-  }
-  //---------------------------------------------------------------
-  uint64_t get_tx_fee(const Transaction& tx)
-  {
-    uint64_t r = 0;
-    if(!get_tx_fee(tx, r))
-      return 0;
-    return r;
   }
   //---------------------------------------------------------------
   bool parse_tx_extra(const std::vector<uint8_t>& tx_extra, std::vector<tx_extra_field>& tx_extra_fields)
@@ -202,24 +163,6 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool append_mm_tag_to_extra(std::vector<uint8_t>& tx_extra, const tx_extra_merge_mining_tag& mm_tag) {
-    blobdata blob;
-    if (!t_serializable_object_to_blob(mm_tag, blob)) {
-      return false;
-    }
-
-    tx_extra.push_back(TX_EXTRA_MERGE_MINING_TAG);
-    std::copy(reinterpret_cast<const uint8_t*>(blob.data()), reinterpret_cast<const uint8_t*>(blob.data() + blob.size()), std::back_inserter(tx_extra));
-    return true;
-  }
-  //---------------------------------------------------------------
-  bool get_mm_tag_from_extra(const std::vector<uint8_t>& tx_extra, tx_extra_merge_mining_tag& mm_tag) {
-    std::vector<tx_extra_field> tx_extra_fields;
-    parse_tx_extra(tx_extra, tx_extra_fields);
-
-    return find_tx_extra_field_by_type(tx_extra_fields, mm_tag);
-  }
-  //---------------------------------------------------------------
   void set_payment_id_to_tx_extra_nonce(blobdata& extra_nonce, const crypto::hash& payment_id)
   {
     extra_nonce.clear();
@@ -237,14 +180,64 @@ namespace cryptonote
     payment_id = *reinterpret_cast<const crypto::hash*>(extra_nonce.data() + 1);
     return true;
   }
-  //---------------------------------------------------------------
+
+  bool parsePaymentId(const std::string& paymentIdString, crypto::hash& paymentId) {
+    cryptonote::blobdata binData;
+    if (!epee::string_tools::parse_hexstr_to_binbuff(paymentIdString, binData)) {
+      return false;
+    }
+
+    if (sizeof(crypto::hash) != binData.size()) {
+      return false;
+    }
+
+    paymentId = *reinterpret_cast<const crypto::hash*>(binData.data());
+    return true;
+  }
+
+
+  bool createTxExtraWithPaymentId(const std::string& paymentIdString, std::vector<uint8_t>& extra) {
+    crypto::hash paymentIdBin;
+
+    if (!parsePaymentId(paymentIdString, paymentIdBin)) {
+      return false;
+    }
+
+    std::string extraNonce;
+    cryptonote::set_payment_id_to_tx_extra_nonce(extraNonce, paymentIdBin);
+
+    if (!cryptonote::add_extra_nonce_to_tx_extra(extra, extraNonce)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  bool getPaymentIdFromTxExtra(const std::vector<uint8_t>& extra, crypto::hash& paymentId) {
+    std::vector<tx_extra_field> tx_extra_fields;
+    if(!parse_tx_extra(extra, tx_extra_fields)) {
+      return false;
+    }
+
+    tx_extra_nonce extra_nonce;
+    if (find_tx_extra_field_by_type(tx_extra_fields, extra_nonce)) {
+      if (!get_payment_id_from_tx_extra_nonce(extra_nonce.nonce, paymentId)) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+
+    return true;
+  }
+
   bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const std::vector<tx_message_entry>& messages, const std::vector<uint8_t>& extra, uint64_t unlock_time, Transaction& tx)
   {
     tx.vin.clear();
     tx.vout.clear();
     tx.signatures.clear();
 
-    tx.version = CURRENT_TRANSACTION_VERSION;
+    tx.version = TRANSACTION_VERSION_1;
     tx.unlockTime = unlock_time;
 
     tx.extra = extra;
@@ -381,22 +374,6 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool get_inputs_money_amount(const Transaction& tx, uint64_t& money)
-  {
-    money = 0;
-
-    for (const auto& in : tx.vin) {
-      uint64_t amount = 0;
-
-      if (in.type() == typeid(TransactionInputToKey)) {
-        amount = boost::get<TransactionInputToKey>(in).amount;
-      }
-
-      money += amount;
-    }
-    return true;
-  }
-  //---------------------------------------------------------------
   uint64_t get_block_height(const Block& b)
   {
     CHECK_AND_ASSERT_MES(b.minerTx.vin.size() == 1, 0, "wrong miner tx in block: " << get_block_hash(b) << ", b.minerTx.vin.size() != 1");
@@ -406,7 +383,13 @@ namespace cryptonote
   //---------------------------------------------------------------
   bool check_inputs_types_supported(const Transaction& tx) {
     for (const auto& in : tx.vin) {
-      if (in.type() != typeid(TransactionInputToKey)) {
+      const auto& inputType = in.type();
+      if (inputType == typeid(TransactionInputMultisignature)) {
+        if (tx.version < TRANSACTION_VERSION_2) {
+          LOG_PRINT_L1("Transaction << " << get_transaction_hash(tx) << " contains multisignature inputs but its version is less than 2");
+          return false;
+        }
+      } else if (inputType != typeid(TransactionInputToKey)) {
         LOG_PRINT_L1("Transaction << " << get_transaction_hash(tx) << " contains inputs with invalid type.");
         return false;
       }
@@ -417,11 +400,30 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool check_outs_valid(const Transaction& tx) {
     for (const TransactionOutput& out : tx.vout) {
+      //assert(out.target.type() == typeid(TransactionOutputToKey) || out.target.type() == typeid(TransactionOutputMultisignature));
       if (out.target.type() == typeid(TransactionOutputToKey)) {
         CHECK_AND_NO_ASSERT_MES(0 < out.amount, false, "zero amount ouput in transaction id=" << get_transaction_hash(tx));
 
         if (!check_key(boost::get<TransactionOutputToKey>(out.target).key)) {
           return false;
+        }
+      } else if (out.target.type() == typeid(TransactionOutputMultisignature)) {
+        if (tx.version < TRANSACTION_VERSION_2) {
+          LOG_PRINT_L1("Transaction << " << get_transaction_hash(tx) << " contains multisignature output but its version is less than 2");
+          return false;
+        }
+
+        const TransactionOutputMultisignature& multisignatureOutput = ::boost::get<TransactionOutputMultisignature>(out.target);
+        if (multisignatureOutput.requiredSignatures > multisignatureOutput.keys.size()) {
+          LOG_PRINT_L1("Transaction << " << get_transaction_hash(tx) << " contains multisignature output with invalid required signature count.");
+          return false;
+        }
+
+        for (const crypto::public_key& key : multisignatureOutput.keys) {
+          if (!check_key(key)) {
+            LOG_PRINT_L1("Transaction << " << get_transaction_hash(tx) << " contains multisignature output with invalid public keys.");
+            return false;
+          }
         }
       } else {
         LOG_PRINT_L1("Transaction << " << get_transaction_hash(tx) << " contains outputs with invalid type.");
@@ -429,6 +431,20 @@ namespace cryptonote
       }
     }
 
+    return true;
+  }
+
+  //-----------------------------------------------------------------------------------------------
+  bool checkMultisignatureInputsDiff(const Transaction& tx) {
+    std::set<std::pair<uint64_t, uint32_t>> inputsUsage;
+    for (const auto& inv : tx.vin) {
+      if (inv.type() == typeid(TransactionInputMultisignature)) {
+        const TransactionInputMultisignature& in = ::boost::get<TransactionInputMultisignature>(inv);
+        if (!inputsUsage.insert(std::make_pair(in.amount, static_cast<uint32_t>(in.outputIndex))).second) {
+          return false;
+        }
+      }
+    }
     return true;
   }
 
@@ -447,6 +463,24 @@ namespace cryptonote
 
       if (in.type() == typeid(TransactionInputToKey)) {
         amount = boost::get<TransactionInputToKey>(in).amount;
+      } else if (in.type() == typeid(TransactionInputMultisignature)) {
+        amount = boost::get<TransactionInputMultisignature>(in).amount;
+        if (boost::get<TransactionInputMultisignature>(in).term != 0) {
+          uint64_t hi;
+          uint64_t lo = mul128(amount, cryptonote::parameters::DEPOSIT_MAX_TOTAL_RATE, &hi);
+          uint64_t maxInterestHi;
+          uint64_t maxInterestLo;
+          div128_32(hi, lo, 100, &maxInterestHi, &maxInterestLo);
+          if (maxInterestHi > 0) {
+            return false;
+          }
+
+          if (amount > std::numeric_limits<uint64_t>::max() - maxInterestLo) {
+            return false;
+          }
+
+          amount += maxInterestLo;
+        }
       }
 
       if (money > amount + money)
@@ -521,6 +555,7 @@ namespace cryptonote
     generate_key_derivation(tx_pub_key, acc.m_view_secret_key, derivation);
 
     for (const TransactionOutput& o : tx.vout) {
+      assert(o.target.type() == typeid(TransactionOutputToKey) || o.target.type() == typeid(TransactionOutputMultisignature));
       if (o.target.type() == typeid(TransactionOutputToKey)) {
         if (is_out_to_acc(acc, boost::get<TransactionOutputToKey>(o.target), derivation, keyIndex)) {
           outs.push_back(outputIndex);
@@ -528,7 +563,10 @@ namespace cryptonote
         }
 
         ++keyIndex;
+      } else if (o.target.type() == typeid(TransactionOutputMultisignature)) {
+        keyIndex += boost::get<TransactionOutputMultisignature>(o.target).keys.size();
       }
+
       ++outputIndex;
     }
     return true;
@@ -581,6 +619,7 @@ namespace cryptonote
     if (!get_block_hashing_blob(b, blob)) {
       return false;
     }
+
     return get_object_hash(blob, res);
   }
   //---------------------------------------------------------------
@@ -595,18 +634,16 @@ namespace cryptonote
     if (!get_block_hashing_blob(b, blob)) {
       return false;
     }
+
     return get_object_hash(blob, res);
   }
   //---------------------------------------------------------------
   bool get_block_longhash(crypto::cn_context &context, const Block& b, crypto::hash& res) {
     blobdata bd;
-    if (b.majorVersion == BLOCK_MAJOR_VERSION_1) {
-      if (!get_block_hashing_blob(b, bd)) {
-        return false;
-      }
-    } else {
+    if (!get_block_hashing_blob(b, bd)) {
       return false;
     }
+
     crypto::cn_slow_hash(context, bd.data(), bd.size(), res);
     return true;
   }
@@ -686,7 +723,7 @@ namespace cryptonote
     return get_tx_tree_hash(txs_ids);
   }
   //---------------------------------------------------------------
-  std::vector<std::string> get_messages_from_extra(const std::vector<uint8_t> &extra, const crypto::public_key &txkey, const account_keys *recipient) {
+  std::vector<std::string> get_messages_from_extra(const std::vector<uint8_t> &extra, const crypto::public_key &txkey, const crypto::secret_key *recepient_secret_key) {
     std::vector<tx_extra_field> tx_extra_fields;
     std::vector<std::string> result;
     if (!parse_tx_extra(extra, tx_extra_fields)) {
@@ -698,7 +735,7 @@ namespace cryptonote
         continue;
       }
       std::string res;
-      if (boost::get<tx_extra_message>(f).decrypt(i, txkey, recipient, res)) {
+      if (boost::get<tx_extra_message>(f).decrypt(i, txkey, recepient_secret_key, res)) {
         result.push_back(res);
       }
       ++i;

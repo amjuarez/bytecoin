@@ -1,31 +1,23 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once 
 
 #include "chaingen.h"
+
+const uint64_t UNDEF_HEIGHT = static_cast<uint64_t>(cryptonote::UpgradeDetectorBase::UNDEF_HEIGHT);
 
 class CheckBlockPurged : public test_chain_unit_base {
 public:
   CheckBlockPurged(size_t invalidBlockIdx, uint8_t blockMajorVersion) :
     m_invalidBlockIdx(invalidBlockIdx),
     m_blockMajorVersion(blockMajorVersion) {
+    assert(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_2);
 
     cryptonote::CurrencyBuilder currencyBuilder;
+    currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     m_currency = currencyBuilder.currency();
 
     REGISTER_CALLBACK("check_block_purged", CheckBlockPurged::check_block_purged);
@@ -65,8 +57,10 @@ struct CheckBlockAccepted : public test_chain_unit_base {
   CheckBlockAccepted(size_t expectedBlockchainHeight, uint8_t blockMajorVersion) :
     m_expectedBlockchainHeight(expectedBlockchainHeight),
     m_blockMajorVersion(blockMajorVersion) {
+    assert(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_2);
 
     cryptonote::CurrencyBuilder currencyBuilder;
+    currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     m_currency = currencyBuilder.currency();
 
     REGISTER_CALLBACK("check_block_accepted", CheckBlockAccepted::check_block_accepted);
@@ -293,6 +287,7 @@ struct gen_block_is_too_big : public CheckBlockPurged
   gen_block_is_too_big(uint8_t blockMajorVersion)
       : CheckBlockPurged(1, blockMajorVersion) {
     cryptonote::CurrencyBuilder currencyBuilder;
+    currencyBuilder.upgradeHeight(blockMajorVersion == cryptonote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
     m_currency = currencyBuilder.currency();
   }
@@ -321,4 +316,3 @@ private:
   const uint8_t m_blockMajorVersion;
   size_t m_corrupt_blocks_begin_idx;
 };
-

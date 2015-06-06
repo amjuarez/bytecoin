@@ -1,76 +1,67 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
-#include <unordered_map>
-
-#include <time.h>
-
 #include "IWallet.h"
+#include "ITransfersContainer.h"
+
+#include <unordered_map>
+#include <set>
+#include <time.h>
+#include <boost/functional/hash.hpp>
+
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic.h"
 
+namespace cryptonote {
+class ISerializer;
+}
+
 namespace CryptoNote {
 
-class WalletUserTransactionsCache;
+typedef std::pair<PublicKey, size_t> TransactionOutputId;
 
-struct UnconfirmedTransferDetails
-{
+struct UnconfirmedTransferDetails {
+
+  UnconfirmedTransferDetails() :
+    amount(0), sentTime(0), transactionId(INVALID_TRANSACTION_ID) {}
+
   cryptonote::Transaction tx;
-  uint64_t change;
+  uint64_t amount;
+  uint64_t outsAmount;
   time_t sentTime;
   TransactionId transactionId;
+  std::vector<TransactionOutputId> usedOutputs;
 };
 
 class WalletUnconfirmedTransactions
 {
 public:
-  template <typename Archive>
-  void save(Archive& ar, bool saveCache) const;
 
-  template<typename Archive>
-  void load(Archive& ar);
+  void serialize(cryptonote::ISerializer& s, const std::string& name);
 
-  bool findTransactionId(const crypto::hash& hash, TransactionId& id);
-  void erase(const crypto::hash& hash);
-  void add(const cryptonote::Transaction& tx, TransactionId transactionId, uint64_t change_amount);
+  bool findTransactionId(const TransactionHash& hash, TransactionId& id);
+  void erase(const TransactionHash& hash);
+  void add(const cryptonote::Transaction& tx, TransactionId transactionId, 
+    uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs);
+  void updateTransactionId(const TransactionHash& hash, TransactionId id);
 
-  uint64_t countPendingBalance() const;
-
-  //quirk. after wallet load transactions' ids may be changed, we need to resynchronize it
-  void synchronizeTransactionIds(const WalletUserTransactionsCache& transactionCache);
+  uint64_t countUnconfirmedOutsAmount() const;
+  uint64_t countUnconfirmedTransactionsAmount() const;
+  bool isUsed(const TransactionOutputInformation& out) const;
 
 private:
-  typedef std::unordered_map<crypto::hash, UnconfirmedTransferDetails> UnconfirmedTxsContainer;
+
+  void collectUsedOutputs();
+
+  typedef std::unordered_map<TransactionHash, UnconfirmedTransferDetails, boost::hash<TransactionHash>> UnconfirmedTxsContainer;
+  typedef std::set<TransactionOutputId> UsedOutputsContainer;
+
   UnconfirmedTxsContainer m_unconfirmedTxs;
+  UsedOutputsContainer m_usedOutputs;
 };
-
-template <typename Archive>
-void WalletUnconfirmedTransactions::save(Archive& ar, bool saveCache) const
-{
-  const UnconfirmedTxsContainer& unconfirmedTxs = saveCache ? m_unconfirmedTxs : UnconfirmedTxsContainer();
-  ar << unconfirmedTxs;
-}
-
-template<typename Archive>
-void WalletUnconfirmedTransactions::load(Archive& ar)
-{
-  ar >> m_unconfirmedTxs;
-}
 
 } // namespace CryptoNote

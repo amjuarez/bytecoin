@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once 
 #include "chaingen.h"
@@ -138,5 +126,40 @@ struct gen_tx_output_with_zero_amount : public get_tx_validation_base
 
 struct gen_tx_signatures_are_invalid : public get_tx_validation_base
 {
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+// MultiSignature
+
+class TestGenerator;
+
+struct MultiSigTx_OutputSignatures : public get_tx_validation_base {
+  MultiSigTx_OutputSignatures(size_t givenKeys, uint32_t requiredSignatures, bool shouldSucceed);
+  
+  bool generate(std::vector<test_event_entry>& events) const;
+  bool generate(TestGenerator& generator) const;
+
+  const size_t m_givenKeys;
+  const uint32_t m_requiredSignatures;
+  const bool m_shouldSucceed;
+  std::vector<cryptonote::account_base> m_outputAccounts;
+};
+
+struct MultiSigTx_InvalidOutputSignature : public get_tx_validation_base {
+  bool generate(std::vector<test_event_entry>& events) const;
+};
+
+
+struct MultiSigTx_Input : public MultiSigTx_OutputSignatures {
+  MultiSigTx_Input(size_t givenKeys, uint32_t requiredSignatures, uint32_t givenSignatures, bool shouldSucceed);
+  bool generate(std::vector<test_event_entry>& events) const;
+
+  const bool m_inputShouldSucceed;
+  const uint32_t m_givenSignatures;
+};
+
+
+struct MultiSigTx_BadInputSignature : public MultiSigTx_OutputSignatures {
+  MultiSigTx_BadInputSignature();
   bool generate(std::vector<test_event_entry>& events) const;
 };

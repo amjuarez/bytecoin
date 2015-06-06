@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 // node.cpp : Defines the entry point for the console application.
 //
@@ -29,6 +17,7 @@ using namespace epee;
 using namespace std;
 
 #include <boost/program_options.hpp>
+#include "cryptonote_core/CoreConfig.h"
 
 #include "common/command_line.h"
 #include "console_handler.h"
@@ -71,7 +60,9 @@ int main(int argc, char* argv[])
   po::options_description desc("Allowed options");
   // tools::get_default_data_dir() can't be called during static initialization
   command_line::add_arg(desc, command_line::arg_data_dir, tools::get_default_data_dir());
-  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> >::init_options(desc);
+
+  cryptonote::CoreConfig::initOptions(desc);
+  nodetool::NetNodeConfig::initOptions(desc);
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc, [&]()
@@ -91,20 +82,24 @@ int main(int argc, char* argv[])
   cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
   tests::proxy_core pr_core(currency);
   cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> cprotocol(pr_core, NULL);
-  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> > p2psrv(cprotocol, cryptonote::NETWORK_ID);
+  nodetool::node_server<cryptonote::t_cryptonote_protocol_handler<tests::proxy_core> > p2psrv(cprotocol);
   cprotocol.set_p2p_endpoint(&p2psrv);
   //pr_core.set_cryptonote_protocol(&cprotocol);
   //daemon_cmmands_handler dch(p2psrv);
 
   //initialize objects
+  cryptonote::CoreConfig coreConfig;
+  coreConfig.init(vm);
+  nodetool::NetNodeConfig netNodeConfig;
+  netNodeConfig.init(vm);
 
   LOG_PRINT_L0("Initializing p2p server...");
-  bool res = p2psrv.init(vm, false);
+  bool res = p2psrv.init(netNodeConfig, false);
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize p2p server.");
   LOG_PRINT_L0("P2p server initialized OK");
 
   LOG_PRINT_L0("Initializing cryptonote protocol...");
-  res = cprotocol.init(vm);
+  res = cprotocol.init();
   CHECK_AND_ASSERT_MES(res, 1, "Failed to initialize cryptonote protocol.");
   LOG_PRINT_L0("Cryptonote protocol initialized OK");
 

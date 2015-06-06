@@ -1,41 +1,35 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
-#include <boost/program_options/variables_map.hpp>
+#include <atomic>
 
+#include <boost/program_options/variables_map.hpp>
+#include <common/ObserverManager.h>
+
+// epee
 #include "storages/levin_abstract_invoke2.h"
 #include "warnings.h"
-#include "cryptonote_protocol_defs.h"
-#include "cryptonote_protocol_handler_common.h"
+
 #include "cryptonote_core/connection_context.h"
 #include "cryptonote_core/cryptonote_stat_info.h"
 #include "cryptonote_core/verification_context.h"
+#include "cryptonote_protocol/cryptonote_protocol_defs.h"
+#include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
+#include "cryptonote_protocol/ICryptonoteProtocolObserver.h"
+#include "cryptonote_protocol/ICryptonoteProtocolQuery.h"
 
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
 
-namespace cryptonote
-{
+namespace cryptonote {
 
   template<class t_core>
-  class t_cryptonote_protocol_handler:  public i_cryptonote_protocol
-  { 
+  class t_cryptonote_protocol_handler : public i_cryptonote_protocol, public ICryptonoteProtocolQuery
+  {
   public:
     typedef cryptonote_connection_context connection_context;
     typedef core_stat_info stat_info;
@@ -53,19 +47,29 @@ namespace cryptonote
       HANDLE_NOTIFY_T2(NOTIFY_RESPONSE_CHAIN_ENTRY, &cryptonote_protocol_handler::handle_response_chain_entry)
     END_INVOKE_MAP2()
 
-    bool on_idle();
-    bool init(const boost::program_options::variables_map& vm);
+    bool init();
     bool deinit();
+
+    virtual bool addObserver(ICryptonoteProtocolObserver* observer);
+    virtual bool removeObserver(ICryptonoteProtocolObserver* observer);
+
     void set_p2p_endpoint(nodetool::i_p2p_endpoint<connection_context>* p2p);
-    //bool process_handshake_data(const blobdata& data, cryptonote_connection_context& context);
-    bool process_payload_sync_data(const CORE_SYNC_DATA& hshd, cryptonote_connection_context& context, bool is_inital);
-    bool get_payload_sync_data(blobdata& data);
-    bool get_payload_sync_data(CORE_SYNC_DATA& hshd);
-    bool get_stat_info(core_stat_info& stat_inf);
-    bool on_callback(cryptonote_connection_context& context);
-    t_core& get_core(){return m_core;}
-    bool is_synchronized(){return m_synchronized;}
+    t_core& get_core() { return m_core; }
+    bool is_synchronized() const { return m_synchronized; }
     void log_connections();
+
+    // Interface t_payload_net_handler, where t_payload_net_handler is template argument of nodetool::node_server
+    void stop();
+    bool on_callback(cryptonote_connection_context& context);
+    bool on_idle();
+    void onConnectionOpened(cryptonote_connection_context& context);
+    void onConnectionClosed(cryptonote_connection_context& context);
+    bool get_stat_info(core_stat_info& stat_inf);
+    bool get_payload_sync_data(CORE_SYNC_DATA& hshd);
+    bool process_payload_sync_data(const CORE_SYNC_DATA& hshd, cryptonote_connection_context& context, bool is_inital);
+    virtual size_t getPeerCount() const;
+    virtual uint64_t getObservedHeight() const;
+
   private:
     //----------------- commands handlers ----------------------------------------------
     int handle_notify_new_block(int command, NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& context);
@@ -75,42 +79,50 @@ namespace cryptonote
     int handle_request_chain(int command, NOTIFY_REQUEST_CHAIN::request& arg, cryptonote_connection_context& context);
     int handle_response_chain_entry(int command, NOTIFY_RESPONSE_CHAIN_ENTRY::request& arg, cryptonote_connection_context& context);
 
-
-    //----------------- i_bc_protocol_layout ---------------------------------------
-    virtual bool relay_block(NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& exclude_context);
-    virtual bool relay_transactions(NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& exclude_context);
+    //----------------- i_cryptonote_protocol ----------------------------------
+    virtual void relay_block(NOTIFY_NEW_BLOCK::request& arg, cryptonote_connection_context& exclude_context) override;
+    virtual void relay_transactions(NOTIFY_NEW_TRANSACTIONS::request& arg, cryptonote_connection_context& exclude_context) override;
     //----------------------------------------------------------------------------------
-    //bool get_payload_sync_data(HANDSHAKE_DATA::request& hshd, cryptonote_connection_context& context);
+
     bool request_missing_objects(cryptonote_connection_context& context, bool check_having_blocks);
     size_t get_synchronizing_connections_count();
     bool on_connection_synchronized();
+    void updateObservedHeight(uint64_t peerHeight, const cryptonote_connection_context& context);
+    void recalculateMaxObservedHeight(const cryptonote_connection_context& context);
+
+    template<class t_parametr>
+    bool post_notify(typename t_parametr::request& arg, cryptonote_connection_context& context)
+    {
+      LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(context) << "] post " << typeid(t_parametr).name() << " -->");
+      std::string blob;
+      epee::serialization::store_t_to_binary(arg, blob);
+      return m_p2p->invoke_notify_to_peer(t_parametr::ID, blob, context);
+    }
+
+    template<class t_parametr>
+    void relay_post_notify(typename t_parametr::request& arg, cryptonote_connection_context& exlude_context)
+    {
+      LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(exlude_context) << "] post relay " << typeid(t_parametr).name() << " -->");
+      std::string arg_buff;
+      epee::serialization::store_t_to_binary(arg, arg_buff);
+      m_p2p->relay_notify_to_all(t_parametr::ID, arg_buff, exlude_context);
+    }
+
+  private:
     t_core& m_core;
 
     nodetool::p2p_endpoint_stub<connection_context> m_p2p_stub;
     nodetool::i_p2p_endpoint<connection_context>* m_p2p;
-    std::atomic<uint32_t> m_syncronized_connections_count;
     std::atomic<bool> m_synchronized;
+    std::atomic<bool> m_stop;
 
-    template<class t_parametr>
-      bool post_notify(typename t_parametr::request& arg, cryptonote_connection_context& context)
-      {
-        LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(context) << "] post " << typeid(t_parametr).name() << " -->");
-        std::string blob;
-        epee::serialization::store_t_to_binary(arg, blob);
-        return m_p2p->invoke_notify_to_peer(t_parametr::ID, blob, context);
-      }
+    mutable std::mutex m_observedHeightMutex;
+    uint64_t m_observedHeight;
 
-      template<class t_parametr>
-      bool relay_post_notify(typename t_parametr::request& arg, cryptonote_connection_context& exlude_context)
-      {
-        LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(exlude_context) << "] post relay " << typeid(t_parametr).name() << " -->");
-        std::string arg_buff;
-        epee::serialization::store_t_to_binary(arg, arg_buff);
-        return m_p2p->relay_notify_to_all(t_parametr::ID, arg_buff, exlude_context);
-      }
+    std::atomic<size_t> m_peersCount;
+    tools::ObserverManager<ICryptonoteProtocolObserver> m_observerManager;
   };
 }
-
 
 #include "cryptonote_protocol_handler.inl"
 

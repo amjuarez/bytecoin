@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "chaingen.h"
 
@@ -29,6 +17,9 @@
 #include "ring_signature_1.h"
 #include "transaction_tests.h"
 #include "tx_validation.h"
+#include "upgrade.h"
+#include "random_outs.h"
+#include "deposit.h"
 
 namespace po = boost::program_options;
 
@@ -92,8 +83,35 @@ int main(int argc, char* argv[])
   else if (command_line::get_arg(vm, arg_generate_and_play_test_data))
   {
 #define GENERATE_AND_PLAY_EX_2VER(TestCase) \
-  GENERATE_AND_PLAY_EX(TestCase(cryptonote::BLOCK_MAJOR_VERSION_1))
+  GENERATE_AND_PLAY_EX(TestCase(cryptonote::BLOCK_MAJOR_VERSION_1)) \
+  GENERATE_AND_PLAY_EX(TestCase(cryptonote::BLOCK_MAJOR_VERSION_2))
 
+    GENERATE_AND_PLAY(DepositTests::BlocksOfFirstTypeCantHaveTransactionsOfTypeTwo);
+    GENERATE_AND_PLAY(DepositTests::BlocksOfSecondTypeCanHaveTransactionsOfTypeOne);
+    GENERATE_AND_PLAY(DepositTests::BlocksOfSecondTypeCanHaveTransactionsOfTypeTwo);
+    GENERATE_AND_PLAY(DepositTests::TransactionOfTypeOneWithDepositInputIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionOfTypeOneWithDepositOutputIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithAmountLowerThenMinIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithMinAmountIsAccepted);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithTermLowerThenMinIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithMinTermIsAccepted);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithTermGreaterThenMaxIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithMaxTermIsAccepted);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithoutSignaturesIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithZeroRequiredSignaturesIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithNumberOfRequiredSignaturesGreaterThanKeysIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithInvalidKeyIsRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithOutputToSpentInputWillBeRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithMultipleInputsThatSpendOneOutputWillBeRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithInputWithAmountThatIsDoesntHaveOutputWithSameAmountWillBeRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithInputWithIndexLargerThanNumberOfOutputsWithThisSumWillBeRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithInputThatPointsToTheOutputButHasAnotherTermWillBeRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionThatTriesToSpendOutputWhosTermHasntFinishedWillBeRejected);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithAmountThatHasAlreadyFinishedWillBeAccepted);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositExtendsEmission);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositRestorsEmissionOnAlternativeChain);
+
+    
     GENERATE_AND_PLAY(gen_simple_chain_001);
     GENERATE_AND_PLAY(gen_simple_chain_split_1);
     GENERATE_AND_PLAY(one_block);
@@ -104,7 +122,9 @@ int main(int argc, char* argv[])
 
     // Block verification tests
     GENERATE_AND_PLAY_EX_2VER(TestBlockMajorVersionAccepted);
-    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(cryptonote::BLOCK_MAJOR_VERSION_1, cryptonote::BLOCK_MAJOR_VERSION_1 + 1));
+    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(cryptonote::BLOCK_MAJOR_VERSION_1, cryptonote::BLOCK_MAJOR_VERSION_2));
+    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(cryptonote::BLOCK_MAJOR_VERSION_2, cryptonote::BLOCK_MAJOR_VERSION_1));
+    GENERATE_AND_PLAY_EX(TestBlockMajorVersionRejected(cryptonote::BLOCK_MAJOR_VERSION_2, cryptonote::BLOCK_MAJOR_VERSION_2 + 1));
     GENERATE_AND_PLAY_EX_2VER(TestBlockBigMinorVersion);
     GENERATE_AND_PLAY_EX_2VER(gen_block_ts_not_checked);
     GENERATE_AND_PLAY_EX_2VER(gen_block_ts_in_past);
@@ -149,6 +169,26 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_tx_output_with_zero_amount);
     GENERATE_AND_PLAY(gen_tx_signatures_are_invalid);
 
+    // multisignature output
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 1, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(2, 2, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(3, 2, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(0, 0, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 0, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(0, 1, false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 2, false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(2, 3, false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_InvalidOutputSignature());
+
+    // multisignature input
+    GENERATE_AND_PLAY_EX(MultiSigTx_Input(1, 1, 1, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_Input(2, 1, 1, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_Input(3, 2, 2, true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_Input(1, 1, 0, false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_Input(2, 2, 1, false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_Input(3, 2, 1, false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_BadInputSignature());
+
     // Double spend
     GENERATE_AND_PLAY(gen_double_spend_in_tx<false>);
     GENERATE_AND_PLAY(gen_double_spend_in_tx<true>);
@@ -162,10 +202,24 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_double_spend_in_alt_chain_in_different_blocks<false>);
     GENERATE_AND_PLAY(gen_double_spend_in_alt_chain_in_different_blocks<true>);
 
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendInTx(false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendInTx(true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendSameBlock(false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendSameBlock(true));   
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendDifferentBlocks(false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendDifferentBlocks(true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendAltChainSameBlock(false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendAltChainSameBlock(true));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendAltChainDifferentBlocks(false));
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendAltChainDifferentBlocks(true));
+
     GENERATE_AND_PLAY(gen_uint_overflow_1);
     GENERATE_AND_PLAY(gen_uint_overflow_2);
 
     GENERATE_AND_PLAY(gen_block_reward);
+    GENERATE_AND_PLAY(gen_upgrade);
+    GENERATE_AND_PLAY(GetRandomOutputs);
+   
 
     std::cout << (failed_tests.empty() ? concolor::green : concolor::magenta);
     std::cout << "\nREPORT:\n";

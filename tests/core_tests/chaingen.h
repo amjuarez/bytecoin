@@ -1,24 +1,13 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
 #include <boost/program_options.hpp>
 #include <boost/serialization/variant.hpp>
+#include "cryptonote_core/CoreConfig.h"
 
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
@@ -390,7 +379,7 @@ template<class t_test_class>
 inline bool do_replay_events(std::vector<test_event_entry>& events, t_test_class& validator)
 {
   boost::program_options::options_description desc("Allowed options");
-  cryptonote::core::init_options(desc);
+  cryptonote::CoreConfig::initOptions(desc);
   command_line::add_arg(desc, command_line::arg_data_dir);
   boost::program_options::variables_map vm;
   bool r = command_line::handle_error_helper(desc, [&]()
@@ -402,9 +391,13 @@ inline bool do_replay_events(std::vector<test_event_entry>& events, t_test_class
   if (!r)
     return false;
 
+  cryptonote::CoreConfig coreConfig;
+  coreConfig.init(vm);
+  cryptonote::MinerConfig emptyMinerConfig;
+
   cryptonote::cryptonote_protocol_stub pr; //TODO: stub only for this kind of test, make real validation of relayed objects
   cryptonote::core c(validator.currency(), &pr);
-  if (!c.init(vm, false))
+  if (!c.init(coreConfig, emptyMinerConfig, false))
   {
     std::cout << concolor::magenta << "Failed to init core" << concolor::normal << std::endl;
     return false;
@@ -612,9 +605,21 @@ bool GenerateAndPlay(const char* testname, GenClassT&& g) {
     }                                                                                                      \
   }
 
+template<uint64_t N>
+struct Pow10 {
+  static const uint64_t value = 10 * Pow10<N - 1>::value;
+};
+
+template<>
+struct Pow10<0> {
+  static const uint64_t value = 1;
+};
+
+const uint64_t COIN = Pow10<cryptonote::parameters::CRYPTONOTE_DISPLAY_DECIMAL_POINT>::value;
+
 #define QUOTEME(x) #x
 #define DEFINE_TESTS_ERROR_CONTEXT(text) const char* perr_context = text;
 #define CHECK_TEST_CONDITION(cond) CHECK_AND_ASSERT_MES(cond, false, "[" << perr_context << "] failed: \"" << QUOTEME(cond) << "\"")
 #define CHECK_EQ(v1, v2) CHECK_AND_ASSERT_MES(v1 == v2, false, "[" << perr_context << "] failed: \"" << QUOTEME(v1) << " == " << QUOTEME(v2) << "\", " << v1 << " != " << v2)
 #define CHECK_NOT_EQ(v1, v2) CHECK_AND_ASSERT_MES(!(v1 == v2), false, "[" << perr_context << "] failed: \"" << QUOTEME(v1) << " != " << QUOTEME(v2) << "\", " << v1 << " == " << v2)
-#define MK_COINS(amount) (UINT64_C(amount) * cryptonote::parameters::COIN)
+#define MK_COINS(amount) (UINT64_C(amount) * COIN)

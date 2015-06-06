@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
@@ -28,8 +16,8 @@ namespace boost
 {
   namespace serialization
   {
-    template <class Archive, class h_key, class hval>
-    inline void save(Archive &a, const std::unordered_map<h_key, hval> &x, const boost::serialization::version_type ver)
+    template <class Archive, class h_key, class hval, class hfunc>
+    inline void save(Archive &a, const std::unordered_map<h_key, hval, hfunc> &x, const boost::serialization::version_type ver)
     {
       size_t s = x.size();
       a << s;
@@ -40,8 +28,8 @@ namespace boost
       }
     }
 
-    template <class Archive, class h_key, class hval>
-    inline void load(Archive &a, std::unordered_map<h_key, hval> &x, const boost::serialization::version_type ver)
+    template <class Archive, class h_key, class hval, class hfunc>
+    inline void load(Archive &a, std::unordered_map<h_key, hval, hfunc> &x, const boost::serialization::version_type ver)
     {
       x.clear();
       size_t s = 0;
@@ -128,6 +116,7 @@ namespace boost
       x.clear();
       size_t s = 0;
       a >> s;
+      x.resize(s);
       for(size_t i = 0; i != s; i++)
       {
         hval v;
@@ -160,6 +149,7 @@ namespace boost
       x.clear();
       size_t s = 0;
       a >> s;
+      x.resize(s);
       for(size_t i = 0; i != s; i++)
       {
         h_key k;
@@ -176,8 +166,8 @@ namespace boost
       split_free(a, x, ver);
     }
 
-    template <class Archive, class h_key, class hval>
-    inline void serialize(Archive &a, std::unordered_map<h_key, hval> &x, const boost::serialization::version_type ver)
+    template <class Archive, class h_key, class hval, class hfunc>
+    inline void serialize(Archive &a, std::unordered_map<h_key, hval, hfunc> &x, const boost::serialization::version_type ver)
     {
       split_free(a, x, ver);
     }

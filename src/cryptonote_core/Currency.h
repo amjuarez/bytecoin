@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
@@ -31,7 +19,6 @@
 
 namespace cryptonote
 {
-
   class Currency {
   public:
     uint64_t maxBlockHeight() const { return m_maxBlockHeight; }
@@ -61,6 +48,12 @@ namespace cryptonote
     size_t difficultyCut() const { return m_difficultyCut; }
     size_t difficultyBlocksCount() const { return m_difficultyWindow + m_difficultyLag; }
 
+    uint64_t depositMinAmount() const { return m_depositMinAmount; }
+    uint32_t depositMinTerm() const { return m_depositMinTerm; }
+    uint32_t depositMaxTerm() const { return m_depositMaxTerm; }
+    uint64_t depositMinTotalRateFactor() const { return m_depositMinTotalRateFactor; }
+    uint64_t depositMaxTotalRate() const { return m_depositMaxTotalRate; }
+
     size_t maxBlockSizeInitial() const { return m_maxBlockSizeInitial; }
     uint64_t maxBlockSizeGrowthSpeedNumerator() const { return m_maxBlockSizeGrowthSpeedNumerator; }
     uint64_t maxBlockSizeGrowthSpeedDenominator() const { return m_maxBlockSizeGrowthSpeedDenominator; }
@@ -70,6 +63,14 @@ namespace cryptonote
 
     uint64_t mempoolTxLiveTime() const { return m_mempoolTxLiveTime; }
     uint64_t mempoolTxFromAltBlockLiveTime() const { return m_mempoolTxFromAltBlockLiveTime; }
+
+    uint64_t upgradeHeight() const { return m_upgradeHeight; }
+    unsigned int upgradeVotingThreshold() const { return m_upgradeVotingThreshold; }
+    size_t upgradeVotingWindow() const { return m_upgradeVotingWindow; }
+    size_t upgradeWindow() const { return m_upgradeWindow; }
+    size_t minNumberVotingBlocks() const { return (m_upgradeVotingWindow * m_upgradeVotingThreshold + 99) / 100; }
+    uint64_t maxUpgradeDistance() const { return static_cast<uint64_t>(m_upgradeWindow); }
+    uint64_t calculateUpgradeHeight(uint64_t voteCompleteHeight) const { return voteCompleteHeight + m_upgradeWindow; }
 
     const std::string& blocksFileName() const { return m_blocksFileName; }
     const std::string& blocksCacheFileName() const { return m_blocksCacheFileName; }
@@ -81,8 +82,14 @@ namespace cryptonote
     const Block& genesisBlock() const { return m_genesisBlock; }
     const crypto::hash& genesisBlockHash() const { return m_genesisBlockHash; }
 
-    bool getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, 
-      uint64_t fee, uint64_t height, uint64_t& reward, int64_t& emissionChange) const;
+    bool getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee, uint64_t height,
+                        uint64_t& reward, int64_t& emissionChange) const;
+    uint64_t calculateInterest(uint64_t amount, uint32_t term) const;
+    uint64_t calculateTotalTransactionInterest(const Transaction& tx) const;
+    uint64_t getTransactionInputAmount(const TransactionInput& in) const;
+    uint64_t getTransactionAllInputsAmount(const Transaction& tx) const;
+    bool getTransactionFee(const Transaction& tx, uint64_t & fee) const;
+    uint64_t getTransactionFee(const Transaction& tx) const;
     size_t maxBlockCumulativeSize(uint64_t height) const;
 
     bool constructMinerTx(size_t height, size_t medianSize, uint64_t alreadyGeneratedCoins, size_t currentBlockSize,
@@ -134,6 +141,12 @@ namespace cryptonote
     size_t m_difficultyLag;
     size_t m_difficultyCut;
 
+    uint64_t m_depositMinAmount;
+    uint32_t m_depositMinTerm;
+    uint32_t m_depositMaxTerm;
+    uint64_t m_depositMinTotalRateFactor;
+    uint64_t m_depositMaxTotalRate;
+
     size_t m_maxBlockSizeInitial;
     uint64_t m_maxBlockSizeGrowthSpeedNumerator;
     uint64_t m_maxBlockSizeGrowthSpeedDenominator;
@@ -143,6 +156,11 @@ namespace cryptonote
 
     uint64_t m_mempoolTxLiveTime;
     uint64_t m_mempoolTxFromAltBlockLiveTime;
+
+    uint64_t m_upgradeHeight;
+    unsigned int m_upgradeVotingThreshold;
+    size_t m_upgradeVotingWindow;
+    size_t m_upgradeWindow;
 
     std::string m_blocksFileName;
     std::string m_blocksCacheFileName;
@@ -167,6 +185,8 @@ namespace cryptonote
       }
       return m_currency;
     }
+
+    Transaction generateGenesisTransaction();
 
     CurrencyBuilder& maxBlockNumber(uint64_t val) { m_currency.m_maxBlockHeight = val; return *this; }
     CurrencyBuilder& maxBlockBlobSize(size_t val) { m_currency.m_maxBlockBlobSize = val; return *this; }
@@ -193,6 +213,12 @@ namespace cryptonote
     CurrencyBuilder& difficultyLag(size_t val) { m_currency.m_difficultyLag = val; return *this; }
     CurrencyBuilder& difficultyCut(size_t val) { m_currency.m_difficultyCut = val; return *this; }
 
+    CurrencyBuilder& depositMinAmount(uint64_t val) { m_currency.m_depositMinAmount = val; return *this; }
+    CurrencyBuilder& depositMinTerm(uint32_t val) { m_currency.m_depositMinTerm = val; return *this; }
+    CurrencyBuilder& depositMaxTerm(uint32_t val) { m_currency.m_depositMaxTerm = val; return *this; }
+    CurrencyBuilder& depositMinTotalRateFactor(uint64_t val) { m_currency.m_depositMinTotalRateFactor = val; return *this; }
+    CurrencyBuilder& depositMaxTotalRate(uint64_t val) { m_currency.m_depositMaxTotalRate = val; return *this; }
+
     CurrencyBuilder& maxBlockSizeInitial(size_t val) { m_currency.m_maxBlockSizeInitial = val; return *this; }
     CurrencyBuilder& maxBlockSizeGrowthSpeedNumerator(uint64_t val) { m_currency.m_maxBlockSizeGrowthSpeedNumerator = val; return *this; }
     CurrencyBuilder& maxBlockSizeGrowthSpeedDenominator(uint64_t val) { m_currency.m_maxBlockSizeGrowthSpeedDenominator = val; return *this; }
@@ -202,6 +228,11 @@ namespace cryptonote
 
     CurrencyBuilder& mempoolTxLiveTime(uint64_t val) { m_currency.m_mempoolTxLiveTime = val; return *this; }
     CurrencyBuilder& mempoolTxFromAltBlockLiveTime(uint64_t val) { m_currency.m_mempoolTxFromAltBlockLiveTime = val; return *this; }
+
+    CurrencyBuilder& upgradeHeight(uint64_t val) { m_currency.m_upgradeHeight = val; return *this; }
+    CurrencyBuilder& upgradeVotingThreshold(unsigned int val);
+    CurrencyBuilder& upgradeVotingWindow(size_t val) { m_currency.m_upgradeVotingWindow = val; return *this; }
+    CurrencyBuilder& upgradeWindow(size_t val);
 
     CurrencyBuilder& blocksFileName(const std::string& val) { m_currency.m_blocksFileName = val; return *this; }
     CurrencyBuilder& blocksCacheFileName(const std::string& val) { m_currency.m_blocksCacheFileName = val; return *this; }

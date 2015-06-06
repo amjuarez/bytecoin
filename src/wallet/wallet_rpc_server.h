@@ -1,43 +1,35 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma  once
 
+#include <future>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include "net/http_server_impl_base.h"
 #include "wallet_rpc_server_commans_defs.h"
-#include "wallet2.h"
+#include "Wallet.h"
 #include "common/command_line.h"
 namespace tools
 {
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  class wallet_rpc_server: public epee::http_server_impl_base<wallet_rpc_server>
+  class wallet_rpc_server: public epee::http_server_impl_base<wallet_rpc_server>, public CryptoNote::IWalletObserver
   {
   public:
     typedef epee::net_utils::connection_context_base connection_context;
 
-    wallet_rpc_server(wallet2& cr);
+    wallet_rpc_server(CryptoNote::IWallet &w, CryptoNote::INode &n, cryptonote::Currency& currency, const std::string& walletFilename);
 
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_port;
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_ip;
 
+    //---------------- IWalletObserver -------------------------
+    virtual void saveCompleted(std::error_code result) override;
+    //----------------------------------------------------------
 
     static void init_options(boost::program_options::options_description& desc);
     bool init(const boost::program_options::variables_map& vm);
@@ -69,8 +61,13 @@ namespace tools
 
       bool handle_command_line(const boost::program_options::variables_map& vm);
 
-      wallet2& m_wallet;
+      CryptoNote::IWallet& m_wallet;
+      CryptoNote::INode& m_node;
       std::string m_port;
       std::string m_bind_ip;
+      cryptonote::Currency& m_currency;
+      const std::string m_walletFilename;
+
+      std::unique_ptr<std::promise<std::error_code>> m_saveResultPromise;
   };
 }

@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "NodeRpcProxy.h"
 
@@ -47,7 +35,8 @@ NodeRpcProxy::NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort)
   : m_nodeAddress("http://" + nodeHost + ":" + std::to_string(nodePort))
   , m_rpcTimeout(10000)
   , m_pullTimer(m_ioService)
-  , m_pullInterval(10000) {
+  , m_pullInterval(10000)
+  , m_lastLocalBlockTimestamp(0) {
   resetInternalState();
 }
 
@@ -57,8 +46,6 @@ NodeRpcProxy::~NodeRpcProxy() {
 
 void NodeRpcProxy::resetInternalState() {
   m_ioService.reset();
-  m_observerManager.clear();
-
   m_peerCount = 0;
   m_nodeHeight = 0;
   m_networkHeight = 0;
@@ -83,9 +70,11 @@ bool NodeRpcProxy::shutdown() {
   boost::system::error_code ignored_ec;
   m_pullTimer.cancel(ignored_ec);
   m_ioService.stop();
-  m_workerThread.join();
+  if (m_workerThread.joinable()) {
+    m_workerThread.join();
+    m_initState.endShutdown();
+  }
 
-  m_initState.endShutdown();
   return true;
 }
 
@@ -129,6 +118,7 @@ void NodeRpcProxy::updateNodeStatus() {
     if (blockHash != m_lastKnowHash) {
       m_lastKnowHash = blockHash;
       m_nodeHeight = rsp.block_header.height;
+      m_lastLocalBlockTimestamp = rsp.block_header.timestamp;
       // TODO request and update network height
       m_networkHeight = m_nodeHeight;
       m_observerManager.notify(&INodeObserver::lastKnownBlockHeightUpdated, m_networkHeight);
@@ -181,6 +171,10 @@ uint64_t NodeRpcProxy::getLastKnownBlockHeight() const {
   return m_networkHeight;
 }
 
+uint64_t NodeRpcProxy::getLastLocalBlockTimestamp() const {
+  return m_lastLocalBlockTimestamp;
+}
+
 void NodeRpcProxy::relayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
   if (!m_initState.initialized()) {
     callback(make_error_code(error::NOT_INITIALIZED));
@@ -216,6 +210,15 @@ void NodeRpcProxy::getTransactionOutsGlobalIndices(const crypto::hash& transacti
   }
 
   m_ioService.post(std::bind(&NodeRpcProxy::doGetTransactionOutsGlobalIndices, this, transactionHash, std::ref(outsGlobalIndices), callback));
+}
+
+void NodeRpcProxy::queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
+  if (!m_initState.initialized()) {
+    callback(make_error_code(error::NOT_INITIALIZED));
+    return;
+  }
+
+  m_ioService.post(std::bind(&NodeRpcProxy::doQueryBlocks, this, std::move(knownBlockIds), timestamp, std::ref(newBlocks), std::ref(startHeight), callback));
 }
 
 void NodeRpcProxy::doRelayTransaction(const cryptonote::Transaction& transaction, const Callback& callback) {
@@ -264,5 +267,37 @@ void NodeRpcProxy::doGetTransactionOutsGlobalIndices(const crypto::hash& transac
   }
   callback(ec);
 }
+
+void NodeRpcProxy::doQueryBlocks(const std::list<crypto::hash>& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) {
+  cryptonote::COMMAND_RPC_QUERY_BLOCKS::request req = AUTO_VAL_INIT(req);
+  cryptonote::COMMAND_RPC_QUERY_BLOCKS::response rsp = AUTO_VAL_INIT(rsp);
+  
+  req.block_ids = knownBlockIds;
+  req.timestamp = timestamp;
+
+  bool r = epee::net_utils::invoke_http_bin_remote_command2(m_nodeAddress + "/queryblocks.bin", req, rsp, m_httpClient, m_rpcTimeout);
+
+  std::error_code ec = interpretJsonRpcResponse(r, rsp.status);
+  
+  if (!ec) {
+    for (auto& item : rsp.items) {
+      BlockCompleteEntry entry;
+
+      entry.blockHash = item.block_id;
+      entry.block = std::move(item.block);
+      entry.txs = std::move(item.txs);
+
+      newBlocks.push_back(std::move(entry));
+    }
+
+    startHeight = rsp.start_height;
+  }
+  callback(ec);
+}
+
+void NodeRpcProxy::getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<cryptonote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) { 
+  is_bc_actual = true;
+  callback(std::error_code()); 
+};
 
 }

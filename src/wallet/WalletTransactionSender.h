@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
@@ -23,27 +11,28 @@
 #include "INode.h"
 #include "WalletSendTransactionContext.h"
 #include "WalletUserTransactionsCache.h"
-#include "WalletTransferDetails.h"
 #include "WalletUnconfirmedTransactions.h"
 #include "WalletRequest.h"
+
+#include "ITransfersContainer.h"
 
 namespace CryptoNote {
 
 class WalletTransactionSender
 {
 public:
-  WalletTransactionSender(const cryptonote::Currency& currency, WalletUserTransactionsCache& transactionsCache,
-      WalletTxSendingState& sendingTxsStates, WalletTransferDetails& transferDetails, WalletUnconfirmedTransactions& unconfirmedTransactions);
+  WalletTransactionSender(const cryptonote::Currency& currency, WalletUserTransactionsCache& transactionsCache, cryptonote::account_keys keys, ITransfersContainer& transfersContainer);
 
-  void init(cryptonote::account_keys keys);
+  void init(cryptonote::account_keys keys, ITransfersContainer& transfersContainer);
   void stop();
 
-  std::shared_ptr<WalletRequest> makeSendRequest(TransactionId& transactionId, std::deque<std::shared_ptr<WalletEvent> >& events, const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
+  std::shared_ptr<WalletRequest> makeSendRequest(TransactionId& transactionId, std::deque<std::shared_ptr<WalletEvent> >& events, const std::vector<Transfer>& transfers,
+      uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
 
 private:
   std::shared_ptr<WalletRequest> makeGetRandomOutsRequest(std::shared_ptr<SendTransactionContext> context);
   std::shared_ptr<WalletRequest> doSendTransaction(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events);
-  void prepareInputs(const std::list<crypto::key_image>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
+  void prepareInputs(const std::list<TransactionOutputInformation>& selectedTransfers, std::vector<cryptonote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& outs,
       std::vector<cryptonote::tx_source_entry>& sources, uint64_t mixIn);
   void splitDestinations(TransferId firstTransferId, size_t transfersCount, const cryptonote::tx_destination_entry& changeDts,
       const TxDustPolicy& dustPolicy, std::vector<cryptonote::tx_destination_entry>& splittedDests);
@@ -54,23 +43,19 @@ private:
   void relayTransactionCallback(std::shared_ptr<SendTransactionContext> context, std::deque<std::shared_ptr<WalletEvent> >& events,
                                 boost::optional<std::shared_ptr<WalletRequest> >& nextRequest, std::error_code ec);
   void notifyBalanceChanged(std::deque<std::shared_ptr<WalletEvent> >& events);
-  void markOutputsSpent(const std::list<crypto::key_image>& selectedTransfers);
-  void makeOutputsNotSpent(const std::list<crypto::key_image>& selectedTransfers);
+
   void validateTransfersAddresses(const std::vector<Transfer>& transfers);
   bool validateDestinationAddress(const std::string& address);
+
+  uint64_t selectTransfersToSend(uint64_t neededMoney, bool addDust, uint64_t dust, std::list<TransactionOutputInformation>& selectedTransfers);
 
   const cryptonote::Currency& m_currency;
   cryptonote::account_keys m_keys;
   WalletUserTransactionsCache& m_transactionsCache;
-  WalletTxSendingState& m_sendingTxsStates;
-  WalletTransferDetails& m_transferDetails;
-  WalletUnconfirmedTransactions& m_unconfirmedTransactions;
   uint64_t m_upperTransactionSizeLimit;
 
-  bool m_isInitialized;
   bool m_isStoping;
-
-  void removeUnconfirmedTx(TransactionId txId);
+  ITransfersContainer& m_transferDetails;
 };
 
 } /* namespace CryptoNote */

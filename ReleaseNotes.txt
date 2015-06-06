@@ -1,3 +1,16 @@
+Release notes 2.0.0-beta
+
+- DigitalNote
+- Multisignatures with API
+- Deposits based on multisignatures
+
+- Low level API
+- High level API improvements
+- Instant transaction pool notifications
+- Refactored simplewallet
+- Optimization in daemon RAM consumption
+- Minor network health updates
+
 Release notes 1.0.2
 
 - JSON RPC for encrypted messages

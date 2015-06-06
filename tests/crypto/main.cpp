@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <cstddef>
 #include <cstring>
@@ -153,6 +141,20 @@ int main(int argc, char *argv[]) {
       get(input, derivation, output_index, base, expected);
       derive_secret_key(derivation, output_index, base, actual);
       if (expected != actual) {
+        goto error;
+      }
+    } else if (cmd == "underive_public_key") {
+      key_derivation derivation;
+      size_t output_index;
+      public_key derived_key;
+      bool expected1, actual1;
+      public_key expected2, actual2;
+      get(input, derivation, output_index, derived_key, expected1);
+      if (expected1) {
+        get(input, expected2);
+      }
+      actual1 = underive_public_key(derivation, output_index, derived_key, actual2);
+      if (expected1 != actual1 || (expected1 && expected2 != actual2)) {
         goto error;
       }
     } else if (cmd == "generate_signature") {

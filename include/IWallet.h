@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
@@ -30,6 +18,7 @@ namespace CryptoNote {
 
 typedef size_t TransactionId;
 typedef size_t TransferId;
+typedef size_t DepositId;
 typedef std::array<uint8_t, 32> TransactionHash;
 
 struct Transfer {
@@ -39,7 +28,17 @@ struct Transfer {
 
 const TransactionId INVALID_TRANSACTION_ID    = std::numeric_limits<TransactionId>::max();
 const TransferId INVALID_TRANSFER_ID          = std::numeric_limits<TransferId>::max();
+const DepositId INVALID_DEPOSIT_ID            = std::numeric_limits<DepositId>::max();
 const uint64_t UNCONFIRMED_TRANSACTION_HEIGHT = std::numeric_limits<uint64_t>::max();
+
+enum class TransactionState : uint8_t {
+  Active,    // --> {Deleted}
+  Deleted,   // --> {Active}
+
+  Sending,   // --> {Active, Cancelled, Failed}
+  Cancelled, // --> {}
+  Failed     // --> {}
+};
 
 struct TransactionMessage
 {
@@ -48,33 +47,49 @@ struct TransactionMessage
 };
 
 struct TransactionInfo {
-  TransferId      firstTransferId;
-  size_t          transferCount;
-  int64_t         totalAmount;
-  uint64_t        fee;
-  TransactionHash hash;
-  bool            isCoinbase;
-  uint64_t        blockHeight;
-  uint64_t        timestamp;
-  std::string     extra;
+  TransferId       firstTransferId;
+  size_t           transferCount;
+  DepositId        firstDepositId;
+  size_t           depositCount;
+  int64_t          totalAmount;
+  uint64_t         fee;
+  uint64_t         sentTime;
+  uint64_t         unlockTime;
+  TransactionHash  hash;
+  bool             isCoinbase;
+  uint64_t         blockHeight;
+  uint64_t         timestamp;
+  std::string      extra;
+  TransactionState state;
   std::vector<std::string> messages;
 };
 
-typedef std::array<uint8_t, 32> PublicKey;
-typedef std::array<uint8_t, 32> SecretKey;
+struct Deposit {
+  TransactionId creatingTransactionId;
+  TransactionId spendingTransactionId;
+  uint32_t term;
+  uint64_t amount;
+  uint64_t interest;
+};
 
-struct AccountKeys {
-  PublicKey viewPublicKey;
-  SecretKey viewSecretKey;
-  PublicKey spendPublicKey;
-  SecretKey spendSecretKey;
+typedef std::array<uint8_t, 32> WalletPublicKey;
+typedef std::array<uint8_t, 32> WalletSecretKey;
+
+struct WalletAccountKeys {
+  WalletPublicKey viewPublicKey;
+  WalletSecretKey viewSecretKey;
+  WalletPublicKey spendPublicKey;
+  WalletSecretKey spendSecretKey;
 };
 
 class IWalletObserver {
 public:
+  virtual ~IWalletObserver() {}
+
   virtual void initCompleted(std::error_code result) {}
   virtual void saveCompleted(std::error_code result) {}
-  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total, std::error_code result) {}
+  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total) {}
+  virtual void synchronizationCompleted(std::error_code result) {}
   virtual void actualBalanceUpdated(uint64_t actualBalance) {}
   virtual void pendingBalanceUpdated(uint64_t pendingBalance) {}
   virtual void externalTransactionCreated(TransactionId transactionId) {}
@@ -90,8 +105,9 @@ public:
 
   virtual void initAndGenerate(const std::string& password) = 0;
   virtual void initAndLoad(std::istream& source, const std::string& password) = 0;
-  virtual void initWithKeys(const AccountKeys& accountKeys, const std::string& password) = 0;
+  virtual void initWithKeys(const WalletAccountKeys& accountKeys, const std::string& password) = 0;
   virtual void shutdown() = 0;
+  virtual void reset() = 0;
 
   virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true) = 0;
 
@@ -114,7 +130,7 @@ public:
   virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) = 0;
   virtual std::error_code cancelTransaction(size_t transferId) = 0;
 
-  virtual void getAccountKeys(AccountKeys& keys) = 0;
+  virtual void getAccountKeys(WalletAccountKeys& keys) = 0;
 };
 
 }

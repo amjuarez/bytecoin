@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
@@ -66,7 +54,7 @@ namespace cryptonote
   };
 
   //---------------------------------------------------------------
-  bool construct_tx(const account_keys &sender_account_keys, const std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry> &destinations, const std::vector<tx_message_entry> &messages, const std::vector<uint8_t>& extra, uint64_t unlock_time, Transaction &tx);
+  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const std::vector<tx_message_entry>& messages, const std::vector<uint8_t>& extra, uint64_t unlock_time, Transaction& tx);
 
   inline bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, std::vector<uint8_t> extra, Transaction& tx, uint64_t unlock_time) {
     return construct_tx(sender_account_keys, sources, destinations, std::vector<tx_message_entry>(), extra, unlock_time, tx);
@@ -90,18 +78,18 @@ namespace cryptonote
   bool add_extra_nonce_to_tx_extra(std::vector<uint8_t>& tx_extra, const blobdata& extra_nonce);
   void set_payment_id_to_tx_extra_nonce(blobdata& extra_nonce, const crypto::hash& payment_id);
   bool get_payment_id_from_tx_extra_nonce(const blobdata& extra_nonce, crypto::hash& payment_id);
-  bool append_mm_tag_to_extra(std::vector<uint8_t>& tx_extra, const tx_extra_merge_mining_tag& mm_tag);
-  bool get_mm_tag_from_extra(const std::vector<uint8_t>& tx_extra, tx_extra_merge_mining_tag& mm_tag);
   bool is_out_to_acc(const account_keys& acc, const TransactionOutputToKey& out_key, const crypto::public_key& tx_pub_key, size_t keyIndex);
   bool is_out_to_acc(const account_keys& acc, const TransactionOutputToKey& out_key, const crypto::key_derivation& derivation, size_t keyIndex);
   bool lookup_acc_outs(const account_keys& acc, const Transaction& tx, const crypto::public_key& tx_pub_key, std::vector<size_t>& outs, uint64_t& money_transfered);
   bool lookup_acc_outs(const account_keys& acc, const Transaction& tx, std::vector<size_t>& outs, uint64_t& money_transfered);
-  bool get_tx_fee(const Transaction& tx, uint64_t & fee);
-  uint64_t get_tx_fee(const Transaction& tx);
   bool generate_key_image_helper(const account_keys& ack, const crypto::public_key& tx_public_key, size_t real_output_index, KeyPair& in_ephemeral, crypto::key_image& ki);
   void get_blob_hash(const blobdata& blob, crypto::hash& res);
   crypto::hash get_blob_hash(const blobdata& blob);
   std::string short_hash_str(const crypto::hash& h);
+  bool createTxExtraWithPaymentId(const std::string& paymentIdString, std::vector<uint8_t>& extra);
+  //returns false if payment id is not found or parse error
+  bool getPaymentIdFromTxExtra(const std::vector<uint8_t>& extra, crypto::hash& paymentId);
+  bool parsePaymentId(const std::string& paymentIdString, crypto::hash& paymentId);
 
   crypto::hash get_transaction_hash(const Transaction& t);
   bool get_transaction_hash(const Transaction& t, crypto::hash& res);
@@ -112,10 +100,11 @@ namespace cryptonote
   crypto::hash get_block_hash(const Block& b);
   bool get_block_longhash(crypto::cn_context &context, const Block& b, crypto::hash& res);
   bool parse_and_validate_block_from_blob(const blobdata& b_blob, Block& b);
-  bool get_inputs_money_amount(const Transaction& tx, uint64_t& money);
   uint64_t get_outs_money_amount(const Transaction& tx);
   bool check_inputs_types_supported(const Transaction& tx);
   bool check_outs_valid(const Transaction& tx);
+  bool checkMultisignatureInputsDiff(const Transaction& tx);
+
   bool check_money_overflow(const Transaction& tx);
   bool check_outs_overflow(const Transaction& tx);
   bool check_inputs_overflow(const Transaction& tx);
@@ -234,7 +223,7 @@ namespace cryptonote
   void get_tx_tree_hash(const std::vector<crypto::hash>& tx_hashes, crypto::hash& h);
   crypto::hash get_tx_tree_hash(const std::vector<crypto::hash>& tx_hashes);
   crypto::hash get_tx_tree_hash(const Block& b);
-  std::vector<std::string> get_messages_from_extra(const std::vector<uint8_t> &extra, const crypto::public_key &txkey, const account_keys *recipient);
+  std::vector<std::string> get_messages_from_extra(const std::vector<uint8_t> &extra, const crypto::public_key &txkey, const crypto::secret_key *recepient_secret_key);
 
 #define CHECKED_GET_SPECIFIC_VARIANT(variant_var, specific_type, variable_name, fail_return_val) \
   CHECK_AND_ASSERT_MES(variant_var.type() == typeid(specific_type), fail_return_val, "wrong variant type: " << variant_var.type().name() << ", expected " << typeid(specific_type).name()); \

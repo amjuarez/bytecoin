@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "tx_pool.h"
 
@@ -57,6 +45,11 @@ namespace cryptonote {
           auto r = m_keyImages.insert(boost::get<TransactionInputToKey>(in).keyImage);
           (void)r; //just to make compiler to shut up
           assert(r.second);
+        } else if (in.type() == typeid(TransactionInputMultisignature)) {
+          const auto& msig = boost::get<TransactionInputMultisignature>(in);
+          auto r = m_usedOutputs.insert(std::make_pair(msig.amount, msig.outputIndex));
+          (void)r; //just to make compiler to shut up
+          assert(r.second);
         }
       }
 
@@ -74,6 +67,11 @@ namespace cryptonote {
       for (const auto& in : tx.vin) {
         if (in.type() == typeid(TransactionInputToKey)) {
           if (m_keyImages.count(boost::get<TransactionInputToKey>(in).keyImage)) {
+            return false;
+          }
+        } else if (in.type() == typeid(TransactionInputMultisignature)) {
+          const auto& msig = boost::get<TransactionInputMultisignature>(in);
+          if (m_usedOutputs.count(std::make_pair(msig.amount, msig.outputIndex))) {
             return false;
           }
         }
@@ -104,12 +102,7 @@ namespace cryptonote {
       return false;
     }
 
-    uint64_t inputs_amount = 0;
-    if (!get_inputs_money_amount(tx, inputs_amount)) {
-      tvc.m_verifivation_failed = true;
-      return false;
-    }
-
+    uint64_t inputs_amount = m_currency.getTransactionAllInputsAmount(tx);
     uint64_t outputs_amount = get_outs_money_amount(tx);
 
     if (outputs_amount >= inputs_amount) {
@@ -225,6 +218,32 @@ namespace cryptonote {
     }
   }
   //---------------------------------------------------------------------------------
+  void tx_memory_pool::get_difference(const std::vector<crypto::hash>& known_tx_ids, std::vector<crypto::hash>& new_tx_ids, std::vector<crypto::hash>& deleted_tx_ids) const {
+    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    std::unordered_set<crypto::hash> ready_tx_ids;
+    for (const auto& tx : m_transactions) {
+      TransactionCheckInfo checkInfo(tx);
+      if (is_transaction_ready_to_go(tx.tx, checkInfo)) {
+        ready_tx_ids.insert(tx.id);
+      }
+    }
+
+    std::unordered_set<crypto::hash> known_set(known_tx_ids.begin(), known_tx_ids.end());
+    for (auto it = ready_tx_ids.begin(), e = ready_tx_ids.end(); it != e;) {
+      auto known_it = known_set.find(*it);
+      if (known_it != known_set.end()) {
+        known_set.erase(known_it);
+        it = ready_tx_ids.erase(it);
+      }
+      else {
+        ++it;
+      }
+    }
+
+    new_tx_ids.assign(ready_tx_ids.begin(), ready_tx_ids.end());
+    deleted_tx_ids.assign(known_set.begin(), known_set.end());
+  }
+  //---------------------------------------------------------------------------------
   bool tx_memory_pool::on_blockchain_inc(uint64_t new_block_height, const crypto::hash& top_block_id) {
     return true;
   }
@@ -277,7 +296,7 @@ namespace cryptonote {
         << "max_used_block_id: " << txd.maxUsedBlock.id << std::endl
         << "last_failed_height: " << txd.lastFailedBlock.height << std::endl
         << "last_failed_id: " << txd.lastFailedBlock.id << std::endl
-        << "recieved: " << std::ctime(&txd.receiveTime) << std::endl;
+        << "received: " << std::ctime(&txd.receiveTime) << std::endl;
     }
 
     return ss.str();
@@ -362,21 +381,30 @@ namespace cryptonote {
 
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::removeExpiredTransactions() {
-    CRITICAL_REGION_LOCAL(m_transactions_lock);
-    
-    auto now = m_timeProvider.now();
+    bool somethingRemoved = false;
+    {
+      CRITICAL_REGION_LOCAL(m_transactions_lock);
 
-    for (auto it = m_transactions.begin(); it != m_transactions.end();) {
-      uint64_t txAge = now - it->receiveTime;
-      bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
+      auto now = m_timeProvider.now();
 
-      if (remove) {
-        LOG_PRINT_L2("Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge);
-        it = removeTransaction(it);
-      } else {
-        ++it;
+      for (auto it = m_transactions.begin(); it != m_transactions.end();) {
+        uint64_t txAge = now - it->receiveTime;
+        bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
+
+        if (remove) {
+          LOG_PRINT_L2("Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge);
+          it = removeTransaction(it);
+          somethingRemoved = true;
+        } else {
+          ++it;
+        }
       }
     }
+
+    if (somethingRemoved) {
+      m_observerManager.notify(&ITxPoolObserver::txDeletedFromPool);
+    }
+
     return true;
   }
 
@@ -404,6 +432,13 @@ namespace cryptonote {
           //it is now empty hash container for this key_image
           m_spent_key_images.erase(it);
         }
+      } else if (in.type() == typeid(TransactionInputMultisignature)) {
+        if (!keptByBlock) {
+          const auto& msig = boost::get<TransactionInputMultisignature>(in);
+          auto output = GlobalOutput(msig.amount, msig.outputIndex);
+          assert(m_spentOutputs.count(output));
+          m_spentOutputs.erase(output);
+        }
       }
     }
 
@@ -422,6 +457,13 @@ namespace cryptonote {
           << "tx_id=" << id);
         auto ins_res = kei_image_set.insert(id);
         CHECK_AND_ASSERT_MES(ins_res.second, false, "internal error: try to insert duplicate iterator in key_image set");
+      } else if (in.type() == typeid(TransactionInputMultisignature)) {
+        if (!keptByBlock) {
+          const auto& msig = boost::get<TransactionInputMultisignature>(in);
+          auto r = m_spentOutputs.insert(GlobalOutput(msig.amount, msig.outputIndex));
+          (void)r;
+          assert(r.second);
+        }
       }
     }
 
@@ -436,8 +478,21 @@ namespace cryptonote {
         if (m_spent_key_images.count(tokey_in.keyImage)) {
           return true;
         }
+      } else if (in.type() == typeid(TransactionInputMultisignature)) {
+        const auto& msig = boost::get<TransactionInputMultisignature>(in);
+        if (m_spentOutputs.count(GlobalOutput(msig.amount, msig.outputIndex))) {
+          return true;
+        }
       }
     }
     return false;
+  }
+
+  bool tx_memory_pool::addObserver(ITxPoolObserver* observer) {
+    return m_observerManager.add(observer);
+  }
+
+  bool tx_memory_pool::removeObserver(ITxPoolObserver* observer) {
+    return m_observerManager.remove(observer);
   }
 }

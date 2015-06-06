@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "gtest/gtest.h"
 
@@ -343,7 +331,7 @@ TEST(tx_pool, fillblock_same_size)
     auto iter = transactions.find(th);
     ASSERT_TRUE(iter != transactions.end());
 
-    if (get_tx_fee(*iter->second) > fee)
+    if (currency.getTransactionFee(*iter->second) > fee)
       ++doubleFee;
   }
 
@@ -394,4 +382,32 @@ TEST(tx_pool, cleanup_stale_tx)
   pool.on_idle(); // all transactions from main chain and 2 transactions from altchain should be removed
 
   ASSERT_EQ(3, pool.get_transactions_count());
+}
+
+TEST(tx_pool, add_tx_after_cleanup)
+{
+  cryptonote::Currency currency = cryptonote::CurrencyBuilder().currency();
+  TestPool<TransactionValidator, FakeTimeProvider> pool(currency);
+  const uint64_t fee = currency.minimumFee();
+
+  time_t startTime = pool.timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, fee, 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false)); // main chain
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  pool.timeProvider.timeNow = startTime + currency.mempoolTxLiveTime() + 1;
+  pool.on_idle();
+
+  ASSERT_EQ(0, pool.get_transactions_count());
+
+  // add again
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false)); // main chain
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  ASSERT_EQ(1, pool.get_transactions_count());
+
 }

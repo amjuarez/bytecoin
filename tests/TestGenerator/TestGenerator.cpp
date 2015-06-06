@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "TestGenerator.h"
 
@@ -72,7 +60,7 @@ void test_generator::addBlock(const cryptonote::Block& blk, size_t tsxSize, uint
   const size_t blockSize = tsxSize + get_object_blobsize(blk.minerTx);
   int64_t emissionChange;
   uint64_t blockReward;
-  m_currency.getBlockReward(misc_utils::median(blockSizes), blockSize, 
+  m_currency.getBlockReward(misc_utils::median(blockSizes), blockSize,
     alreadyGeneratedCoins, fee, m_blocksInfo.size(), blockReward, emissionChange);
   m_blocksInfo[get_block_hash(blk)] = BlockInfo(blk.prevId, alreadyGeneratedCoins + emissionChange, blockSize);
 }
@@ -96,7 +84,7 @@ bool test_generator::constructBlock(cryptonote::Block& blk, uint64_t height, con
   size_t txsSize = 0;
   for (auto& tx : txList) {
     uint64_t fee = 0;
-    bool r = get_tx_fee(tx, fee);
+    bool r = m_currency.getTransactionFee(tx, fee);
     CHECK_AND_ASSERT_MES(r, false, "wrong transaction passed to construct_block");
     totalFee += fee;
     txsSize += get_object_blobsize(tx);
@@ -223,15 +211,14 @@ bool test_generator::constructMaxSizeBlock(cryptonote::Block& blk, const crypton
   getLastNBlockSizes(blockSizes, get_block_hash(blkPrev), medianBlockCount);
 
   size_t median = misc_utils::median(blockSizes);
-  size_t blockGrantedFullRewardZone = m_currency.blockGrantedFullRewardZone();
-  median = std::max(median, blockGrantedFullRewardZone);
+  median = std::max(median, m_currency.blockGrantedFullRewardZone());
 
   uint64_t totalFee = 0;
   size_t txsSize = 0;
   std::vector<crypto::hash> txHashes;
   for (auto& tx : txList) {
     uint64_t fee = 0;
-    bool r = get_tx_fee(tx, fee);
+    bool r = m_currency.getTransactionFee(tx, fee);
     CHECK_AND_ASSERT_MES(r, false, "wrong transaction passed to construct_max_size_block");
     totalFee += fee;
     txsSize += get_object_blobsize(tx);
@@ -291,7 +278,7 @@ bool constructMinerTxManually(const cryptonote::Currency& currency, size_t heigh
   out.target = TransactionOutputToKey(outEphPublicKey);
   tx.vout.push_back(out);
 
-  tx.version = CURRENT_TRANSACTION_VERSION;
+  tx.version = TRANSACTION_VERSION_1;
   tx.unlockTime = height + currency.minedMoneyUnlockWindow();
 
   return true;

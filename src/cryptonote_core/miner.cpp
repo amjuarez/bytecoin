@@ -1,19 +1,7 @@
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2014-2015 XDN developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <sstream>
 #include <numeric>
@@ -44,14 +32,6 @@ using namespace epee;
 namespace cryptonote
 {
 
-  namespace
-  {
-    const command_line::arg_descriptor<std::string> arg_extra_messages =  {"extra-messages-file", "Specify file for extra messages to include into coinbase transactions", "", true};
-    const command_line::arg_descriptor<std::string> arg_start_mining =    {"start-mining", "Specify wallet address to mining for", "", true};
-    const command_line::arg_descriptor<uint32_t>    arg_mining_threads =  {"mining-threads", "Specify mining threads count", 0, true};
-  }
-
-
   miner::miner(const Currency& currency, i_miner_handler* phandler):
     m_currency(currency),
     m_stop(1),
@@ -78,6 +58,7 @@ namespace cryptonote
   bool miner::set_block_template(const Block& bl, const difficulty_type& di) {
     CRITICAL_REGION_LOCAL(m_template_lock);
     m_template = bl;
+
     m_diffic = di;
     ++m_template_no;
     m_starter_nonce = crypto::rand<uint32_t>();
@@ -150,26 +131,16 @@ namespace cryptonote
     m_last_hr_merge_time = misc_utils::get_tick_count();
     m_hashes = 0;
   }
-  //-----------------------------------------------------------------------------------------------------
-  void miner::init_options(boost::program_options::options_description& desc)
-  {
-    command_line::add_arg(desc, arg_extra_messages);
-    command_line::add_arg(desc, arg_start_mining);
-    command_line::add_arg(desc, arg_mining_threads);
-  }
-  //-----------------------------------------------------------------------------------------------------
-  bool miner::init(const boost::program_options::variables_map& vm)
-  {
-    if(command_line::has_arg(vm, arg_extra_messages))
-    {
+
+  bool miner::init(const MinerConfig& config) {
+    if (!config.extraMessages.empty()) {
       std::string buff;
-      bool r = file_io_utils::load_file_to_string(command_line::get_arg(vm, arg_extra_messages), buff);
-      CHECK_AND_ASSERT_MES(r, false, "Failed to load file with extra messages: " << command_line::get_arg(vm, arg_extra_messages));
+      bool r = file_io_utils::load_file_to_string(config.extraMessages, buff);
+      CHECK_AND_ASSERT_MES(r, false, "Failed to load file with extra messages: " << config.extraMessages);
       std::vector<std::string> extra_vec;
       boost::split(extra_vec, buff, boost::is_any_of("\n"), boost::token_compress_on );
       m_extra_messages.resize(extra_vec.size());
-      for(size_t i = 0; i != extra_vec.size(); i++)
-      {
+      for(size_t i = 0; i != extra_vec.size(); i++) {
         string_tools::trim(extra_vec[i]);
         if(!extra_vec[i].size())
           continue;
@@ -177,23 +148,21 @@ namespace cryptonote
         if(buff != "0")
           m_extra_messages[i] = buff;
       }
-      m_config_folder_path = boost::filesystem::path(command_line::get_arg(vm, arg_extra_messages)).parent_path().string();
+      m_config_folder_path = boost::filesystem::path(config.extraMessages).parent_path().string();
       m_config = AUTO_VAL_INIT(m_config);
       epee::serialization::load_t_from_json_file(m_config, m_config_folder_path + "/" + cryptonote::parameters::MINER_CONFIG_FILE_NAME);
       LOG_PRINT_L0("Loaded " << m_extra_messages.size() << " extra messages, current index " << m_config.current_extra_message_index);
     }
 
-    if(command_line::has_arg(vm, arg_start_mining))
-    {
-      if (!m_currency.parseAccountAddressString(command_line::get_arg(vm, arg_start_mining), m_mine_address)) {
-        LOG_ERROR("Target account address " << command_line::get_arg(vm, arg_start_mining) << " has wrong format, starting daemon canceled");
+    if(!config.startMining.empty()) {
+      if (!m_currency.parseAccountAddressString(config.startMining, m_mine_address)) {
+        LOG_ERROR("Target account address " << config.startMining << " has wrong format, starting daemon canceled");
         return false;
       }
       m_threads_total = 1;
       m_do_mining = true;
-      if(command_line::has_arg(vm, arg_mining_threads))
-      {
-        m_threads_total = command_line::get_arg(vm, arg_mining_threads);
+      if(config.miningThreads > 0) {
+        m_threads_total = config.miningThreads;
       }
     }
 
