@@ -59,7 +59,7 @@ bool wallet_rpc_server::init(const boost::program_options::variables_map& vm) {
 bool wallet_rpc_server::on_getbalance(const wallet_rpc::COMMAND_RPC_GET_BALANCE::request& req, wallet_rpc::COMMAND_RPC_GET_BALANCE::response& res, epee::json_rpc::error& er, connection_context& cntx) {
   try {
     res.balance = m_wallet.pendingBalance();
-    res.unlocked_balance = m_wallet.pendingBalance();
+    res.unlocked_balance = m_wallet.actualBalance();
   } catch (std::exception& e) {
     er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
     er.message = e.what();
