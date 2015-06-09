@@ -38,6 +38,7 @@
 #include "PaymentServiceConfiguration.h"
 #include "p2p/NetNodeConfig.h"
 #include "RpcNodeConfiguration.h"
+#include "CoinBaseConfiguration.h"
 
 namespace PaymentService {
 
@@ -51,6 +52,7 @@ public:
   CryptoNote::NetNodeConfig netNodeConfig;
   CryptoNote::CoreConfig coreConfig;
   RpcNodeConfiguration remoteNodeConfig;
+CoinBaseConfiguration coinBaseConfig;
 };
 
 } //namespace PaymentService

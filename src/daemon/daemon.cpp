@@ -235,8 +235,7 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
 
       boost::system::error_code ec;
       if (boost::filesystem::exists(config_path, ec)) {
-        po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), desc_cmd_sett), vm);
-      }
+po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), desc_cmd_sett, true), vm);      }
       po::notify(vm);
 if (command_line::get_arg(vm, arg_print_genesis_tx)) {
 print_genesis_tx_hex(logManager, vm);  return false;

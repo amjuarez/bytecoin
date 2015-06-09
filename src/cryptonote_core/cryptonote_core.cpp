@@ -222,7 +222,7 @@ bool core::check_tx_semantic(const Transaction& tx, bool keeped_by_block) {
   get_inputs_money_amount(tx, amount_in);
   uint64_t amount_out = get_outs_money_amount(tx);
 
-  if (amount_in <= amount_out) {
+  if (amount_in < amount_out) {
     logger(ERROR) << "tx with wrong amounts: ins " << amount_in << ", outs " << amount_out << ", rejected for tx id= " << get_transaction_hash(tx);
     return false;
   }

@@ -52,8 +52,7 @@ bool ConfigurationManager::init(int argc, char** argv) {
   po::options_description cmdGeneralOptions("Common Options");
 
   cmdGeneralOptions.add_options()
-      ("config,c", po::value<std::string>(), "configuration file");
-
+("config,c", po::value<std::string>()->default_value("./configs/-.conf"), "configuration file");
   po::options_description confGeneralOptions;
   confGeneralOptions.add(cmdGeneralOptions).add_options()
       ("testnet", po::value<bool>(), "")
@@ -76,13 +75,13 @@ bool ConfigurationManager::init(int argc, char** argv) {
 
   po::options_description remoteNodeOptions("Remote Node Options");
   RpcNodeConfiguration::initOptions(remoteNodeOptions);
+po::options_description coinBaseOptions("Coin Base Options");
+CoinBaseConfiguration::initOptions(coinBaseOptions);
 
   po::options_description cmdOptionsDesc;
-  cmdOptionsDesc.add(cmdGeneralOptions).add(remoteNodeOptions).add(netNodeOptions);
-
+cmdOptionsDesc.add(cmdGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
   po::options_description confOptionsDesc;
-  confOptionsDesc.add(confGeneralOptions).add(remoteNodeOptions).add(netNodeOptions);
-
+confOptionsDesc.add(confGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
   po::variables_map cmdOptions;
   po::store(po::parse_command_line(argc, argv, cmdOptionsDesc), cmdOptions);
   po::notify(cmdOptions);
@@ -99,13 +98,13 @@ bool ConfigurationManager::init(int argc, char** argv) {
     }
 
     po::variables_map confOptions;
-    po::store(po::parse_config_file(confStream, confOptionsDesc), confOptions);
-    po::notify(confOptions);
+po::store(po::parse_config_file(confStream, confOptionsDesc, true), confOptions);    po::notify(confOptions);
 
     gateConfiguration.init(confOptions);
     netNodeConfig.init(confOptions);
     coreConfig.init(confOptions);
     remoteNodeConfig.init(confOptions);
+coinBaseConfig.init(confOptions);
 
     if (confOptions.count("local")) {
       startInprocess = confOptions["local"].as<bool>();

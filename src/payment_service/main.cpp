@@ -378,6 +378,33 @@ void changeDirectory(const std::string& path) {
 void runInProcess() {
   Logging::LoggerRef(logger, "run")(Logging::INFO) << "Starting Payment Gate with local node";
 
+currencyBuilder->genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
+currencyBuilder->publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+currencyBuilder->moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
+currencyBuilder->emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
+currencyBuilder->blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+currencyBuilder->numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
+currencyBuilder->mininumFee(config.coinBaseConfig.MINIMUM_FEE);
+currencyBuilder->defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
+currencyBuilder->difficultyTarget(config.coinBaseConfig.DIFFICULTY_TARGET);
+currencyBuilder->minedMoneyUnlockWindow(config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+currencyBuilder->maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
+
+if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
+{
+  currencyBuilder->difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  currencyBuilder->upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  currencyBuilder->upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+} else {
+  currencyBuilder->difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+}
+currencyBuilder->maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+currencyBuilder->lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
+
+if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT != 0)
+{
+  currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
+}
   CryptoNote::Currency currency = currencyBuilder->currency();
   CryptoNote::core core(currency, NULL, logger);
 
@@ -449,6 +476,33 @@ void runInProcess() {
 
 void runRpcProxy() {
   Logging::LoggerRef(logger, "run")(Logging::INFO) << "Starting Payment Gate with remote node";
+currencyBuilder->genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
+currencyBuilder->publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+currencyBuilder->moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
+currencyBuilder->emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
+currencyBuilder->blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+currencyBuilder->numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
+currencyBuilder->mininumFee(config.coinBaseConfig.MINIMUM_FEE);
+currencyBuilder->defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
+currencyBuilder->difficultyTarget(config.coinBaseConfig.DIFFICULTY_TARGET);
+currencyBuilder->minedMoneyUnlockWindow(config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+currencyBuilder->maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
+
+if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
+{
+  currencyBuilder->difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  currencyBuilder->upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  currencyBuilder->upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+} else {
+  currencyBuilder->difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+}
+currencyBuilder->maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+currencyBuilder->lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
+
+if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT != 0)
+{
+  currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
+}
   CryptoNote::Currency currency = currencyBuilder->currency();
   std::unique_ptr<CryptoNote::INode> node;
 
@@ -506,6 +560,33 @@ int main(int argc, char** argv) {
     logger.addLogger(fileLogger);
 
     if (config.gateConfiguration.generateNewWallet) {
+currencyBuilder->genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
+currencyBuilder->publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+currencyBuilder->moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
+currencyBuilder->emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
+currencyBuilder->blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+currencyBuilder->numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
+currencyBuilder->mininumFee(config.coinBaseConfig.MINIMUM_FEE);
+currencyBuilder->defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
+currencyBuilder->difficultyTarget(config.coinBaseConfig.DIFFICULTY_TARGET);
+currencyBuilder->minedMoneyUnlockWindow(config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+currencyBuilder->maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
+
+if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
+{
+  currencyBuilder->difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  currencyBuilder->upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  currencyBuilder->upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+} else {
+  currencyBuilder->difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+}
+currencyBuilder->maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+currencyBuilder->lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
+
+if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT != 0)
+{
+  currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
+}
       CryptoNote::Currency currency = currencyBuilder->currency();
       generateNewWallet(currency, config.gateConfiguration, logger);
       return 0;
