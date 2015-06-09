@@ -121,7 +121,7 @@ namespace CryptoNote {
 
     uint64_t outputs_amount = get_outs_money_amount(tx);
 
-    if (outputs_amount >= inputs_amount) {
+    if (outputs_amount > inputs_amount) {
       logger(INFO) << "transaction use more money then it has: use " << m_currency.formatAmount(outputs_amount) <<
         ", have " << m_currency.formatAmount(inputs_amount);
       tvc.m_verifivation_failed = true;
@@ -185,7 +185,7 @@ namespace CryptoNote {
 
     tvc.m_added_to_pool = true;
 
-    if (inputsValid && fee > 0)
+    if (inputsValid)
       tvc.m_should_be_relayed = true;
 
     tvc.m_verifivation_failed = true;
