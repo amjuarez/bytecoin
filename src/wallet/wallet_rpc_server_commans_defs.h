@@ -25,10 +25,14 @@ namespace wallet_rpc
 
     struct response
     {
-      uint64_t balance;
-      uint64_t unlocked_balance;
+      uint64_t locked_amount;
+      uint64_t available_balance;
+      uint64_t balance;            //<! \deprecated Use locked_amount + available_balance
+      uint64_t unlocked_balance;   //<! \deprecated Use available_balance
 
       BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(locked_amount)
+        KV_SERIALIZE(available_balance)
         KV_SERIALIZE(balance)
         KV_SERIALIZE(unlocked_balance)
       END_KV_SERIALIZE_MAP()

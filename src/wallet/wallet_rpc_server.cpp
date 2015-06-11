@@ -29,18 +29,12 @@ void wallet_rpc_server::init_options(boost::program_options::options_description
   command_line::add_arg(desc, arg_rpc_bind_port);
 }
 //------------------------------------------------------------------------------------------------------------------------------
-wallet_rpc_server::wallet_rpc_server(CryptoNote::IWallet&w, CryptoNote::INode& n, cryptonote::Currency& currency, const std::string& walletFile) :m_wallet(w), m_node(n), m_currency(currency), m_walletFilename(walletFile), m_saveResultPromise(nullptr) {
+wallet_rpc_server::wallet_rpc_server(CryptoNote::IWallet&w, CryptoNote::INode& n, cryptonote::Currency& currency, const std::string& walletFile) :m_wallet(w), m_node(n), m_currency(currency), m_walletFilename(walletFile) {
 }
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::run() {
   //DO NOT START THIS SERVER IN MORE THEN 1 THREADS WITHOUT REFACTORING
   return epee::http_server_impl_base<wallet_rpc_server, connection_context>::run(1, true);
-}
-//----------------------------------------------------------------------------------------------------
-void wallet_rpc_server::saveCompleted(std::error_code result) {
-  if (m_saveResultPromise.get() != nullptr) {
-    m_saveResultPromise->set_value(result);
-  }
 }
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::handle_command_line(const boost::program_options::variables_map& vm) {
@@ -58,8 +52,10 @@ bool wallet_rpc_server::init(const boost::program_options::variables_map& vm) {
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::on_getbalance(const wallet_rpc::COMMAND_RPC_GET_BALANCE::request& req, wallet_rpc::COMMAND_RPC_GET_BALANCE::response& res, epee::json_rpc::error& er, connection_context& cntx) {
   try {
-    res.balance = m_wallet.pendingBalance();
-    res.unlocked_balance = m_wallet.actualBalance();
+    res.locked_amount = m_wallet.pendingBalance();
+    res.available_balance = m_wallet.actualBalance();
+    res.balance = res.locked_amount + res.available_balance;
+    res.unlocked_balance = res.available_balance;
   } catch (std::exception& e) {
     er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
     er.message = e.what();
@@ -106,15 +102,17 @@ bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::requ
   std::copy(extra.begin(), extra.end(), std::back_inserter(extraString));
   try {
     cryptonote::WalletHelper::SendCompleteResultObserver sent;
-    std::promise<TransactionId> txId;
-    sent.expectedTxID = txId.get_future();
-    std::future<std::error_code> f_sendError = sent.sendResult.get_future();
+    WalletHelper::IWalletRemoveObserverGuard removeGuard(m_wallet, sent);
 
-    m_wallet.addObserver(&sent);
     CryptoNote::TransactionId tx = m_wallet.sendTransaction(transfers, req.fee, extraString, req.mixin, req.unlock_time, messages);
-    txId.set_value(tx);
-    std::error_code sendError = f_sendError.get();
-    m_wallet.removeObserver(&sent);
+    if (tx == INVALID_TRANSACTION_ID) {
+      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+      er.message = "WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR";
+      return false;
+    }
+
+    std::error_code sendError = sent.wait(tx);
+    removeGuard.removeObserver();
     if (sendError) {
       er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
       er.message = sendError.message();
@@ -146,27 +144,13 @@ bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::requ
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::on_store(const wallet_rpc::COMMAND_RPC_STORE::request& req, wallet_rpc::COMMAND_RPC_STORE::response& res, epee::json_rpc::error& er, connection_context& cntx) {
   try {
-    std::ofstream walletFile;
-    walletFile.open(m_walletFilename, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-    if (walletFile.fail())
-      return false;
-    m_wallet.addObserver(this);
-    m_saveResultPromise.reset(new std::promise<std::error_code>());
-    std::future<std::error_code> f_saveError = m_saveResultPromise->get_future();
-    m_wallet.save(walletFile);
-    auto saveError = f_saveError.get();
-    m_saveResultPromise.reset(nullptr);
-    if (saveError) {
-      er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
-      er.message = saveError.message();
-      return false;
-    }
-    m_wallet.removeObserver(this);
+    WalletHelper::storeWallet(m_wallet, m_walletFilename);
   } catch (std::exception& e) {
     er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
     er.message = e.what();
     return false;
   }
+
   return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------
@@ -204,7 +188,7 @@ bool wallet_rpc_server::on_get_payments(const wallet_rpc::COMMAND_RPC_GET_PAYMEN
       wallet_rpc::payment_details rpc_payment;
       rpc_payment.tx_hash = epee::string_tools::pod_to_hex(txInfo.hash);
       rpc_payment.amount = txInfo.totalAmount;
-      rpc_payment.block_height = txInfo.totalAmount;
+      rpc_payment.block_height = txInfo.blockHeight;
       rpc_payment.unlock_time = txInfo.unlockTime;
       res.payments.push_back(rpc_payment);
     }

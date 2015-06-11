@@ -195,6 +195,7 @@ void TransfersContainer::addTransaction(const BlockInfo& block, const ITransacti
   txInfo.publicKey = tx.getTransactionPublicKey();
   txInfo.totalAmountIn = tx.getInputTotalAmount();
   txInfo.totalAmountOut = tx.getOutputTotalAmount();
+  txInfo.extra = tx.getExtra();
   txInfo.messages = std::move(messages);
 
   if (!tx.getPaymentId(txInfo.paymentId)) {

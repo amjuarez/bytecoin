@@ -27,10 +27,6 @@ namespace tools
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_port;
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_ip;
 
-    //---------------- IWalletObserver -------------------------
-    virtual void saveCompleted(std::error_code result) override;
-    //----------------------------------------------------------
-
     static void init_options(boost::program_options::options_description& desc);
     bool init(const boost::program_options::variables_map& vm);
     bool run();
@@ -67,7 +63,5 @@ namespace tools
       std::string m_bind_ip;
       cryptonote::Currency& m_currency;
       const std::string m_walletFilename;
-
-      std::unique_ptr<std::promise<std::error_code>> m_saveResultPromise;
   };
 }

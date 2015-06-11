@@ -7,6 +7,7 @@
 #include <set>
 #include <future>
 #include <sstream>
+#include <string>
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -264,10 +265,9 @@ std::error_code initAndLoadWallet(IWallet& wallet, std::istream& walletFile, con
   WalletHelper::InitWalletResultObserver initObserver;
   std::future<std::error_code> f_initError = initObserver.initResult.get_future();
 
-  wallet.addObserver(&initObserver);
+  WalletHelper::IWalletRemoveObserverGuard removeGuard(wallet, initObserver);
   wallet.initAndLoad(walletFile, password);
   auto initError = f_initError.get();
-  wallet.removeObserver(&initObserver);
 
   return initError;
 }
@@ -312,19 +312,11 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
         }
 
         LOG_PRINT_L0("Storing wallet...");
-        std::ofstream walletFile;
-        walletFile.open(walletFileName, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-        if (walletFile.fail()) {
-          throw std::runtime_error("error saving wallet file '" + walletFileName + "'");
-        }
-        WalletHelper::SaveWalletResultObserver saveObserver;
-        std::future<std::error_code> f_saveError = saveObserver.saveResult.get_future();
-        wallet->addObserver(&saveObserver);
-        wallet->save(walletFile, false, false);
-        auto saveError = f_saveError.get();
-        wallet->removeObserver(&saveObserver);
-        if (saveError) {
-          fail_msg_writer() << "Failed to store wallet: " << saveError.message();
+
+        try {
+          WalletHelper::storeWallet(*wallet, walletFileName);
+        } catch (std::exception& e) {
+          fail_msg_writer() << "Failed to store wallet: " << e.what();
           throw std::runtime_error("error saving wallet file '" + walletFileName + "'");
         }
 
@@ -343,28 +335,21 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
 
     WalletHelper::InitWalletResultObserver initObserver;
     std::future<std::error_code> f_initError = initObserver.initResult.get_future();
-    wallet->addObserver(&initObserver);
+
+    WalletHelper::IWalletRemoveObserverGuard removeGuard(*wallet, initObserver);
     wallet->initAndLoad(ss, password);
     auto initError = f_initError.get();
-    wallet->removeObserver(&initObserver);
+    removeGuard.removeObserver();
     if (initError) {
       throw std::runtime_error("failed to load wallet: " + initError.message());
     }
 
     LOG_PRINT_L0("Storing wallet...");
-    std::ofstream walletFile;
-    walletFile.open(walletFileName, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-    if (walletFile.fail()) {
-      throw std::runtime_error("error saving wallet file '" + walletFileName  + "'");
-    }
-    WalletHelper::SaveWalletResultObserver saveObserver;
-    std::future<std::error_code> f_saveError = saveObserver.saveResult.get_future();
-    wallet->addObserver(&saveObserver);
-    wallet->save(walletFile, false, false);
-    auto saveError = f_saveError.get();
-    wallet->removeObserver(&saveObserver);
-    if (saveError) {
-      fail_msg_writer() << "Failed to store wallet: " << saveError.message();
+
+    try {
+      WalletHelper::storeWallet(*wallet, walletFileName);
+    } catch(std::exception& e) {
+      fail_msg_writer() << "Failed to store wallet: " << e.what();
       throw std::runtime_error("error saving wallet file '" + walletFileName + "'");
     }
 
@@ -399,7 +384,6 @@ simple_wallet::simple_wallet(const cryptonote::Currency& currency)
   : m_daemon_port(0)
   , m_currency(currency)
   , m_refresh_progress_reporter(*this)
-  , m_saveResultPromise(nullptr)
   , m_initResultPromise(nullptr)
 {
   m_cmd_binder.set_handler("start_mining", boost::bind(&simple_wallet::start_mining, this, _1), "start_mining [<number_of_threads>] - Start mining in daemon");
@@ -603,18 +587,12 @@ bool simple_wallet::new_wallet(const string &wallet_file, const std::string& pas
       fail_msg_writer() << "failed to generate new wallet: " << initError.message();
       return false;
     }
-    std::ofstream walletFile;
-    walletFile.open(m_wallet_file, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-    if (walletFile.fail())
-      return false;
-    m_saveResultPromise.reset(new std::promise<std::error_code>());
-    std::future<std::error_code> f_saveError = m_saveResultPromise->get_future();
-    m_wallet->save(walletFile);
-    auto saveError = f_saveError.get();
-    m_saveResultPromise.reset(nullptr);
-    if (saveError) {
-      fail_msg_writer() << "failed to save new wallet: " << saveError.message();
-      return false;
+
+    try {
+    WalletHelper::storeWallet(*m_wallet, m_wallet_file);
+    } catch (std::exception& e) {
+      fail_msg_writer() << "failed to save new wallet: " << e.what();
+      throw;
     }
 
     WalletAccountKeys keys;
@@ -645,19 +623,7 @@ bool simple_wallet::close_wallet()
 {
   try
   {
-    std::ofstream walletFile;
-    walletFile.open(m_wallet_file, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-    if (walletFile.fail())
-      return false;
-    m_saveResultPromise.reset(new std::promise<std::error_code>());
-    std::future<std::error_code> f_saveError = m_saveResultPromise->get_future();
-    m_wallet->save(walletFile);
-    auto saveError = f_saveError.get();
-    m_saveResultPromise.reset(nullptr);
-     if (saveError) {
-      fail_msg_writer() << saveError.message();
-      return false;
-    }
+    WalletHelper::storeWallet(*m_wallet, m_wallet_file);
   }
   catch (const std::exception& e)
   {
@@ -672,19 +638,7 @@ bool simple_wallet::save(const std::vector<std::string> &args)
 {
   try
   {
-    std::ofstream walletFile;
-    walletFile.open(m_wallet_file, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-    if (walletFile.fail())
-      return false;
-    m_saveResultPromise.reset(new std::promise<std::error_code>());
-    std::future<std::error_code> f_saveError = m_saveResultPromise->get_future();
-    m_wallet->save(walletFile);
-    auto saveError = f_saveError.get();
-    m_saveResultPromise.reset(nullptr);
-    if (saveError) {
-      fail_msg_writer() << saveError.message();
-      return false;
-    }
+    WalletHelper::storeWallet(*m_wallet, m_wallet_file);
     success_msg_writer() << "Wallet data saved";
   }
   catch (const std::exception& e)
@@ -760,12 +714,6 @@ bool simple_wallet::stop_mining(const std::vector<std::string>& args)
 void simple_wallet::initCompleted(std::error_code result) {
   if (m_initResultPromise.get() != nullptr) {
     m_initResultPromise->set_value(result);
-  }
-}
-//----------------------------------------------------------------------------------------------------
-void simple_wallet::saveCompleted(std::error_code result) {
-  if (m_saveResultPromise.get() != nullptr) {
-    m_saveResultPromise->set_value(result);
   }
 }
 //----------------------------------------------------------------------------------------------------
@@ -936,21 +884,20 @@ bool simple_wallet::transfer(const std::vector<std::string> &args)
     if (!cmd.parseArguments(args))
       return false;
     cryptonote::WalletHelper::SendCompleteResultObserver sent;
-    std::promise<TransactionId> txId;
-    sent.expectedTxID = txId.get_future();
-    std::future<std::error_code> f_sendError = sent.sendResult.get_future();
+
     std::string extraString;
     std::copy(cmd.extra.begin(), cmd.extra.end(), std::back_inserter(extraString));
 
-    m_wallet->addObserver(&sent);
+    WalletHelper::IWalletRemoveObserverGuard removeGuard(*m_wallet, sent);
+
     CryptoNote::TransactionId tx = m_wallet->sendTransaction(cmd.dsts, cmd.fee, extraString, cmd.fake_outs_count, 0);
     if (tx == INVALID_TRANSACTION_ID) {
       fail_msg_writer() << "Can't send money";
       return true;
     }
-    txId.set_value(tx);
-    std::error_code sendError = f_sendError.get();
-    m_wallet->removeObserver(&sent);
+
+    std::error_code sendError = sent.wait(tx);
+    removeGuard.removeObserver();
     if (sendError) {
       fail_msg_writer() << sendError.message();
       return true;
@@ -961,21 +908,7 @@ bool simple_wallet::transfer(const std::vector<std::string> &args)
     success_msg_writer(true) << "Money successfully sent, transaction " << epee::string_tools::pod_to_hex(txInfo.hash);
 
     try {
-      std::ofstream walletFile;
-      walletFile.open(m_wallet_file, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-      if (walletFile.fail()) {
-        fail_msg_writer() << "cant open " << m_wallet_file << " for save";
-        return true;
-      }
-      m_saveResultPromise.reset(new std::promise<std::error_code>());
-      std::future<std::error_code> f_saveError = m_saveResultPromise->get_future();
-      m_wallet->save(walletFile);
-      auto saveError = f_saveError.get();
-      m_saveResultPromise.reset(nullptr);
-      if (saveError) {
-        fail_msg_writer() << saveError.message();
-        return true;
-      }
+      WalletHelper::storeWallet(*m_wallet, m_wallet_file);
     } catch (const std::exception& e) {
       fail_msg_writer() << e.what();
       return true;
@@ -1121,6 +1054,7 @@ int main(int argc, char* argv[])
     std::string daemon_address = command_line::get_arg(vm, arg_daemon_address);
     std::string daemon_host = command_line::get_arg(vm, arg_daemon_host);
     int daemon_port = command_line::get_arg(vm, arg_daemon_port);
+
     if (daemon_host.empty())
       daemon_host = "localhost";
     if (!daemon_port)
@@ -1172,20 +1106,9 @@ int main(int argc, char* argv[])
     try
     {
       LOG_PRINT_L0("Storing wallet...");
-      std::ofstream walletFile;
-      walletFile.open(walletFileName, std::ios_base::binary | std::ios_base::out | std::ios::trunc);
-      if (walletFile.fail())
-        return false;
-      WalletHelper::SaveWalletResultObserver saveObserver;
-      std::future<std::error_code> f_saveError = saveObserver.saveResult.get_future();
-      wallet->addObserver(&saveObserver);
-      wallet->save(walletFile);
-      auto saveError = f_saveError.get();
-      wallet->removeObserver(&saveObserver);
-      if (saveError) {
-        fail_msg_writer() << "Failed to store wallet: " << saveError.message();
-        return 1;
-      }
+
+      WalletHelper::storeWallet(*wallet, walletFileName);
+
       LOG_PRINT_GREEN("Stored ok", LOG_LEVEL_0);
     }
     catch (const std::exception& e)

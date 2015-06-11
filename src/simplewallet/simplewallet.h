@@ -53,7 +53,6 @@ namespace cryptonote
     bool help(const std::vector<std::string> &args = std::vector<std::string>());
     bool start_mining(const std::vector<std::string> &args);
     bool stop_mining(const std::vector<std::string> &args);
-    //bool refresh(const std::vector<std::string> &args = std::vector<std::string>());
     bool show_balance(const std::vector<std::string> &args = std::vector<std::string>());
     bool show_incoming_transfers(const std::vector<std::string> &args);
     bool show_payments(const std::vector<std::string> &args);
@@ -65,19 +64,10 @@ namespace cryptonote
     bool reset(const std::vector<std::string> &args);
     bool set_log(const std::vector<std::string> &args);
 
-    //uint64_t get_daemon_blockchain_height(std::string& err);
-    //bool try_connect_to_daemon();
     bool ask_wallet_create_if_needed();
-
-    ////----------------- i_wallet2_callback ---------------------
-    //virtual void on_money_received(uint64_t height, const cryptonote::Transaction& tx, size_t out_index);
-    //virtual void on_money_spent(uint64_t height, const cryptonote::Transaction& in_tx, size_t out_index, const cryptonote::Transaction& spend_tx);
-    //virtual void on_skip_transaction(uint64_t height, const cryptonote::Transaction& tx);
-    ////----------------------------------------------------------
 
     //---------------- IWalletObserver -------------------------
     virtual void initCompleted(std::error_code result) override;
-    virtual void saveCompleted(std::error_code result) override;
     virtual void externalTransactionCreated(CryptoNote::TransactionId transactionId) override;
     //----------------------------------------------------------
 
@@ -149,7 +139,6 @@ namespace cryptonote
     std::string m_wallet_file;
 
     std::unique_ptr<std::promise<std::error_code>> m_initResultPromise;
-    std::unique_ptr<std::promise<std::error_code>> m_saveResultPromise;
 
     epee::console_handlers_binder m_cmd_binder;
 
