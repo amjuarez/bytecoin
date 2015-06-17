@@ -220,7 +220,7 @@ bool wallet_rpc_server::on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANS
     transfer.time = txInfo.timestamp;
     transfer.output = txInfo.totalAmount < 0;
     transfer.transactionHash = epee::string_tools::pod_to_hex(txInfo.hash);
-    transfer.amount = txInfo.totalAmount;
+    transfer.amount = std::abs(txInfo.totalAmount);
     transfer.fee = txInfo.fee;
     transfer.address = address;
     transfer.blockIndex = txInfo.blockHeight;
