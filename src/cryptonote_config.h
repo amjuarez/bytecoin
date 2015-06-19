@@ -58,7 +58,7 @@ const uint64_t CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS    = DIFFICULTY_TARGET
 const uint64_t CRYPTONOTE_MEMPOOL_TX_LIVETIME                = (60 * 60 * 14); //seconds, 14 hours
 const uint64_t CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME = (60 * 60 * 24); //seconds, one day
 
-const uint64_t UPGRADE_HEIGHT                                = static_cast<uint64_t>(-1);
+const uint64_t UPGRADE_HEIGHT                                = 136212;
 const unsigned UPGRADE_VOTING_THRESHOLD                      = 90;               // percent
 const size_t   UPGRADE_VOTING_WINDOW                         = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
 const size_t   UPGRADE_WINDOW                                = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
@@ -140,7 +140,9 @@ const std::initializer_list<CheckpointData> CHECKPOINTS = {
     { 80550, "169e6b813b8ee072735bf7f7dc45b9b712b89a1317d1a4e672f6bba785a564fc" },
     { 99000, "2a83ce4fbd12ccb2eb60869d11d6b4212e8a810ab33408a2feaa3066d2853d9f" },
     { 122000, "926e915d84af28a8908809ae94f75bdea50d99d2d1a67fd5598bb91ccdf62c83" },
-    { 132000, "b58a6b387d3120ea11061642a6a78a9a4b7800b77a44fae7ec1c73b60f2e375f" }
+    { 132000, "b58a6b387d3120ea11061642a6a78a9a4b7800b77a44fae7ec1c73b60f2e375f" },
+    { 136212, "5a935b048194d8b6ffb33b744c73cbe632da4f3c4d5e4c4488967d9431ba2a36" },
+    { 136213, "336b687fdb96457cf4060072f76fc9e4e9281744822e0892c9ea128445bbebc7" },
 };
 
 } // cryptonote
