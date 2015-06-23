@@ -53,5 +53,7 @@ private:
 
 void prepareFileNames(const std::string& file_path, std::string& keys_file, std::string& wallet_file);
 void storeWallet(CryptoNote::IWallet& wallet, const std::string& walletFilename);
+std::error_code walletSaveWrapper(CryptoNote::IWallet& wallet, std::ostream& stream, bool saveDetailes, bool saveCache);
+std::error_code initAndLoadWallet(CryptoNote::IWallet& wallet, std::istream& stream, const std::string& password);
 
 } }

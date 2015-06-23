@@ -12,6 +12,7 @@
 #include "wallet_rpc_server_commans_defs.h"
 #include "Wallet.h"
 #include "common/command_line.h"
+#include "simplewallet/password_container.h"
 namespace tools
 {
   /************************************************************************/
@@ -22,7 +23,8 @@ namespace tools
   public:
     typedef epee::net_utils::connection_context_base connection_context;
 
-    wallet_rpc_server(CryptoNote::IWallet &w, CryptoNote::INode &n, cryptonote::Currency& currency, const std::string& walletFilename);
+    wallet_rpc_server(std::unique_ptr<CryptoNote::IWallet>& w, CryptoNote::INode& n, cryptonote::Currency& currency,
+                      const std::string& walletFilename, const password_container& pass);
 
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_port;
     const static command_line::arg_descriptor<std::string> arg_rpc_bind_ip;
@@ -57,11 +59,12 @@ namespace tools
 
       bool handle_command_line(const boost::program_options::variables_map& vm);
 
-      CryptoNote::IWallet& m_wallet;
+      std::unique_ptr<CryptoNote::IWallet>& m_wallet;
       CryptoNote::INode& m_node;
       std::string m_port;
       std::string m_bind_ip;
       cryptonote::Currency& m_currency;
       const std::string m_walletFilename;
+      const tools::password_container& m_pass;
   };
 }

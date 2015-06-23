@@ -261,17 +261,6 @@ struct TransferCommand {
   }
 };
 
-std::error_code initAndLoadWallet(IWallet& wallet, std::istream& walletFile, const std::string& password) {
-  WalletHelper::InitWalletResultObserver initObserver;
-  std::future<std::error_code> f_initError = initObserver.initResult.get_future();
-
-  WalletHelper::IWalletRemoveObserverGuard removeGuard(wallet, initObserver);
-  wallet.initAndLoad(walletFile, password);
-  auto initError = f_initError.get();
-
-  return initError;
-}
-
 std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, const std::string& walletFile, const std::string& password) {
   std::string keys_file, walletFileName;
   WalletHelper::prepareFileNames(walletFile, keys_file, walletFileName);
@@ -296,7 +285,7 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
       throw std::runtime_error("error opening wallet file '" + walletFileName + "'");
     }
 
-    auto initError = initAndLoadWallet(*wallet, walletFile, password);
+    auto initError = WalletHelper::initAndLoadWallet(*wallet, walletFile, password);
 
     walletFile.close();
     if (initError) { //bad password, or legacy format
@@ -306,7 +295,7 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
         boost::filesystem::rename(keys_file, keys_file + ".back");
         boost::filesystem::rename(walletFileName, walletFileName + ".back");
 
-        initError = initAndLoadWallet(*wallet, ss, password);
+        initError = WalletHelper::initAndLoadWallet(*wallet, ss, password);
         if (initError) {
           throw std::runtime_error("failed to load wallet: " + initError.message());
         }
@@ -493,7 +482,6 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
   if (m_daemon_address.empty())
     m_daemon_address = std::string("http://") + m_daemon_host + ":" + std::to_string(m_daemon_port);
 
-  tools::password_container pwd_container;
   if (command_line::has_arg(vm, arg_password))
   {
     pwd_container.password(command_line::get_arg(vm, arg_password));
@@ -650,7 +638,38 @@ bool simple_wallet::save(const std::vector<std::string> &args)
 }
 
 bool simple_wallet::reset(const std::vector<std::string> &args) {
-  m_wallet->reset();
+  if (pwd_container.empty()) {
+    fail_msg_writer() << "password not set";
+    return false;
+  }
+
+  // die on exception
+  try {
+    std::stringstream stream;
+    // save without cache
+    auto error = WalletHelper::walletSaveWrapper(*m_wallet, stream, false, false);
+    if (error) {
+      fail_msg_writer() << "failed to save wallet to stream";
+      return false;
+    }
+
+    m_wallet->removeObserver(this);
+    m_wallet->shutdown();
+
+    m_wallet.reset(new Wallet(m_currency, *m_node));
+    error = WalletHelper::initAndLoadWallet(*m_wallet, stream, pwd_container.password());
+    if (error) {
+      throw std::runtime_error("failed to reinitialize wallet");
+    }
+
+    m_wallet->addObserver(this);
+
+  } catch (std::exception& e) {
+    // kill simple wallet if something is wrong
+    fail_msg_writer() << "failed to reset wallet: " << e.what();
+    std::abort();
+  }
+
   success_msg_writer(true) << "Reset is complete successfully";
   return true;
 }
@@ -1050,7 +1069,7 @@ int main(int argc, char* argv[])
     }
 
     std::string wallet_file = command_line::get_arg(vm, arg_wallet_file);
-    std::string wallet_password = command_line::get_arg(vm, arg_password);
+    tools::password_container pass(command_line::get_arg(vm, arg_password));
     std::string daemon_address = command_line::get_arg(vm, arg_daemon_address);
     std::string daemon_host = command_line::get_arg(vm, arg_daemon_host);
     int daemon_port = command_line::get_arg(vm, arg_daemon_port);
@@ -1082,7 +1101,7 @@ int main(int argc, char* argv[])
     std::string walletFileName;
     try
     {
-      walletFileName = ::tryToOpenWalletOrLoadKeysOrThrow(wallet, wallet_file, wallet_password);      
+      walletFileName = ::tryToOpenWalletOrLoadKeysOrThrow(wallet, wallet_file, pass.password());      
       LOG_PRINT_L1("available balance: " << currency.formatAmount(wallet->actualBalance()) <<
         ", locked amount: " << currency.formatAmount(wallet->pendingBalance()));
       LOG_PRINT_GREEN("Loaded ok", LOG_LEVEL_0);
@@ -1093,7 +1112,9 @@ int main(int argc, char* argv[])
       return 1;
     }
 
-    tools::wallet_rpc_server wrpc(*wallet, *node, currency, walletFileName);
+    // as long as this server is always single threaded it is safe to pass and use refernce to wallet pointer here
+    // without syncronization
+    tools::wallet_rpc_server wrpc(wallet, *node, currency, walletFileName, pass);
     wrpc.init(vm);
     CHECK_AND_ASSERT_MES(r, 1, "Failed to initialize wallet rpc server");
 

@@ -26,24 +26,31 @@ void openOutputFileStream(const std::string& filename, std::ofstream& file) {
   }
 }
 
-std::error_code walletSaveWrapper(CryptoNote::IWallet& wallet, std::ofstream& file, bool saveDetailes, bool saveCache) {
-  cryptonote::WalletHelper::SaveWalletResultObserver o;
-
-  std::error_code e;
-  try {
-    std::future<std::error_code> f = o.saveResult.get_future();
-    wallet.addObserver(&o);
-    wallet.save(file, saveDetailes, saveCache);
-    e = f.get();
-  } catch (std::exception&) {
-    wallet.removeObserver(&o);
-    return make_error_code(std::errc::invalid_argument);
-  }
-
-  wallet.removeObserver(&o);
-  return e;
 }
 
+std::error_code initAndLoadWallet(CryptoNote::IWallet& wallet, std::istream& stream, const std::string& password) {
+  WalletHelper::InitWalletResultObserver initObserver;
+  auto f_initError = initObserver.initResult.get_future();
+
+  WalletHelper::IWalletRemoveObserverGuard removeGuard(wallet, initObserver);
+  wallet.initAndLoad(stream, password);
+  auto initError = f_initError.get();
+
+  return initError;
+}
+
+std::error_code walletSaveWrapper(CryptoNote::IWallet& wallet, std::ostream& stream, bool saveDetailes, bool saveCache) {
+  std::error_code err;
+  cryptonote::WalletHelper::SaveWalletResultObserver observer;
+  try {
+    auto future = observer.saveResult.get_future();
+    WalletHelper::IWalletRemoveObserverGuard guard(wallet, observer);
+    wallet.save(stream, saveDetailes, saveCache);
+    err = future.get();
+  } catch (std::exception&) {
+    err = make_error_code(std::errc::invalid_argument);
+  }
+  return err;
 }
 
 void prepareFileNames(const std::string& file_path, std::string& keys_file, std::string& wallet_file) {

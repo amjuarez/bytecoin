@@ -137,6 +137,7 @@ namespace cryptonote
     int m_daemon_port;
 
     std::string m_wallet_file;
+    tools::password_container pwd_container;
 
     std::unique_ptr<std::promise<std::error_code>> m_initResultPromise;
 
