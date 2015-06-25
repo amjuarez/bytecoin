@@ -405,6 +405,8 @@ if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT
 {
   currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
 }
+currencyBuilder->difficultyLag(config.coinBaseConfig.DIFFICULTY_CUT);
+currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
   CryptoNote::Currency currency = currencyBuilder->currency();
   CryptoNote::core core(currency, NULL, logger);
 
@@ -503,6 +505,8 @@ if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT
 {
   currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
 }
+currencyBuilder->difficultyLag(config.coinBaseConfig.DIFFICULTY_CUT);
+currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
   CryptoNote::Currency currency = currencyBuilder->currency();
   std::unique_ptr<CryptoNote::INode> node;
 
@@ -587,6 +591,8 @@ if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT
 {
   currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
 }
+currencyBuilder->difficultyLag(config.coinBaseConfig.DIFFICULTY_CUT);
+currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
       CryptoNote::Currency currency = currencyBuilder->currency();
       generateNewWallet(currency, config.gateConfiguration, logger);
       return 0;

@@ -82,6 +82,8 @@ const command_line::arg_descriptor<size_t>      arg_CRYPTONOTE_MINED_MONEY_UNLOC
 const command_line::arg_descriptor<uint64_t>    arg_MAX_BLOCK_SIZE_INITIAL  = {"MAX_BLOCK_SIZE_INITIAL", "uint64_t", CryptoNote::parameters::MAX_BLOCK_SIZE_INITIAL};
 const command_line::arg_descriptor<uint64_t>    arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY  = {"EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", "uint64_t"};
 const command_line::arg_descriptor<uint64_t>    arg_UPGRADE_HEIGHT  = {"UPGRADE_HEIGHT", "uint64_t", 0};
+const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT  = {"DIFFICULTY_CUT", "uint64_t", CryptoNote::parameters::DIFFICULTY_CUT};
+const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "uint64_t", CryptoNote::parameters::DIFFICULTY_LAG};
 const command_line::arg_descriptor<std::string> arg_rpc_bind_port = {"rpc-bind-port", "", std::to_string(RPC_DEFAULT_PORT)};
 const command_line::arg_descriptor<bool> arg_testnet = { "testnet", "Used to deploy test nets. The daemon must be launched with --testnet flag", false };
 const command_line::arg_descriptor< std::vector<std::string> > arg_command = { "command", "" };
@@ -1018,6 +1020,8 @@ command_line::add_arg(desc_params, arg_CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
 command_line::add_arg(desc_params, arg_MAX_BLOCK_SIZE_INITIAL);
 command_line::add_arg(desc_params, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
 command_line::add_arg(desc_params, arg_UPGRADE_HEIGHT);
+command_line::add_arg(desc_params, arg_DIFFICULTY_CUT);
+command_line::add_arg(desc_params, arg_DIFFICULTY_LAG);
 command_line::add_arg(desc_params, arg_rpc_bind_port);
 
   po::positional_options_description positional_options;
@@ -1122,6 +1126,9 @@ if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT) && command_line::get_arg(vm, a
 {
   currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
 }
+
+currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
+currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
 currencyBuilder.testnet(command_line::get_arg(vm, arg_testnet));
 CryptoNote::Currency currency = currencyBuilder.currency();
 

@@ -69,6 +69,8 @@ const command_line::arg_descriptor<size_t>      arg_CRYPTONOTE_MINED_MONEY_UNLOC
 const command_line::arg_descriptor<uint64_t>    arg_MAX_BLOCK_SIZE_INITIAL  = {"MAX_BLOCK_SIZE_INITIAL", "uint64_t", CryptoNote::parameters::MAX_BLOCK_SIZE_INITIAL};
 const command_line::arg_descriptor<uint64_t>    arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY  = {"EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", "uint64_t"};
 const command_line::arg_descriptor<uint64_t>    arg_UPGRADE_HEIGHT  = {"UPGRADE_HEIGHT", "uint64_t", 0};
+const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT  = {"DIFFICULTY_CUT", "uint64_t", CryptoNote::parameters::DIFFICULTY_CUT};
+const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "uint64_t", CryptoNote::parameters::DIFFICULTY_LAG};
 const command_line::arg_descriptor<std::string> arg_CRYPTONOTE_NAME  = {"CRYPTONOTE_NAME", "Cryptonote name. Used for storage directory", ""};
 const command_line::arg_descriptor< std::vector<std::string> > arg_CHECKPOINT  = {"CHECKPOINT", "Checkpoints. Format: HEIGHT:HASH"};
   const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
@@ -76,7 +78,8 @@ const command_line::arg_descriptor< std::vector<std::string> > arg_CHECKPOINT  =
 }
 
 bool command_line_preprocessor(const boost::program_options::variables_map& vm, LoggerRef& logger);
-void print_genesis_tx_hex(LoggerManager& logManager, const boost::program_options::variables_map& vm) {CryptoNote::CurrencyBuilder currencyBuilder(logManager);
+void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager) {
+CryptoNote::CurrencyBuilder currencyBuilder(logManager);
 currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
 currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
 currencyBuilder.moneySupply(command_line::get_arg(vm, arg_MONEY_SUPPLY));
@@ -104,6 +107,9 @@ if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT) && command_line::get_arg(vm, a
 {
   currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
 }
+
+currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
+currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
 CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction();
 currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
 currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
@@ -132,6 +138,9 @@ if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT) && command_line::get_arg(vm, a
 {
   currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
 }
+
+currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
+currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
   CryptoNote::blobdata txb = tx_to_blob(tx);
   std::string tx_hex = blobToHex(txb);
 
@@ -200,6 +209,8 @@ command_line::add_arg(desc_cmd_sett, arg_CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
 command_line::add_arg(desc_cmd_sett, arg_MAX_BLOCK_SIZE_INITIAL);
 command_line::add_arg(desc_cmd_sett, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
 command_line::add_arg(desc_cmd_sett, arg_UPGRADE_HEIGHT);
+command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_CUT);
+command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_LAG);
 command_line::add_arg(desc_cmd_sett, arg_CRYPTONOTE_NAME);
 command_line::add_arg(desc_cmd_sett, arg_CHECKPOINT);
 command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
@@ -238,7 +249,8 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
 po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), desc_cmd_sett, true), vm);      }
       po::notify(vm);
 if (command_line::get_arg(vm, arg_print_genesis_tx)) {
-print_genesis_tx_hex(logManager, vm);  return false;
+  print_genesis_tx_hex(vm, logManager);
+  return false;
 }
       return true;
     });
@@ -304,6 +316,9 @@ if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT) && command_line::get_arg(vm, a
 {
   currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
 }
+
+currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
+currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
     currencyBuilder.testnet(testnet_mode);
 try {
   currencyBuilder.currency();

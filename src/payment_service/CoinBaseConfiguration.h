@@ -62,6 +62,8 @@ public:
   uint64_t MAX_BLOCK_SIZE_INITIAL;
   uint64_t EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;
   uint64_t UPGRADE_HEIGHT;
+  size_t DIFFICULTY_CUT;
+  size_t DIFFICULTY_LAG;
 };
 
 } //namespace PaymentService
