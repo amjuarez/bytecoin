@@ -1435,3 +1435,73 @@ TEST_F(WalletApi, sendBulkOfMessages) {
   bob->shutdown();
   carol->shutdown();
 }
+
+TEST_F(WalletApi, PaymentIdIndexWorks) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  prepareBobWallet();
+  bob->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+
+  for (int i = 0; i < 5; ++i) {
+    GetOneBlockReward(*alice);
+  }
+
+  generator.generateEmptyBlocks(10);
+
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  uint64_t sendAmount = 100000;
+  
+  CryptoNote::Transfer tr;
+  tr.address = bob->getAddress();
+  tr.amount = sendAmount;
+
+  std::string extra;
+  std::vector<uint8_t> rawExtra;
+  ASSERT_TRUE(cryptonote::createTxExtraWithPaymentId("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", rawExtra));
+  std::copy(rawExtra.begin(), rawExtra.end(), std::back_inserter(extra));
+  CryptoNote::PaymentId paymentId;
+  crypto::hash id;
+  ASSERT_TRUE(cryptonote::getPaymentIdFromTxExtra(rawExtra, id));
+  std::copy_n(reinterpret_cast<unsigned char*>(&id), sizeof(CryptoNote::PaymentId), std::begin(paymentId));
+  ASSERT_EQ(0, bob->getTransactionCount());
+  ASSERT_EQ(0, bob->getTransactionsByPaymentIds({paymentId})[0].transactions.size());
+  aliceNode->setNextTransactionToPool();
+  ASSERT_FALSE(extra.empty());
+  auto txId = alice->sendTransaction(tr, m_currency.minimumFee(), extra, 1, 0); 
+
+  bobNode->setNextTransactionToPool();
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+  ASSERT_NE(txId, CryptoNote::INVALID_TRANSACTION_ID);
+  aliceNode->includeTransactionsFromPoolToBlock();
+  ASSERT_EQ(0, bob->getTransactionsByPaymentIds({paymentId})[0].transactions.size());
+
+  bobNode->includeTransactionsFromPoolToBlock();
+  bobNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+  ASSERT_EQ(1, bob->getTransactionCount());
+  bobNode->includeTransactionsFromPoolToBlock();
+  //ASSERT_EQ(0, bob->unconfirmedTransactionAmount());
+  
+  CryptoNote::TransactionInfo info;
+  ASSERT_TRUE(bob->getTransaction(0, info));
+  //CryptoNote::ITransfersObserver& obeserver = *bob;
+  //observer.onTransactionUpdated(nullptr, info.hash);
+  generator.generateEmptyBlocks(10);
+
+  {
+    auto payments = bob->getTransactionsByPaymentIds({paymentId});
+
+    ASSERT_EQ(1, payments[0].transactions.size());
+    ASSERT_EQ(sendAmount, payments[0].transactions[0].totalAmount);
+  }
+  {
+    auto payments = alice->getTransactionsByPaymentIds({paymentId});
+
+    ASSERT_EQ(0, payments[0].transactions.size());
+  }
+}

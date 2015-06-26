@@ -12,6 +12,7 @@
 #include <ostream>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <vector>
 
 namespace CryptoNote {
@@ -82,6 +83,14 @@ struct WalletAccountKeys {
   WalletSecretKey spendSecretKey;
 };
 
+using PaymentId = std::array<uint8_t, 32>;
+struct Payments {
+  PaymentId paymentId;
+  std::vector<TransactionInfo> transactions;
+};
+
+static_assert(std::is_move_constructible<Payments>::value, "Payments is not move constructible");
+
 class IWalletObserver {
 public:
   virtual ~IWalletObserver() {}
@@ -125,6 +134,7 @@ public:
   
   virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction) = 0;
   virtual bool getTransfer(TransferId transferId, Transfer& transfer) = 0;
+  virtual std::vector<Payments> getTransactionsByPaymentIds(const std::vector<PaymentId>& paymentIds) const = 0;
 
   virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) = 0;
   virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) = 0;

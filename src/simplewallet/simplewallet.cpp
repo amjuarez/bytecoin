@@ -3,11 +3,12 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <thread>
-#include <set>
+#include <cstring>
 #include <future>
+#include <set>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -25,6 +26,7 @@
 #include "p2p/net_node.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "simplewallet.h"
+#include "transfers/TypeHelpers.h"
 #include "wallet/wallet_rpc_server.h"
 #include "version.h"
 #include "wallet/WalletHelper.h"
@@ -790,7 +792,7 @@ bool simple_wallet::listTransfers(const std::vector<std::string>& args) {
   for (size_t trantransactionNumber = 0; trantransactionNumber < transactionsCount; ++trantransactionNumber) {
     TransactionInfo txInfo;
     m_wallet->getTransaction(trantransactionNumber, txInfo);
-    if (txInfo.state != TransactionState::Active) {
+    if (txInfo.state != TransactionState::Active || txInfo.blockHeight == UNCONFIRMED_TRANSACTION_HEIGHT) {
       continue;
     }
 
@@ -828,55 +830,53 @@ bool simple_wallet::listTransfers(const std::vector<std::string>& args) {
   return true;
 }
 
-bool simple_wallet::show_payments(const std::vector<std::string> &args)
-{
-  if (args.empty())
-  {
+bool simple_wallet::show_payments(const std::vector<std::string> &args) {
+  if (args.empty()) {
     fail_msg_writer() << "expected at least one payment ID";
     return true;
   }
 
-  message_writer() << "                            payment                             \t" <<
-    "                          transaction                           \t" <<
-    "  height\t       amount        ";
+  try {
+    auto hashes = args;
+    std::sort(std::begin(hashes), std::end(hashes));
+    hashes.erase(std::unique(std::begin(hashes), std::end(hashes)), std::end(hashes));
+    std::vector<PaymentId> paymentIds;
+    paymentIds.reserve(hashes.size());
+    std::transform(std::begin(hashes), std::end(hashes), std::back_inserter(paymentIds), [](const std::string& arg) {
+      crypto::hash expectedPaymentId;
+      if (!cryptonote::parsePaymentId(arg, expectedPaymentId)) {
+        throw std::runtime_error("payment ID has invalid format: \"" + arg + "\", expected 64-character string");
+      }
+      
+      PaymentId paymentId;
+      static_assert(sizeof(PaymentId) == sizeof(crypto::hash), "size of PaymentId and crypto::hash doesn't match");
+      std::copy_n(reinterpret_cast<unsigned char*>(&expectedPaymentId), sizeof(expectedPaymentId), std::begin(paymentId));
+      return paymentId;
+    });
+    
+    message_writer() << "                            payment                             \t" <<
+      "                          transaction                           \t" <<
+      "  height\t       amount        ";
 
-  bool payments_found = false;
-  for (const std::string& arg: args)
-  {
-    crypto::hash expectedPaymentId;
-    if (cryptonote::parsePaymentId(arg, expectedPaymentId))
-    {
+    auto payments = m_wallet->getTransactionsByPaymentIds(paymentIds);
 
-      size_t transactionsCount = m_wallet->getTransactionCount();
-      for (size_t trantransactionNumber = 0; trantransactionNumber < transactionsCount; ++trantransactionNumber) {
-        TransactionInfo txInfo;
-        m_wallet->getTransaction(trantransactionNumber, txInfo);
-        if (txInfo.totalAmount < 0) continue;
-        std::vector<uint8_t> extraVec;
-        extraVec.reserve(txInfo.extra.size());
-        std::for_each(txInfo.extra.begin(), txInfo.extra.end(), [&extraVec](const char el) { extraVec.push_back(el); });
-
-        crypto::hash paymentId;
-        if (cryptonote::getPaymentIdFromTxExtra(extraVec, paymentId) && paymentId == expectedPaymentId) {
-          payments_found = true;
-          success_msg_writer(true) <<
-            paymentId << "\t\t" <<
-            epee::string_tools::pod_to_hex(txInfo.hash) <<
-            std::setw(8) << txInfo.blockHeight << '\t' <<
-            std::setw(21) << m_currency.formatAmount(txInfo.totalAmount);// << '\t' <<
-        }
+    for (auto& payment : payments) {
+      for (auto& transaction : payment.transactions) {
+        success_msg_writer(true) << 
+          epee::string_tools::pod_to_hex(payment.paymentId) << '\t' << 
+          epee::string_tools::pod_to_hex(transaction.hash) << '\t' <<
+          std::setw(8) << transaction.blockHeight << '\t' << 
+          std::setw(21) << m_currency.formatAmount(transaction.totalAmount); // << '\t' <<
       }
 
-      if (!payments_found)
-      {
-        success_msg_writer() << "No payments with id " << expectedPaymentId;
-        continue;
+      if (payment.transactions.empty()) {
+        success_msg_writer() << "No payments with id " << epee::string_tools::pod_to_hex(payment.paymentId);
       }
+
     }
-    else
-    {
-      fail_msg_writer() << "payment ID has invalid format: \"" << arg << "\", expected 64-character string";
-    }
+
+  } catch (std::exception& e) {
+    fail_msg_writer() << "show_payments exception: " << e.what();
   }
 
   return true;

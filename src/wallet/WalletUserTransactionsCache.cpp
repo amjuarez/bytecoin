@@ -15,6 +15,7 @@
 #include "serialization/ISerializer.h"
 #include "serialization/SerializationOverloads.h"
 #include <algorithm>
+#include <iterator>
 
 namespace CryptoNote {
 
@@ -28,9 +29,61 @@ void WalletUserTransactionsCache::serialize(cryptonote::ISerializer& s, const st
 
   if (s.type() == cryptonote::ISerializer::INPUT) {
     updateUnconfirmedTransactions();
+    rebuildPaymentsIndex();
   }
 
   s.endObject();
+}
+
+bool paymentIdIsSet(const PaymentId& paymentId) {
+  return std::all_of(std::begin(paymentId), std::end(paymentId), [](PaymentId::value_type v) { return v != 0; });
+}
+
+bool canInsertTransactionToIndex(const TransactionInfo& info) {
+  return info.state == TransactionState::Active && info.blockHeight != UNCONFIRMED_TRANSACTION_HEIGHT &&
+      info.totalAmount > 0 && !info.extra.empty();
+}
+
+bool extractPaymentId(const std::vector<uint8_t>& extra, PaymentId& paymentId) {
+  crypto::hash hash;
+  if (!cryptonote::getPaymentIdFromTxExtra(extra, hash)) {
+    return false;
+  }
+  std::copy_n(reinterpret_cast<unsigned char*>(&hash), sizeof(crypto::hash), std::begin(paymentId));
+  return true;
+}
+
+void WalletUserTransactionsCache::pushToPaymentsIndex(const PaymentId& paymentId, Offset distance) {
+  m_paymentsIndex[paymentId].push_back(distance);
+}
+
+void WalletUserTransactionsCache::popFromPaymentsIndex(const PaymentId& paymentId, Offset distance) {
+  auto it = m_paymentsIndex.find(paymentId);
+  if (it == m_paymentsIndex.end()) {
+    return;
+  }
+
+  auto toErase = std::lower_bound(it->second.begin(), it->second.end(), distance);
+  if (toErase == it->second.end() || *toErase != distance) {
+    return;
+  }
+
+  it->second.erase(toErase);
+}
+
+void WalletUserTransactionsCache::rebuildPaymentsIndex() {
+  auto begin = std::begin(m_transactions);
+  auto end = std::end(m_transactions);
+  std::vector<uint8_t> extra;
+  for (auto it = begin; it != end; ++it) {
+    PaymentId paymentId;
+    extra.insert(extra.begin(), it->extra.begin(), it->extra.end());
+    if (canInsertTransactionToIndex(*it) && extractPaymentId(extra, paymentId)) {
+      pushToPaymentsIndex(paymentId, std::distance(begin, it));
+    }
+    extra.clear();
+  }
+
 }
 
 uint64_t WalletUserTransactionsCache::unconfirmedTransactionsAmount() const {
@@ -55,7 +108,7 @@ size_t WalletUserTransactionsCache::getDepositCount() const {
 
 TransactionId WalletUserTransactionsCache::addNewTransaction(
   uint64_t amount, uint64_t fee, const std::string& extra, const std::vector<Transfer>& transfers, uint64_t unlockTime, const std::vector<TransactionMessage>& messages) {
-  
+
   TransactionInfo transaction;
 
   transaction.firstTransferId = insertTransfers(transfers);
@@ -138,8 +191,32 @@ std::shared_ptr<WalletEvent> WalletUserTransactionsCache::onTransactionUpdated(c
     // notification event
     event = std::make_shared<WalletTransactionUpdatedEvent>(id);
   }
+    
+  if (canInsertTransactionToIndex(getTransaction(id)) && paymentIdIsSet(txInfo.paymentId)) {
+    pushToPaymentsIndex(txInfo.paymentId, id);
+  }
 
   return event;
+}
+
+std::vector<Payments> WalletUserTransactionsCache::getTransactionsByPaymentIds(const std::vector<PaymentId>& paymentIds) const {
+  std::vector<Payments> payments(paymentIds.size());
+  auto payment = payments.begin();
+  for (auto& key : paymentIds) {
+    payment->paymentId = key;
+    auto it = m_paymentsIndex.find(key);
+    if (it != m_paymentsIndex.end()) {
+      std::transform(it->second.begin(), it->second.end(), std::back_inserter(payment->transactions),
+                     [this](decltype(it->second)::value_type val) {
+        assert(val < m_transactions.size());
+        return m_transactions[val];
+      });
+    }
+
+    ++payment;
+  }
+
+  return payments;
 }
 
 std::shared_ptr<WalletEvent> WalletUserTransactionsCache::onTransactionDeleted(const TransactionHash& transactionHash) {
@@ -155,6 +232,11 @@ std::shared_ptr<WalletEvent> WalletUserTransactionsCache::onTransactionDeleted(c
   std::shared_ptr<WalletEvent> event;
   if (id != CryptoNote::INVALID_TRANSACTION_ID) {
     TransactionInfo& tr = getTransaction(id);
+    std::vector<uint8_t> extra(tr.extra.begin(), tr.extra.end());
+    PaymentId paymentId;
+    if (extractPaymentId(extra, paymentId)) {
+      popFromPaymentsIndex(paymentId, id);
+    }
     tr.blockHeight = UNCONFIRMED_TRANSACTION_HEIGHT;
     tr.timestamp = 0;
     tr.state = TransactionState::Deleted;

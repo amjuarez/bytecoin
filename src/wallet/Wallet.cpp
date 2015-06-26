@@ -321,6 +321,10 @@ void Wallet::reset() {
   removeObserver(&initWaiter);
 }
 
+std::vector<Payments> Wallet::getTransactionsByPaymentIds(const std::vector<PaymentId>& paymentIds) const {
+  return m_transactionsCache.getTransactionsByPaymentIds(paymentIds);
+}
+
 void Wallet::save(std::ostream& destination, bool saveDetailed, bool saveCache) {
   if(m_isStopping) {
     m_observerManager.notify(&IWalletObserver::saveCompleted, make_error_code(cryptonote::error::OPERATION_CANCELLED));

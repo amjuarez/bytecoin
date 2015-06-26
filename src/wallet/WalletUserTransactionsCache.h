@@ -8,6 +8,7 @@
 #include "crypto/hash.h"
 #include "IWallet.h"
 #include "ITransfersContainer.h"
+#include <transfers/TypeHelpers.h>
 
 #include "WalletEvent.h"
 #include "WalletUnconfirmedTransactions.h"
@@ -49,8 +50,9 @@ public:
 
   bool isUsed(const TransactionOutputInformation& out) const;
 
-private:
+  std::vector<Payments> getTransactionsByPaymentIds(const std::vector<PaymentId>& paymentIds) const;
 
+private:
   TransactionId findTransactionByHash(const TransactionHash& hash);
   TransactionId insertTransaction(TransactionInfo&& Transaction);
   TransferId insertTransfers(const std::vector<Transfer>& transfers);
@@ -59,11 +61,19 @@ private:
   typedef std::vector<Transfer> UserTransfers;
   typedef std::vector<TransactionInfo> UserTransactions;
   typedef std::vector<DepositInfo> UserDeposits;
+  using Offset = UserTransactions::size_type;
+  using UserPaymentIndex = std::unordered_map<PaymentId, std::vector<Offset>>;
+  
+  void rebuildPaymentsIndex();
+  void pushToPaymentsIndex(const PaymentId& paymentId, Offset distance);
+  void pushToPaymentsIndexInternal(Offset distance, const TransactionInfo& info, std::vector<uint8_t>& extra);
+  void popFromPaymentsIndex(const PaymentId& paymentId, Offset distance);
 
   UserTransactions m_transactions;
   UserTransfers m_transfers;
   UserDeposits m_deposits;
   WalletUnconfirmedTransactions m_unconfirmedTransactions;
+  UserPaymentIndex m_paymentsIndex;
 };
 
 } //namespace CryptoNote

@@ -156,7 +156,7 @@ bool wallet_rpc_server::on_store(const wallet_rpc::COMMAND_RPC_STORE::request& r
 }
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::on_get_payments(const wallet_rpc::COMMAND_RPC_GET_PAYMENTS::request& req, wallet_rpc::COMMAND_RPC_GET_PAYMENTS::response& res, epee::json_rpc::error& er, connection_context& cntx) {
-  crypto::hash expectedPaymentId;
+  PaymentId expectedPaymentId;
   cryptonote::blobdata payment_id_blob;
   if (!epee::string_tools::parse_hexstr_to_binbuff(req.payment_id, payment_id_blob)) {
     er.code = WALLET_RPC_ERROR_CODE_WRONG_PAYMENT_ID;
@@ -170,31 +170,17 @@ bool wallet_rpc_server::on_get_payments(const wallet_rpc::COMMAND_RPC_GET_PAYMEN
     return false;
   }
 
-  expectedPaymentId = *reinterpret_cast<const crypto::hash*>(payment_id_blob.data());
-  size_t transactionsCount = m_wallet->getTransactionCount();
-  for (size_t trantransactionNumber = 0; trantransactionNumber < transactionsCount; ++trantransactionNumber) {
-    TransactionInfo txInfo;
-    m_wallet->getTransaction(trantransactionNumber, txInfo);
-    if (txInfo.state != TransactionState::Active || txInfo.blockHeight == UNCONFIRMED_TRANSACTION_HEIGHT) {
-      continue;
-    }
-
-    if (txInfo.totalAmount < 0) continue;
-    std::vector<uint8_t> extraVec;
-    extraVec.reserve(txInfo.extra.size());
-    std::for_each(txInfo.extra.begin(), txInfo.extra.end(), [&extraVec](const char el) { extraVec.push_back(el); });
-
-    crypto::hash paymentId;
-    if (getPaymentIdFromTxExtra(extraVec, paymentId) && paymentId == expectedPaymentId) {
-      wallet_rpc::payment_details rpc_payment;
-      rpc_payment.tx_hash = epee::string_tools::pod_to_hex(txInfo.hash);
-      rpc_payment.amount = txInfo.totalAmount;
-      rpc_payment.block_height = txInfo.blockHeight;
-      rpc_payment.unlock_time = txInfo.unlockTime;
-      res.payments.push_back(rpc_payment);
-    }
+  std::copy(std::begin(payment_id_blob), std::end(payment_id_blob), reinterpret_cast<char*>(&expectedPaymentId)); // no UB, char can alias any type
+  auto payments = m_wallet->getTransactionsByPaymentIds({expectedPaymentId});
+  assert(payments.size() == 1);
+  for (auto& transaction : payments[0].transactions) {
+    wallet_rpc::payment_details rpc_payment;
+    rpc_payment.tx_hash = epee::string_tools::pod_to_hex(transaction.hash);
+    rpc_payment.amount = transaction.totalAmount;
+    rpc_payment.block_height = transaction.blockHeight;
+    rpc_payment.unlock_time = transaction.unlockTime;
+    res.payments.push_back(rpc_payment);
   }
-
   return true;
 }
 
