@@ -81,7 +81,7 @@ template<class Archive> void cryptonote::blockchain_storage::MultisignatureOutpu
 namespace cryptonote
 {
 
-#define CURRENT_BLOCKCACHE_STORAGE_ARCHIVE_VER 1
+#define CURRENT_BLOCKCACHE_STORAGE_ARCHIVE_VER 2
 
   class BlockCacheSerializer {
 
@@ -124,6 +124,9 @@ namespace cryptonote
 
       LOG_PRINT_L0(operation << "multi-signature outputs...");
       ar & m_bs.m_multisignatureOutputs;
+
+      LOG_PRINT_L0(operation << "deposit index...");
+      ar & m_bs.m_depositIndex;
 
       m_loaded = true;
     }
@@ -263,6 +266,7 @@ bool blockchain_storage::init(const std::string& config_folder, bool load_existi
           const BlockEntry& block = m_blocks[b];
           crypto::hash blockHash = get_block_hash(block.bl);
           m_blockIndex.push(blockHash);
+          uint64_t interest = 0;
           for (uint16_t t = 0; t < block.transactions.size(); ++t) {
             const TransactionEntry& transaction = block.transactions[t];
             crypto::hash transactionHash = get_transaction_hash(transaction.tx);
@@ -289,7 +293,11 @@ bool blockchain_storage::init(const std::string& config_folder, bool load_existi
                 m_multisignatureOutputs[out.amount].push_back(usage);
               }
             }
+
+            interest += m_currency.calculateTotalTransactionInterest(transaction.tx);
           }
+
+          pushToDepositIndex(block, interest);
         }
 
         std::chrono::duration<double> duration = std::chrono::steady_clock::now() - timePoint;
@@ -396,6 +404,11 @@ crypto::hash blockchain_storage::get_block_id_by_height(uint64_t height) {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
   return m_blockIndex.getBlockId(height);
 }
+   
+bool blockchain_storage::getBlockHeight(const crypto::hash& blockHash, uint64_t& height) const {
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  return m_blockIndex.getBlockHeight(blockHash, height);
+}
 
 bool blockchain_storage::get_block_by_hash(const crypto::hash& blockHash, Block& b) {
   CRITICAL_REGION_LOCAL(m_blockchain_lock);
@@ -440,6 +453,22 @@ uint64_t blockchain_storage::getCoinsInCirculation() {
   } else {
     return m_blocks.back().already_generated_coins;
   }
+}
+    
+uint64_t blockchain_storage::coinsEmittedAtHeight(uint64_t height) {
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  const auto& block = m_blocks[height];
+  return block.already_generated_coins;
+}
+
+difficulty_type blockchain_storage::difficultyAtHeight(uint64_t height) {
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  const auto& current = m_blocks[height];
+  if (height < 1) { 
+    return current.cumulative_difficulty;
+  }
+  const auto& previous = m_blocks[height - 1];
+  return current.cumulative_difficulty - previous.cumulative_difficulty;
 }
 
 uint8_t blockchain_storage::get_block_major_version_for_height(uint64_t height) const {
@@ -1179,7 +1208,6 @@ bool blockchain_storage::find_blockchain_supplement(const std::list<crypto::hash
     return false;
 
   resp.total_height = get_current_blockchain_height();
-  size_t count = 0;
 
   return m_blockIndex.getBlockIds(resp.start_height, BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT, resp.m_block_ids);
 }
@@ -1673,6 +1701,7 @@ bool blockchain_storage::pushBlock(const Block& blockData, block_verification_co
   }
 
   pushBlock(block);
+  pushToDepositIndex(block, interestSummary);
   TIME_MEASURE_FINISH(block_processing_time);
   LOG_PRINT_L1("+++++ BLOCK SUCCESSFULLY ADDED" << ENDL << "id:\t" << blockHash
     << ENDL << "PoW:\t" << proof_of_work
@@ -1687,6 +1716,49 @@ bool blockchain_storage::pushBlock(const Block& blockData, block_verification_co
   update_next_comulative_size_limit();
 
   return true;
+}
+    
+uint64_t blockchain_storage::fullDepositAmount() const {
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  return m_depositIndex.fullDepositAmount();
+}
+
+uint64_t blockchain_storage::depositAmountAtHeight(size_t height) const {
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  return m_depositIndex.depositAmountAtHeight(height);
+}
+    
+uint64_t blockchain_storage::fullDepositInterest() const {
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  return m_depositIndex.fullInterestAmount();
+}
+
+uint64_t blockchain_storage::depositInterestAtHeight(size_t height) const {
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+  return m_depositIndex.depositInterestAtHeight(height);
+}
+
+void blockchain_storage::pushToDepositIndex(const BlockEntry& block, uint64_t interest) {
+  int64_t deposit = 0;
+  for (const auto& tx : block.transactions) {
+    for (const auto& in : tx.tx.vin) {
+      if (in.type() == typeid(TransactionInputMultisignature)) {
+        auto& multisign = boost::get<TransactionInputMultisignature>(in);
+        if (multisign.term > 0) {
+          deposit -= multisign.amount;
+        }
+      }
+    }
+    for (const auto& out : tx.tx.vout) {
+      if (out.target.type() == typeid(TransactionOutputMultisignature)) {
+        auto& multisign = boost::get<TransactionOutputMultisignature>(out.target);
+        if (multisign.term > 0) {
+          deposit += out.amount;
+        }
+      }
+    }
+  }
+  m_depositIndex.pushBlock(deposit, interest);
 }
 
 bool blockchain_storage::pushBlock(BlockEntry& block) {
@@ -1707,6 +1779,7 @@ void blockchain_storage::popBlock(const crypto::hash& blockHash) {
   }
 
   popTransactions(m_blocks.back(), get_transaction_hash(m_blocks.back().bl.minerTx));
+  m_depositIndex.popBlock();
   m_blocks.pop_back();
   m_blockIndex.pop();
 
@@ -1912,8 +1985,8 @@ bool blockchain_storage::validateInput(const TransactionInputMultisignature& inp
     return false;
   }
 
-  std::size_t inputSignatureIndex = 0;
-  std::size_t outputKeyIndex = 0;
+  size_t inputSignatureIndex = 0;
+  size_t outputKeyIndex = 0;
   while (inputSignatureIndex < input.signatures) {
     if (outputKeyIndex == output.keys.size()) {
       LOG_PRINT_L1("Transaction << " << transactionHash << " contains multisignature input with invalid signatures.");

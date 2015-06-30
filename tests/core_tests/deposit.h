@@ -57,6 +57,46 @@ struct DepositTestsBase : public test_chain_unit_base {
   std::size_t emission = 0;
 };
 
+struct DepositIndexTest : public DepositTestsBase {
+  using Block = cryptonote::Block;
+  using Core = cryptonote::core;
+  using Events = std::vector<test_event_entry>;
+  DepositIndexTest() {
+    m_currency =
+        cryptonote::CurrencyBuilder().upgradeHeight(0).depositMinTerm(10).depositMinTotalRateFactor(100).mininumFee(1000).currency();
+    REGISTER_CALLBACK_METHOD(DepositIndexTest, interestZero);
+    REGISTER_CALLBACK_METHOD(DepositIndexTest, interestOneMinimal);
+    REGISTER_CALLBACK_METHOD(DepositIndexTest, interestTwoMininmal);
+    REGISTER_CALLBACK_METHOD(DepositIndexTest, amountZero);
+    REGISTER_CALLBACK_METHOD(DepositIndexTest, amountOneMinimal);
+    REGISTER_CALLBACK_METHOD(DepositIndexTest, amountThreeMinimal);
+  }
+
+  bool amountZero(const Core& c, std::size_t ev_index, const Events& events) {
+    return c.fullDepositAmount() == 0;
+  }
+
+  bool amountOneMinimal(const Core& c, std::size_t ev_index, const Events& events) {
+    return c.fullDepositAmount() == m_currency.depositMinAmount();
+  }
+
+  bool amountThreeMinimal(const Core& c, std::size_t ev_index, const Events& events) {
+    return c.fullDepositAmount() == 3 * m_currency.depositMinAmount();
+  }
+
+  bool interestZero(const Core& c, std::size_t ev_index, const Events& events) {
+    return c.fullDepositInterest() == 0;
+  }
+
+  bool interestOneMinimal(const Core& c, std::size_t ev_index, const Events& events) {
+    return c.fullDepositInterest() == m_currency.calculateInterest(m_currency.depositMinAmount(), m_currency.depositMinTerm());
+  }
+
+  bool interestTwoMininmal(const Core& c, std::size_t ev_index, const Events& events) {
+    return c.fullDepositInterest() == 2 * m_currency.calculateInterest(m_currency.depositMinAmount(), m_currency.depositMinTerm());
+  }
+};
+
 struct EmissionTest : public DepositTestsBase {
   EmissionTest() {
     m_currency =
@@ -77,12 +117,12 @@ struct EmissionTest : public DepositTestsBase {
   bool save_emission_before(cryptonote::core& c, std::size_t /*ev_index*/,
                             const std::vector<test_event_entry>& /*events*/) {
     emission_before = c.getCoinsInCirculation();
-    return true;
+    return emission_before > 0;
   }
 
   bool save_emission_after(cryptonote::core& c, std::size_t ev_index, const std::vector<test_event_entry>& /*events*/) {
     emission_after = c.getCoinsInCirculation();
-    return true;
+    return emission_after > 0;
   }
   TestGenerator prepare(std::vector<test_event_entry>& events) const;
   std::size_t emission_before = 0;
@@ -198,4 +238,37 @@ struct TransactionThatTriesToSpendOutputWhosTermHasntFinishedWillBeRejected : pu
 struct TransactionWithAmountThatHasAlreadyFinishedWillBeAccepted : public DepositTestsBase {
   bool generate(std::vector<test_event_entry>& events);
 };
+
+struct TransactionWithDepositExtendsTotalDeposit : public DepositIndexTest {
+  bool generate(std::vector<test_event_entry>& events);
+};
+
+struct TransactionWithMultipleDepositOutsExtendsTotalDeposit : public DepositIndexTest {
+  bool generate(std::vector<test_event_entry>& events);
+};
+
+struct TransactionWithDepositIsClearedAfterInputSpend : public DepositIndexTest {
+  bool generate(std::vector<test_event_entry>& events);
+};
+
+struct TransactionWithDepositUpdatesInterestAfterDepositUnlock : public DepositIndexTest {
+  bool generate(std::vector<test_event_entry>& events);
+};
+
+struct TransactionWithDepositUnrolesInterestAfterSwitchToAlternativeChain : public DepositIndexTest{
+  bool generate(std::vector<test_event_entry>& events);
+};
+
+struct TransactionWithDepositUnrolesAmountAfterSwitchToAlternativeChain : public DepositIndexTest {
+  bool generate(std::vector<test_event_entry>& events);
+};
+
+struct TransactionWithDepositUpdatesInterestAfterDepositUnlockMultiple : public DepositIndexTest {
+  bool generate(std::vector<test_event_entry>& events);
+};
+
+struct TransactionWithDepositUnrolesPartOfAmountAfterSwitchToAlternativeChain : public DepositIndexTest {
+  bool generate(std::vector<test_event_entry>& events); 
+};
+
 }

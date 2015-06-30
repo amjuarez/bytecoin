@@ -67,12 +67,15 @@ namespace cryptonote {
      crypto::hash get_block_id_by_height(uint64_t height);
      void get_transactions(const std::vector<crypto::hash>& txs_ids, std::list<Transaction>& txs, std::list<crypto::hash>& missed_txs);
      bool get_block_by_hash(const crypto::hash &h, Block &blk);
+     bool getBlockHeight(const crypto::hash &h, uint64_t& height) const;
      //void get_all_known_block_ids(std::list<crypto::hash> &main, std::list<crypto::hash> &alt, std::list<crypto::hash> &invalid);
 
      virtual bool getBlockByHash(const crypto::hash &h, Block &blk) override;
 
      bool get_alternative_blocks(std::list<Block>& blocks);
      size_t get_alternative_blocks_count();
+     uint64_t coinsEmittedAtHeight(uint64_t height);
+     uint64_t difficultyAtHeight(uint64_t height);
 
      void set_cryptonote_protocol(i_cryptonote_protocol* pprotocol);
      void set_checkpoints(checkpoints&& chk_pts);
@@ -101,6 +104,10 @@ namespace cryptonote {
      void on_synchronized();
      virtual bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) override;
      uint64_t getCoinsInCirculation();
+     uint64_t fullDepositAmount() const;
+     uint64_t fullDepositInterest() const;
+     uint64_t depositAmountAtHeight(size_t height) const;
+     uint64_t depositInterestAtHeight(size_t height) const;
 
    private:
      bool add_new_tx(const Transaction& tx, const crypto::hash& tx_hash, const crypto::hash& tx_prefix_hash, size_t blob_size, tx_verification_context& tvc, bool keeped_by_block);

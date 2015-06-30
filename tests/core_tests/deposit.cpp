@@ -695,5 +695,295 @@ bool TransactionWithAmountThatHasAlreadyFinishedWillBeAccepted::generate(std::ve
   return true;
 }
 
+bool TransactionWithDepositExtendsTotalDeposit::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow(), BLOCK_MAJOR_VERSION_2);
+  generator.addCallback("amountZero");
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount() + 100, m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  generator.addCallback("amountOneMinimal");
+  generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  return true;
+}
+
+bool TransactionWithMultipleDepositOutsExtendsTotalDeposit::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow(), BLOCK_MAJOR_VERSION_2);
+  generator.addCallback("amountZero");
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount() + 100, m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, 0);
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  generator.addCallback("amountThreeMinimal");
+  generator.generateBlocks(2, BLOCK_MAJOR_VERSION_2);
+  return true;
+}
+
+bool TransactionWithDepositIsClearedAfterInputSpend::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow(), BLOCK_MAJOR_VERSION_2);
+  generator.addCallback("amountZero");
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount() + 100, m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  
+  generator.generateBlocks(m_currency.depositMinTerm() - 1, BLOCK_MAJOR_VERSION_2);
+
+  generator.addCallback("amountOneMinimal");
+  {
+    TransactionBuilder builder(m_currency);
+    auto src = createSource(m_currency.depositMinTerm(), key);
+    src.input.term = m_currency.depositMinTerm();
+    builder.addMultisignatureInput(src);
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  generator.addCallback("amountZero");
+  generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  
+  return true;
+}
+
+bool TransactionWithDepositUpdatesInterestAfterDepositUnlock::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow(), BLOCK_MAJOR_VERSION_2);
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount() + 100, m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  
+  generator.generateBlocks(m_currency.depositMinTerm() - 1, BLOCK_MAJOR_VERSION_2);
+
+  generator.addCallback("interestZero");
+  {
+    TransactionBuilder builder(m_currency);
+    auto src = createSource(m_currency.depositMinTerm(), key);
+    src.input.term = m_currency.depositMinTerm();
+    builder.addMultisignatureInput(src);
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+    generator.addCallback("interestOneMinimal");
+    generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  }
+  
+  return true;
+}
+
+bool TransactionWithDepositUpdatesInterestAfterDepositUnlockMultiple::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow(), BLOCK_MAJOR_VERSION_2);
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount() + 100, m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  
+  generator.generateBlocks(m_currency.depositMinTerm() - 1, BLOCK_MAJOR_VERSION_2);
+
+  generator.addCallback("interestZero");
+  {
+    TransactionBuilder builder(m_currency);
+    auto src1 = createSource(m_currency.depositMinTerm(), key);
+    auto src2 = createSource(m_currency.depositMinTerm(), key);
+    src1.input.term = m_currency.depositMinTerm();
+    src2.input.term = m_currency.depositMinTerm();
+    src2.input.outputIndex = 1;
+    src2.srcOutputIndex = 1;
+    builder.addMultisignatureInput(src1);
+    builder.addMultisignatureInput(src2);
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+    generator.addCallback("interestTwoMininmal");
+    generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  }
+  
+  return true;
+}
+
+bool TransactionWithDepositUnrolesInterestAfterSwitchToAlternativeChain::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow(), BLOCK_MAJOR_VERSION_2);
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount() + 100, m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  
+  generator.generateBlocks(m_currency.depositMinTerm() - 1, BLOCK_MAJOR_VERSION_2);
+  auto lastBlock = generator.lastBlock;
+
+  generator.addCallback("interestZero");
+  {
+    TransactionBuilder builder(m_currency);
+    auto src = createSource(m_currency.depositMinTerm(), key);
+    src.input.term = m_currency.depositMinTerm();
+    builder.addMultisignatureInput(src);
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+    generator.addCallback("interestOneMinimal");
+    generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  }
+  
+  generator.lastBlock = lastBlock; 
+  generator.generateBlocks(4, BLOCK_MAJOR_VERSION_2);
+  generator.addCallback("interestZero");
+  generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  
+  return true;
+}
+
+bool TransactionWithDepositUnrolesAmountAfterSwitchToAlternativeChain::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow(), BLOCK_MAJOR_VERSION_2);
+  auto lastBlock = generator.lastBlock;
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount() + 100, m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  
+  generator.addCallback("amountOneMinimal");
+  generator.generateBlocks(m_currency.depositMinTerm(), BLOCK_MAJOR_VERSION_2);
+
+  generator.addCallback("amountOneMinimal");
+  generator.lastBlock = lastBlock; 
+  generator.generateBlocks(m_currency.depositMinTerm() + 4, BLOCK_MAJOR_VERSION_2);
+  generator.addCallback("amountZero");
+  generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  
+  return true;
+}
+
+bool TransactionWithDepositUnrolesPartOfAmountAfterSwitchToAlternativeChain::generate(std::vector<test_event_entry>& events) {
+  TestGenerator generator(m_currency, events);
+  generator.generator.defaultMajorVersion = BLOCK_MAJOR_VERSION_2;
+  generator.generateBlocks(m_currency.minedMoneyUnlockWindow() + 3, BLOCK_MAJOR_VERSION_2);
+  cryptonote::KeyPair key;
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount(), m_currency.minimumFee());
+    builder.m_destinations.clear();
+
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    key = builder.getTxKeys();
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+  }
+  
+  auto lastBlock = generator.lastBlock;
+  generator.addCallback("amountOneMinimal");
+  generator.generateBlocks(m_currency.depositMinTerm(), BLOCK_MAJOR_VERSION_2);
+
+  {
+    auto builder = generator.createTxBuilder(generator.minerAccount, from, m_currency.depositMinAmount(), m_currency.minimumFee());
+    builder.m_sources.clear();
+    builder.m_destinations.clear();
+    TransactionBuilder::KeysVector kv;
+    kv.push_back(from.get_keys());
+    auto src1 = createSource(m_currency.depositMinTerm(), key);
+    src1.input.term = m_currency.depositMinTerm();
+    builder.addMultisignatureInput(src1);
+    builder.addMultisignatureOut(m_currency.depositMinAmount(), kv, 1, m_currency.depositMinTerm());
+    auto tx = builder.build();
+    generator.addEvent(tx);
+    generator.makeNextBlock(tx);
+    generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  }
+  
+  generator.lastBlock = lastBlock; 
+  generator.generateBlocks(m_currency.depositMinTerm() + 4, BLOCK_MAJOR_VERSION_2);
+  generator.addCallback("amountOneMinimal");
+  generator.generateBlocks(1, BLOCK_MAJOR_VERSION_2);
+  
+  return true;
+}
 
 }

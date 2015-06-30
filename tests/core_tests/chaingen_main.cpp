@@ -86,6 +86,15 @@ int main(int argc, char* argv[])
   GENERATE_AND_PLAY_EX(TestCase(cryptonote::BLOCK_MAJOR_VERSION_1)) \
   GENERATE_AND_PLAY_EX(TestCase(cryptonote::BLOCK_MAJOR_VERSION_2))
 
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositUnrolesPartOfAmountAfterSwitchToAlternativeChain);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositExtendsTotalDeposit);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithMultipleDepositOutsExtendsTotalDeposit);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositUpdatesInterestAfterDepositUnlock);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositUnrolesInterestAfterSwitchToAlternativeChain);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositUnrolesAmountAfterSwitchToAlternativeChain);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositIsClearedAfterInputSpend);
+    GENERATE_AND_PLAY(DepositTests::TransactionWithDepositUpdatesInterestAfterDepositUnlockMultiple);
+
     GENERATE_AND_PLAY(DepositTests::BlocksOfFirstTypeCantHaveTransactionsOfTypeTwo);
     GENERATE_AND_PLAY(DepositTests::BlocksOfSecondTypeCanHaveTransactionsOfTypeOne);
     GENERATE_AND_PLAY(DepositTests::BlocksOfSecondTypeCanHaveTransactionsOfTypeTwo);
@@ -111,7 +120,6 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(DepositTests::TransactionWithDepositExtendsEmission);
     GENERATE_AND_PLAY(DepositTests::TransactionWithDepositRestorsEmissionOnAlternativeChain);
 
-    
     GENERATE_AND_PLAY(gen_simple_chain_001);
     GENERATE_AND_PLAY(gen_simple_chain_split_1);
     GENERATE_AND_PLAY(one_block);

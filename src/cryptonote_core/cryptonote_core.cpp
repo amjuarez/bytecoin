@@ -212,6 +212,22 @@ namespace cryptonote
   uint64_t core::getCoinsInCirculation() {
     return m_blockchain_storage.getCoinsInCirculation();
   }
+  
+  uint64_t core::fullDepositAmount() const {
+    return m_blockchain_storage.fullDepositAmount();
+  }
+
+  uint64_t core::depositAmountAtHeight(size_t height) const {
+    return m_blockchain_storage.depositAmountAtHeight(height);
+  }
+
+  uint64_t core::fullDepositInterest() const {
+    return m_blockchain_storage.fullDepositInterest();
+  }
+
+  uint64_t core::depositInterestAtHeight(size_t height) const {
+    return m_blockchain_storage.depositInterestAtHeight(height);
+  }
 
   //-----------------------------------------------------------------------------------------------
   bool core::check_tx_semantic(const Transaction& tx, bool keeped_by_block)
@@ -486,6 +502,18 @@ namespace cryptonote
   //-----------------------------------------------------------------------------------------------
   bool core::getBlockByHash(const crypto::hash &h, Block &blk) {
     return core::get_block_by_hash(h, blk);
+  }
+     
+  bool core::getBlockHeight(const crypto::hash &h, uint64_t& height) const {
+    return m_blockchain_storage.getBlockHeight(h, height);
+  }
+     
+  uint64_t core::coinsEmittedAtHeight(uint64_t height) {
+    return m_blockchain_storage.coinsEmittedAtHeight(height);
+  }
+  
+  uint64_t core::difficultyAtHeight(uint64_t height) {
+    return {m_blockchain_storage.difficultyAtHeight(height)};
   }
 
   crypto::hash core::get_block_id_by_height(uint64_t height)

@@ -9,12 +9,12 @@
 
 #include "console_handler.h"
 #include "p2p/net_node.h"
+#include "cryptonote_core/Currency.h"
 #include "cryptonote_core/miner.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "common/util.h"
 #include "crypto/hash.h"
 #include "version.h"
-
 
 class daemon_cmmands_handler
 {
@@ -29,6 +29,7 @@ public:
     //m_cmd_binder.set_handler("print_bci", boost::bind(&daemon_cmmands_handler::print_bci, this, _1));
     //m_cmd_binder.set_handler("print_bc_outs", boost::bind(&daemon_cmmands_handler::print_bc_outs, this, _1));
     m_cmd_binder.set_handler("print_block", boost::bind(&daemon_cmmands_handler::print_block, this, _1), "Print block, print_block <block_hash> | <block_height>");
+    m_cmd_binder.set_handler("print_stat", boost::bind(&daemon_cmmands_handler::print_stat, this, _1), "Print statistics, print_stat <nothing=last> | <block_hash> | <block_height>");
     m_cmd_binder.set_handler("print_tx", boost::bind(&daemon_cmmands_handler::print_tx, this, _1), "Print transaction, print_tx <transaction_hash>");
     m_cmd_binder.set_handler("start_mining", boost::bind(&daemon_cmmands_handler::start_mining, this, _1), "Start mining for specified address, start_mining <addr> [threads=1]");
     m_cmd_binder.set_handler("stop_mining", boost::bind(&daemon_cmmands_handler::stop_mining, this, _1), "Stop mining");
@@ -236,6 +237,36 @@ private:
       std::cout << "block wasn't found: " << arg << std::endl;
       return false;
     }
+
+    return true;
+  }
+  //--------------------------------------------------------------------------------
+  bool print_stat(const std::vector<std::string>& args) {
+    uint64_t height = 0;
+    auto& core = m_srv.get_payload_object().get_core();
+    uint64_t maxHeight = core.get_current_blockchain_height() - 1;
+    if (args.empty()) {
+      height = maxHeight;
+    } else {
+      try {
+        height = boost::lexical_cast<uint64_t>(args.front());
+      } catch (boost::bad_lexical_cast&) {
+        crypto::hash block_hash;
+        if (!parse_hash256(args.front(), block_hash) || !core.getBlockHeight(block_hash, height)) {
+          return false;
+        }
+      }
+      if (height > maxHeight) {
+        std::cout << "printing for last available block: " << maxHeight << std::endl;
+        height = maxHeight;
+      }
+    }
+
+    std::cout << "Block height: " << height << std::endl;
+    std::cout << "Block difficulty: " << core.difficultyAtHeight(height) << std::endl;
+    std::cout << "Total coins in network: " << core.currency().formatAmount(core.coinsEmittedAtHeight(height)) << std::endl;
+    std::cout << "Total coins on deposits: " << core.currency().formatAmount(core.depositAmountAtHeight(height)) << std::endl;
+    std::cout << "Total interest paid: " << core.currency().formatAmount(core.depositInterestAtHeight(height)) << std::endl;
 
     return true;
   }

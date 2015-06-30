@@ -21,6 +21,7 @@
 #include "cryptonote_core/UpgradeDetector.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/tx_pool.h"
+#include "cryptonote_core/DepositIndex.h"
 
 
 namespace cryptonote {
@@ -58,6 +59,7 @@ namespace cryptonote {
     size_t get_alternative_blocks_count();
     crypto::hash get_block_id_by_height(uint64_t height);
     bool get_block_by_hash(const crypto::hash &h, Block &blk);
+    bool getBlockHeight(const crypto::hash& blockHash, uint64_t& height) const;
 
     bool have_tx(const crypto::hash &id);
     bool have_tx_keyimges_as_spent(const Transaction &tx);
@@ -86,6 +88,12 @@ namespace cryptonote {
     bool is_storing_blockchain(){return m_is_blockchain_storing;}
     uint64_t block_difficulty(size_t i);
     bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids);
+    uint64_t fullDepositAmount() const;
+    uint64_t depositAmountAtHeight(size_t height) const;
+    uint64_t fullDepositInterest() const;
+    uint64_t depositInterestAtHeight(size_t height) const;
+    uint64_t coinsEmittedAtHeight(uint64_t height);
+    uint64_t difficultyAtHeight(uint64_t height);
 
 
     template<class t_ids_container, class t_blocks_container, class t_missed_container>
@@ -182,7 +190,7 @@ namespace cryptonote {
 
     const Currency& m_currency;
     tx_memory_pool& m_tx_pool;
-    epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
+    mutable epee::critical_section m_blockchain_lock; // TODO: add here reader/writer lock
     crypto::cn_context m_cn_context;
     tools::ObserverManager<IBlockchainStorageObserver> m_observerManager;
 
@@ -205,6 +213,7 @@ namespace cryptonote {
 
     Blocks m_blocks;
     CryptoNote::BlockIndex m_blockIndex;
+    CryptoNote::DepositIndex m_depositIndex;
     TransactionMap m_transactionMap;
     MultisignatureOutputsContainer m_multisignatureOutputs;
     UpgradeDetector m_upgradeDetector;
@@ -214,6 +223,7 @@ namespace cryptonote {
     bool switch_to_alternative_blockchain(std::list<blocks_ext_by_hash::iterator>& alt_chain, bool discard_disconnected_chain);
     bool handle_alternative_block(const Block& b, const crypto::hash& id, block_verification_context& bvc);
     difficulty_type get_next_difficulty_for_alternative_chain(const std::list<blocks_ext_by_hash::iterator>& alt_chain, BlockEntry& bei);
+    void pushToDepositIndex(const BlockEntry& block, uint64_t interest);
     bool prevalidate_miner_transaction(const Block& b, uint64_t height);
     bool validate_miner_transaction(const Block& b, uint64_t height, size_t cumulativeBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee, uint64_t& reward, int64_t& emissionChange);
     bool validate_transaction(const Block& b, uint64_t height, const Transaction& tx);
