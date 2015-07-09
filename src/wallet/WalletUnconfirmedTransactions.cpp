@@ -123,5 +123,9 @@ void WalletUnconfirmedTransactions::collectUsedOutputs() {
   m_usedOutputs = std::move(used);
 }
 
+void WalletUnconfirmedTransactions::reset() {
+  m_unconfirmedTxs.clear();
+  m_usedOutputs.clear();
+}
 
 } /* namespace CryptoNote */

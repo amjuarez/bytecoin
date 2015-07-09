@@ -35,7 +35,10 @@ namespace {
 
   void handleSignal() {
     static std::mutex m_mutex;
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+      return;
+    }
     m_handler();
   }
 
@@ -75,6 +78,7 @@ namespace tools {
 #else
     signal(SIGINT, posixHandler);
     signal(SIGTERM, posixHandler);
+    signal(SIGPIPE, SIG_IGN);
     m_handler = t;
     return true;
 #endif

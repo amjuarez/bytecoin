@@ -24,6 +24,7 @@
 #include "EventWaiter.h"
 #include "INode.h"
 #include "wallet/Wallet.h"
+#include "wallet/WalletHelper.h"
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/Currency.h"
 
@@ -285,7 +286,7 @@ void WalletApi::TestSendMoney(int64_t transferAmount, uint64_t fee, uint64_t mix
   bob->initAndGenerate("pass2");
 
   ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
-  ASSERT_NO_FATAL_FAILURE(TransferMoney(*alice, *bob, transferAmount, fee, 0, ""));
+  ASSERT_NO_FATAL_FAILURE(TransferMoney(*alice, *bob, transferAmount, fee, mixIn, ""));
   ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
 
   generator.generateEmptyBlocks(10);
@@ -1326,4 +1327,345 @@ TEST_F(WalletApi, DISABLED_loadingBrokenCache) {
 
   ASSERT_NO_FATAL_FAILURE(WaitWalletLoad(aliceWalletObserver.get(), result));
   ASSERT_EQ(result.value(), 0);
+}
+
+TEST_F(WalletApi, shutdownAllowsInitializeWalletWithTheSameKeys) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  CryptoNote::WalletAccountKeys accountKeys;
+  alice->getAccountKeys(accountKeys);
+
+  alice->shutdown();
+  alice->initWithKeys(accountKeys, "pass");
+
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(1, alice->getTransactionCount());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, shutdownAllowsInitializeWalletWithDifferentKeys) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  alice->shutdown();
+  alice->initAndGenerate("pass");
+
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(0, alice->getTransactionCount());
+
+  alice->shutdown();
+}
+
+namespace {
+class WalletSynchronizationProgressUpdatedObserver : public CryptoNote::IWalletObserver {
+public:
+  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t /*total*/) override {
+    m_current = current;
+  }
+
+  uint64_t m_current = 0;
+};
+}
+
+TEST_F(WalletApi, shutdownDoesNotRemoveObservers) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  WalletSynchronizationProgressUpdatedObserver observer;
+  CryptoNote::WalletHelper::IWalletRemoveObserverGuard observerGuard(*alice, observer);
+
+  alice->shutdown();
+  observer.m_current = 0;
+  alice->initAndGenerate("pass");
+
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(5, observer.m_current);
+
+  observerGuard.removeObserver();
+  alice->shutdown();
+}
+
+namespace {
+class WalletTransactionEventCounter : public CryptoNote::IWalletObserver {
+public:
+  virtual void externalTransactionCreated(CryptoNote::TransactionId /*transactionId*/) override {
+    ++m_count;
+  }
+
+  virtual void transactionUpdated(CryptoNote::TransactionId /*transactionId*/) override {
+    ++m_count;
+  }
+
+  size_t m_count = 0;
+};
+}
+
+TEST_F(WalletApi, afterShutdownAndInitWalletDoesNotSendNotificationsRelatedToOldAddress) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  std::string aliceAddress1 = alice->getAddress();
+  CryptoNote::WalletAccountKeys accountKeys1;
+  alice->getAccountKeys(accountKeys1);
+
+  alice->shutdown();
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  std::string aliceAddress2 = alice->getAddress();
+
+  alice->shutdown();
+  alice->initWithKeys(accountKeys1, "pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  WalletTransactionEventCounter observer;
+  CryptoNote::WalletHelper::IWalletRemoveObserverGuard observerGuard(*alice, observer);
+
+  prepareBobWallet();
+  bob->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+  GetOneBlockReward(*bob);
+  generator.generateEmptyBlocks(10);
+  bobNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+
+  std::vector<CryptoNote::Transfer> transfers;
+  transfers.push_back({ aliceAddress1, TEST_BLOCK_REWARD / 10 });
+  transfers.push_back({ aliceAddress2, TEST_BLOCK_REWARD / 5 });
+  bob->sendTransaction(transfers, m_currency.minimumFee());
+  std::error_code sendResult;
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(bobWalletObserver.get(), sendResult));
+
+  generator.generateEmptyBlocks(1);
+  bobNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(bobWalletObserver.get()));
+
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(1, observer.m_count);
+
+  observerGuard.removeObserver();
+  bob->shutdown();
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetDoesNotChangeAddress) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  auto expectedAddress = alice->getAddress();
+  alice->reset();
+  ASSERT_EQ(expectedAddress, alice->getAddress());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetDoesNotChangeAccountKeys) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  CryptoNote::WalletAccountKeys expectedAccountKeys;
+  alice->getAccountKeys(expectedAccountKeys);
+
+  alice->reset();
+
+  CryptoNote::WalletAccountKeys actualAccountKeys;
+  alice->getAccountKeys(actualAccountKeys);
+
+  ASSERT_EQ(expectedAccountKeys.spendPublicKey, actualAccountKeys.spendPublicKey);
+  ASSERT_EQ(expectedAccountKeys.spendSecretKey, actualAccountKeys.spendSecretKey);
+  ASSERT_EQ(expectedAccountKeys.viewPublicKey, actualAccountKeys.viewPublicKey);
+  ASSERT_EQ(expectedAccountKeys.viewSecretKey, actualAccountKeys.viewSecretKey);
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetDoesNotRemoveObservers) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  WalletSynchronizationProgressUpdatedObserver observer;
+  CryptoNote::WalletHelper::IWalletRemoveObserverGuard observerGuard(*alice, observer);
+
+  alice->reset();
+  observer.m_current = 0;
+
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(5, observer.m_current);
+
+  observerGuard.removeObserver();
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetDoesNotChangePassword) {
+  std::string password = "password";
+  std::string newPassword = "new_password";
+
+  alice->initAndGenerate(password);
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  alice->reset();
+  ASSERT_TRUE(static_cast<bool>(alice->changePassword(newPassword, password)));
+  ASSERT_FALSE(static_cast<bool>(alice->changePassword(password, newPassword)));
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetClearsPendingBalance) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD, alice->pendingBalance());
+  alice->reset();
+  ASSERT_EQ(0, alice->pendingBalance());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetClearsActualBalance) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  generator.generateEmptyBlocks(10);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD, alice->actualBalance());
+  alice->reset();
+  ASSERT_EQ(0, alice->actualBalance());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetClearsTransactionHistory) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  generator.generateEmptyBlocks(10);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(1, alice->getTransactionCount());
+  alice->reset();
+  ASSERT_EQ(0, alice->getTransactionCount());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetClearsTransfersHistory) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  generator.generateEmptyBlocks(10);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  alice->sendTransaction({ alice->getAddress(), 100 }, m_currency.minimumFee());
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+
+  ASSERT_EQ(1, alice->getTransferCount());
+  alice->reset();
+  ASSERT_EQ(0, alice->getTransferCount());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetAndSyncRestorePendingBalance) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  alice->reset();
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD, alice->pendingBalance());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetAndSyncRestoreActualBalance) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  generator.generateEmptyBlocks(10);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  alice->reset();
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(TEST_BLOCK_REWARD, alice->actualBalance());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetAndSyncRestoreTransactions) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  generator.generateEmptyBlocks(10);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  alice->reset();
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(1, alice->getTransactionCount());
+
+  alice->shutdown();
+}
+
+TEST_F(WalletApi, resetAndSyncDoNotRestoreTransfers) {
+  alice->initAndGenerate("pass");
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  GetOneBlockReward(*alice);
+  generator.generateEmptyBlocks(10);
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  alice->sendTransaction({ alice->getAddress(), 100 }, m_currency.minimumFee());
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSend(aliceWalletObserver.get()));
+
+  alice->reset();
+  aliceNode->updateObservers();
+  ASSERT_NO_FATAL_FAILURE(WaitWalletSync(aliceWalletObserver.get()));
+
+  ASSERT_EQ(0, alice->getTransferCount());
+
+  alice->shutdown();
 }

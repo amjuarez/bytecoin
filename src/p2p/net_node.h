@@ -171,10 +171,11 @@ namespace CryptoNote
 
     typedef std::unordered_map<boost::uuids::uuid, p2p_connection_context, boost::hash<boost::uuids::uuid>> ConnectionContainer;
     typedef ConnectionContainer::iterator ConnectionIterator;
+    ConnectionContainer m_raw_connections;
     ConnectionContainer m_connections;
 
     void acceptLoop();
-    void connectionHandler(ConnectionIterator connIter);
+    void connectionHandler(const boost::uuids::uuid& connectionId, p2p_connection_context& connection);
     void onIdle();
     void timedSyncLoop();
 

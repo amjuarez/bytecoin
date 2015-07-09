@@ -435,7 +435,11 @@ namespace CryptoNote
     m_idleTimer.stop();
     m_timedSyncTimer.stop();
 
-    logger(INFO) << "Stopping " << m_connections.size() << " connections";
+    logger(INFO) << "Stopping " << m_connections.size() + m_raw_connections.size() << " connections";
+
+    for (auto& conn : m_raw_connections) {
+      conn.second.connection.stop();
+    }
 
     for (auto& conn : m_connections) {
       conn.second.connection.stop();
@@ -671,32 +675,44 @@ namespace CryptoNote
       ctx.m_is_income = false;
       ctx.m_started = time(nullptr);
 
-      CryptoNote::LevinProtocol proto(ctx.connection);
+      auto raw = m_raw_connections.emplace(ctx.m_connection_id, std::move(ctx)).first;
+      try {
+        CryptoNote::LevinProtocol proto(raw->second.connection);
 
-      if (!handshake(proto, ctx, just_take_peerlist)) {
-        logger(WARNING) << "Failed to HANDSHAKE with peer " << na;
-        return false;
+        if (!handshake(proto, raw->second, just_take_peerlist)) {
+          logger(WARNING) << "Failed to HANDSHAKE with peer " << na;
+          m_raw_connections.erase(raw);
+          return false;
+        }
+      } catch (...) {
+        m_raw_connections.erase(raw);
+        throw;
       }
 
       if (just_take_peerlist) {
-        logger(Logging::DEBUGGING, Logging::BRIGHT_GREEN) << ctx << "CONNECTION HANDSHAKED OK AND CLOSED.";
+        logger(Logging::DEBUGGING, Logging::BRIGHT_GREEN) << raw->second << "CONNECTION HANDSHAKED OK AND CLOSED.";
+        m_raw_connections.erase(raw);
         return true;
       }
 
       peerlist_entry pe_local = AUTO_VAL_INIT(pe_local);
       pe_local.adr = na;
-      pe_local.id = ctx.peer_id;
+      pe_local.id = raw->second.peer_id;
       time(&pe_local.last_seen);
       m_peerlist.append_with_peer_white(pe_local);
 
       if (m_stop) {
+        m_raw_connections.erase(raw);
         throw System::InterruptedException();
       }
 
-      auto iter = m_connections.emplace(ctx.m_connection_id, std::move(ctx)).first;
+      auto iter = m_connections.emplace(raw->first, std::move(raw->second)).first;
+      m_raw_connections.erase(raw);
+      const boost::uuids::uuid& connectionId = iter->first;
+      p2p_connection_context& connectionContext = iter->second;
 
       ++m_spawnCount;
-      m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, iter));
+      m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, std::cref(connectionId), std::ref(connectionContext)));
 
       return true;
     } catch (System::InterruptedException&) {
@@ -1219,9 +1235,11 @@ namespace CryptoNote
         ctx.m_remote_port = addressAndPort.second;
 
         auto iter = m_connections.emplace(ctx.m_connection_id, std::move(ctx)).first;
+        const boost::uuids::uuid& connectionId = iter->first;
+        p2p_connection_context& connection = iter->second;
 
         ++m_spawnCount;
-        m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, iter));
+        m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, std::cref(connectionId), std::ref(connection)));
       }
     } catch (System::InterruptedException&) {
     } catch (const std::exception& e) {
@@ -1274,10 +1292,9 @@ namespace CryptoNote
     }
   }
 
-  void node_server::connectionHandler(ConnectionIterator connIter) {
+  void node_server::connectionHandler(const boost::uuids::uuid& connectionId, p2p_connection_context& ctx) {
 
     try {
-      auto& ctx = connIter->second;
       on_connection_new(ctx);
 
       LevinProtocol proto(ctx.connection);
@@ -1320,10 +1337,10 @@ namespace CryptoNote
       logger(WARNING) << "Exception in connectionHandler: " << e.what();
     }
 
-    connIter->second.writeLatch.wait();
+    ctx.writeLatch.wait();
 
-    on_connection_close(connIter->second);
-    m_connections.erase(connIter);
+    on_connection_close(ctx);
+    m_connections.erase(connectionId);
  
     if (--m_spawnCount == 0) {
       m_shutdownCompleteEvent.set();

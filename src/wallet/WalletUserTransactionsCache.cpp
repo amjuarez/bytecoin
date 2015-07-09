@@ -293,5 +293,11 @@ void WalletUserTransactionsCache::updateUnconfirmedTransactions() {
 Transfer& WalletUserTransactionsCache::getTransfer(TransferId transferId) {
   return m_transfers.at(transferId);
 }
+  
+void WalletUserTransactionsCache::reset() {
+  m_transactions.clear();
+  m_transfers.clear();
+  m_unconfirmedTransactions.reset();
+}
 
 } //namespace CryptoNote

@@ -57,6 +57,7 @@ public:
   Transfer& getTransfer(TransferId transferId);
 
   bool isUsed(const TransactionOutputInformation& out) const;
+  void reset();
 
 private:
 

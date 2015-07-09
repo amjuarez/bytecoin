@@ -64,6 +64,7 @@ public:
   uint64_t countUnconfirmedOutsAmount() const;
   uint64_t countUnconfirmedTransactionsAmount() const;
   bool isUsed(const TransactionOutputInformation& out) const;
+  void reset();
 
 private:
 

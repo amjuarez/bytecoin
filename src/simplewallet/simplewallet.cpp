@@ -791,7 +791,7 @@ bool simple_wallet::listTransfers(const std::vector<std::string>& args) {
   for (size_t trantransactionNumber = 0; trantransactionNumber < transactionsCount; ++trantransactionNumber) {
     TransactionInfo txInfo;
     m_wallet->getTransaction(trantransactionNumber, txInfo);
-    if (txInfo.state != TransactionState::Active) {
+    if (txInfo.state != TransactionState::Active || txInfo.blockHeight == UNCONFIRMED_TRANSACTION_HEIGHT) {
       continue;
     }
 
