@@ -645,7 +645,9 @@ TEST_F(TransfersContainerKeyImage, removeConfirmed_oneOfThree) {
 
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAllUnlocked));
 
-  container.detach(TEST_BLOCK_HEIGHT + 2);
+  std::vector<Hash> deletedTransactions;
+  std::vector<TransactionOutputInformation> lockedTransfers;
+  container.detach(TEST_BLOCK_HEIGHT + 2, deletedTransactions, lockedTransfers);
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAllUnlocked));
 }
 
@@ -655,7 +657,9 @@ TEST_F(TransfersContainerKeyImage, removeConfirmed_oneOfTwo) {
 
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAllUnlocked));
 
-  container.detach(TEST_BLOCK_HEIGHT + 1);
+  std::vector<Hash> deletedTransactions;
+  std::vector<TransactionOutputInformation> lockedTransfers;
+  container.detach(TEST_BLOCK_HEIGHT + 1, deletedTransactions, lockedTransfers);
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeStateSoftLocked | ITransfersContainer::IncludeTypeAll));
 }
 
@@ -664,7 +668,10 @@ TEST_F(TransfersContainerKeyImage, removeConfirmed_revealsUnconfirmed) {
   addTransactionWithFixedKey(UNCONFIRMED, 2, TEST_OUTPUT_AMOUNT * 2);
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAll));
 
-  ASSERT_EQ(1, container.detach(TEST_BLOCK_HEIGHT).size());
+  std::vector<Hash> deletedTransactions;
+  std::vector<TransactionOutputInformation> lockedTransfers;
+  container.detach(TEST_BLOCK_HEIGHT, deletedTransactions, lockedTransfers);
+  ASSERT_EQ(1, deletedTransactions.size());
   ASSERT_EQ(TEST_OUTPUT_AMOUNT * 2, container.balance(ITransfersContainer::IncludeAll));
   ASSERT_EQ(TEST_OUTPUT_AMOUNT * 2, container.balance(ITransfersContainer::IncludeAllLocked));
 }
@@ -676,7 +683,11 @@ TEST_F(TransfersContainerKeyImage, removeConfirmed_twoUnconfirmedHidden) {
 
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAll));
 
-  ASSERT_EQ(1, container.detach(TEST_BLOCK_HEIGHT).size());
+  std::vector<Hash> deletedTransactions;
+  std::vector<TransactionOutputInformation> lockedTransfers;
+  container.detach(TEST_BLOCK_HEIGHT, deletedTransactions, lockedTransfers);
+
+  ASSERT_EQ(1, deletedTransactions.size());
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 }
 
@@ -686,7 +697,11 @@ TEST_F(TransfersContainerKeyImage, removeConfirmed_twoConfirmedOneUnconfirmedHid
   addTransactionWithFixedKey(UNCONFIRMED, 3, TEST_OUTPUT_AMOUNT * 3);
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAll));
 
-  ASSERT_EQ(1, container.detach(TEST_BLOCK_HEIGHT + 1).size());
+  std::vector<Hash> deletedTransactions;
+  std::vector<TransactionOutputInformation> lockedTransfers;
+  container.detach(TEST_BLOCK_HEIGHT + 1, deletedTransactions, lockedTransfers);
+
+  ASSERT_EQ(1, deletedTransactions.size());
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAll));
 }
 
@@ -699,7 +714,11 @@ TEST_F(TransfersContainerKeyImage, removeConfirmed_oneSpentOneConfirmed) {
   auto tx2 = addTransactionWithFixedKey(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE + 1, 2, TEST_OUTPUT_AMOUNT * 2);
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 
-  ASSERT_EQ(1, container.detach(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE + 1).size());
+  std::vector<Hash> deletedTransactions;
+  std::vector<TransactionOutputInformation> lockedTransfers;
+  container.detach(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE + 1, deletedTransactions, lockedTransfers);
+
+  ASSERT_EQ(1, deletedTransactions.size());
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 }
 
@@ -714,7 +733,11 @@ TEST_F(TransfersContainerKeyImage, removeConfirmed_oneSpentTwoConfirmed) {
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
   ASSERT_EQ(4, container.transactionsCount());
 
-  ASSERT_EQ(1, container.detach(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE + 2).size());
+  std::vector<Hash> deletedTransactions;
+  std::vector<TransactionOutputInformation> lockedTransfers;
+  container.detach(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE + 2, deletedTransactions, lockedTransfers);
+
+  ASSERT_EQ(1, deletedTransactions.size());
   ASSERT_EQ(3, container.transactionsCount());
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 }

@@ -231,7 +231,8 @@ namespace cryptonote
     return true;
   }
 
-  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations, const std::vector<tx_message_entry>& messages, const std::vector<uint8_t>& extra, uint64_t unlock_time, Transaction& tx)
+  bool construct_tx(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources, const std::vector<tx_destination_entry>& destinations,
+                    const std::vector<tx_message_entry>& messages, const std::vector<uint8_t>& extra, uint64_t unlock_time, Transaction& tx)
   {
     tx.vin.clear();
     tx.vout.clear();

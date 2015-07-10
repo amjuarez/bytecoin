@@ -71,6 +71,7 @@ struct Deposit {
   uint32_t term;
   uint64_t amount;
   uint64_t interest;
+  bool locked;
 };
 
 typedef std::array<uint8_t, 32> WalletPublicKey;
@@ -101,14 +102,17 @@ public:
   virtual void synchronizationCompleted(std::error_code result) {}
   virtual void actualBalanceUpdated(uint64_t actualBalance) {}
   virtual void pendingBalanceUpdated(uint64_t pendingBalance) {}
+  virtual void actualDepositBalanceUpdated(uint64_t actualDepositBalance) {}
+  virtual void pendingDepositBalanceUpdated(uint64_t pendingDepositBalance) {}
   virtual void externalTransactionCreated(TransactionId transactionId) {}
   virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) {}
   virtual void transactionUpdated(TransactionId transactionId) {}
+  virtual void depositsUpdated(const std::vector<DepositId>& depositIds) {}
 };
 
 class IWallet {
 public:
-  virtual ~IWallet() {} ;
+  virtual ~IWallet() {}
   virtual void addObserver(IWalletObserver* observer) = 0;
   virtual void removeObserver(IWalletObserver* observer) = 0;
 
@@ -126,18 +130,24 @@ public:
 
   virtual uint64_t actualBalance() = 0;
   virtual uint64_t pendingBalance() = 0;
+  virtual uint64_t actualDepositBalance() = 0;
+  virtual uint64_t pendingDepositBalance() = 0;
 
   virtual size_t getTransactionCount() = 0;
   virtual size_t getTransferCount() = 0;
+  virtual size_t getDepositCount() = 0;
 
   virtual TransactionId findTransactionByTransferId(TransferId transferId) = 0;
   
   virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction) = 0;
   virtual bool getTransfer(TransferId transferId, Transfer& transfer) = 0;
+  virtual bool getDeposit(DepositId depositId, Deposit& deposit) = 0;
   virtual std::vector<Payments> getTransactionsByPaymentIds(const std::vector<PaymentId>& paymentIds) const = 0;
 
   virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) = 0;
   virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) = 0;
+  virtual TransactionId deposit(uint32_t term, uint64_t amount, uint64_t fee, uint64_t mixIn = 0) = 0;
+  virtual TransactionId withdrawDeposits(const std::vector<DepositId>& depositIds, uint64_t fee) = 0;
   virtual std::error_code cancelTransaction(size_t transferId) = 0;
 
   virtual void getAccountKeys(WalletAccountKeys& keys) = 0;

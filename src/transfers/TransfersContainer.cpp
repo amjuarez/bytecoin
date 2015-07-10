@@ -4,6 +4,9 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "TransfersContainer.h"
+
+#include <iterator>
+
 #include "IWallet.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 
@@ -25,7 +28,7 @@ void serialize(TransactionInformation& ti, const std::string& name, cryptonote::
   s(ti.messages, "");
 }
 
-const uint32_t TRANSFERS_CONTAINER_STORAGE_VERSION = 0;
+const uint32_t TRANSFERS_CONTAINER_STORAGE_VERSION = 1;
 
 namespace {
   template<typename TIterator>
@@ -80,8 +83,32 @@ namespace {
   TransferIteratorList<TIterator> createTransferIteratorList(const std::pair<TIterator, TIterator>& itPair) {
     return TransferIteratorList<TIterator>(itPair.first, itPair.second);
   }
+
+  TransferUnlockJob makeTransferUnlockJob(const TransactionOutputInformationEx& output, size_t transactionSpendableAge) {
+    TransferUnlockJob job;
+
+    uint64_t unlockTime = output.unlockTime == 0 ? output.blockHeight : output.unlockTime;
+
+    if (output.type == TransactionTypes::OutputType::Multisignature && output.term != 0) {
+      job.unlockHeight = std::max({unlockTime, output.blockHeight + output.term, output.blockHeight + transactionSpendableAge});
+    } else {
+      job.unlockHeight = std::max(unlockTime, output.blockHeight + transactionSpendableAge);
+    }
+
+    job.transactionOutputId.transactionHash = output.transactionHash;
+    job.transactionOutputId.outputInTransaction = output.outputInTransaction;
+
+    return job;
+  }
 }
 
+size_t TransactionOutputId::hash() const {
+  size_t hash = 0;
+  boost::hash_combine(hash, transactionHash);
+  boost::hash_combine(hash, outputInTransaction);
+
+  return hash;
+}
 
 SpentOutputDescriptor::SpentOutputDescriptor() :
     m_type(TransactionTypes::OutputType::Invalid) {
@@ -156,7 +183,7 @@ TransfersContainer::TransfersContainer(const cryptonote::Currency& currency, siz
 
 bool TransfersContainer::addTransaction(const BlockInfo& block, const ITransactionReader& tx,
                                         const std::vector<TransactionOutputInformationIn>& transfers,
-                                        std::vector<std::string>&& messages) {
+                                        std::vector<std::string>&& messages, std::vector<TransactionOutputInformation>* unlockingTransfers) {
   std::unique_lock<std::mutex> lock(m_mutex);
 
   if (block.height < m_currentHeight) {
@@ -175,7 +202,11 @@ bool TransfersContainer::addTransaction(const BlockInfo& block, const ITransacti
   }
 
   if (block.height != UNCONFIRMED_TRANSACTION_HEIGHT) {
-    m_currentHeight = block.height;
+    auto finishedJobs = doAdvanceHeight(block.height);
+
+    if (unlockingTransfers != nullptr) {
+      *unlockingTransfers = std::move(finishedJobs);
+    }
   }
 
   return added;
@@ -245,6 +276,8 @@ bool TransfersContainer::addTransactionOutputs(const BlockInfo& block, const ITr
         }
       }
 
+      addUnlockJob(info);
+
       auto result = m_availableTransfers.emplace(std::move(info));
       assert(result.second);
     }
@@ -304,6 +337,7 @@ bool TransfersContainer::addTransactionInputs(const BlockInfo& block, const ITra
       }
 
       assert(spendingTransferIt->keyImage == input.keyImage);
+      deleteUnlockJob(*spendingTransferIt);
       copyToSpent(block, tx, i, *spendingTransferIt);
       // erase from available outputs
       outputDescriptorIndex.erase(spendingTransferIt);
@@ -317,6 +351,7 @@ bool TransfersContainer::addTransactionInputs(const BlockInfo& block, const ITra
       auto& outputDescriptorIndex = m_availableTransfers.get<SpentOutputDescriptorIndex>();
       auto availableOutputIt = outputDescriptorIndex.find(SpentOutputDescriptor(input.amount, input.outputIndex));
       if (availableOutputIt != outputDescriptorIndex.end()) {
+        deleteUnlockJob(*availableOutputIt);
         copyToSpent(block, tx, i, *availableOutputIt);
         // erase from available outputs
         outputDescriptorIndex.erase(availableOutputIt);
@@ -390,6 +425,8 @@ bool TransfersContainer::markTransactionConfirmed(const BlockInfo& block, const 
       }
     }
 
+    addUnlockJob(transfer);
+
     auto result = m_availableTransfers.emplace(std::move(transfer));
     assert(result.second);
 
@@ -423,8 +460,12 @@ void TransfersContainer::deleteTransactionTransfers(const Hash& transactionHash)
     assert(it->blockHeight != UNCONFIRMED_TRANSACTION_HEIGHT);
     assert(it->globalOutputIndex != UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX);
 
-    auto result = m_availableTransfers.emplace(static_cast<const TransactionOutputInformationEx&>(*it));
+    const TransactionOutputInformationEx& unspendingTransfer = static_cast<const TransactionOutputInformationEx&>(*it);
+
+    addUnlockJob(unspendingTransfer);
+    auto result = m_availableTransfers.emplace(unspendingTransfer);
     assert(result.second);
+
     it = spendingTransactionIndex.erase(it);
 
     if (result.first->type == TransactionTypes::OutputType::Key) {
@@ -446,6 +487,8 @@ void TransfersContainer::deleteTransactionTransfers(const Hash& transactionHash)
   auto& transactionTransfersIndex = m_availableTransfers.get<ContainingTransactionIndex>();
   auto transactionTransfersRange = transactionTransfersIndex.equal_range(transactionHash);
   for (auto it = transactionTransfersRange.first; it != transactionTransfersRange.second;) {
+    deleteUnlockJob(*it);
+
     if (it->type == TransactionTypes::OutputType::Key) {
       KeyImage keyImage = it->keyImage;
       it = transactionTransfersIndex.erase(it);
@@ -473,13 +516,12 @@ void TransfersContainer::copyToSpent(const BlockInfo& block, const ITransactionR
   assert(result.second);
 }
 
-std::vector<Hash> TransfersContainer::detach(uint64_t height) {
+void TransfersContainer::detach(uint64_t height, std::vector<Hash>& deletedTransactions, std::vector<TransactionOutputInformation>& lockedTransfers) {
   // This method expects that UNCONFIRMED_TRANSACTION_HEIGHT is a big positive number
   assert(height < UNCONFIRMED_TRANSACTION_HEIGHT);
 
   std::lock_guard<std::mutex> lk(m_mutex);
 
-  std::vector<Hash> deletedTransactions;
   auto& spendingTransactionIndex = m_spentTransfers.get<SpendingTransactionIndex>();
   auto& blockHeightIndex = m_transactions.get<1>();
   auto it = blockHeightIndex.end();
@@ -508,10 +550,12 @@ std::vector<Hash> TransfersContainer::detach(uint64_t height) {
     }
   }
 
+  uint64_t prevHeight = m_currentHeight;
+
   // TODO: notification on detach
   m_currentHeight = height == 0 ? 0 : height - 1;
 
-  return deletedTransactions;
+  getLockingTransfers(prevHeight, m_currentHeight, deletedTransactions, lockedTransfers);
 }
 
 namespace {
@@ -563,15 +607,24 @@ void TransfersContainer::updateTransfersVisibility(const KeyImage& keyImage) {
   }
 }
 
-bool TransfersContainer::advanceHeight(uint64_t height) {
+std::vector<TransactionOutputInformation> TransfersContainer::advanceHeight(uint64_t height) {
   std::lock_guard<std::mutex> lk(m_mutex);
 
-  if (m_currentHeight <= height) {
-    m_currentHeight = height;
-    return true;
+  return doAdvanceHeight(height);
+}
+
+/**
+ * \pre m_mutex is locked
+ */
+std::vector<TransactionOutputInformation> TransfersContainer::doAdvanceHeight(uint64_t height) {
+  if (height < m_currentHeight) {
+    throw std::invalid_argument("New height is less then current while advancing height");
   }
 
-  return false;
+  uint64_t prevHeight = m_currentHeight;
+  m_currentHeight = height;
+
+  return getUnlockingTransfers(prevHeight, m_currentHeight);
 }
 
 size_t TransfersContainer::transfersCount() {
@@ -686,6 +739,24 @@ std::vector<TransactionOutputInformation> TransfersContainer::getTransactionOutp
   return result;
 }
 
+std::vector<TransactionOutputInformation> TransfersContainer::getTransactionInputs(const Hash& transactionHash, uint32_t flags) const {
+  //only type flags are feasible
+  assert((flags & IncludeStateAll) == 0);
+  flags |= IncludeStateUnlocked;
+
+  std::lock_guard<std::mutex> lk(m_mutex);
+
+  std::vector<TransactionOutputInformation> result;
+  auto transactionInputsRange = m_spentTransfers.get<SpendingTransactionIndex>().equal_range(transactionHash);
+  for (auto it = transactionInputsRange.first; it != transactionInputsRange.second; ++it) {
+    if (isIncluded(*it, IncludeStateUnlocked, flags)) {
+      result.push_back(*it);
+    }
+  }
+
+  return result;
+}
+
 void TransfersContainer::getUnconfirmedTransactions(std::vector<crypto::hash>& transactions) {
   std::lock_guard<std::mutex> lk(m_mutex);
   transactions.clear();
@@ -719,6 +790,47 @@ std::vector<TransactionSpentOutputInformation> TransfersContainer::getSpentOutpu
   return spentOutputs;
 }
 
+bool TransfersContainer::getTransfer(const Hash& transactionHash, uint32_t outputInTransaction, TransactionOutputInformation& transfer, TransferState& transferState) const {
+  TransactionOutputId transferId { transactionHash, outputInTransaction };
+
+  std::lock_guard<std::mutex> lk(m_mutex);
+
+  auto& availableIndex = m_availableTransfers.get<TransactionOutputIdIndex>();
+
+  auto availableIt = availableIndex.find(transferId);
+  if (availableIt != availableIndex.end()) {
+    transfer = *availableIt;
+
+    if (!isSpendTimeUnlocked(*availableIt) || m_currentHeight < availableIt->blockHeight + m_transactionSpendableAge) {
+      transferState = TransferState::TransferLocked;
+    } else {
+      transferState = TransferState::TransferAvailable;
+    }
+
+    return true;
+  }
+
+  auto& unconfirmedIndex = m_unconfirmedTransfers.get<TransactionOutputIdIndex>();
+
+  auto unconfirmedIt = unconfirmedIndex.find(transferId);
+  if (unconfirmedIt != unconfirmedIndex.end()) {
+    transfer = *unconfirmedIt;
+    transferState = TransferState::TransferUnconfirmed;
+    return true;
+  }
+
+  auto& spentIndex = m_spentTransfers.get<TransactionOutputIdIndex>();
+
+  auto spentIt = spentIndex.find(transferId);
+  if (spentIt != spentIndex.end()) {
+    transfer = *unconfirmedIt;
+    transferState = TransferState::TransferSpent;
+    return true;
+  }
+
+  return false;
+}
+
 void TransfersContainer::save(std::ostream& os) {
   std::lock_guard<std::mutex> lk(m_mutex);
   cryptonote::BinaryOutputStreamSerializer s(os);
@@ -730,6 +842,7 @@ void TransfersContainer::save(std::ostream& os) {
   cryptonote::writeSequence<TransactionOutputInformationEx>(m_unconfirmedTransfers.begin(), m_unconfirmedTransfers.end(), "unconfirmedTransfers", s);
   cryptonote::writeSequence<TransactionOutputInformationEx>(m_availableTransfers.begin(), m_availableTransfers.end(), "availableTransfers", s);
   cryptonote::writeSequence<SpentTransactionOutput>(m_spentTransfers.begin(), m_spentTransfers.end(), "spentTransfers", s);
+  cryptonote::writeSequence<TransferUnlockJob>(m_transfersUnlockJobs.begin(), m_transfersUnlockJobs.end(), "transfersUnlockJobs", s);
 }
 
 void TransfersContainer::load(std::istream& in) {
@@ -748,6 +861,7 @@ void TransfersContainer::load(std::istream& in) {
   UnconfirmedTransfersMultiIndex unconfirmedTransfers;
   AvailableTransfersMultiIndex availableTransfers;
   SpentTransfersMultiIndex spentTransfers;
+  TransfersUnlockMultiIndex transfersUnlockJobs;
 
   s(currentHeight, "height");
   cryptonote::readSequence<TransactionInformation>(std::inserter(transactions, transactions.end()), "transactions", s);
@@ -755,11 +869,32 @@ void TransfersContainer::load(std::istream& in) {
   cryptonote::readSequence<TransactionOutputInformationEx>(std::inserter(availableTransfers, availableTransfers.end()), "availableTransfers", s);
   cryptonote::readSequence<SpentTransactionOutput>(std::inserter(spentTransfers, spentTransfers.end()), "spentTransfers", s);
 
+  if (version != 0) {
+    cryptonote::readSequence<TransferUnlockJob>(std::inserter(transfersUnlockJobs, transfersUnlockJobs.end()), "transfersUnlockJobs", s);
+  } else {
+    rebuildTransfersUnlockJobs(transfersUnlockJobs, availableTransfers, spentTransfers);
+  }
+
   m_currentHeight = currentHeight;
   m_transactions = std::move(transactions);
   m_unconfirmedTransfers = std::move(unconfirmedTransfers);
   m_availableTransfers = std::move(availableTransfers);
   m_spentTransfers = std::move(spentTransfers);
+  m_transfersUnlockJobs = std::move(transfersUnlockJobs);
+}
+
+void TransfersContainer::rebuildTransfersUnlockJobs(TransfersUnlockMultiIndex& transfersUnlockJobs, const AvailableTransfersMultiIndex& availableTransfers,
+    const SpentTransfersMultiIndex& spentTransfers) {
+
+  for (auto it = availableTransfers.begin(); it != availableTransfers.end(); ++it) {
+    TransferUnlockJob job = makeTransferUnlockJob(*it, m_transactionSpendableAge);
+    transfersUnlockJobs.emplace(std::move(job));
+  }
+
+  for (auto it = spentTransfers.begin(); it != spentTransfers.end(); ++it) {
+    TransferUnlockJob job = makeTransferUnlockJob(*it, m_transactionSpendableAge);
+    transfersUnlockJobs.emplace(std::move(job));
+  }
 }
 
 bool TransfersContainer::isSpendTimeUnlocked(const TransactionOutputInformationEx& info) const {
@@ -804,6 +939,98 @@ bool TransfersContainer::isIncluded(const TransactionOutputInformationEx& output
     &&
     // filter by state
     ((flags & state) != 0);
+}
+
+/**
+ *  \pre m_mutex is locked
+ */
+void TransfersContainer::addUnlockJob(const TransactionOutputInformationEx& output) {
+  TransferUnlockJob job = makeTransferUnlockJob(output, m_transactionSpendableAge);
+
+  auto r = m_transfersUnlockJobs.emplace(std::move(job));
+  assert(r.second);
+}
+
+void TransfersContainer::deleteUnlockJob(const TransactionOutputInformationEx& output) {
+  auto& index = m_transfersUnlockJobs.get<TransactionOutputIdIndex>();
+
+  auto it = index.find(output.getTransactionOutputId());
+  if (it == index.end()) {
+    return;
+  }
+
+  index.erase(it);
+}
+
+/**
+ *  \pre m_mutex is locked
+ */
+std::vector<TransactionOutputInformation> TransfersContainer::getUnlockingTransfers(uint64_t prevHeight, uint64_t currentHeight) {
+  if (currentHeight < prevHeight) {
+    assert(false);
+    throw std::invalid_argument("New height is less then current height");
+  }
+
+  auto& index = m_transfersUnlockJobs.get<TransferUnlockHeightIndex>();
+  auto start = index.upper_bound(prevHeight);
+  auto end = index.upper_bound(currentHeight);
+
+  if (start == end) {
+    //no transfers to unlock
+    return std::vector<TransactionOutputInformation>();
+  }
+
+  std::vector<TransactionOutputInformation> unlockingTransfers;
+  unlockingTransfers.reserve(std::distance(start, end));
+
+  for (auto it = start; it != end; ++it) {
+    TransactionOutputInformation output = getAvailableOutput(it->transactionOutputId);
+    unlockingTransfers.emplace_back(std::move(output));
+  }
+
+  return unlockingTransfers;
+}
+
+/**
+ *  \pre m_mutex is locked
+ */
+void TransfersContainer::getLockingTransfers(uint64_t prevHeight, uint64_t currentHeight, const std::vector<Hash>& deletedTransactions,
+  std::vector<TransactionOutputInformation>& lockingTransfers) {
+
+  if (currentHeight > prevHeight) {
+    return;
+  }
+
+  auto& index = m_transfersUnlockJobs.get<TransferUnlockHeightIndex>();
+  auto start = index.upper_bound(currentHeight);
+  auto end = index.upper_bound(prevHeight);
+
+  if (start == end) {
+    //no transfers to lock
+    return;
+  }
+
+  lockingTransfers.reserve(lockingTransfers.size() + std::distance(start, end));
+  for (auto it = start; it != end; ++it) {
+    TransactionOutputInformation output = getAvailableOutput(it->transactionOutputId);
+    lockingTransfers.emplace_back(std::move(output));
+  }
+}
+
+/**
+ *  \pre m_mutex is locked
+ *  \pre requested output must exist
+ */
+TransactionOutputInformation TransfersContainer::getAvailableOutput(const TransactionOutputId& transactionOutputId) const {
+  auto& availableIndex = m_availableTransfers.get<TransactionOutputIdIndex>();
+  auto availableIt = availableIndex.find(transactionOutputId);
+
+  assert(availableIt != availableIndex.end());
+  if (availableIt == availableIndex.end()) {
+    throw std::invalid_argument("The output is supposed to be available");
+  }
+
+  return *availableIt;
 }
 
 }

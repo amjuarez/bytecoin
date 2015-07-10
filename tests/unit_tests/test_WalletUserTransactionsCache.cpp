@@ -6,14 +6,17 @@
 #include "gtest/gtest.h"
 
 #include <cassert>
+
 #include <cryptonote_core/cryptonote_format_utils.h>
+#include "cryptonote_core/Currency.h"
 #include <wallet/WalletUserTransactionsCache.h>
 
 using namespace CryptoNote;
+using namespace cryptonote;
 
 class WalletUserTransactionsCacheTest : public testing::Test {
 public:
-  WalletUserTransactionsCacheTest() {
+  WalletUserTransactionsCacheTest() : currency(CurrencyBuilder().currency()) {
     cryptonote::createTxExtraWithPaymentId(stringPaymentId, rawExtra);
     crypto::hash hash;
     if (!cryptonote::getPaymentIdFromTxExtra(rawExtra, hash)) {
@@ -42,6 +45,13 @@ public:
     return info;
   }
 
+  void updateTransaction(const CryptoNote::TransactionInformation& info, int64_t balance) {
+    std::vector<TransactionOutputInformation> newDeposits;
+    std::vector<TransactionOutputInformation> spentDeposits;
+    cache.onTransactionUpdated(info, balance, newDeposits, spentDeposits, currency);
+  }
+
+  Currency currency;
   std::string stringPaymentId = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
   WalletUserTransactionsCache cache;
   PaymentId paymentId;
@@ -51,7 +61,7 @@ public:
 };
 
 TEST_F(WalletUserTransactionsCacheTest, TransactionIsAddedToIndexWhenItIsConfirmed) {
-  cache.onTransactionUpdated(buildTransactionInformation(), 1000);
+  updateTransaction(buildTransactionInformation(), 1000);
   ASSERT_EQ(1, cache.getTransactionsByPaymentIds({paymentId})[0].transactions.size());
   ASSERT_EQ(paymentId, cache.getTransactionsByPaymentIds({paymentId})[0].transactions[0].hash);
 }
@@ -59,24 +69,24 @@ TEST_F(WalletUserTransactionsCacheTest, TransactionIsAddedToIndexWhenItIsConfirm
 TEST_F(WalletUserTransactionsCacheTest, TransactionWithInvalidHeightIsNotAdded) {
   auto tx = buildTransactionInformation();
   tx.blockHeight = UNCONFIRMED_TRANSACTION_HEIGHT;
-  cache.onTransactionUpdated(tx, 1000);
+  updateTransaction(tx, 1000);
   ASSERT_EQ(0, cache.getTransactionsByPaymentIds({paymentId})[0].transactions.size());
 }
 
 TEST_F(WalletUserTransactionsCacheTest, TransactionWithEmptyExtraIsNotAdded) {
   auto tx = buildTransactionInformation();
   tx.extra.clear();
-  cache.onTransactionUpdated(tx, 1000);
+  updateTransaction(tx, 1000);
   ASSERT_EQ(0, cache.getTransactionsByPaymentIds({paymentId})[0].transactions.size());
 }
 
 TEST_F(WalletUserTransactionsCacheTest, TransactionWithInvalidAmountIsNotAdded) {
-  cache.onTransactionUpdated(buildTransactionInformation(), 0);
+  updateTransaction(buildTransactionInformation(), 0);
   ASSERT_EQ(0, cache.getTransactionsByPaymentIds({paymentId})[0].transactions.size());
 }
 
 TEST_F(WalletUserTransactionsCacheTest, TransactionIsRemovedFromIndexWhenItIsRemovedFromCache) {
-  cache.onTransactionUpdated(buildTransactionInformation(), 1000);
+  updateTransaction(buildTransactionInformation(), 1000);
   ASSERT_EQ(1, cache.getTransactionsByPaymentIds({paymentId})[0].transactions.size());
   cache.onTransactionDeleted(cache.getTransaction(id).hash);
   ASSERT_EQ(0, cache.getTransactionsByPaymentIds({paymentId})[0].transactions.size());

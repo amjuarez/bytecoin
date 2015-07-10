@@ -241,6 +241,10 @@ private:
     return true;
   }
   //--------------------------------------------------------------------------------
+  uint64_t calculatePercent(const cryptonote::Currency& currency, uint64_t value, uint64_t total) {
+    return static_cast<uint64_t>(100.0 * currency.coin() * static_cast<double>(value) / static_cast<double>(total));
+  }
+  //--------------------------------------------------------------------------------
   bool print_stat(const std::vector<std::string>& args) {
     uint64_t height = 0;
     auto& core = m_srv.get_payload_object().get_core();
@@ -262,11 +266,19 @@ private:
       }
     }
 
+    uint64_t totalCoinsInNetwork = core.coinsEmittedAtHeight(height);
+    uint64_t totalCoinsOnDeposits = core.depositAmountAtHeight(height);
+    uint64_t amountOfActiveCoins = totalCoinsInNetwork - totalCoinsOnDeposits;
+
+    const auto& currency = core.currency();
     std::cout << "Block height: " << height << std::endl;
     std::cout << "Block difficulty: " << core.difficultyAtHeight(height) << std::endl;
-    std::cout << "Total coins in network: " << core.currency().formatAmount(core.coinsEmittedAtHeight(height)) << std::endl;
-    std::cout << "Total coins on deposits: " << core.currency().formatAmount(core.depositAmountAtHeight(height)) << std::endl;
-    std::cout << "Total interest paid: " << core.currency().formatAmount(core.depositInterestAtHeight(height)) << std::endl;
+    std::cout << "Total coins in network:  " << currency.formatAmount(totalCoinsInNetwork) << std::endl;
+    std::cout << "Total coins on deposits: " << currency.formatAmount(totalCoinsOnDeposits) <<
+      " (" << currency.formatAmount(calculatePercent(currency, totalCoinsOnDeposits, totalCoinsInNetwork)) << "%)" << std::endl;
+    std::cout << "Amount of active coins:  " << currency.formatAmount(amountOfActiveCoins) <<
+      " (" << currency.formatAmount(calculatePercent(currency, amountOfActiveCoins, totalCoinsInNetwork)) << "%)" << std::endl;
+    std::cout << "Total interest paid: " << currency.formatAmount(core.depositInterestAtHeight(height)) << std::endl;
 
     return true;
   }

@@ -47,6 +47,16 @@ namespace {
     tx.addInput(senderKeys, info, kp);
   }
 
+  void addMultisignatureInput(ITransaction& tx, uint64_t amount, uint32_t signatures, uint64_t outputIndex, uint32_t term) {
+    TransactionTypes::InputMultisignature input;
+    input.amount = amount;
+    input.signatures = signatures;
+    input.outputIndex = outputIndex;
+    input.term = term;
+
+    tx.addInput(input);
+  }
+
   TransactionOutputInformationIn addTestMultisignatureOutput(ITransaction& transaction, uint64_t amount,
                                                              uint64_t globalOutputIndex) {
     std::vector<AccountAddress> addresses;
@@ -92,17 +102,18 @@ namespace {
     }
 
     std::unique_ptr<ITransaction> addTransaction(uint64_t height = UNCONFIRMED_TRANSACTION_HEIGHT,
-                                                 uint64_t outputAmount = TEST_OUTPUT_AMOUNT) {
+                                                 uint64_t outputAmount = TEST_OUTPUT_AMOUNT, std::vector<TransactionOutputInformation>* unlockedTransfers = nullptr) {
       auto tx = createTransaction();
       addTestInput(*tx, outputAmount + 1);
       auto outputIndex = (height == UNCONFIRMED_TRANSACTION_HEIGHT) ? UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX : TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX;
       auto outInfo = addTestKeyOutput(*tx, outputAmount, outputIndex, account);
       std::vector<TransactionOutputInformationIn> outputs = { outInfo };
-      EXPECT_TRUE(container.addTransaction(blockInfo(height), *tx, outputs, {}));
+      EXPECT_TRUE(container.addTransaction(blockInfo(height), *tx, outputs, {}, unlockedTransfers));
       return tx;
     }
 
-    std::unique_ptr<ITransaction> addSpendingTransaction(const Hash& sourceTx, uint64_t height, uint64_t outputIndex, uint64_t amount = TEST_OUTPUT_AMOUNT) {
+    std::unique_ptr<ITransaction> addSpendingTransaction(const Hash& sourceTx, uint64_t height, uint64_t outputIndex, uint64_t amount = TEST_OUTPUT_AMOUNT,
+                                                         std::vector<TransactionOutputInformation>* unlockedTransfers = nullptr) {
       std::unique_ptr<ITransaction> tx;
       auto outputs = container.getTransactionOutputs(sourceTx, ITransfersContainer::IncludeTypeAll |
         ITransfersContainer::IncludeStateUnlocked | ITransfersContainer::IncludeStateSoftLocked);
@@ -117,7 +128,11 @@ namespace {
       size_t inputAmount = 0;
       for (const auto& t : outputs) {
         inputAmount += t.amount;
-        addInput(*tx, account, t);
+        if (t.type == TransactionTypes::OutputType::Key) {
+          addInput(*tx, account, t);
+        } else if (t.type == TransactionTypes::OutputType::Multisignature) {
+          addMultisignatureInput(*tx, t.amount, t.requiredSignatures, t.globalOutputIndex, t.term);
+        }
       }
 
       EXPECT_GE(inputAmount, amount);
@@ -130,9 +145,46 @@ namespace {
         transfers.emplace_back(addTestKeyOutput(*tx, inputAmount - amount, outputIndex + 1, account)); // change
       }
 
-      EXPECT_TRUE(container.addTransaction(blockInfo(height), *tx, transfers, {}));
+      EXPECT_TRUE(container.addTransaction(blockInfo(height), *tx, transfers, {}, unlockedTransfers));
 
       return tx;
+    }
+
+    TransactionOutputInformationIn addDepositOutput(ITransaction& tx, uint64_t amount, uint32_t term, uint64_t height, uint32_t requiredSignatures = 1) {
+      auto index = tx.addOutput(amount, {account.address}, requiredSignatures, term);
+      auto outputIndex = (height == UNCONFIRMED_TRANSACTION_HEIGHT) ? UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX : TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX;
+
+      TransactionTypes::OutputMultisignature output;
+      tx.getOutput(index, output);
+
+      TransactionOutputInformationIn outputInfo;
+      outputInfo.type = TransactionTypes::OutputType::Multisignature;
+      outputInfo.amount = output.amount;
+      outputInfo.globalOutputIndex = outputIndex;
+      outputInfo.outputInTransaction = index;
+      outputInfo.transactionPublicKey = tx.getTransactionPublicKey();
+      outputInfo.transactionHash = tx.getTransactionHash();
+      outputInfo.requiredSignatures = requiredSignatures;
+      outputInfo.term = term;
+      outputInfo.keyImage = generateKeyImage(account, index, tx.getTransactionPublicKey());
+
+      return outputInfo;
+    }
+
+    std::vector<Hash> detachContainer(uint64_t height) {
+      std::vector<Hash> deletedTransactions;
+      std::vector<TransactionOutputInformation> lockedTransfers;
+
+      container.detach(height, deletedTransactions, lockedTransfers);
+      return deletedTransactions;
+    }
+
+    std::vector<TransactionOutputInformation> detachContainerGetLockedTransfers(uint64_t height) {
+      std::vector<Hash> deletedTransactions;
+      std::vector<TransactionOutputInformation> lockedTransfers;
+
+      container.detach(height, deletedTransactions, lockedTransfers);
+      return lockedTransfers;
     }
 
     Currency currency;
@@ -169,7 +221,7 @@ TEST_F(TransfersContainer_addTransaction, orderIsRequired_unconfirmedAtAnyHeight
 TEST_F(TransfersContainer_addTransaction, orderIsRequired_afterDetach) {
   ASSERT_NO_THROW(addTransaction(TEST_BLOCK_HEIGHT));
   ASSERT_NO_THROW(addTransaction(TEST_BLOCK_HEIGHT + 1));
-  container.detach(TEST_BLOCK_HEIGHT + 1);
+  detachContainer(TEST_BLOCK_HEIGHT + 1);
   ASSERT_NO_THROW(addTransaction(TEST_BLOCK_HEIGHT));
 }
 
@@ -801,7 +853,9 @@ TEST_F(TransfersContainer_detach, detachConfirmed) {
 
   ASSERT_EQ(1, container.transfersCount());
   ASSERT_EQ(1, container.transactionsCount());
-  container.detach(TEST_BLOCK_HEIGHT);
+
+  detachContainer(TEST_BLOCK_HEIGHT);
+
   ASSERT_EQ(0, container.transfersCount());
   ASSERT_EQ(0, container.transactionsCount());
 }
@@ -818,7 +872,7 @@ TEST_F(TransfersContainer_detach, detachConfirmedSpendingTransaction) {
   ASSERT_EQ(2, container.transactionsCount());
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 
-  container.detach(TEST_BLOCK_HEIGHT+1);
+  detachContainer(TEST_BLOCK_HEIGHT+1);
   
   ASSERT_EQ(1, container.transfersCount());
   ASSERT_EQ(1, container.transactionsCount());
@@ -841,7 +895,8 @@ TEST_F(TransfersContainer_detach, threeRelatedTransactions) {
   ASSERT_EQ(3, container.transactionsCount());
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 
-  container.detach(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+  detachContainer(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+
   container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE*2);
 
   ASSERT_EQ(1, container.transfersCount());
@@ -859,7 +914,7 @@ TEST_F(TransfersContainer_detach, detachConfirmedTransactionWithUnrelatedUnconfi
   ASSERT_EQ(2, container.transactionsCount());
   ASSERT_EQ(TEST_OUTPUT_AMOUNT * 2, container.balance(ITransfersContainer::IncludeAll));
 
-  container.detach(TEST_BLOCK_HEIGHT);
+  detachContainer(TEST_BLOCK_HEIGHT);
 
   ASSERT_EQ(1, container.transfersCount());
   ASSERT_EQ(1, container.transactionsCount());
@@ -879,7 +934,7 @@ TEST_F(TransfersContainer_detach, confirmedWithUnconfirmedSpendingTransaction_H1
   ASSERT_EQ(2, container.transactionsCount());
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 
-  container.detach(TEST_BLOCK_HEIGHT + 1);
+  detachContainer(TEST_BLOCK_HEIGHT + 1);
 
   ASSERT_EQ(1, container.transfersCount());
   ASSERT_EQ(2, container.transactionsCount());
@@ -897,7 +952,7 @@ TEST_F(TransfersContainer_detach, confirmedWithUnconfirmedSpendingTransaction_H0
   ASSERT_EQ(2, container.transactionsCount());
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAll));
 
-  container.detach(TEST_BLOCK_HEIGHT);
+  detachContainer(TEST_BLOCK_HEIGHT);
 
   ASSERT_EQ(0, container.transfersCount());
   ASSERT_EQ(0, container.transactionsCount());
@@ -911,22 +966,22 @@ TEST_F(TransfersContainer_detach, confirmedTwoOfThree) {
 
   ASSERT_EQ(3, container.transactionsCount());
 
-  container.detach(TEST_BLOCK_HEIGHT);
+  detachContainer(TEST_BLOCK_HEIGHT);
 
   ASSERT_EQ(1, container.transactionsCount());
   ASSERT_EQ(1, container.getTransactionOutputs(txHash, ITransfersContainer::IncludeAll).size());
 }
 
 TEST_F(TransfersContainer_detach, transactionDetachAfterAdvance) {
-  container.detach(TEST_BLOCK_HEIGHT);
   addTransaction(TEST_BLOCK_HEIGHT);
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAllUnlocked));
   container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAllUnlocked));
-  container.detach(TEST_BLOCK_HEIGHT);
+
+  detachContainer(TEST_BLOCK_HEIGHT);
+
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAllUnlocked));
 }
-
 
 //--------------------------------------------------------------------------- 
 // TransfersContainer_advanceHeight
@@ -936,19 +991,7 @@ public:
   TransfersContainer_advanceHeight(){}
 };
 
-
-TEST_F(TransfersContainer_advanceHeight, advanceFailed) {
-  ASSERT_TRUE(container.advanceHeight(1000));
-  ASSERT_FALSE(container.advanceHeight(999)); // 1000 -> 999
-}
-
-TEST_F(TransfersContainer_advanceHeight, advanceSucceeded) {
-  ASSERT_TRUE(container.advanceHeight(1000)); // 1000 -> 1000
-  ASSERT_TRUE(container.advanceHeight(1001)); // 1000 -> 1001
-}
-
 TEST_F(TransfersContainer_advanceHeight, advanceUnlocksTransaction) {
-  container.detach(TEST_BLOCK_HEIGHT);
   addTransaction(TEST_BLOCK_HEIGHT);
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAllUnlocked));
   container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
@@ -958,6 +1001,206 @@ TEST_F(TransfersContainer_advanceHeight, advanceUnlocksTransaction) {
   ASSERT_EQ(TEST_OUTPUT_AMOUNT, container.balance(ITransfersContainer::IncludeAllUnlocked));
 }
 
+//---------------------------------------------------------------------------
+// TransfersContainer_transfersLockStateNotification
+//---------------------------------------------------------------------------
+class TransfersContainer_transfersLockStateNotification : public TransfersContainer_advanceHeight {
+public:
+  TransfersContainer_transfersLockStateNotification(){}
+
+  const uint64_t AMOUNT_1 = 1122;
+  const uint64_t AMOUNT_2 = 2233;
+  const uint32_t TERM = 100;
+  const uint64_t TRANSACTION_HEIGHT_1 = 1;
+
+  struct UnconfirmedTransactionInfo {
+    std::unique_ptr<ITransaction> transaction;
+    std::vector<TransactionOutputInformationIn> outputs;
+    std::vector<uint64_t> globalIndices;
+
+    UnconfirmedTransactionInfo() {
+    }
+
+    UnconfirmedTransactionInfo(UnconfirmedTransactionInfo&& other) :
+      transaction(std::move(other.transaction)),
+      outputs(std::move(other.outputs)),
+      globalIndices(std::move(other.globalIndices)) {
+    }
+  };
+
+  UnconfirmedTransactionInfo addUnconfirmedTransaction(uint64_t outputAmount = TEST_OUTPUT_AMOUNT) {
+    UnconfirmedTransactionInfo txInfo;
+
+    txInfo.transaction = createTransaction();
+
+    addTestInput(*txInfo.transaction, outputAmount + 1);
+    auto outputIndex = UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX;
+    auto outInfo = addTestKeyOutput(*txInfo.transaction, outputAmount, outputIndex, account);
+
+    txInfo.outputs = { outInfo };
+    txInfo.globalIndices = { TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX };
+
+    std::vector<TransactionOutputInformation> unlockedTransfers;
+    EXPECT_TRUE(container.addTransaction(blockInfo(UNCONFIRMED_TRANSACTION_HEIGHT), *txInfo.transaction, txInfo.outputs, {}, &unlockedTransfers));
+    EXPECT_TRUE(unlockedTransfers.empty());
+
+    return txInfo;
+  }
+
+  void confirmTransaction(uint64_t height, const UnconfirmedTransactionInfo& txInfo) {
+    EXPECT_TRUE(container.markTransactionConfirmed(blockInfo(height), txInfo.transaction->getTransactionHash(), txInfo.globalIndices));
+  }
+
+  std::unique_ptr<ITransaction> addDepositTransaction(uint64_t height, uint32_t term, uint64_t amount = TEST_OUTPUT_AMOUNT, std::vector<TransactionOutputInformation>* unlockedTransfers = nullptr) {
+    auto tx = createTransaction();
+    auto outInfo = addDepositOutput(*tx, amount, term, height);
+
+    std::vector<TransactionOutputInformationIn> outputs = { outInfo };
+
+    EXPECT_TRUE(container.addTransaction(blockInfo(height), *tx, outputs, {}, unlockedTransfers));
+
+    return tx;
+  }
+};
+
+TEST_F(TransfersContainer_transfersLockStateNotification, addTransactionReturnsUnlockedTransfers) {
+  std::vector<CryptoNote::TransactionOutputInformation> unlockedTransfers;
+
+  addTransaction(TRANSACTION_HEIGHT_1, AMOUNT_1);
+  addTransaction(TRANSACTION_HEIGHT_1 + TEST_TRANSACTION_SPENDABLE_AGE, AMOUNT_2, &unlockedTransfers);
+
+  ASSERT_EQ(1, unlockedTransfers.size());
+  EXPECT_EQ(AMOUNT_1, unlockedTransfers.front().amount);
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, advanceReturnsUnlockedTransfers) {
+  std::vector<CryptoNote::TransactionOutputInformation> unlockedTransfers;
+
+  addTransaction(TRANSACTION_HEIGHT_1, AMOUNT_1);
+  unlockedTransfers = container.advanceHeight(TRANSACTION_HEIGHT_1 + TEST_TRANSACTION_SPENDABLE_AGE);
+
+  ASSERT_EQ(1, unlockedTransfers.size());
+  EXPECT_EQ(AMOUNT_1, unlockedTransfers.front().amount);
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, advanceReturnsNoUnlockedTransfersForUnconfirmedTransaction) {
+  auto info = addUnconfirmedTransaction(TEST_OUTPUT_AMOUNT);
+
+  auto unlockedTransfers = container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+  ASSERT_TRUE(unlockedTransfers.empty());
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, advanceReturnsUnlockedTransfersAfterTransactionConfirmation) {
+  auto info = addUnconfirmedTransaction(TEST_OUTPUT_AMOUNT);
+  confirmTransaction(TEST_BLOCK_HEIGHT, info);
+
+  auto unlockedTransfers = container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+
+  ASSERT_EQ(1, unlockedTransfers.size());
+  EXPECT_EQ(TEST_OUTPUT_AMOUNT, unlockedTransfers[0].amount);
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, secondAdvanceReturnsNoUnlockedTransfers) {
+  addTransaction(TEST_BLOCK_HEIGHT, AMOUNT_1);
+
+  container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+  auto transfers = container.advanceHeight(TEST_BLOCK_HEIGHT + 2 * TEST_TRANSACTION_SPENDABLE_AGE);
+  ASSERT_TRUE(transfers.empty());
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, advanceHeightLessThenDepositTermReturnsNoTransfers) {
+  assert(TEST_TRANSACTION_SPENDABLE_AGE < TERM);
+  assert(TERM > 1);
+
+  addDepositTransaction(TEST_BLOCK_HEIGHT, TERM);
+
+  auto unlocked = container.advanceHeight(TEST_BLOCK_HEIGHT + TERM - 1);
+  ASSERT_TRUE(unlocked.empty());
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, advanceHeightReturnsUnlockedDeposits) {
+  addDepositTransaction(TEST_BLOCK_HEIGHT, TERM, TEST_OUTPUT_AMOUNT);
+
+  auto unlocked = container.advanceHeight(TEST_BLOCK_HEIGHT + TERM);
+  ASSERT_EQ(1, unlocked.size());
+  EXPECT_EQ(TEST_OUTPUT_AMOUNT, unlocked[0].amount);
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, detachLocksTransfers) {
+  addTransaction(TEST_BLOCK_HEIGHT);
+
+  container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+
+  std::vector<TransactionOutputInformation> lockedTransfers = detachContainerGetLockedTransfers(TEST_BLOCK_HEIGHT + 1);
+
+  ASSERT_EQ(1, lockedTransfers.size());
+  EXPECT_EQ(TEST_OUTPUT_AMOUNT, lockedTransfers[0].amount);
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, detachDoesntLockUnconfirmedTransfers) {
+  addTransaction();
+
+  container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+  std::vector<TransactionOutputInformation> lockedTransfers = detachContainerGetLockedTransfers(TEST_BLOCK_HEIGHT + 1);
+  ASSERT_TRUE(lockedTransfers.empty());
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, detachDoesntLockUnlockedTransfersForThisHeight) {
+  addTransaction(TEST_BLOCK_HEIGHT);
+
+  container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE + 10);
+
+  std::vector<TransactionOutputInformation> lockedTransfers = detachContainerGetLockedTransfers(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE + 1);
+  ASSERT_TRUE(lockedTransfers.empty());
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, detachLocksDeposits) {
+  assert(TEST_TRANSACTION_SPENDABLE_AGE <= TERM);
+
+  addDepositTransaction(TEST_BLOCK_HEIGHT, TERM, TEST_OUTPUT_AMOUNT);
+
+  uint64_t unlockHeight = TEST_BLOCK_HEIGHT + TERM;
+  container.advanceHeight(unlockHeight);
+
+  std::vector<TransactionOutputInformation> lockedTransfers = detachContainerGetLockedTransfers(unlockHeight - 1);
+  ASSERT_EQ(1, lockedTransfers.size());
+  EXPECT_EQ(TEST_OUTPUT_AMOUNT, lockedTransfers[0].amount);
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, advanceHeightDoesntUnlockDeletedTransfers) {
+  addTransaction(TEST_BLOCK_HEIGHT);
+
+  container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+  detachContainer(TEST_BLOCK_HEIGHT);
+  auto unlocked = container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+
+  ASSERT_TRUE(unlocked.empty());
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, restoreContainerAndUnlockConfirmedTransactions) {
+  addTransaction(TEST_BLOCK_HEIGHT);
+
+  std::stringstream stream;
+  container.save(stream);
+  TransfersContainer container2(currency, TEST_TRANSACTION_SPENDABLE_AGE);
+  container2.load(stream);
+
+  auto unlocked = container2.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+  ASSERT_EQ(1, unlocked.size());
+  EXPECT_EQ(TEST_OUTPUT_AMOUNT, unlocked[0].amount);
+}
+
+TEST_F(TransfersContainer_transfersLockStateNotification, restoreContainerAndUnlockUnconfirmedTransactions) {
+  addTransaction();
+
+  std::stringstream stream;
+  container.save(stream);
+  TransfersContainer container2(currency, TEST_TRANSACTION_SPENDABLE_AGE);
+  container2.load(stream);
+
+  auto unlocked = container2.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
+  ASSERT_TRUE(unlocked.empty());
+}
 
 //--------------------------------------------------------------------------- 
 // TransfersContainer_balance
@@ -1196,32 +1439,106 @@ TEST_F(TransfersContainer_getOutputs, filtersByStateAndKeySimultaneously) {
   ASSERT_EQ(AMOUNT_1 + AMOUNT_2, transfers.front().amount);
 }
 
-class TransfersContainer_depositBalance : public TransfersContainerTest {
+class TransfersContainer_getTransactionInputs : public TransfersContainerTest {
+public:
+  const uint64_t AMOUNT_1 = 1000224;
+  const uint64_t AMOUNT_2 = 3392922;
+  const uint64_t AMOUNT_3 = AMOUNT_1 + AMOUNT_2;
+  const uint64_t TERM = 22231;
+
+  TransfersContainer_getTransactionInputs() {
+  }
+
+  std::vector<TransactionOutputInformationIn> keyOutputs;
+  std::vector<TransactionOutputInformationIn> depositOutputs;
+
+  std::unique_ptr<ITransaction> createGeneratingTransaction() {
+    auto generatingTransaction = createTransaction();
+
+    auto out1 = addTestKeyOutput(*generatingTransaction, AMOUNT_1, 1, account);
+    auto out2 = addTestKeyOutput(*generatingTransaction, AMOUNT_2, 2, account);
+    auto out3 = addDepositOutput(*generatingTransaction, AMOUNT_3, TERM, TEST_BLOCK_HEIGHT);
+
+    std::vector<TransactionOutputInformationIn> outputs = { out1, out2, out3 };
+    container.addTransaction(blockInfo(TEST_BLOCK_HEIGHT), *generatingTransaction, outputs, {});
+    container.advanceHeight(TEST_BLOCK_HEIGHT + TERM);
+
+    out1.transactionHash = generatingTransaction->getTransactionHash();
+    out2.transactionHash = generatingTransaction->getTransactionHash();
+
+    keyOutputs.push_back(out1);
+    keyOutputs.push_back(out2);
+    depositOutputs.push_back(out3);
+
+    return generatingTransaction;
+  }
+
+  std::unique_ptr<ITransaction> createSpendingTransaction(ITransaction& generatingTransaction) {
+    auto spendingTransaction = addSpendingTransaction(generatingTransaction.getTransactionHash(), TEST_BLOCK_HEIGHT + TERM + 1, 3, AMOUNT_3);
+    return spendingTransaction;
+  }
+
+  void checkKeyInputs(const std::vector<TransactionOutputInformation>& inputs) {
+    for (const auto& input: keyOutputs) {
+      EXPECT_NE(inputs.end(), std::find(inputs.begin(), inputs.end(), static_cast<const TransactionOutputInformation&>(input)));
+    }
+  }
+
+  void checkDepositInputs(const std::vector<TransactionOutputInformation>& inputs) {
+    for (const auto& input: depositOutputs) {
+      EXPECT_NE(inputs.end(), std::find(inputs.begin(), inputs.end(), static_cast<const TransactionOutputInformation&>(input)));
+    }
+  }
+
+  void checkDepositInputs(ITransaction& spendingTransaction) {
+    std::vector<TransactionOutputInformation> inputs = container.getTransactionInputs(spendingTransaction.getTransactionHash(), ITransfersContainer::IncludeTypeDeposit);
+    ASSERT_EQ(depositOutputs.size(), inputs.size());
+
+    checkDepositInputs(inputs);
+  }
+
+  void checkKeyInputs(ITransaction& spendingTransaction) {
+    std::vector<TransactionOutputInformation> inputs = container.getTransactionInputs(spendingTransaction.getTransactionHash(), ITransfersContainer::IncludeTypeKey);
+    ASSERT_EQ(keyOutputs.size(), inputs.size());
+
+    checkKeyInputs(inputs);
+  }
+
+  void checkAllInputs(ITransaction& spendingTransaction) {
+    std::vector<TransactionOutputInformation> inputs = container.getTransactionInputs(spendingTransaction.getTransactionHash(), ITransfersContainer::IncludeTypeAll);
+
+    ASSERT_EQ(keyOutputs.size() + depositOutputs.size(), inputs.size());
+    checkKeyInputs(inputs);
+    checkDepositInputs(inputs);
+  }
+};
+
+TEST_F(TransfersContainer_getTransactionInputs, returnsAllInputsCorrectly) {
+  auto generatingTransaction = createGeneratingTransaction();
+  auto spendingTransaction = createSpendingTransaction(*generatingTransaction);
+
+  checkAllInputs(*spendingTransaction);
+}
+
+TEST_F(TransfersContainer_getTransactionInputs, returnsDepositInputsCorrectly) {
+  auto generatingTransaction = createGeneratingTransaction();
+  auto spendingTransaction = createSpendingTransaction(*generatingTransaction);
+
+  checkDepositInputs(*spendingTransaction);
+}
+
+TEST_F(TransfersContainer_getTransactionInputs, returnsKeyInputsCorrectly) {
+  auto generatingTransaction = createGeneratingTransaction();
+  auto spendingTransaction = createSpendingTransaction(*generatingTransaction);
+
+  checkKeyInputs(*spendingTransaction);
+}
+
+class TransfersContainer_depositBalance : public TransfersContainer_getTransactionInputs {
 protected:
 
   const uint64_t HEIGHT = 10;
   const uint64_t TERM = 100;
-
-  TransactionOutputInformationIn addDepositOutput(std::unique_ptr<ITransaction>& tx, uint64_t amount, uint32_t term, uint64_t height, uint32_t requiredSignatures = 1) {
-    auto index = tx->addOutput(amount, {account.address}, requiredSignatures, term);
-    auto outputIndex = (height == UNCONFIRMED_TRANSACTION_HEIGHT) ? UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX : TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX;
-
-    TransactionTypes::OutputMultisignature output;
-    tx->getOutput(index, output);
-
-    TransactionOutputInformationIn outputInfo;
-    outputInfo.type = TransactionTypes::OutputType::Multisignature;
-    outputInfo.amount = output.amount;
-    outputInfo.globalOutputIndex = outputIndex;
-    outputInfo.outputInTransaction = index;
-    outputInfo.transactionPublicKey = tx->getTransactionPublicKey();
-    outputInfo.transactionHash = tx->getTransactionHash();
-    outputInfo.requiredSignatures = requiredSignatures;
-    outputInfo.term = term;
-    outputInfo.keyImage = generateKeyImage(account, index, tx->getTransactionPublicKey());
-
-    return outputInfo;
-  }
 
   void addTransaction(const std::unique_ptr<ITransaction>& tx, TransactionOutputInformationIn outInfo, uint64_t height) {
     std::vector<TransactionOutputInformationIn> outputs = { outInfo };
@@ -1236,7 +1553,7 @@ protected:
 TEST_F(TransfersContainer_depositBalance, depositBalanceLocked) {
   auto tx = createTransaction();
 
-  TransactionOutputInformationIn outInfo = addDepositOutput(tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
+  TransactionOutputInformationIn outInfo = addDepositOutput(*tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
   addTransaction(tx, outInfo, HEIGHT);
   container.advanceHeight(HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
 
@@ -1247,7 +1564,7 @@ TEST_F(TransfersContainer_depositBalance, depositBalanceLocked) {
 TEST_F(TransfersContainer_depositBalance, depositBalanceUnlocked) {
   auto tx = createTransaction();
 
-  TransactionOutputInformationIn outInfo = addDepositOutput(tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
+  TransactionOutputInformationIn outInfo = addDepositOutput(*tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
   addTransaction(tx, outInfo, HEIGHT);
   container.advanceHeight(HEIGHT + TERM);
 
@@ -1258,7 +1575,7 @@ TEST_F(TransfersContainer_depositBalance, depositBalanceUnlocked) {
 TEST_F(TransfersContainer_depositBalance, spendDepositOutput) {
   auto tx = createTransaction();
 
-  TransactionOutputInformationIn outInfo = addDepositOutput(tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
+  TransactionOutputInformationIn outInfo = addDepositOutput(*tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
   addTransaction(tx, outInfo, HEIGHT);
   container.advanceHeight(HEIGHT + TERM);
 
@@ -1282,7 +1599,7 @@ TEST_F(TransfersContainer_depositBalance, spendDepositOutput) {
 TEST_F(TransfersContainer_depositBalance, serializeContainer) {
   auto tx1 = createTransaction();
 
-  TransactionOutputInformationIn out1 = addDepositOutput(tx1, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
+  TransactionOutputInformationIn out1 = addDepositOutput(*tx1, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
   addTransaction(tx1, out1, HEIGHT);
   container.advanceHeight(HEIGHT + TERM);
 
@@ -1291,7 +1608,7 @@ TEST_F(TransfersContainer_depositBalance, serializeContainer) {
   const uint64_t AMOUNT2 = 8832;
 
   auto tx2 = createTransaction();
-  TransactionOutputInformationIn out2 = addDepositOutput(tx2, AMOUNT2, TERM2, HEIGHT2);
+  TransactionOutputInformationIn out2 = addDepositOutput(*tx2, AMOUNT2, TERM2, HEIGHT2);
   addTransaction(tx2, out2, HEIGHT2);
 
   auto unlockedBalance = container.balance(ITransfersContainer::IncludeAllUnlocked);
@@ -1317,7 +1634,7 @@ TEST_F(TransfersContainer_depositBalance, transactionUnlockTimeGreaterThenDeposi
   const uint64_t UNLOCK_TIME = TERM + 20;
   auto tx = createTransaction();
 
-  TransactionOutputInformationIn out = addDepositOutput(tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
+  TransactionOutputInformationIn out = addDepositOutput(*tx, TEST_OUTPUT_AMOUNT, TERM, HEIGHT);
   tx->setUnlockTime(UNLOCK_TIME);
 
   addTransaction(tx, out, HEIGHT);

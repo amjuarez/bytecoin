@@ -116,7 +116,7 @@ TEST_F(TransfersSubscriptionTest, onError) {
 
 TEST_F(TransfersSubscriptionTest, advanceHeight) {
   ASSERT_TRUE(sub.advanceHeight(10));
-  ASSERT_FALSE(sub.advanceHeight(9)); // can't go backwards
+  ASSERT_ANY_THROW(sub.advanceHeight(9)); // can't go backwards
 }
 
 

@@ -34,6 +34,8 @@ public:
   void putTxPoolToBlockchain();
   void clearTxPool();
 
+  uint64_t getCurrentHeight() const { return m_blockchain.size() - 1; }
+
 private:
   
   void addGenesisBlock();

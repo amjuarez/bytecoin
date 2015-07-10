@@ -85,14 +85,24 @@ public:
     IncludeDefault = IncludeKeyUnlocked
   };
 
+  enum class TransferState : uint32_t {
+    TransferUnconfirmed,
+    TransferLocked,
+    TransferAvailable,
+    TransferSpent
+  };
+
   virtual size_t transfersCount() = 0;
   virtual size_t transactionsCount() = 0;
   virtual uint64_t balance(uint32_t flags = IncludeDefault) = 0;
   virtual void getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags = IncludeDefault) = 0;
   virtual bool getTransactionInformation(const Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) = 0;
   virtual std::vector<TransactionOutputInformation> getTransactionOutputs(const Hash& transactionHash, uint32_t flags = IncludeDefault) = 0;
+  //only type flags are feasible for this function
+  virtual std::vector<TransactionOutputInformation> getTransactionInputs(const Hash& transactionHash, uint32_t flags) const = 0;
   virtual void getUnconfirmedTransactions(std::vector<crypto::hash>& transactions) = 0;
   virtual std::vector<TransactionSpentOutputInformation> getSpentOutputs() = 0;
+  virtual bool getTransfer(const Hash& transactionHash, uint32_t outputInTransaction, TransactionOutputInformation& transfer, TransferState& transferState) const = 0;
 };
 
 }

@@ -58,18 +58,24 @@ public:
 
   virtual uint64_t actualBalance();
   virtual uint64_t pendingBalance();
+  virtual uint64_t actualDepositBalance() override;
+  virtual uint64_t pendingDepositBalance() override;
 
   virtual size_t getTransactionCount();
   virtual size_t getTransferCount();
+  virtual size_t getDepositCount() override;
 
   virtual TransactionId findTransactionByTransferId(TransferId transferId);
 
   virtual bool getTransaction(TransactionId transactionId, TransactionInfo& transaction);
   virtual bool getTransfer(TransferId transferId, Transfer& transfer);
+  virtual bool getDeposit(DepositId depositId, Deposit& deposit) override;
   virtual std::vector<Payments> getTransactionsByPaymentIds(const std::vector<PaymentId>& paymentIds) const override;
 
   virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
   virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0, const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
+  virtual TransactionId deposit(uint32_t term, uint64_t amount, uint64_t fee, uint64_t mixIn = 0) override;
+  virtual TransactionId withdrawDeposits(const std::vector<DepositId>& depositIds, uint64_t fee) override;
   virtual std::error_code cancelTransaction(size_t transactionId);
 
   virtual void getAccountKeys(WalletAccountKeys& keys);
@@ -83,6 +89,8 @@ private:
   // ITransfersObserver
   virtual void onTransactionUpdated(ITransfersSubscription* object, const Hash& transactionHash) override;
   virtual void onTransactionDeleted(ITransfersSubscription* object, const Hash& transactionHash) override;
+  virtual void onTransfersUnlocked(ITransfersSubscription* object, const std::vector<TransactionOutputInformation>& unlockedTransfers) override;
+  virtual void onTransfersLocked(ITransfersSubscription* object, const std::vector<TransactionOutputInformation>& lockedTransfers) override;
 
   void initSync();
   void throwIfNotInitialised();
@@ -95,8 +103,23 @@ private:
 
   void synchronizationCallback(WalletRequest::Callback callback, std::error_code ec);
   void sendTransactionCallback(WalletRequest::Callback callback, std::error_code ec);
-  void notifyClients(std::deque<std::shared_ptr<WalletEvent> >& events);
+  void notifyClients(std::deque<std::unique_ptr<WalletEvent>>& events);
   void notifyIfBalanceChanged();
+  void notifyIfDepositBalanceChanged();
+
+  std::unique_ptr<WalletEvent> getActualDepositBalanceChangedEvent();
+  std::unique_ptr<WalletEvent> getPendingDepositBalanceChangedEvent();
+
+  std::unique_ptr<WalletEvent> getActualBalanceChangedEvent();
+  std::unique_ptr<WalletEvent> getPendingBalanceChangedEvent();
+
+  uint64_t calculateActualDepositBalance();
+  uint64_t calculatePendingDepositBalance();
+
+  uint64_t calculateActualBalance();
+  uint64_t calculatePendingBalance();
+
+  void pushBalanceUpdatedEvents(std::deque<std::unique_ptr<WalletEvent>>& eventsQueue);
 
   enum WalletState
   {
@@ -116,6 +139,9 @@ private:
 
   std::atomic<uint64_t> m_lastNotifiedActualBalance;
   std::atomic<uint64_t> m_lastNotifiedPendingBalance;
+
+  std::atomic<uint64_t> m_lastNotifiedActualDepositBalance;
+  std::atomic<uint64_t> m_lastNotifiedPendingDepositBalance;
 
   BlockchainSynchronizer m_blockchainSync;
   TransfersSyncronizer m_transfersSync;

@@ -27,7 +27,12 @@ enum WalletErrorCodes {
   TX_CANCEL_IMPOSSIBLE,
   TX_CANCELLED,
   OPERATION_CANCELLED,
-  TX_TRANSFER_IMPOSSIBLE
+  TX_TRANSFER_IMPOSSIBLE,
+  DEPOSIT_TERM_TOO_SMALL,
+  DEPOSIT_TERM_TOO_BIG,
+  DEPOSIT_AMOUNT_TOO_SMALL,
+  DEPOSIT_DOESNOT_EXIST,
+  DEPOSIT_LOCKED
 };
 
 // custom category:
@@ -59,6 +64,11 @@ public:
     case WRONG_STATE:         return "The wallet is in wrong state (maybe loading or saving), try again later";
     case OPERATION_CANCELLED: return "The operation you've requested has been cancelled";
     case TX_TRANSFER_IMPOSSIBLE: return "Transaction transfer impossible";
+    case DEPOSIT_TERM_TOO_SMALL: return "Deposit term is too small";
+    case DEPOSIT_TERM_TOO_BIG: return "Deposit term is too big";
+    case DEPOSIT_AMOUNT_TOO_SMALL: return "Deposit amount is too small";
+    case DEPOSIT_DOESNOT_EXIST: return "Deposit doesn't exist";
+    case DEPOSIT_LOCKED:      return "Deposit is locked";
     default:                  return "Unknown error";
     }
   }

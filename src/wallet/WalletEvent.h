@@ -64,6 +64,19 @@ private:
   TransactionId m_id;
 };
 
+class WalletDepositsUpdatedEvent : public WalletEvent {
+public:
+  WalletDepositsUpdatedEvent(std::vector<DepositId>&& depositIds) : updatedDeposits(depositIds) {}
+
+  virtual ~WalletDepositsUpdatedEvent() {}
+
+  virtual void notify(tools::ObserverManager<CryptoNote::IWalletObserver>& observer) override {
+    observer.notify(&IWalletObserver::depositsUpdated, updatedDeposits);
+  }
+private:
+  std::vector<DepositId> updatedDeposits;
+};
+
 class WalletSynchronizationProgressUpdatedEvent : public WalletEvent
 {
 public:
@@ -116,6 +129,34 @@ public:
   virtual void notify(tools::ObserverManager<CryptoNote::IWalletObserver>& observer)
   {
     observer.notify(&IWalletObserver::pendingBalanceUpdated, m_balance);
+  }
+private:
+  uint64_t m_balance;
+};
+
+class WalletActualDepositBalanceUpdatedEvent : public WalletEvent
+{
+public:
+  WalletActualDepositBalanceUpdatedEvent(uint64_t balance) : m_balance(balance) {}
+  virtual ~WalletActualDepositBalanceUpdatedEvent() {}
+
+  virtual void notify(tools::ObserverManager<CryptoNote::IWalletObserver>& observer)
+  {
+    observer.notify(&IWalletObserver::actualDepositBalanceUpdated, m_balance);
+  }
+private:
+  uint64_t m_balance;
+};
+
+class WalletPendingDepositBalanceUpdatedEvent : public WalletEvent
+{
+public:
+  WalletPendingDepositBalanceUpdatedEvent(uint64_t balance) : m_balance(balance) {}
+  virtual ~WalletPendingDepositBalanceUpdatedEvent() {}
+
+  virtual void notify(tools::ObserverManager<CryptoNote::IWalletObserver>& observer)
+  {
+    observer.notify(&IWalletObserver::pendingDepositBalanceUpdated, m_balance);
   }
 private:
   uint64_t m_balance;

@@ -17,6 +17,8 @@
 
 namespace {
 
+const uint32_t WALLET_SERIALIZATION_VERSION = 2;
+
 bool verifyKeys(const crypto::secret_key& sec, const crypto::public_key& expected_pub) {
   crypto::public_key pub;
   bool r = crypto::secret_key_to_public_key(sec, pub);
@@ -35,7 +37,7 @@ namespace CryptoNote {
 WalletSerializer::WalletSerializer(cryptonote::account_base& account, WalletUserTransactionsCache& transactionsCache) :
   account(account),
   transactionsCache(transactionsCache),
-  walletSerializationVersion(1)
+  walletSerializationVersion(WALLET_SERIALIZATION_VERSION)
 {
 }
 
@@ -131,7 +133,11 @@ void WalletSerializer::deserialize(std::istream& stream, const std::string& pass
   serializer(detailsSaved, "has_details");
 
   if (detailsSaved) {
-    serializer(transactionsCache, "details");
+    if (version == 1) {
+      transactionsCache.deserializeLegacyV1(serializer, "details");
+    } else {
+      serializer(transactionsCache, "details");
+    }
   }
 
   serializer.binary(cache, "cache");

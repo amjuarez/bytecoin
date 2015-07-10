@@ -28,6 +28,19 @@ void serialize(UnconfirmedTransferDetails& utd, const std::string& name, crypton
   serializer.endObject();
 }
 
+void serialize(UnconfirmedSpentDepositDetails& details, const std::string& name, cryptonote::ISerializer& serializer) {
+  serializer.beginObject(name);
+
+  uint64_t txId = details.transactionId;
+  serializer(txId, "spendingTransactionId");
+  details.transactionId = txId;
+
+  serializer(details.depositsSum, "depositsSum");
+  serializer(details.fee, "fee");
+
+  serializer.endObject();
+}
+
 void serialize(TransactionInfo& txi, const std::string& name, cryptonote::ISerializer& serializer) {
   serializer.beginObject(name);
 
@@ -82,11 +95,13 @@ void serialize(Deposit& deposit, const std::string& name, cryptonote::ISerialize
 
   uint64_t spendingTxIx = static_cast<uint64_t>(deposit.spendingTransactionId);
   serializer(spendingTxIx, "spending_transaction_id");
-  deposit.creatingTransactionId = static_cast<size_t>(spendingTxIx);
+  deposit.spendingTransactionId = static_cast<size_t>(spendingTxIx);
 
   serializer(deposit.term, "term");
   serializer(deposit.amount, "amount");
   serializer(deposit.interest, "interest");
+  serializer(deposit.locked, "locked");
+
   serializer.endObject();
 }
 

@@ -58,4 +58,11 @@ void serialize(T& value, const std::string& name, ISerializer& serializer) {
   return;
 }
 
+#ifdef __clang__
+template<> inline
+ISerializer& ISerializer::operator()(size_t& value, const std::string& name) {
+  return operator()(*reinterpret_cast<uint64_t*>(&value), name);
+}
+#endif
+
 }

@@ -9,6 +9,7 @@
 #include "ITransfersContainer.h"
 
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <time.h>
 #include <boost/functional/hash.hpp>
@@ -16,13 +17,13 @@
 #include "crypto/hash.h"
 #include "cryptonote_core/cryptonote_basic.h"
 
+#include <transfers/TypeHelpers.h>
+
 namespace cryptonote {
 class ISerializer;
 }
 
 namespace CryptoNote {
-
-typedef std::pair<PublicKey, size_t> TransactionOutputId;
 
 struct UnconfirmedTransferDetails {
 
@@ -34,20 +35,35 @@ struct UnconfirmedTransferDetails {
   uint64_t outsAmount;
   time_t sentTime;
   TransactionId transactionId;
-  std::vector<TransactionOutputId> usedOutputs;
+  std::vector<std::pair<PublicKey, size_t>> usedOutputs;
 };
 
-class WalletUnconfirmedTransactions
-{
+struct UnconfirmedSpentDepositDetails {
+  TransactionId transactionId;
+  uint64_t depositsSum;
+  uint64_t fee;
+};
+
+class WalletUnconfirmedTransactions {
 public:
 
   void serialize(cryptonote::ISerializer& s, const std::string& name);
+  void deserializeV1(cryptonote::ISerializer& s, const std::string& name);
 
   bool findTransactionId(const TransactionHash& hash, TransactionId& id);
   void erase(const TransactionHash& hash);
   void add(const cryptonote::Transaction& tx, TransactionId transactionId, 
-    uint64_t amount, const std::list<TransactionOutputInformation>& usedOutputs);
+    uint64_t amount, const std::vector<TransactionOutputInformation>& usedOutputs);
   void updateTransactionId(const TransactionHash& hash, TransactionId id);
+
+  void addCreatedDeposit(DepositId id, uint64_t totalAmount);
+  void addDepositSpendingTransaction(const Hash& transactionHash, const UnconfirmedSpentDepositDetails& details);
+
+  void eraseCreatedDeposit(DepositId id);
+
+  uint64_t countCreatedDepositsSum() const;
+  uint64_t countSpentDepositsProfit() const;
+  uint64_t countSpentDepositsTotalAmount() const;
 
   uint64_t countUnconfirmedOutsAmount() const;
   uint64_t countUnconfirmedTransactionsAmount() const;
@@ -57,11 +73,20 @@ private:
 
   void collectUsedOutputs();
 
+  bool eraseUnconfirmedTransaction(const TransactionHash& hash);
+  bool eraseDepositSpendingTransaction(const TransactionHash& hash);
+
+  bool findUnconfirmedTransactionId(const TransactionHash& hash, TransactionId& id);
+  bool findUnconfirmedDepositSpendingTransactionId(const TransactionHash& hash, TransactionId& id);
+
   typedef std::unordered_map<TransactionHash, UnconfirmedTransferDetails, boost::hash<TransactionHash>> UnconfirmedTxsContainer;
-  typedef std::set<TransactionOutputId> UsedOutputsContainer;
+  typedef std::set<std::pair<PublicKey, size_t>> UsedOutputsContainer;
 
   UnconfirmedTxsContainer m_unconfirmedTxs;
   UsedOutputsContainer m_usedOutputs;
+
+  std::unordered_map<DepositId, uint64_t> m_createdDeposits;
+  std::unordered_map<Hash, UnconfirmedSpentDepositDetails> m_spentDeposits;
 };
 
 } // namespace CryptoNote

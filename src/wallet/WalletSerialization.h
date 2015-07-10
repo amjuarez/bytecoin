@@ -22,8 +22,10 @@ struct TransactionInfo;
 struct Transfer;
 struct DepositInfo;
 struct Deposit;
+struct UnconfirmedSpentDepositDetails;
 
 void serialize(UnconfirmedTransferDetails& utd, const std::string& name, cryptonote::ISerializer& serializer);
+void serialize(UnconfirmedSpentDepositDetails& details, const std::string& name, cryptonote::ISerializer& serializer);
 void serialize(TransactionInfo& txi, const std::string& name, cryptonote::ISerializer& serializer);
 void serialize(Transfer& tr, const std::string& name, cryptonote::ISerializer& serializer);
 void serialize(DepositInfo& depositInfo, const std::string& name, cryptonote::ISerializer& serializer);

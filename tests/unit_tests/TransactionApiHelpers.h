@@ -88,7 +88,7 @@ inline bool operator == (const AccountKeys& a, const AccountKeys& b) {
   return memcmp(&a, &b, sizeof(a)) == 0; 
 }
 
-inline bool operator==(const CryptoNote::TransactionOutputInformation& l, const CryptoNote::TransactionOutputInformation& r) {
+inline bool operator==(const TransactionOutputInformation& l, const TransactionOutputInformation& r) {
   if (l.type != r.type) {
     return false;
   }
@@ -97,7 +97,7 @@ inline bool operator==(const CryptoNote::TransactionOutputInformation& l, const 
     return false;
   }
 
-  if (l.globalOutputIndex != r.globalOutputIndex ) {
+  if (l.globalOutputIndex != r.globalOutputIndex) {
     return false;
   }
 

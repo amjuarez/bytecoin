@@ -39,6 +39,13 @@ public:
    * for the same \a transactionHash.
    */
   virtual void onTransactionDeleted(ITransfersSubscription* object, const Hash& transactionHash) { }
+
+  /**
+   * \note this method MUST be called after appropriate onTransactionUpdated has been called
+   */
+  virtual void onTransfersUnlocked(ITransfersSubscription* object, const std::vector<TransactionOutputInformation>& unlockedTransfers) {}
+
+  virtual void onTransfersLocked(ITransfersSubscription* object, const std::vector<TransactionOutputInformation>& lockedTransfers) {}
 };
 
 class ITransfersSubscription : public IObservable < ITransfersObserver > {

@@ -11,6 +11,7 @@
 #include "WalletUtils.h"
 #include "WalletSerializer.h"
 
+#include <numeric>
 #include <time.h>
 #include <string.h>
 
@@ -84,6 +85,13 @@ private:
   std::promise<std::error_code> promise;
   std::future<std::error_code> future;
 };
+
+uint64_t calculateDepositsAmount(const std::vector<CryptoNote::TransactionOutputInformation>& transfers, const cryptonote::Currency& currency) {
+  return std::accumulate(transfers.begin(), transfers.end(), static_cast<uint64_t>(0), [&currency] (uint64_t sum, const CryptoNote::TransactionOutputInformation& deposit) {
+    return sum + deposit.amount + currency.calculateInterest(deposit.amount, deposit.term);
+  });
+}
+
 } //namespace
 
 namespace CryptoNote {
@@ -107,6 +115,10 @@ Wallet::Wallet(const cryptonote::Currency& currency, INode& node) :
   m_currency(currency),
   m_node(node),
   m_isStopping(false),
+  m_lastNotifiedActualBalance(0),
+  m_lastNotifiedPendingBalance(0),
+  m_lastNotifiedActualDepositBalance(0),
+  m_lastNotifiedPendingDepositBalance(0),
   m_blockchainSync(node, currency.genesisBlockHash()),
   m_transfersSync(currency, m_blockchainSync, node),
   m_transferDetails(nullptr),
@@ -417,16 +429,28 @@ uint64_t Wallet::actualBalance() {
   std::unique_lock<std::mutex> lock(m_cacheMutex);
   throwIfNotInitialised();
 
-  return m_transferDetails->balance(ITransfersContainer::IncludeKeyUnlocked) -
-    m_transactionsCache.unconfrimedOutsAmount();
+  return calculateActualBalance();
 }
 
 uint64_t Wallet::pendingBalance() {
   std::unique_lock<std::mutex> lock(m_cacheMutex);
   throwIfNotInitialised();
 
-  uint64_t change = m_transactionsCache.unconfrimedOutsAmount() - m_transactionsCache.unconfirmedTransactionsAmount();
-  return m_transferDetails->balance(ITransfersContainer::IncludeKeyNotUnlocked) + change;
+  return calculatePendingBalance();
+}
+
+uint64_t Wallet::actualDepositBalance() {
+  std::unique_lock<std::mutex> lock(m_cacheMutex);
+  throwIfNotInitialised();
+
+  return calculateActualDepositBalance();
+}
+
+uint64_t Wallet::pendingDepositBalance() {
+  std::unique_lock<std::mutex> lock(m_cacheMutex);
+  throwIfNotInitialised();
+
+  return calculatePendingDepositBalance();
 }
 
 size_t Wallet::getTransactionCount() {
@@ -441,6 +465,13 @@ size_t Wallet::getTransferCount() {
   throwIfNotInitialised();
 
   return m_transactionsCache.getTransferCount();
+}
+
+size_t Wallet::getDepositCount() {
+  std::unique_lock<std::mutex> lock(m_cacheMutex);
+  throwIfNotInitialised();
+
+  return m_transactionsCache.getDepositCount();
 }
 
 TransactionId Wallet::findTransactionByTransferId(TransferId transferId) {
@@ -464,6 +495,13 @@ bool Wallet::getTransfer(TransferId transferId, Transfer& transfer) {
   return m_transactionsCache.getTransfer(transferId, transfer);
 }
 
+bool Wallet::getDeposit(DepositId depositId, Deposit& deposit) {
+  std::unique_lock<std::mutex> lock(m_cacheMutex);
+  throwIfNotInitialised();
+
+  return m_transactionsCache.getDeposit(depositId, deposit);
+}
+
 TransactionId Wallet::sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra, uint64_t mixIn, uint64_t unlockTimestamp, const std::vector<TransactionMessage>& messages) {
   std::vector<Transfer> transfers;
   transfers.push_back(transfer);
@@ -474,8 +512,8 @@ TransactionId Wallet::sendTransaction(const Transfer& transfer, uint64_t fee, co
 
 TransactionId Wallet::sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra, uint64_t mixIn, uint64_t unlockTimestamp, const std::vector<TransactionMessage>& messages) {
   TransactionId txId = 0;
-  std::shared_ptr<WalletRequest> request;
-  std::deque<std::shared_ptr<WalletEvent> > events;
+  std::unique_ptr<WalletRequest> request;
+  std::deque<std::unique_ptr<WalletEvent>> events;
   throwIfNotInitialised();
 
   {
@@ -493,29 +531,91 @@ TransactionId Wallet::sendTransaction(const std::vector<Transfer>& transfers, ui
   return txId;
 }
 
+TransactionId Wallet::deposit(uint32_t term, uint64_t amount, uint64_t fee, uint64_t mixIn) {
+  throwIfNotInitialised();
+
+  TransactionId txId = 0;
+  std::unique_ptr<WalletRequest> request;
+  std::deque<std::unique_ptr<WalletEvent>> events;
+
+  {
+    std::unique_lock<std::mutex> lock(m_cacheMutex);
+    request = m_sender->makeDepositRequest(txId, events, term, amount, fee, mixIn);
+
+    if (request != nullptr) {
+      pushBalanceUpdatedEvents(events);
+    }
+  }
+
+  notifyClients(events);
+
+  if (request) {
+    m_asyncContextCounter.addAsyncContext();
+    request->perform(m_node, std::bind(&Wallet::sendTransactionCallback, this, std::placeholders::_1, std::placeholders::_2));
+  }
+
+  return txId;
+}
+
+TransactionId Wallet::withdrawDeposits(const std::vector<DepositId>& depositIds, uint64_t fee) {
+  throwIfNotInitialised();
+
+  TransactionId txId = 0;
+  std::unique_ptr<WalletRequest> request;
+  std::deque<std::unique_ptr<WalletEvent>> events;
+
+  {
+    std::unique_lock<std::mutex> lock(m_cacheMutex);
+    request = m_sender->makeWithdrawDepositRequest(txId, events, depositIds, fee);
+
+    if (request != nullptr) {
+      pushBalanceUpdatedEvents(events);
+    }
+  }
+
+  notifyClients(events);
+
+  if (request != nullptr) {
+    m_asyncContextCounter.addAsyncContext();
+    request->perform(m_node, std::bind(&Wallet::sendTransactionCallback, this, std::placeholders::_1, std::placeholders::_2));
+  }
+
+  return txId;
+}
+
 void Wallet::sendTransactionCallback(WalletRequest::Callback callback, std::error_code ec) {
   ContextCounterHolder counterHolder(m_asyncContextCounter);
-  std::deque<std::shared_ptr<WalletEvent> > events;
+  std::deque<std::unique_ptr<WalletEvent> > events;
 
-  boost::optional<std::shared_ptr<WalletRequest> > nextRequest;
+  std::unique_ptr<WalletRequest> nextRequest;
   {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
     callback(events, nextRequest, ec);
+
+    auto actualDepositBalanceUpdated = getActualDepositBalanceChangedEvent();
+    if (actualDepositBalanceUpdated) {
+      events.push_back(std::move(actualDepositBalanceUpdated));
+    }
+
+    auto pendingDepositBalanceUpdated = getPendingDepositBalanceChangedEvent();
+    if (pendingDepositBalanceUpdated) {
+      events.push_back(std::move(pendingDepositBalanceUpdated));
+    }
   }
 
   notifyClients(events);
 
   if (nextRequest) {
     m_asyncContextCounter.addAsyncContext();
-    (*nextRequest)->perform(m_node, std::bind(&Wallet::synchronizationCallback, this, std::placeholders::_1, std::placeholders::_2));
+    nextRequest->perform(m_node, std::bind(&Wallet::synchronizationCallback, this, std::placeholders::_1, std::placeholders::_2));
   }
 }
 
 void Wallet::synchronizationCallback(WalletRequest::Callback callback, std::error_code ec) {
   ContextCounterHolder counterHolder(m_asyncContextCounter);
 
-  std::deque<std::shared_ptr<WalletEvent> > events;
-  boost::optional<std::shared_ptr<WalletRequest> > nextRequest;
+  std::deque<std::unique_ptr<WalletEvent>> events;
+  std::unique_ptr<WalletRequest> nextRequest;
   {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
     callback(events, nextRequest, ec);
@@ -525,7 +625,7 @@ void Wallet::synchronizationCallback(WalletRequest::Callback callback, std::erro
 
   if (nextRequest) {
     m_asyncContextCounter.addAsyncContext();
-    (*nextRequest)->perform(m_node, std::bind(&Wallet::synchronizationCallback, this, std::placeholders::_1, std::placeholders::_2));
+    nextRequest->perform(m_node, std::bind(&Wallet::synchronizationCallback, this, std::placeholders::_1, std::placeholders::_2));
   }
 }
 
@@ -552,30 +652,75 @@ void Wallet::synchronizationCompleted(std::error_code result) {
 }
 
 void Wallet::onTransactionUpdated(ITransfersSubscription* object, const Hash& transactionHash) {
-  std::shared_ptr<WalletEvent> event;
+  std::deque<std::unique_ptr<WalletEvent>> events;
 
   TransactionInformation txInfo;
   int64_t txBalance;
   if (m_transferDetails->getTransactionInformation(transactionHash, txInfo, txBalance)) {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
-    event = m_transactionsCache.onTransactionUpdated(txInfo, txBalance);
+
+    auto newDepositOuts = m_transferDetails->getTransactionOutputs(transactionHash, ITransfersContainer::IncludeTypeDeposit | ITransfersContainer::IncludeStateAll);
+    auto spentDeposits = m_transferDetails->getTransactionInputs(transactionHash, ITransfersContainer::IncludeTypeDeposit);
+
+    events = m_transactionsCache.onTransactionUpdated(txInfo, txBalance, newDepositOuts, spentDeposits, m_currency);
+
+    auto actualDepositBalanceChangedEvent = getActualDepositBalanceChangedEvent();
+    auto pendingDepositBalanceChangedEvent = getPendingDepositBalanceChangedEvent();
+
+    if (actualDepositBalanceChangedEvent) {
+      events.push_back(std::move(actualDepositBalanceChangedEvent));
+    }
+
+    if (pendingDepositBalanceChangedEvent) {
+      events.push_back(std::move(pendingDepositBalanceChangedEvent));
+    }
   }
 
-  if (event.get()) {
-    event->notify(m_observerManager);
-  }
+  notifyClients(events);
 }
 
 void Wallet::onTransactionDeleted(ITransfersSubscription* object, const Hash& transactionHash) {
-  std::shared_ptr<WalletEvent> event;
+  std::deque<std::unique_ptr<WalletEvent>> events;
 
   {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
-    event = m_transactionsCache.onTransactionDeleted(transactionHash);
+    events = m_transactionsCache.onTransactionDeleted(transactionHash);
+
+    std::unique_ptr<WalletEvent> actualDepositBalanceUpdated = getActualDepositBalanceChangedEvent();
+    if (actualDepositBalanceUpdated) {
+      events.push_back(std::move(actualDepositBalanceUpdated));
+    }
+
+    std::unique_ptr<WalletEvent> pendingDepositBalanceUpdated = getPendingDepositBalanceChangedEvent();
+    if (pendingDepositBalanceUpdated) {
+      events.push_back(std::move(pendingDepositBalanceUpdated));
+    }
   }
 
-  if (event.get()) {
-    event->notify(m_observerManager);
+  notifyClients(events);
+}
+
+void Wallet::onTransfersUnlocked(ITransfersSubscription* object, const std::vector<TransactionOutputInformation>& unlockedTransfers) {
+  std::unique_lock<std::mutex> lock(m_cacheMutex);
+  auto unlockedDeposits = m_transactionsCache.unlockDeposits(unlockedTransfers);
+  lock.unlock();
+
+  if (!unlockedDeposits.empty()) {
+    m_observerManager.notify(&IWalletObserver::depositsUpdated, unlockedDeposits);
+
+    notifyIfDepositBalanceChanged();
+  }
+}
+
+void Wallet::onTransfersLocked(ITransfersSubscription* object, const std::vector<TransactionOutputInformation>& lockedTransfers) {
+  std::unique_lock<std::mutex> lock(m_cacheMutex);
+  auto lockedDeposits = m_transactionsCache.lockDeposits(lockedTransfers);
+  lock.unlock();
+
+  if (!lockedDeposits.empty()) {
+    m_observerManager.notify(&IWalletObserver::depositsUpdated, lockedDeposits);
+
+    notifyIfDepositBalanceChanged();
   }
 }
 
@@ -585,9 +730,9 @@ void Wallet::throwIfNotInitialised() {
   assert(m_transferDetails);
 }
 
-void Wallet::notifyClients(std::deque<std::shared_ptr<WalletEvent> >& events) {
+void Wallet::notifyClients(std::deque<std::unique_ptr<WalletEvent>>& events) {
   while (!events.empty()) {
-    std::shared_ptr<WalletEvent> event = events.front();
+    std::unique_ptr<WalletEvent>& event = events.front();
     event->notify(m_observerManager);
     events.pop_front();
   }
@@ -608,6 +753,71 @@ void Wallet::notifyIfBalanceChanged() {
     m_observerManager.notify(&IWalletObserver::pendingBalanceUpdated, pending);
   }
 
+}
+
+void Wallet::notifyIfDepositBalanceChanged() {
+  std::unique_ptr<WalletEvent> actualEvent = getActualDepositBalanceChangedEvent();
+  std::unique_ptr<WalletEvent> pendingEvent = getPendingDepositBalanceChangedEvent();
+
+  if (actualEvent) {
+    actualEvent->notify(m_observerManager);
+  }
+
+  if (pendingEvent) {
+    pendingEvent->notify(m_observerManager);
+  }
+}
+
+std::unique_ptr<WalletEvent> Wallet::getActualDepositBalanceChangedEvent() {
+  auto actual = calculateActualDepositBalance();
+  auto prevActual = m_lastNotifiedActualDepositBalance.exchange(actual);
+
+  std::unique_ptr<WalletEvent> event;
+
+  if (actual != prevActual) {
+    event = std::unique_ptr<WalletEvent>(new WalletActualDepositBalanceUpdatedEvent(actual));
+  }
+
+  return event;
+}
+
+std::unique_ptr<WalletEvent> Wallet::getPendingDepositBalanceChangedEvent() {
+  auto pending = calculatePendingDepositBalance();
+  auto prevPending = m_lastNotifiedPendingDepositBalance.exchange(pending);
+
+  std::unique_ptr<WalletEvent> event;
+
+  if (pending != prevPending) {
+    event = std::unique_ptr<WalletEvent>(new WalletPendingDepositBalanceUpdatedEvent(pending));
+  }
+
+  return event;
+}
+
+std::unique_ptr<WalletEvent> Wallet::getActualBalanceChangedEvent() {
+  auto actual = calculateActualBalance();
+  auto prevActual = m_lastNotifiedActualBalance.exchange(actual);
+
+  std::unique_ptr<WalletEvent> event;
+
+  if (actual != prevActual) {
+    event = std::unique_ptr<WalletEvent>(new WalletActualBalanceUpdatedEvent(actual));
+  }
+
+  return event;
+}
+
+std::unique_ptr<WalletEvent> Wallet::getPendingBalanceChangedEvent() {
+  auto pending = calculatePendingBalance();
+  auto prevPending = m_lastNotifiedPendingBalance.exchange(pending);
+
+  std::unique_ptr<WalletEvent> event;
+
+  if (pending != prevPending) {
+    event = std::unique_ptr<WalletEvent>(new WalletPendingBalanceUpdatedEvent(pending));
+  }
+
+  return event;
 }
 
 void Wallet::getAccountKeys(WalletAccountKeys& keys) {
@@ -631,6 +841,57 @@ void Wallet::getAccountKeys(WalletAccountKeys& keys) {
   std::copy(reinterpret_cast<const uint8_t*>(&accountKeys.m_view_secret_key),
     reinterpret_cast<const uint8_t*>(&accountKeys.m_view_secret_key) + sizeof(crypto::secret_key),
     keys.viewSecretKey.begin());
+}
+
+uint64_t Wallet::calculateActualDepositBalance() {
+  std::vector<TransactionOutputInformation> transfers;
+  m_transferDetails->getOutputs(transfers, ITransfersContainer::IncludeTypeDeposit | ITransfersContainer::IncludeStateUnlocked);
+
+  return calculateDepositsAmount(transfers, m_currency) - m_transactionsCache.countUnconfirmedSpentDepositsTotalAmount();
+}
+
+uint64_t Wallet::calculatePendingDepositBalance() {
+  std::vector<TransactionOutputInformation> transfers;
+  m_transferDetails->getOutputs(transfers, ITransfersContainer::IncludeTypeDeposit
+                                | ITransfersContainer::IncludeStateLocked
+                                | ITransfersContainer::IncludeStateSoftLocked);
+
+  return calculateDepositsAmount(transfers, m_currency) + m_transactionsCache.countUnconfirmedCreatedDepositsSum();
+}
+
+uint64_t Wallet::calculateActualBalance() {
+  return m_transferDetails->balance(ITransfersContainer::IncludeKeyUnlocked) -
+    m_transactionsCache.unconfrimedOutsAmount();
+}
+
+uint64_t Wallet::calculatePendingBalance() {
+  uint64_t change = m_transactionsCache.unconfrimedOutsAmount() - m_transactionsCache.unconfirmedTransactionsAmount();
+  uint64_t spentDeposits = m_transactionsCache.countUnconfirmedSpentDepositsProfit();
+  uint64_t container = m_transferDetails->balance(ITransfersContainer::IncludeKeyNotUnlocked);
+
+  return container + change + spentDeposits;
+}
+
+void Wallet::pushBalanceUpdatedEvents(std::deque<std::unique_ptr<WalletEvent>>& eventsQueue) {
+  auto actualDepositBalanceUpdated = getActualDepositBalanceChangedEvent();
+  if (actualDepositBalanceUpdated != nullptr) {
+    eventsQueue.push_back(std::move(actualDepositBalanceUpdated));
+  }
+
+  auto pendingDepositBalanceUpdated = getPendingDepositBalanceChangedEvent();
+  if (pendingDepositBalanceUpdated != nullptr) {
+    eventsQueue.push_back(std::move(pendingDepositBalanceUpdated));
+  }
+
+  auto actualBalanceUpdated = getActualBalanceChangedEvent();
+  if (actualBalanceUpdated != nullptr) {
+    eventsQueue.push_back(std::move(actualBalanceUpdated));
+  }
+
+  auto pendingBalanceUpdated = getPendingBalanceChangedEvent();
+  if (pendingBalanceUpdated != nullptr) {
+    eventsQueue.push_back(std::move(pendingBalanceUpdated));
+  }
 }
 
 } //namespace CryptoNote
