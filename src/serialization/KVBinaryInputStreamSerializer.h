@@ -18,32 +18,21 @@
 #pragma once
 
 #include <istream>
-#include <memory>
-#include "../Common/JsonValue.h"
 #include "ISerializer.h"
 #include "JsonInputValueSerializer.h"
-#include "SerializationOverloads.h"
 
 namespace CryptoNote {
 
 class KVBinaryInputStreamSerializer : public JsonInputValueSerializer {
 public:
-  KVBinaryInputStreamSerializer(std::istream& strm) : stream(strm) {}
-  virtual ~KVBinaryInputStreamSerializer() {}
+  KVBinaryInputStreamSerializer(std::istream& strm);
 
-  void parse();
-
-  virtual ISerializer& binary(void* value, std::size_t size, const std::string& name) override;
-  virtual ISerializer& binary(std::string& value, const std::string& name) override;
+  virtual bool binary(void* value, std::size_t size, Common::StringView name) override;
+  virtual bool binary(std::string& value, Common::StringView name) override;
 
 private:
-  std::unique_ptr<Common::JsonValue> root;
-  std::istream& stream;
 
-  Common::JsonValue loadSection();
-  Common::JsonValue loadEntry();
-  Common::JsonValue loadValue(uint8_t type);
-  Common::JsonValue loadArray(uint8_t itemType);
+  Common::JsonValue value;
 };
 
 }

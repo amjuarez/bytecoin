@@ -23,10 +23,12 @@
 namespace CryptoNote {
   template<bool is_store> struct AccountBaseSerializer;
 
+  class ISerializer;
+
   struct account_keys {
     AccountPublicAddress m_account_address;
-    crypto::secret_key   m_spend_secret_key;
-    crypto::secret_key   m_view_secret_key;
+    crypto::secret_key m_spend_secret_key;
+    crypto::secret_key m_view_secret_key;
   };
 
   /************************************************************************/
@@ -43,14 +45,13 @@ namespace CryptoNote {
     uint64_t get_createtime() const { return m_creation_timestamp; }
     void set_createtime(uint64_t val) { m_creation_timestamp = val; }
 
-    bool load(const std::string& file_path);
-    bool store(const std::string& file_path);
-
     template <class t_archive>
     inline void serialize(t_archive &a, const unsigned int /*ver*/) {
       a & m_keys;
       a & m_creation_timestamp;
     }
+
+    void serialize(ISerializer& s);
 
   private:
     void set_null();

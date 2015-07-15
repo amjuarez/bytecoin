@@ -15,145 +15,77 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
-
 #include "JsonRpcMessages.h"
 #include "serialization/SerializationOverloads.h"
 
 namespace PaymentService {
 
-namespace {
-
-void throwIfRequiredParamsMissing(CryptoNote::ISerializer& serializer, const std::vector<const char*>& names) {
-  bool r = true;
-  for (const auto name: names) {
-    r &= serializer.hasObject(name);
-  }
+void TransferDestination::serialize(CryptoNote::ISerializer& serializer) {
+  bool r = serializer(amount, "amount");
+  r &= serializer(address, "address");
 
   if (!r) {
-    throw RequestSerializationError();
+    throw std::runtime_error("Required parameter is missing");
   }
 }
 
-void throwIfRequiredParamsMissing(CryptoNote::ISerializer& serializer, const char* name) {
-  throwIfRequiredParamsMissing(serializer, std::vector<const char *>{name});
-}
+void SendTransactionRequest::serialize(CryptoNote::ISerializer& serializer) {
+  bool r = serializer(destinations, "destinations");
+  r &= serializer(fee, "fee");
+  r &= serializer(mixin, "mixin");
+  serializer(unlockTime, "unlock_time");
+  serializer(paymentId, "payment_id");
 
-}
-
-void TransferDestination::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
-  throwIfRequiredParamsMissing(serializer, {"amount", "address"});
-  serializer(amount, "amount");
-  serializer(address, "address");
-  serializer.endObject();
-}
-
-void SendTransactionRequest::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  throwIfRequiredParamsMissing(serializer, {"destinations", "fee", "mixin"});
-
-  serializer.beginObject(name);
-
-  size_t size = destinations.size();
-  serializer.beginArray(size, "destinations");
-  destinations.resize(size);
-
-  auto it = destinations.begin();
-  for (size_t i = 0; i < size; ++i, ++it) {
-    it->serialize(serializer, "");
+  if (!r) {
+    throw std::runtime_error("Required parameter is missing");
   }
-  serializer.endArray();
-
-  serializer(fee, "fee");
-  serializer(mixin, "mixin");
-
-  if (serializer.hasObject("unlock_time")) {
-    serializer(unlockTime, "unlock_time");
-  }
-
-  if (serializer.hasObject("payment_id")) {
-    serializer(paymentId, "payment_id");
-  }
-
-  serializer.endObject();
 }
 
-void SendTransactionResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void SendTransactionResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(transactionId, "transaction_id");
-  serializer.endObject();
 }
 
-void GetAddressResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void GetAddressResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(address, "address");
-  serializer.endObject();
 }
 
-void GetActualBalanceResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void GetActualBalanceResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(actualBalance, "actual_balance");
-  serializer.endObject();
 }
 
-void GetPendingBalanceResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void GetPendingBalanceResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(pendingBalance, "pending_balance");
-  serializer.endObject();
 }
 
-void GetTransactionsCountResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void GetTransactionsCountResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(transactionsCount, "transactions_count");
-  serializer.endObject();
 }
 
-void GetTransfersCountResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void GetTransfersCountResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(transfersCount, "transfers_count");
-  serializer.endObject();
 }
 
-void GetTransactionIdByTransferIdRequest::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  throwIfRequiredParamsMissing(serializer, "transfer_id");
+void GetTransactionIdByTransferIdRequest::serialize(CryptoNote::ISerializer& serializer) {
+  bool r = serializer(transferId, "transfer_id");
 
-  serializer.beginObject(name);
-  serializer(transferId, "transfer_id");
-  serializer.endObject();
+  if (!r) {
+    throw std::runtime_error("Required parameter is missing");
+  }
 }
 
-void GetTransactionIdByTransferIdResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void GetTransactionIdByTransferIdResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(transactionid, "transaction_id");
-  serializer.endObject();
 }
 
-void GetTransactionRequest::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  throwIfRequiredParamsMissing(serializer, "transaction_id");
+void GetTransactionRequest::serialize(CryptoNote::ISerializer& serializer) {
+  bool r = serializer(transactionId, "transaction_id");
 
-  serializer.beginObject(name);
-  serializer(transactionId, "transaction_id");
-  serializer.endObject();
+  if (!r) {
+    throw std::runtime_error("Required parameter is missing");
+  }
 }
 
-void TransactionRpcInfo::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
-
+void TransactionRpcInfo::serialize(CryptoNote::ISerializer& serializer) {
   serializer(firstTransferId, "first_transfer_id");
   serializer(transferCount, "transfer_count");
   serializer(totalAmount, "total_amount");
@@ -163,86 +95,71 @@ void TransactionRpcInfo::serialize(CryptoNote::ISerializer& serializer, const st
   serializer(blockHeight, "block_height");
   serializer(timestamp, "timestamp");
   serializer(extra, "extra");
-
-  serializer.endObject();
 }
 
-void GetTransactionResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
-
+void GetTransactionResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(found, "found");
 
   if (!found) {
-    serializer.endObject();
-    return;
+    serializer(transactionInfo, "transaction_info");
   }
-
-  transactionInfo.serialize(serializer, "transaction_info");
-
-  serializer.endObject();
 }
 
-void TransferRpcInfo::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void ListTransactionsRequest::serialize(CryptoNote::ISerializer& serializer) {
+  bool r = serializer(startingTransactionId, "starting_transaction_id");
+  r &= serializer(maxTransactionCount, "max_transaction_count");
+
+  if (!r) {
+    throw std::runtime_error("Required parameter is missing");
+  }
+}
+
+void ListTransactionsResponse::serialize(CryptoNote::ISerializer& serializer) {
+  serializer(transactions, "transactions");
+}
+
+void TransferRpcInfo::serialize(CryptoNote::ISerializer& serializer) {
   serializer(address, "address");
   serializer(amount, "amount");
-  serializer.endObject();
 }
 
-void GetTransferRequest::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  throwIfRequiredParamsMissing(serializer, "transfer_id");
+void GetTransferRequest::serialize(CryptoNote::ISerializer& serializer) {
+  bool r = serializer(transferId, "transfer_id");
 
-  serializer.beginObject(name);
-  serializer(transferId, "transfer_id");
-  serializer.endObject();
-}
-
-void GetTransferResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
-  serializer(found, "found");
-
-  if (!found) {
-    serializer.endObject();
-    return;
+  if (!r) {
+    throw std::runtime_error("Required parameter is missing");
   }
-
-  transferInfo.serialize(serializer, "transfer_info");
-
-  serializer.endObject();
 }
 
-void GetIncomingPaymentsRequest::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  throwIfRequiredParamsMissing(serializer, "payments");
-
-  serializer.beginObject(name);
-  serializer(payments, "payments");
-  serializer.endObject();
+void GetTransferResponse::serialize(CryptoNote::ISerializer& serializer) {
+  serializer(found, "found");
+  if (found) {
+    serializer(transferInfo, "transfer_info");
+  }
 }
 
-void PaymentsById::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void GetIncomingPaymentsRequest::serialize(CryptoNote::ISerializer& serializer) {
+  bool r = serializer(payments, "payments");
 
+  if (!r) {
+    throw std::runtime_error("Required parameter is missing");
+  }
+}
+
+void PaymentsById::serialize(CryptoNote::ISerializer& serializer) {
   serializer(id, "id");
   serializer(payments, "payments");
-
-  serializer.endObject();
 }
 
-void GetIncomingPaymentsResponse::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
-
+void GetIncomingPaymentsResponse::serialize(CryptoNote::ISerializer& serializer) {
   serializer(payments, "payments");
-
-  serializer.endObject();
 }
 
-void PaymentDetails::serialize(CryptoNote::ISerializer& serializer, const std::string& name) {
-  serializer.beginObject(name);
+void PaymentDetails::serialize(CryptoNote::ISerializer& serializer) {
   serializer(txHash, "tx_hash");
   serializer(amount, "amount");
   serializer(blockHeight, "block_height");
   serializer(unlockTime, "unlock_time");
-  serializer.endObject();
 }
 
 }

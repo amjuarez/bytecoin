@@ -24,16 +24,22 @@
 
 class ICryptonoteProtocolQueryStub: public CryptoNote::ICryptonoteProtocolQuery {
 public:
-  ICryptonoteProtocolQueryStub() : peers(0), observedHeight(0) {}
+  ICryptonoteProtocolQueryStub() : peers(0), observedHeight(0), synchronized(false) {}
 
   virtual bool addObserver(CryptoNote::ICryptonoteProtocolObserver* observer);
   virtual bool removeObserver(CryptoNote::ICryptonoteProtocolObserver* observer);
   virtual uint64_t getObservedHeight() const;
   virtual size_t getPeerCount() const;
+  virtual bool isSynchronized() const;
+
   void setPeerCount(uint32_t count);
   void setObservedHeight(uint64_t height);
+
+  void setSynchronizedStatus(bool status);
 
 private:
   size_t peers;
   uint64_t observedHeight;
+
+  bool synchronized;
 };

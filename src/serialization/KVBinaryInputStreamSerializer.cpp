@@ -27,19 +27,23 @@ using namespace CryptoNote;
 
 namespace {
 
+void strictRead(std::istream& s, void* ptr, size_t size) {
+  if (s.read(reinterpret_cast<char*>(ptr), size).gcount() != size) {
+    throw std::runtime_error("read error");
+  }
+}
+
 template <typename T>
 T readPod(std::istream& s) {
   T v;
-  s.read(reinterpret_cast<char*>(&v), sizeof(T));
+  strictRead(s, &v, sizeof(T));
   return v;
 }
 
 template <typename T, typename JsonT = T>
 JsonValue readPodJson(std::istream& s) {
-  T v;
-  s.read(reinterpret_cast<char*>(&v), sizeof(T));
   JsonValue jv;
-  jv = static_cast<JsonT>(v);
+  jv = static_cast<JsonT>(readPod<T>(s));
   return jv;
 }
 
@@ -77,77 +81,44 @@ std::string readString(std::istream& s) {
   auto size = readVarint(s);
   std::string str;
   str.resize(size);
-  s.read(&str[0], size);
+  if (size) {
+    strictRead(s, &str[0], size);
+  }
   return str;
 }
 
 JsonValue readStringJson(std::istream& s) {
-  JsonValue js;
-  js = readString(s);
-  return js;
+  return JsonValue(readString(s));
 }
 
 void readName(std::istream& s, std::string& name) {
   uint8_t len = readPod<uint8_t>(s);
-  name.resize(len);
-  s.read(&name[0], len);
-}
-
-}
-
-void KVBinaryInputStreamSerializer::parse() {
-  auto hdr = readPod<KVBinaryStorageBlockHeader>(stream);
-
-  if (
-    hdr.m_signature_a != PORTABLE_STORAGE_SIGNATUREA ||
-    hdr.m_signature_b != PORTABLE_STORAGE_SIGNATUREB) {
-    throw std::runtime_error("Invalid binary storage signature");
+  if (len) {
+    name.resize(len);
+    strictRead(s, &name[0], len);
   }
-
-  if (hdr.m_ver != PORTABLE_STORAGE_FORMAT_VER) {
-    throw std::runtime_error("Unknown binary storage format version");
-  }
-
-  root.reset(new JsonValue(loadSection()));
-  setJsonValue(root.get());
 }
 
-ISerializer& KVBinaryInputStreamSerializer::binary(void* value, std::size_t size, const std::string& name) {
-  std::string str;
+JsonValue loadValue(std::istream& stream, uint8_t type);
+JsonValue loadSection(std::istream& stream);
+JsonValue loadEntry(std::istream& stream);
+JsonValue loadArray(std::istream& stream, uint8_t itemType);
 
-  (*this)(str, name);
 
-  if (str.size() != size) {
-    throw std::runtime_error("Binary block size mismatch");
-  }
-
-  memcpy(value, str.data(), size);
-  return *this;
-}
-
-ISerializer& KVBinaryInputStreamSerializer::binary(std::string& value, const std::string& name) {
-  if (!hasObject(name)) {
-    value.clear();
-    return *this;
-  }
-
-  return (*this)(value, name); // load as string
-}
-
-JsonValue KVBinaryInputStreamSerializer::loadSection() {
+JsonValue loadSection(std::istream& stream) {
   JsonValue sec(JsonValue::OBJECT);
   size_t count = readVarint(stream);
   std::string name;
 
   while (count--) {
     readName(stream, name);
-    sec.insert(name, loadEntry());
+    sec.insert(name, loadEntry(stream));
   }
 
   return sec;
 }
 
-JsonValue KVBinaryInputStreamSerializer::loadValue(uint8_t type) {
+JsonValue loadValue(std::istream& stream, uint8_t type) {
   switch (type) {
   case BIN_KV_SERIALIZE_TYPE_INT64:  return readIntegerJson<int64_t>(stream);
   case BIN_KV_SERIALIZE_TYPE_INT32:  return readIntegerJson<int32_t>(stream);
@@ -160,32 +131,74 @@ JsonValue KVBinaryInputStreamSerializer::loadValue(uint8_t type) {
   case BIN_KV_SERIALIZE_TYPE_DOUBLE: return readPodJson<double>(stream);
   case BIN_KV_SERIALIZE_TYPE_BOOL:   return JsonValue(stream.get() != 0);
   case BIN_KV_SERIALIZE_TYPE_STRING: return readStringJson(stream);
-  case BIN_KV_SERIALIZE_TYPE_OBJECT: return loadSection();
-  case BIN_KV_SERIALIZE_TYPE_ARRAY:  return loadArray(type);
+  case BIN_KV_SERIALIZE_TYPE_OBJECT: return loadSection(stream);
+  case BIN_KV_SERIALIZE_TYPE_ARRAY:  return loadArray(stream, type);
   default:
     throw std::runtime_error("Unknown data type");
     break;
   }
 }
 
-JsonValue KVBinaryInputStreamSerializer::loadEntry() {
+JsonValue loadEntry(std::istream& stream) {
   uint8_t type = readPod<uint8_t>(stream);
 
   if (type & BIN_KV_SERIALIZE_FLAG_ARRAY) {
     type &= ~BIN_KV_SERIALIZE_FLAG_ARRAY;
-    return loadArray(type);
+    return loadArray(stream, type);
   }
 
-  return loadValue(type);
+  return loadValue(stream, type);
 }
 
-JsonValue KVBinaryInputStreamSerializer::loadArray(uint8_t itemType) {
+JsonValue loadArray(std::istream& stream, uint8_t itemType) {
   JsonValue arr(JsonValue::ARRAY);
   size_t count = readVarint(stream);
 
   while (count--) {
-    arr.pushBack(loadValue(itemType));
+    arr.pushBack(loadValue(stream, itemType));
   }
 
   return arr;
 }
+
+
+JsonValue parseBinary(std::istream& stream) {
+  auto hdr = readPod<KVBinaryStorageBlockHeader>(stream);
+
+  if (
+    hdr.m_signature_a != PORTABLE_STORAGE_SIGNATUREA ||
+    hdr.m_signature_b != PORTABLE_STORAGE_SIGNATUREB) {
+    throw std::runtime_error("Invalid binary storage signature");
+  }
+
+  if (hdr.m_ver != PORTABLE_STORAGE_FORMAT_VER) {
+    throw std::runtime_error("Unknown binary storage format version");
+  }
+
+  return loadSection(stream);
+}
+
+}
+
+KVBinaryInputStreamSerializer::KVBinaryInputStreamSerializer(std::istream& strm) : value(parseBinary(strm)), JsonInputValueSerializer(value) {
+}
+
+bool KVBinaryInputStreamSerializer::binary(void* value, std::size_t size, Common::StringView name) {
+  std::string str;
+
+  if (!(*this)(str, name)) {
+    return false;
+  }
+
+  if (str.size() != size) {
+    throw std::runtime_error("Binary block size mismatch");
+  }
+
+  memcpy(value, str.data(), size);
+  return true;
+}
+
+bool KVBinaryInputStreamSerializer::binary(std::string& value, Common::StringView name) {
+  return (*this)(value, name); // load as string
+}
+

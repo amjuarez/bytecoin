@@ -33,10 +33,18 @@ size_t ICryptonoteProtocolQueryStub::getPeerCount() const {
   return peers;
 }
 
+bool ICryptonoteProtocolQueryStub::isSynchronized() const {
+  return synchronized;
+}
+
 void ICryptonoteProtocolQueryStub::setPeerCount(uint32_t count) {
   peers = count;
 }
 
 void ICryptonoteProtocolQueryStub::setObservedHeight(uint64_t height) {
   observedHeight = height;
+}
+
+void ICryptonoteProtocolQueryStub::setSynchronizedStatus(bool status) {
+    synchronized = status;
 }

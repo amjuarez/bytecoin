@@ -103,8 +103,16 @@ namespace CryptoNote {
     uint64_t get_current_comulative_blocksize_limit();
     bool is_storing_blockchain(){return m_is_blockchain_storing;}
     uint64_t block_difficulty(size_t i);
-    bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids);
+    bool getPoolChanges(const crypto::hash& tailBlockId, const std::vector<crypto::hash>& knownTxsIds,
+                        std::vector<Transaction>& addedTxs, std::vector<crypto::hash>& deletedTxsIds);
+    void getPoolChanges(const std::vector<crypto::hash>& knownTxsIds, std::vector<Transaction>& addedTxs,
+                        std::vector<crypto::hash>& deletedTxsIds);
+    bool getBlockContainingTx(const crypto::hash& txId, crypto::hash& blockId, uint64_t& blockHeight);
+    bool getAlreadyGeneratedCoins(const crypto::hash& hash, uint64_t& generatedCoins);
+    bool getBlockSize(const crypto::hash& hash, size_t& size);
+    bool getMultisigOutputReference(const TransactionInputMultisignature& txInMultisig, std::pair<crypto::hash, size_t>& outputReference);
 
+    template<class visitor_t> bool scan_outputkeys_for_indexes(const TransactionInputToKey& tx_in_to_key, visitor_t& vis, uint64_t* pmax_related_block_height = NULL);
 
     template<class t_ids_container, class t_blocks_container, class t_missed_container>
     bool get_blocks(const t_ids_container& block_ids, t_blocks_container& blocks, t_missed_container& missed_bs) {
@@ -125,8 +133,8 @@ namespace CryptoNote {
     }
 
     template<class t_ids_container, class t_tx_container, class t_missed_container>
-    void get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, bool checkTxPool = false) {
-      std::lock_guard<std::recursive_mutex> lk(m_blockchain_lock);
+    void getBlockchainTransactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs) {
+      std::lock_guard<decltype(m_blockchain_lock)> bcLock(m_blockchain_lock);
 
       for (const auto& tx_id : txs_ids) {
         auto it = m_transactionMap.find(tx_id);
@@ -136,11 +144,21 @@ namespace CryptoNote {
           txs.push_back(transactionByIndex(it->second).tx);
         }
       }
+    }
 
-      if (checkTxPool) {
+    template<class t_ids_container, class t_tx_container, class t_missed_container>
+    void get_transactions(const t_ids_container& txs_ids, t_tx_container& txs, t_missed_container& missed_txs, bool checkTxPool = false) {
+      if (checkTxPool){
+        std::lock_guard<decltype(m_tx_pool)> txLock(m_tx_pool);
+
+        getBlockchainTransactions(txs_ids, txs, missed_txs);
+
         auto poolTxIds = std::move(missed_txs);
         missed_txs.clear();
         m_tx_pool.getTransactions(poolTxIds, txs, missed_txs);
+
+      } else {
+        getBlockchainTransactions(txs_ids, txs, missed_txs);
       }
     }
 
@@ -234,7 +252,6 @@ namespace CryptoNote {
     Logging::LoggerRef logger;
 
     bool storeCache();
-    template<class visitor_t> bool scan_outputkeys_for_indexes(const TransactionInputToKey& tx_in_to_key, visitor_t& vis, uint64_t* pmax_related_block_height = NULL);
     bool switch_to_alternative_blockchain(std::list<blocks_ext_by_hash::iterator>& alt_chain, bool discard_disconnected_chain);
     bool handle_alternative_block(const Block& b, const crypto::hash& id, block_verification_context& bvc);
     difficulty_type get_next_difficulty_for_alternative_chain(const std::list<blocks_ext_by_hash::iterator>& alt_chain, BlockEntry& bei);
@@ -315,7 +332,7 @@ namespace CryptoNote {
         return false;
       }
 
-      if (!vis.handle_output(tx.tx, tx.tx.vout[amount_outs_vec[i].second])) {
+      if (!vis.handle_output(tx.tx, tx.tx.vout[amount_outs_vec[i].second], amount_outs_vec[i].second)) {
         logger(Logging::INFO) << "Failed to handle_output for output no = " << count << ", with absolute offset " << i;
         return false;
       }

@@ -23,6 +23,7 @@
 #include "cryptonote_core/ICore.h"
 #include "cryptonote_core/ICoreObserver.h"
 #include "Common/ObserverManager.h"
+#include "BlockchainExplorer/BlockchainExplorerDataBuilder.h"
 
 #include <thread>
 #include <boost/asio.hpp>
@@ -66,10 +67,15 @@ public:
   virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<CryptoNote::Transaction>& new_txs,
     std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override;
 
+  virtual void getBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks, const Callback& callback) override;
+  virtual void getBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<BlockDetails>& blocks, const Callback& callback) override;
+  virtual void getTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<TransactionDetails>& transactions, const Callback& callback) override;
+  virtual void isSynchronized(bool& syncStatus, const Callback& callback) override;
 
 private:
   virtual void peerCountUpdated(size_t count) override;
   virtual void lastKnownBlockHeightUpdated(uint64_t height) override;
+  virtual void blockchainSynchronized(uint64_t topHeight) override;
   virtual void blockchainUpdated() override;
   virtual void poolUpdated() override;
 
@@ -94,6 +100,18 @@ private:
   void getPoolSymmetricDifferenceAsync(std::vector<crypto::hash>& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<CryptoNote::Transaction>& new_txs,
     std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback);
 
+  void getBlocksAsync(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks, const Callback& callback);
+  std::error_code doGetBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks);
+
+  void getBlocksAsync(const std::vector<crypto::hash>& blockHashes, std::vector<BlockDetails>& blocks, const Callback& callback);
+  std::error_code doGetBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<BlockDetails>& blocks);
+
+  void getTransactionsAsync(const std::vector<crypto::hash>& transactionHashes, std::vector<TransactionDetails>& transactions, const Callback& callback);
+  std::error_code doGetTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<TransactionDetails>& transactions);
+
+  void isSynchronizedAsync(bool& syncStatus, const Callback& callback);
+  std::error_code doIsSynchronized(bool& syncStatus);
+
   void workerFunc();
   bool doShutdown();
 
@@ -110,6 +128,8 @@ private:
   boost::asio::io_service ioService;
   std::unique_ptr<std::thread> workerThread;
   std::unique_ptr<boost::asio::io_service::work> work;
+
+  BlockchainExplorerDataBuilder blockchainExplorerDataBuilder;
 
   mutable std::mutex mutex;
 };

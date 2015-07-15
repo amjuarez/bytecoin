@@ -51,6 +51,11 @@ public:
   virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override { is_bc_actual = true; callback(std::error_code()); };
   virtual void queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) { callback(std::error_code()); };
 
+  virtual void getBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<CryptoNote::BlockDetails>>& blocks, const Callback& callback) { callback(std::error_code()); };
+  virtual void getBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<CryptoNote::BlockDetails>& blocks, const Callback& callback) { callback(std::error_code()); };
+  virtual void getTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<CryptoNote::TransactionDetails>& transactions, const Callback& callback) { callback(std::error_code()); };
+  virtual void isSynchronized(bool& syncStatus, const Callback& callback) { callback(std::error_code()); };
+
   void updateObservers();
 
   tools::ObserverManager<CryptoNote::INodeObserver> observerManager;
@@ -61,7 +66,7 @@ class INodeTrivialRefreshStub : public INodeDummyStub
 {
 public:
   INodeTrivialRefreshStub(TestBlockchainGenerator& generator) : 
-    m_lastHeight(1), m_blockchainGenerator(generator), m_nextTxError(false), m_getMaxBlocks(std::numeric_limits<size_t>::max()), m_nextTxToPool(false) {};
+    m_lastHeight(1), m_blockchainGenerator(generator), m_nextTxError(false), m_getMaxBlocks(std::numeric_limits<size_t>::max()), m_nextTxToPool(false), m_synchronized(false) {};
 
   void setGetNewBlocksLimit(size_t maxBlocks) { m_getMaxBlocks = maxBlocks; }
 
@@ -77,10 +82,20 @@ public:
   virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
     std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override;
 
+  virtual void getBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<CryptoNote::BlockDetails>>& blocks, const Callback& callback) override;
+  virtual void getBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<CryptoNote::BlockDetails>& blocks, const Callback& callback) override;
+  virtual void getTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<CryptoNote::TransactionDetails>& transactions, const Callback& callback) override;
+  virtual void isSynchronized(bool& syncStatus, const Callback& callback) override;
+
   virtual void startAlternativeChain(uint64_t height);
   void setNextTransactionError();
   void setNextTransactionToPool();
   void includeTransactionsFromPoolToBlock();
+
+  void setSynchronizedStatus(bool status);
+
+  void sendPoolChanged();
+  void sendLocalBlockchainUpdated();
 
   std::vector<crypto::hash> calls_getTransactionOutsGlobalIndices;
 
@@ -95,6 +110,10 @@ protected:
   void doGetPoolSymmetricDifference(std::vector<crypto::hash>& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual,
     std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback);
 
+  void doGetBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<CryptoNote::BlockDetails>>& blocks, const Callback& callback);
+  void doGetBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<CryptoNote::BlockDetails>& blocks, const Callback& callback);
+  void doGetTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<CryptoNote::TransactionDetails>& transactions, const Callback& callback);
+
   size_t m_getMaxBlocks;
   uint64_t m_lastHeight;
   TestBlockchainGenerator& m_blockchainGenerator;
@@ -102,4 +121,6 @@ protected:
   bool m_nextTxToPool;
   std::mutex m_multiWalletLock;
   CryptoNote::WalletAsyncContextCounter m_asyncCounter;
+
+  bool m_synchronized;
 };

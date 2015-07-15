@@ -18,7 +18,6 @@
 #include "block_validation.h"
 #include "TestGenerator.h"
 
-using namespace epee;
 using namespace CryptoNote;
 
 #define BLOCK_VALIDATION_INIT_GENERATE()                        \

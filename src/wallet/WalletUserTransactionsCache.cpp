@@ -27,9 +27,7 @@
 namespace CryptoNote {
 
 
-void WalletUserTransactionsCache::serialize(CryptoNote::ISerializer& s, const std::string& name) {
-  s.beginObject(name);
-
+bool WalletUserTransactionsCache::serialize(CryptoNote::ISerializer& s) {
   if (s.type() == CryptoNote::ISerializer::INPUT) {
     s(m_transactions, "transactions");
     s(m_transfers, "transfers");
@@ -45,7 +43,7 @@ void WalletUserTransactionsCache::serialize(CryptoNote::ISerializer& s, const st
     s(m_unconfirmedTransactions, "unconfirmed");
   }
 
-  s.endObject();
+  return true;
 }
 
 uint64_t WalletUserTransactionsCache::unconfirmedTransactionsAmount() const {
@@ -151,7 +149,7 @@ std::shared_ptr<WalletEvent> WalletUserTransactionsCache::onTransactionDeleted(c
   TransactionId id = CryptoNote::INVALID_TRANSACTION_ID;
   if (m_unconfirmedTransactions.findTransactionId(transactionHash, id)) {
     m_unconfirmedTransactions.erase(transactionHash);
-    LOG_ERROR("Unconfirmed transaction is deleted: id = " << id << ", hash = " << transactionHash);
+    // LOG_ERROR("Unconfirmed transaction is deleted: id = " << id << ", hash = " << transactionHash);
     assert(false);
   } else {
     id = findTransactionByHash(transactionHash);
@@ -166,7 +164,7 @@ std::shared_ptr<WalletEvent> WalletUserTransactionsCache::onTransactionDeleted(c
 
     event = std::make_shared<WalletTransactionUpdatedEvent>(id);
   } else {
-    LOG_ERROR("Transaction wasn't found: " << transactionHash);
+    // LOG_ERROR("Transaction wasn't found: " << transactionHash);
     assert(false);
   }
 

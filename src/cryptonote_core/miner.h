@@ -22,9 +22,6 @@
 #include <boost/program_options.hpp>
 #include <boost/thread.hpp>
 
-// epee
-#include "serialization/keyvalue_serialization.h"
-
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/difficulty.h"
@@ -33,6 +30,8 @@
 #include "cryptonote_core/OnceInInterval.h"
 
 #include <Logging/LoggerRef.h>
+
+#include "serialization/ISerializer.h"
 
 namespace CryptoNote {
   class miner {
@@ -64,12 +63,10 @@ namespace CryptoNote {
     struct miner_config
     {
       uint64_t current_extra_message_index;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(current_extra_message_index)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(current_extra_message_index)
+      }
     };
-
 
     const Currency& m_currency;
     Logging::LoggerRef logger;
@@ -81,7 +78,6 @@ namespace CryptoNote {
     std::atomic<uint32_t> m_starter_nonce;
     difficulty_type m_diffic;
 
-    // volatile uint32_t m_thread_index;
     std::atomic<uint32_t> m_threads_total;
     std::atomic<int32_t> m_pausers_count;
     std::mutex m_miners_count_lock;
@@ -90,8 +86,6 @@ namespace CryptoNote {
     std::mutex m_threads_lock;
     i_miner_handler& m_handler;
     AccountPublicAddress m_mine_address;
-    //epee::math_helper::once_a_time_seconds<5> m_update_block_template_interval;
-    //epee::math_helper::once_a_time_seconds<2> m_update_merge_hr_interval;
     OnceInInterval m_update_block_template_interval;
     OnceInInterval m_update_merge_hr_interval;
 

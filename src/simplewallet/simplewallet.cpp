@@ -17,11 +17,13 @@
 
 #include "simplewallet.h"
 
+#include <fstream>
 #include <future>
 #include <thread>
 #include <set>
 #include <sstream>
 
+#include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -57,7 +59,7 @@ using Common::JsonValue;
 namespace po = boost::program_options;
 
 #define EXTENDED_LOGS_FILE "wallet_details.log"
-
+#undef ERROR
 
 namespace {
 

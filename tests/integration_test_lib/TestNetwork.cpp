@@ -17,6 +17,7 @@
 
 #include "TestNetwork.h"
 
+#include <fstream>
 #include <boost/filesystem.hpp>
 
 #include "InProcTestNode.h"

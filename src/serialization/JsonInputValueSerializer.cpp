@@ -23,151 +23,142 @@
 using Common::JsonValue;
 using namespace CryptoNote;
 
-JsonInputValueSerializer::JsonInputValueSerializer() : root(nullptr) {
+JsonInputValueSerializer::JsonInputValueSerializer(const Common::JsonValue& value) : root(value) {
+  chain.push_back(&root);
 }
 
 JsonInputValueSerializer::~JsonInputValueSerializer() {
-}
-
-void JsonInputValueSerializer::setJsonValue(const JsonValue* value) {
-  root = value;
 }
 
 ISerializer::SerializerType JsonInputValueSerializer::type() const {
   return ISerializer::INPUT;
 }
 
-ISerializer& JsonInputValueSerializer::beginObject(const std::string& name) {
-  assert(root);
-
-  if (chain.size() == 0) {
-    chain.push_back(root);
-    return *this;
-  }
-
+bool JsonInputValueSerializer::beginObject(Common::StringView name) {
   const JsonValue* parent = chain.back();
+
   if (parent->isArray()) {
     const JsonValue& v = (*parent)[idxs.back()++];
     chain.push_back(&v);
-  } else {
-    const JsonValue& v = (*parent)(name);
-    chain.push_back(&v);
+    return true;
   }
 
-  return *this;
+  if (parent->contains(std::string(name))) {
+    const JsonValue& v = (*parent)(std::string(name));
+    chain.push_back(&v);
+    return true;
+  }
+
+  return false;
+
+  //if (parent->isArray()) {
+  //  const JsonValue& v = (*parent)[idxs.back()++];
+  //  chain.push_back(&v);
+  //} else {
+  //  const JsonValue& v = (*parent)(name);
+  //  chain.push_back(&v);
+  //}
 }
 
-ISerializer& JsonInputValueSerializer::endObject() {
-  assert(root);
-
+void JsonInputValueSerializer::endObject() {
+  assert(!chain.empty());
   chain.pop_back();
-  return *this;
 }
 
-ISerializer& JsonInputValueSerializer::beginArray(std::size_t& size, const std::string& name) {
-  assert(root);
-
+bool JsonInputValueSerializer::beginArray(std::size_t& size, Common::StringView name) {
   const JsonValue* parent = chain.back();
+  std::string strName(name);
 
-  if (parent->count(name)) {
-    const JsonValue& arr = (*parent)(name);
+  if (parent->contains(strName)) {
+    const JsonValue& arr = (*parent)(strName);
     size = arr.size();
     chain.push_back(&arr);
-  } else {
-    size = 0;
-    chain.push_back(0);
+    idxs.push_back(0);
+    return true;
   }
-
-  idxs.push_back(0);
-  return *this;
+ 
+  size = 0;
+  return false;
 }
 
-ISerializer& JsonInputValueSerializer::endArray() {
-  assert(root);
+void JsonInputValueSerializer::endArray() {
+  assert(!chain.empty());
+  assert(!idxs.empty());
 
   chain.pop_back();
   idxs.pop_back();
-  return *this;
 }
 
-ISerializer& JsonInputValueSerializer::operator()(uint32_t& value, const std::string& name) {
-  assert(root);
-  value = static_cast<uint32_t>(getNumber(name));
-  return *this;
+bool JsonInputValueSerializer::operator()(uint32_t& value, Common::StringView name) {
+  return getNumber(name, value);
 }
 
-ISerializer& JsonInputValueSerializer::operator()(int32_t& value, const std::string& name) {
-  assert(root);
-  value = static_cast<int32_t>(getNumber(name));
-  return *this;
+bool JsonInputValueSerializer::operator()(int32_t& value, Common::StringView name) {
+  return getNumber(name, value);
 }
 
-ISerializer& JsonInputValueSerializer::operator()(int64_t& value, const std::string& name) {
-  assert(root);
-  value = getNumber(name);
-  return *this;
+bool JsonInputValueSerializer::operator()(int64_t& value, Common::StringView name) {
+  return getNumber(name, value);
 }
 
-ISerializer& JsonInputValueSerializer::operator()(uint64_t& value, const std::string& name) {
-  assert(root);
-  value = static_cast<uint64_t>(getNumber(name));
-  return *this;
+bool JsonInputValueSerializer::operator()(uint64_t& value, Common::StringView name) {
+  return getNumber(name, value);
 }
 
-ISerializer& JsonInputValueSerializer::operator()(double& value, const std::string& name) {
-  assert(root);
-  value = getValue(name).getReal();
-  return *this;
+bool JsonInputValueSerializer::operator()(double& value, Common::StringView name) {
+  return getNumber(name, value);
 }
 
-ISerializer& JsonInputValueSerializer::operator()(std::string& value, const std::string& name) {
-  assert(root);
-  value = getValue(name).getString();
-  return *this;
+bool JsonInputValueSerializer::operator()(uint8_t& value, Common::StringView name) {
+  return getNumber(name, value);
 }
 
-ISerializer& JsonInputValueSerializer::operator()(uint8_t& value, const std::string& name) {
-  assert(root);
-  value = static_cast<uint8_t>(getNumber(name));
-  return *this;
+bool JsonInputValueSerializer::operator()(std::string& value, Common::StringView name) {
+  auto ptr = getValue(name);
+  if (!ptr) {
+    return false;
+  }
+  value = ptr->getString();
+  return true;
 }
 
-ISerializer& JsonInputValueSerializer::operator()(bool& value, const std::string& name) {
-  assert(root);
-  value = getValue(name).getBool();
-  return *this;
+bool JsonInputValueSerializer::operator()(bool& value, Common::StringView name) {
+  auto ptr = getValue(name);
+  if (!ptr) {
+    return false;
+  }
+  value = ptr->getBool();
+  return true;
 }
 
-bool JsonInputValueSerializer::hasObject(const std::string& name) {
-  assert(root);
-
-  const Common::JsonValue* value;
-  if (chain.empty()) {
-    value = root;
-  } else {
-    value = chain.back();
+bool JsonInputValueSerializer::binary(void* value, std::size_t size, Common::StringView name) {
+  auto ptr = getValue(name);
+  if (ptr == nullptr) {
+    return false;
   }
 
-  return value->count(name) != 0;
+  Common::fromHex(ptr->getString(), value, size);
+  return true;
 }
 
-ISerializer& JsonInputValueSerializer::binary(void* value, std::size_t size, const std::string& name) {
-  auto str = getValue(name).getString();
-  Common::fromHex(str, value, size);
-  return *this;
+bool JsonInputValueSerializer::binary(std::string& value, Common::StringView name) {
+  auto ptr = getValue(name);
+  if (ptr == nullptr) {
+    return false;
+  }
+
+  std::string valueHex = ptr->getString();
+  value = Common::asString(Common::fromHex(valueHex));
+
+  return true;
 }
 
-ISerializer& JsonInputValueSerializer::binary(std::string& value, const std::string& name) {
-  auto str = getValue(name).getString();
-  value = Common::asString(Common::fromHex(str));
-  return *this;
-}
-
-JsonValue JsonInputValueSerializer::getValue(const std::string& name) {
+const JsonValue* JsonInputValueSerializer::getValue(Common::StringView name) {
   const JsonValue& val = *chain.back();
-  return val.isArray() ? val[idxs.back()++] : val(name);
-}
+  if (val.isArray()) {
+    return &val[idxs.back()++];
+  }
 
-int64_t JsonInputValueSerializer::getNumber(const std::string& name) {
-  return getValue(name).getInteger();
+  std::string strName(name);
+  return val.contains(strName) ? &val(strName) : nullptr;
 }

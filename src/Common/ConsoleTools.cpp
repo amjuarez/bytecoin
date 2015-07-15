@@ -17,15 +17,31 @@
 
 #include "ConsoleTools.h"
 
+#include <stdio.h>
+
 #ifdef _WIN32
 #include <Windows.h>
+#include <io.h>
 #else
 #include <iostream>
+#include <unistd.h>
 #endif
 
 namespace Common { namespace Console { 
 
+bool isConsoleTty() {
+#if defined(WIN32)
+  static bool istty = 0 != _isatty(_fileno(stdout));
+#else
+  static bool istty = 0 != isatty(fileno(stdout));
+#endif
+  return istty;
+}
+
 void setTextColor(Color color) {
+  if (!isConsoleTty()) {
+    return;
+  }
 
   if (color > Color::BrightMagenta) {
     color = Color::Default;

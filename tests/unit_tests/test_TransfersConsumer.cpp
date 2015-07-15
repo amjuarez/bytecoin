@@ -843,7 +843,7 @@ TEST_F(TransfersConsumerTest, onPoolUpdated_addTransactionDoesNotGetsGlobalIndic
   // construct tx
   auto tx = createTransaction();
   addTestInput(*tx, 10000);
-  auto out = addTestKeyOutput(*tx, 10000, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX, m_accountKeys);
+  addTestKeyOutput(*tx, 10000, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX, m_accountKeys);
   m_consumer.onPoolUpdated({ convertTx(*tx) }, {});
 
   ASSERT_TRUE(m_node.calls_getTransactionOutsGlobalIndices.empty());

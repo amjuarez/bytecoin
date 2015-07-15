@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 namespace CryptoNote {
 class ICryptonoteProtocolObserver;
@@ -29,6 +30,7 @@ public:
 
   virtual uint64_t getObservedHeight() const = 0;
   virtual size_t getPeerCount() const = 0;
+  virtual bool isSynchronized() const = 0;
 };
 
 } //namespace CryptoNote

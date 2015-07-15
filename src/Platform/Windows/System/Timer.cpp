@@ -89,7 +89,7 @@ void Timer::stop() {
   stopped = true;
 }
 
-void Timer::sleep(std::chrono::milliseconds duration) {
+void Timer::sleep(std::chrono::nanoseconds duration) {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
   if (stopped) {
@@ -101,7 +101,7 @@ void Timer::sleep(std::chrono::milliseconds duration) {
   QueryPerformanceCounter(&ticks);
   QueryPerformanceFrequency(&frequency);
   uint64_t currentTime = ticks.QuadPart / (frequency.QuadPart / 1000);
-  uint64_t time = currentTime + duration.count();
+  uint64_t time = currentTime + duration.count() / 1000000;
   void* fiber = GetCurrentFiber();
   TimerContext timerContext{ time, fiber, false };
   context = &timerContext;

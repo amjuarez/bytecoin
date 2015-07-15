@@ -45,16 +45,7 @@ namespace
 
 int main(int argc, char* argv[])
 {
-  TRY_ENTRY();
-  // epee::string_tools::set_module_name_and_folder(argv[0]);
-
-  //set up logging options
-  epee::log_space::get_set_log_detalisation_level(true, LOG_LEVEL_3);
-  epee::log_space::log_singletone::add_logger(LOGGER_CONSOLE, NULL, NULL, LOG_LEVEL_2);
-  
-  epee::log_space::log_singletone::add_logger(LOGGER_FILE, 
-    epee::log_space::log_singletone::get_default_log_file().c_str(), 
-    epee::log_space::log_singletone::get_default_log_folder().c_str());
+  try {
 
   po::options_description desc_options("Allowed options");
   command_line::add_arg(desc_options, command_line::arg_help);
@@ -238,5 +229,7 @@ int main(int argc, char* argv[])
 
   return failed_tests.empty() ? 0 : 1;
 
-  CATCH_ENTRY_L0("main", 1);
+  } catch (std::exception& e) {
+    std::cout << "Exception in main(): " << e.what() << std::endl;
+  }
 }

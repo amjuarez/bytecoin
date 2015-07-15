@@ -283,7 +283,7 @@ namespace CryptoNote
       std::vector<std::string> perrs = command_line::get_arg(vm, arg_p2p_add_peer);
       for(const std::string& pr_str: perrs)
       {
-        peerlist_entry pe = AUTO_VAL_INIT(pe);
+        peerlist_entry pe = boost::value_initialized<peerlist_entry>();
         pe.id = crypto::rand<uint64_t>();
         bool r = parse_peer_from_string(pe.adr, pr_str);
         if (!(r)) { logger(ERROR, BRIGHT_RED) << "Failed to parse address from string: " << pr_str; return false; }
@@ -512,6 +512,8 @@ namespace CryptoNote
 
     proto.invoke(COMMAND_HANDSHAKE::ID, arg, rsp);
 
+    context.version = rsp.node_data.version;
+
     if (rsp.node_data.network_id != m_network_id) {
       logger(Logging::ERROR) << context << "COMMAND_HANDSHAKE Failed, wrong network!  (" << rsp.node_data.network_id << "), closing connection.";
       return false;
@@ -545,7 +547,7 @@ namespace CryptoNote
 
   
   bool node_server::timedSync() {   
-    COMMAND_TIMED_SYNC::request arg = AUTO_VAL_INIT(arg);
+    COMMAND_TIMED_SYNC::request arg = boost::value_initialized<COMMAND_TIMED_SYNC::request>();
     m_payload_handler.get_payload_sync_data(arg.payload_data);
     auto cmdBuf = LevinProtocol::encode<COMMAND_TIMED_SYNC::request>(arg);
 
@@ -695,7 +697,7 @@ namespace CryptoNote
         return true;
       }
 
-      peerlist_entry pe_local = AUTO_VAL_INIT(pe_local);
+      peerlist_entry pe_local = boost::value_initialized<peerlist_entry>();
       pe_local.adr = na;
       pe_local.id = raw->second.peer_id;
       time(&pe_local.last_seen);
@@ -747,7 +749,7 @@ namespace CryptoNote
         continue;
 
       tried_peers.insert(random_index);
-      peerlist_entry pe = AUTO_VAL_INIT(pe);
+      peerlist_entry pe = boost::value_initialized<peerlist_entry>();
       bool r = use_white_list ? m_peerlist.get_white_peer_by_index(pe, random_index):m_peerlist.get_gray_peer_by_index(pe, random_index);
       if (!(r)) { logger(ERROR, BRIGHT_RED) << "Failed to get random peer from peerlist(white:" << use_white_list << ")"; return false; }
 
@@ -894,6 +896,7 @@ namespace CryptoNote
   
   bool node_server::get_local_node_data(basic_node_data& node_data)
   {
+    node_data.version = P2PProtocolVersion::CURRENT;
     time_t local_time;
     time(&local_time);
     node_data.local_time = local_time;
@@ -907,34 +910,34 @@ namespace CryptoNote
   }
   //-----------------------------------------------------------------------------------
 #ifdef ALLOW_DEBUG_COMMANDS
-  
-  bool node_server::check_trust(const proof_of_trust& tr)
-  {
+
+  bool node_server::check_trust(const proof_of_trust &tr) {
     uint64_t local_time = time(NULL);
-    uint64_t time_delata = local_time > tr.time ? local_time - tr.time: tr.time - local_time;
-    if(time_delata > 24*60*60 )
-    {
-      logger(ERROR) << "check_trust failed to check time conditions, local_time=" <<  local_time << ", proof_time=" << tr.time;
+    uint64_t time_delata = local_time > tr.time ? local_time - tr.time : tr.time - local_time;
+
+    if (time_delata > 24 * 60 * 60) {
+      logger(ERROR) << "check_trust failed to check time conditions, local_time=" << local_time << ", proof_time=" << tr.time;
       return false;
     }
-    if(m_last_stat_request_time >= tr.time )
-    {
-      logger(ERROR) << "check_trust failed to check time conditions, last_stat_request_time=" <<  m_last_stat_request_time << ", proof_time=" << tr.time;
+
+    if (m_last_stat_request_time >= tr.time) {
+      logger(ERROR) << "check_trust failed to check time conditions, last_stat_request_time=" << m_last_stat_request_time << ", proof_time=" << tr.time;
       return false;
     }
-    if(m_config.m_peer_id != tr.peer_id)
-    {
-      logger(ERROR) << "check_trust failed: peer_id mismatch (passed " << tr.peer_id << ", expected " << m_config.m_peer_id<< ")";
+
+    if (m_config.m_peer_id != tr.peer_id) {
+      logger(ERROR) << "check_trust failed: peer_id mismatch (passed " << tr.peer_id << ", expected " << m_config.m_peer_id << ")";
       return false;
     }
-    crypto::public_key pk = AUTO_VAL_INIT(pk);
+
+    crypto::public_key pk;
     Common::podFromHex(CryptoNote::P2P_STAT_TRUSTED_PUB_KEY, pk);
     crypto::hash h = get_proof_of_trust_hash(tr);
-    if(!crypto::check_signature(h, pk, tr.sign))
-    {
+    if (!crypto::check_signature(h, pk, tr.sign)) {
       logger(ERROR) << "check_trust failed: sign check failed";
       return false;
     }
+
     //update last request time
     m_last_stat_request_time = tr.time;
     return true;
@@ -1081,7 +1084,9 @@ namespace CryptoNote
   
   int node_server::handle_handshake(int command, COMMAND_HANDSHAKE::request& arg, COMMAND_HANDSHAKE::response& rsp, p2p_connection_context& context)
   {
-    if(arg.node_data.network_id != m_network_id) {
+    context.version = arg.node_data.version;
+
+    if (arg.node_data.network_id != m_network_id) {
       logger(Logging::INFO) << context << "WRONG NETWORK AGENT CONNECTED! id=" << arg.node_data.network_id;
       context.m_state = cryptonote_connection_context::state_shutdown;
       return 1;
@@ -1211,7 +1216,7 @@ namespace CryptoNote
     std::vector<std::string> perrs = command_line::get_arg(vm, arg);
 
     for(const std::string& pr_str: perrs) {
-      net_address na = AUTO_VAL_INIT(na);
+      net_address na;
       if (!parse_peer_from_string(na, pr_str)) { 
         logger(ERROR, BRIGHT_RED) << "Failed to parse address from string: " << pr_str; 
         return false; 
@@ -1223,8 +1228,8 @@ namespace CryptoNote
   }
 
   void node_server::acceptLoop() {
-    try {
-      for (;;) {
+    for (;;) {
+      try {
         p2p_connection_context ctx(m_dispatcher, m_listener.accept());
         ctx.m_connection_id = boost::uuids::random_generator()();
         ctx.m_is_income = true;
@@ -1240,10 +1245,11 @@ namespace CryptoNote
 
         ++m_spawnCount;
         m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, std::cref(connectionId), std::ref(connection)));
+      } catch (System::InterruptedException&) {
+        break;
+      } catch (const std::exception& e) {
+        logger(WARNING) << "Exception in acceptLoop: " << e.what();
       }
-    } catch (System::InterruptedException&) {
-    } catch (const std::exception& e) {
-      logger(WARNING) << "Exception in acceptLoop: " << e.what();
     }
 
     logger(DEBUGGING) << "acceptLoop finished";
@@ -1301,10 +1307,12 @@ namespace CryptoNote
       LevinProtocol::Command cmd;
 
       for (;;) {
-
         if (ctx.m_state == cryptonote_connection_context::state_sync_required) {
           ctx.m_state = cryptonote_connection_context::state_synchronizing;
           m_payload_handler.start_sync(ctx);
+        } else if (ctx.m_state == cryptonote_connection_context::state_pool_sync_required) {
+          ctx.m_state = cryptonote_connection_context::state_normal;
+          m_payload_handler.requestMissingPoolTransactions(ctx);
         }
 
         if (!proto.readCommand(cmd)) {

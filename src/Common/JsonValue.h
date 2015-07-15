@@ -121,9 +121,14 @@ public:
 
   JsonValue& operator()(const Key& key);
   const JsonValue& operator()(const Key& key) const;
-  std::size_t count(const Key& key) const;
+  bool contains(const Key& key) const;
   JsonValue& insert(const Key& key, const JsonValue& value);
   JsonValue& insert(const Key& key, JsonValue&& value);
+
+  // sets or creates value, returns reference to self
+  JsonValue& set(const Key& key, const JsonValue& value);
+  JsonValue& set(const Key& key, JsonValue&& value);
+
   std::size_t erase(const Key& key);
 
   static JsonValue fromString(const std::string& source);
@@ -144,6 +149,7 @@ private:
   };
 
   void destructValue();
+
   void readArray(std::istream& in);
   void readTrue(std::istream& in);
   void readFalse(std::istream& in);

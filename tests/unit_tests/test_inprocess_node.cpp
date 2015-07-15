@@ -19,10 +19,15 @@
 
 #include <system_error>
 
+#include <boost/range/combine.hpp>
+
 #include "EventWaiter.h"
 #include "ICoreStub.h"
 #include "ICryptonoteProtocolQueryStub.h"
 #include "InProcessNode/InProcessNode.h"
+#include "TestBlockchainGenerator.h"
+#include "Logging/FileLogger.h"
+#include "cryptonote_core/TransactionApi.h"
 
 struct CallbackStatus {
   CallbackStatus() {}
@@ -36,9 +41,24 @@ struct CallbackStatus {
   EventWaiter waiter;
 };
 
+namespace {
+CryptoNote::Transaction createTx(CryptoNote::ITransactionReader& tx) {
+  auto data = tx.getTransactionData();
+
+  CryptoNote::blobdata txblob(data.data(), data.data() + data.size());
+  CryptoNote::Transaction outTx;
+  CryptoNote::parse_and_validate_tx_from_blob(txblob, outTx);
+
+  return outTx;
+}
+}
+
 class InProcessNode : public ::testing::Test {
 public:
-  InProcessNode() : node(coreStub, protocolQueryStub) {}
+  InProcessNode() : 
+    node(coreStub, protocolQueryStub),
+    currency(CryptoNote::CurrencyBuilder(logger).currency()),
+    generator(currency) {}
   void SetUp();
 
 protected:
@@ -47,9 +67,14 @@ protected:
   ICoreStub coreStub;
   ICryptonoteProtocolQueryStub protocolQueryStub;
   CryptoNote::InProcessNode node;
+
+  CryptoNote::Currency currency;
+  TestBlockchainGenerator generator;
+  Logging::FileLogger logger;
 };
 
 void InProcessNode::SetUp() {
+  logger.init("/dev/null");
   initNode();
 }
 
@@ -280,6 +305,375 @@ TEST_F(InProcessNode, getLastLocalBlockTimestampError) {
   ASSERT_TRUE(initStatus.wait());
 
   ASSERT_THROW(newNode.getLastLocalBlockTimestamp(), std::exception);
+}
+
+TEST_F(InProcessNode, getBlocksByHeightEmpty) {
+  std::vector<uint64_t> blockHeights;
+  std::vector<std::vector<CryptoNote::BlockDetails>> blocks;
+  ASSERT_EQ(blockHeights.size(), 0);
+  ASSERT_EQ(blocks.size(), 0);
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  CallbackStatus status;
+  node.getBlocks(blockHeights, blocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, getBlocksByHeightMany) {
+  const uint64_t NUMBER_OF_BLOCKS = 10;
+
+  std::vector<uint64_t> blockHeights;
+  std::vector<std::vector<CryptoNote::BlockDetails>> actualBlocks;
+
+  std::vector<CryptoNote::Block> expectedBlocks;
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  generator.generateEmptyBlocks(NUMBER_OF_BLOCKS);
+  ASSERT_GE(generator.getBlockchain().size(), NUMBER_OF_BLOCKS);
+
+  for (auto iter = generator.getBlockchain().begin() + 1; iter != generator.getBlockchain().end(); iter++) {
+    expectedBlocks.push_back(*iter);
+    blockHeights.push_back(std::move(boost::get<CryptoNote::TransactionInputGenerate>(iter->minerTx.vin.front()).height));
+    coreStub.addBlock(*iter);
+  }
+
+  ASSERT_GE(blockHeights.size(), NUMBER_OF_BLOCKS);
+  ASSERT_EQ(blockHeights.size(), expectedBlocks.size());
+  ASSERT_EQ(actualBlocks.size(), 0);
+
+  CallbackStatus status;
+  node.getBlocks(blockHeights, actualBlocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+
+  ASSERT_EQ(blockHeights.size(), expectedBlocks.size());
+  ASSERT_EQ(blockHeights.size(), actualBlocks.size());
+  auto range1 = boost::combine(blockHeights, expectedBlocks);
+  auto range = boost::combine(range1, actualBlocks);
+  for (const boost::tuple<boost::tuple<size_t, CryptoNote::Block>, std::vector<CryptoNote::BlockDetails>>& sameHeight : range) {
+    EXPECT_EQ(sameHeight.get<1>().size(), 1);
+    for (const CryptoNote::BlockDetails& block : sameHeight.get<1>()) {
+      EXPECT_EQ(block.height, sameHeight.get<0>().get<0>());
+      crypto::hash expectedCryptoHash = CryptoNote::get_block_hash(sameHeight.get<0>().get<1>());
+      std::array<uint8_t, 32> expectedHash = reinterpret_cast<const std::array<uint8_t, 32>&>(expectedCryptoHash);
+      EXPECT_EQ(block.hash, expectedHash);
+      EXPECT_FALSE(block.isOrphaned);
+    }
+  }
+}
+
+TEST_F(InProcessNode, getBlocksByHeightFail) {
+  const uint64_t NUMBER_OF_BLOCKS = 10;
+
+  std::vector<uint64_t> blockHeights;
+  std::vector<std::vector<CryptoNote::BlockDetails>> actualBlocks;
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  generator.generateEmptyBlocks(NUMBER_OF_BLOCKS);
+  ASSERT_LT(generator.getBlockchain().size(), NUMBER_OF_BLOCKS * 2);
+
+  for (const CryptoNote::Block& block : generator.getBlockchain()) {
+    coreStub.addBlock(block);
+  }
+
+  for (uint64_t i = 0; i < NUMBER_OF_BLOCKS * 2; ++i) {
+    blockHeights.push_back(std::move(i));
+  }
+
+  ASSERT_EQ(actualBlocks.size(), 0);
+
+  CallbackStatus status;
+  node.getBlocks(blockHeights, actualBlocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, getBlocksByHeightNotInited) {
+  CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
+
+  std::vector<uint64_t> blockHeights;
+  std::vector<std::vector<CryptoNote::BlockDetails>> blocks;
+  ASSERT_EQ(blockHeights.size(), 0);
+  ASSERT_EQ(blocks.size(), 0);
+
+  CallbackStatus status;
+  newNode.getBlocks(blockHeights, blocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, getBlocksByHashEmpty) {
+  std::vector<crypto::hash> blockHashes;
+  std::vector<CryptoNote::BlockDetails> blocks;
+  ASSERT_EQ(blockHashes.size(), 0);
+  ASSERT_EQ(blocks.size(), 0);
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  CallbackStatus status;
+  node.getBlocks(blockHashes, blocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, getBlocksByHashMany) {
+  const uint64_t NUMBER_OF_BLOCKS = 10;
+
+  std::vector<crypto::hash> blockHashes;
+  std::vector<CryptoNote::BlockDetails> actualBlocks;
+
+  std::vector<CryptoNote::Block> expectedBlocks;
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  generator.generateEmptyBlocks(NUMBER_OF_BLOCKS);
+  ASSERT_GE(generator.getBlockchain().size(), NUMBER_OF_BLOCKS);
+
+  for (auto iter = generator.getBlockchain().begin() + 1; iter != generator.getBlockchain().end(); iter++) {
+    expectedBlocks.push_back(*iter);
+    blockHashes.push_back(CryptoNote::get_block_hash(*iter));
+    coreStub.addBlock(*iter);
+  }
+
+  ASSERT_GE(blockHashes.size(), NUMBER_OF_BLOCKS);
+  ASSERT_EQ(blockHashes.size(), expectedBlocks.size());
+  ASSERT_EQ(actualBlocks.size(), 0);
+
+  CallbackStatus status;
+  node.getBlocks(blockHashes, actualBlocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+
+  ASSERT_EQ(blockHashes.size(), expectedBlocks.size());
+  ASSERT_EQ(blockHashes.size(), actualBlocks.size());
+  auto range1 = boost::combine(blockHashes, expectedBlocks);
+  auto range = boost::combine(range1, actualBlocks);
+  for (const boost::tuple<boost::tuple<crypto::hash, CryptoNote::Block>, CryptoNote::BlockDetails>& sameHeight : range) {
+    crypto::hash expectedCryptoHash = CryptoNote::get_block_hash(sameHeight.get<0>().get<1>());
+    EXPECT_EQ(expectedCryptoHash, sameHeight.get<0>().get<0>());
+    std::array<uint8_t, 32> expectedHash = reinterpret_cast<const std::array<uint8_t, 32>&>(expectedCryptoHash);
+    EXPECT_EQ(sameHeight.get<1>().hash, expectedHash);
+    EXPECT_FALSE(sameHeight.get<1>().isOrphaned);
+  }
+}
+
+TEST_F(InProcessNode, getBlocksByHashFail) {
+  const uint64_t NUMBER_OF_BLOCKS = 10;
+
+  std::vector<crypto::hash> blockHashes;
+  std::vector<CryptoNote::BlockDetails> actualBlocks;
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  generator.generateEmptyBlocks(NUMBER_OF_BLOCKS);
+  ASSERT_LT(generator.getBlockchain().size(), NUMBER_OF_BLOCKS * 2);
+
+  for (const CryptoNote::Block& block : generator.getBlockchain()) {
+    coreStub.addBlock(block);
+  }
+
+  for (uint64_t i = 0; i < NUMBER_OF_BLOCKS * 2; ++i) {
+    blockHashes.push_back(boost::value_initialized<crypto::hash>());
+  }
+
+  ASSERT_EQ(actualBlocks.size(), 0);
+
+  CallbackStatus status;
+  node.getBlocks(blockHashes, actualBlocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, getBlocksByHashNotInited) {
+  CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
+
+  std::vector<crypto::hash> blockHashes;
+  std::vector<CryptoNote::BlockDetails> blocks;
+  ASSERT_EQ(blockHashes.size(), 0);
+  ASSERT_EQ(blocks.size(), 0);
+
+  CallbackStatus status;
+  newNode.getBlocks(blockHashes, blocks, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, getTxEmpty) {
+  std::vector<crypto::hash> transactionHashes;
+  std::vector<CryptoNote::TransactionDetails> transactions;
+  ASSERT_EQ(transactionHashes.size(), 0);
+  ASSERT_EQ(transactions.size(), 0);
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  CallbackStatus status;
+  node.getTransactions(transactionHashes, transactions, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, getTxMany) {
+  size_t POOL_TX_NUMBER = 10;
+  size_t BLOCKCHAIN_TX_NUMBER = 10;
+
+  std::vector<crypto::hash> transactionHashes;
+  std::vector<CryptoNote::TransactionDetails> actualTransactions;
+
+  std::vector<std::tuple<CryptoNote::Transaction, crypto::hash, uint64_t>> expectedTransactions;
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  size_t prevBlockchainSize = generator.getBlockchain().size();
+  for (size_t i = 0; i < BLOCKCHAIN_TX_NUMBER; ++i) {
+    auto txptr = CryptoNote::createTransaction();
+    auto tx = ::createTx(*txptr.get());
+    transactionHashes.push_back(CryptoNote::get_transaction_hash(tx));
+    generator.addTxToBlockchain(tx);
+    ASSERT_EQ(generator.getBlockchain().size(), prevBlockchainSize + 1);
+    prevBlockchainSize = generator.getBlockchain().size();
+    coreStub.addBlock(generator.getBlockchain().back());
+    coreStub.addTransaction(tx);
+    expectedTransactions.push_back(std::make_tuple(tx, CryptoNote::get_block_hash(generator.getBlockchain().back()), boost::get<CryptoNote::TransactionInputGenerate>(generator.getBlockchain().back().minerTx.vin.front()).height));
+  }
+
+  ASSERT_EQ(transactionHashes.size(), BLOCKCHAIN_TX_NUMBER);
+  ASSERT_EQ(transactionHashes.size(), expectedTransactions.size());
+  ASSERT_EQ(actualTransactions.size(), 0);
+
+  for (size_t i = 0; i < POOL_TX_NUMBER; ++i) {
+    auto txptr = CryptoNote::createTransaction();
+    auto tx = ::createTx(*txptr.get());
+    transactionHashes.push_back(CryptoNote::get_transaction_hash(tx));
+    coreStub.addTransaction(tx);
+    expectedTransactions.push_back(std::make_tuple(tx, boost::value_initialized<crypto::hash>(), boost::value_initialized<uint64_t>()));
+  }
+
+  ASSERT_EQ(transactionHashes.size(), BLOCKCHAIN_TX_NUMBER + POOL_TX_NUMBER);
+  ASSERT_EQ(transactionHashes.size(), expectedTransactions.size());
+  ASSERT_EQ(actualTransactions.size(), 0);
+
+
+  CallbackStatus status;
+  node.getTransactions(transactionHashes, actualTransactions, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+
+  ASSERT_EQ(transactionHashes.size(), expectedTransactions.size());
+  ASSERT_EQ(transactionHashes.size(), actualTransactions.size());
+  auto range1 = boost::combine(transactionHashes, actualTransactions);
+  auto range = boost::combine(range1, expectedTransactions);
+  for (const boost::tuple<boost::tuple<crypto::hash, CryptoNote::TransactionDetails>, std::tuple<CryptoNote::Transaction, crypto::hash, uint64_t>>& sameHeight : range) {
+    crypto::hash expectedCryptoHash = CryptoNote::get_transaction_hash(std::get<0>(sameHeight.get<1>()));
+    EXPECT_EQ(expectedCryptoHash, sameHeight.get<0>().get<0>());
+    std::array<uint8_t, 32> expectedHash = reinterpret_cast<const std::array<uint8_t, 32>&>(expectedCryptoHash);
+    EXPECT_EQ(sameHeight.get<0>().get<1>().hash, expectedHash);
+    if (std::get<1>(sameHeight.get<1>()) != boost::value_initialized<crypto::hash>()) {
+      EXPECT_TRUE(sameHeight.get<0>().get<1>().inBlockchain);
+      std::array<uint8_t, 32> expectedBlockHash = reinterpret_cast<const std::array<uint8_t, 32>&>(std::get<1>(sameHeight.get<1>()));
+      EXPECT_EQ(sameHeight.get<0>().get<1>().blockHash, expectedBlockHash);
+      EXPECT_EQ(sameHeight.get<0>().get<1>().blockHeight, std::get<2>(sameHeight.get<1>()));
+    } else {
+      EXPECT_FALSE(sameHeight.get<0>().get<1>().inBlockchain);
+    }
+  }
+}
+
+TEST_F(InProcessNode, getTxFail) {
+size_t POOL_TX_NUMBER = 10;
+  size_t BLOCKCHAIN_TX_NUMBER = 10;
+
+  std::vector<crypto::hash> transactionHashes;
+  std::vector<CryptoNote::TransactionDetails> actualTransactions;
+
+  std::vector<std::tuple<CryptoNote::Transaction, crypto::hash, uint64_t>> expectedTransactions;
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  size_t prevBlockchainSize = generator.getBlockchain().size();
+  for (size_t i = 0; i < BLOCKCHAIN_TX_NUMBER; ++i) {
+    auto txptr = CryptoNote::createTransaction();
+    auto tx = ::createTx(*txptr.get());
+    transactionHashes.push_back(CryptoNote::get_transaction_hash(tx));
+    generator.addTxToBlockchain(tx);
+    ASSERT_EQ(generator.getBlockchain().size(), prevBlockchainSize + 1);
+    prevBlockchainSize = generator.getBlockchain().size();
+    coreStub.addBlock(generator.getBlockchain().back());
+    coreStub.addTransaction(tx);
+    expectedTransactions.push_back(std::make_tuple(tx, CryptoNote::get_block_hash(generator.getBlockchain().back()), boost::get<CryptoNote::TransactionInputGenerate>(generator.getBlockchain().back().minerTx.vin.front()).height));
+  }
+
+  ASSERT_EQ(transactionHashes.size(), BLOCKCHAIN_TX_NUMBER);
+  ASSERT_EQ(transactionHashes.size(), expectedTransactions.size());
+  ASSERT_EQ(actualTransactions.size(), 0);
+
+  for (size_t i = 0; i < POOL_TX_NUMBER; ++i) {
+    auto txptr = CryptoNote::createTransaction();
+    auto tx = ::createTx(*txptr.get());
+    transactionHashes.push_back(CryptoNote::get_transaction_hash(tx));
+    expectedTransactions.push_back(std::make_tuple(tx, boost::value_initialized<crypto::hash>(), boost::value_initialized<uint64_t>()));
+  }
+
+  ASSERT_EQ(transactionHashes.size(), BLOCKCHAIN_TX_NUMBER + POOL_TX_NUMBER);
+  ASSERT_EQ(transactionHashes.size(), expectedTransactions.size());
+  ASSERT_EQ(actualTransactions.size(), 0);
+
+
+  CallbackStatus status;
+  node.getTransactions(transactionHashes, actualTransactions, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
+
+}
+
+TEST_F(InProcessNode, getTxNotInited) {
+  CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
+
+  std::vector<crypto::hash> transactionHashes;
+  std::vector<CryptoNote::TransactionDetails> transactions;
+  ASSERT_EQ(transactionHashes.size(), 0);
+  ASSERT_EQ(transactions.size(), 0);
+
+  coreStub.set_blockchain_top(0, boost::value_initialized<crypto::hash>(), true);
+
+  CallbackStatus status;
+  newNode.getTransactions(transactionHashes, transactions, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNode, isSynchronized) {
+  bool syncStatus;
+  {
+    CallbackStatus status;
+    node.isSynchronized(syncStatus, [&status] (std::error_code ec) { status.setStatus(ec); });
+    ASSERT_TRUE(status.wait());
+    ASSERT_EQ(std::error_code(), status.getStatus());
+    ASSERT_FALSE(syncStatus);
+  }
+
+  protocolQueryStub.setSynchronizedStatus(true);
+
+  {
+    CallbackStatus status;
+    node.isSynchronized(syncStatus, [&status] (std::error_code ec) { status.setStatus(ec); });
+    ASSERT_TRUE(status.wait());
+    ASSERT_EQ(std::error_code(), status.getStatus());
+    ASSERT_TRUE(syncStatus);
+  }
+}
+
+TEST_F(InProcessNode, isSynchronizedNotInited) {
+  CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
+  bool syncStatus;
+
+  CallbackStatus status;
+  newNode.isSynchronized(syncStatus, [&status] (std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
 }
 
 //TODO: make relayTransaction unit test

@@ -17,6 +17,8 @@
 
 #include "ICoreStub.h"
 
+#include "cryptonote_core/cryptonote_format_utils.h"
+
 bool ICoreStub::addObserver(CryptoNote::ICoreObserver* observer) {
   return true;
 }
@@ -77,8 +79,17 @@ void ICoreStub::set_random_outs(const CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS
   randomOutsResult = result;
 }
 
-bool ICoreStub::getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) {
+std::vector<CryptoNote::Transaction> ICoreStub::getPoolTransactions() {
+  return std::vector<CryptoNote::Transaction>();
+}
+
+bool ICoreStub::getPoolChanges(const crypto::hash& tailBlockId, const std::vector<crypto::hash>& knownTxsIds,
+                               std::vector<CryptoNote::Transaction>& addedTxs, std::vector<crypto::hash>& deletedTxsIds) {
   return true;
+}
+
+void ICoreStub::getPoolChanges(const std::vector<crypto::hash>& knownTxsIds, std::vector<CryptoNote::Transaction>& addedTxs,
+                               std::vector<crypto::hash>& deletedTxsIds) {
 }
 
 bool ICoreStub::queryBlocks(const std::list<crypto::hash>& block_ids, uint64_t timestamp,
@@ -87,7 +98,94 @@ bool ICoreStub::queryBlocks(const std::list<crypto::hash>& block_ids, uint64_t t
   return true;
 }
 
+crypto::hash ICoreStub::getBlockIdByHeight(uint64_t height) {
+  auto iter = blockHashByHeightIndex.find(height);
+  if (iter == blockHashByHeightIndex.end()) {
+    return boost::value_initialized<crypto::hash>();
+  }
+  return iter->second;
+}
+
 bool ICoreStub::getBlockByHash(const crypto::hash &h, CryptoNote::Block &blk) {
-  //stub
+  auto iter = blocks.find(h);
+  if (iter == blocks.end()) {
+    return false;
+  }
+  blk = iter->second;
   return true;
+}
+
+void ICoreStub::getTransactions(const std::vector<crypto::hash>& txs_ids, std::list<CryptoNote::Transaction>& txs, std::list<crypto::hash>& missed_txs, bool checkTxPool) {
+  for (const crypto::hash& hash : txs_ids) {
+    auto iter = transactions.find(hash);
+    if (iter != transactions.end()) {
+      txs.push_back(iter->second);
+    } else {
+      missed_txs.push_back(hash);
+    }
+  }
+}
+
+bool ICoreStub::getBackwardBlocksSizes(uint64_t fromHeight, std::vector<size_t>& sizes, size_t count) {
+  return true;
+}
+
+bool ICoreStub::getBlockSize(const crypto::hash& hash, size_t& size) {
+  return true;
+}
+
+bool ICoreStub::getAlreadyGeneratedCoins(const crypto::hash& hash, uint64_t& generatedCoins) {
+  return true;
+}
+
+bool ICoreStub::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee,
+    bool penalizeFee, uint64_t& reward, int64_t& emissionChange) {
+  return true;
+}
+
+bool ICoreStub::scanOutputkeysForIndices(const CryptoNote::TransactionInputToKey& txInToKey, std::list<std::pair<crypto::hash, size_t>>& outputReferences) {
+  return true;
+}
+
+bool ICoreStub::getBlockDifficulty(uint64_t height, CryptoNote::difficulty_type& difficulty) {
+  return true;
+}
+
+bool ICoreStub::getBlockContainingTx(const crypto::hash& txId, crypto::hash& blockId, uint64_t& blockHeight) {
+  auto iter = blockHashByTxHashIndex.find(txId);
+  if (iter == blockHashByTxHashIndex.end()) {
+    return false;
+  }
+  blockId = iter->second;
+  auto blockIter = blocks.find(blockId);
+  if (blockIter == blocks.end()) {
+    return false;
+  }
+  blockHeight = boost::get<CryptoNote::TransactionInputGenerate>(blockIter->second.minerTx.vin.front()).height;
+  return true;
+}
+
+bool ICoreStub::getMultisigOutputReference(const CryptoNote::TransactionInputMultisignature& txInMultisig, std::pair<crypto::hash, size_t>& outputReference) {
+  return true;
+}
+
+void ICoreStub::addBlock(const CryptoNote::Block& block) {
+  uint64_t height = boost::get<CryptoNote::TransactionInputGenerate>(block.minerTx.vin.front()).height;
+  crypto::hash hash = CryptoNote::get_block_hash(block);
+  if (height > topHeight) {
+    topHeight = height;
+    topId = hash;
+  }
+  blocks.emplace(std::make_pair(hash, block));
+  blockHashByHeightIndex.emplace(std::make_pair(height, hash));
+
+  blockHashByTxHashIndex.emplace(std::make_pair(CryptoNote::get_transaction_hash(block.minerTx), hash));
+  for (auto txHash : block.txHashes) {
+    blockHashByTxHashIndex.emplace(std::make_pair(txHash, hash));
+  }
+}
+
+void ICoreStub::addTransaction(const CryptoNote::Transaction& tx) {
+  crypto::hash hash = CryptoNote::get_transaction_hash(tx);
+  transactions.emplace(std::make_pair(hash, tx));
 }

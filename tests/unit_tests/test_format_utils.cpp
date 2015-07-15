@@ -19,15 +19,14 @@
 
 #include <vector>
 
-// epee
-#include "misc_language.h"
-
 #include "Common/util.h"
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/Currency.h"
 
 #include <Logging/LoggerGroup.h>
+
+#define AUTO_VAL_INIT(n) boost::value_initialized<decltype(n)>()
 
 TEST(parse_tx_extra, handles_empty_extra)
 {

@@ -18,7 +18,6 @@
 #include "double_spend.h"
 #include "TestGenerator.h"
 
-using namespace epee;
 using namespace CryptoNote;
 
 //======================================================================================================================

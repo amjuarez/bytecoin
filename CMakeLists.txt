@@ -12,7 +12,7 @@ set(CMAKE_SUPPRESS_REGENERATION ON)
 
 project(Bytecoin)
 
-include_directories(include src contrib/epee/include external "${CMAKE_BINARY_DIR}/version")
+include_directories(include src external "${CMAKE_BINARY_DIR}/version")
 if(APPLE)
   include_directories(SYSTEM /usr/include/malloc)
   enable_language(ASM)
@@ -140,7 +140,6 @@ else()
   endif()
 endif()
 
-add_subdirectory(contrib)
 add_subdirectory(external)
 add_subdirectory(src)
 add_subdirectory(tests)

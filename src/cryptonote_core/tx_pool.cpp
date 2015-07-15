@@ -34,6 +34,8 @@
 
 using namespace Logging;
 
+#undef ERROR
+
 namespace CryptoNote {
 
   //---------------------------------------------------------------------------------
@@ -130,8 +132,8 @@ namespace CryptoNote {
 
     const uint64_t fee = inputs_amount - outputs_amount;
     if (!keptByBlock && fee < m_currency.minimumFee()) {
-      logger(INFO) << "transaction fee is not enought: " << m_currency.formatAmount(fee) <<
-        ", minumim fee: " << m_currency.formatAmount(m_currency.minimumFee());
+      logger(INFO) << "transaction fee is not enough: " << m_currency.formatAmount(fee) <<
+        ", minimum fee: " << m_currency.formatAmount(m_currency.minimumFee());
       tvc.m_verifivation_failed = true;
       tvc.m_tx_fee_too_small = true;
       return false;
@@ -165,6 +167,14 @@ namespace CryptoNote {
 
     std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
 
+    if (!keptByBlock && m_recentlyDeletedTransactions.find(id) != m_recentlyDeletedTransactions.end()) {
+      logger(INFO) << "Trying to add recently deleted transaction. Ignore: " << id;
+      tvc.m_verifivation_failed = false;
+      tvc.m_should_be_relayed = false;
+      tvc.m_added_to_pool = false;
+      return true;
+    }
+
     // add to pool
     {
       TransactionDetails txd;
@@ -180,7 +190,10 @@ namespace CryptoNote {
       txd.lastFailedBlock.clear();
 
       auto txd_p = m_transactions.insert(std::move(txd));
-      if (!(txd_p.second)) { logger(ERROR, BRIGHT_RED) << "transaction already exists at inserting in memory pool"; return false; }
+      if (!(txd_p.second)) {
+        logger(ERROR, BRIGHT_RED) << "transaction already exists at inserting in memory pool";
+        return false;
+      }
     }
 
     tvc.m_added_to_pool = true;
@@ -372,6 +385,9 @@ namespace CryptoNote {
       m_spent_key_images.clear();
       m_spentOutputs.clear();
     }
+
+    removeExpiredTransactions();
+
     // Ignore deserialization error
     return true;
   }
@@ -399,22 +415,32 @@ namespace CryptoNote {
   bool tx_memory_pool::removeExpiredTransactions() {
     bool somethingRemoved = false;
     {
-    std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
+      std::lock_guard<std::recursive_mutex> lock(m_transactions_lock);
 
-    auto now = m_timeProvider.now();
+      uint64_t now = m_timeProvider.now();
 
-    for (auto it = m_transactions.begin(); it != m_transactions.end();) {
-      uint64_t txAge = now - it->receiveTime;
-      bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
-
-      if (remove) {
-        logger(TRACE) << "Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge;
-        it = removeTransaction(it);
-          somethingRemoved = true;
-      } else {
-        ++it;
+      for (auto it = m_recentlyDeletedTransactions.begin(); it != m_recentlyDeletedTransactions.end();) {
+        uint64_t elapsedTimeSinceDeletion = now - it->second;
+        if (elapsedTimeSinceDeletion > m_currency.numberOfPeriodsToForgetTxDeletedFromPool() * m_currency.mempoolTxLiveTime()) {
+          it = m_recentlyDeletedTransactions.erase(it);
+        } else {
+          ++it;
+        }
       }
-    }
+
+      for (auto it = m_transactions.begin(); it != m_transactions.end();) {
+        uint64_t txAge = now - it->receiveTime;
+        bool remove = txAge > (it->keptByBlock ? m_currency.mempoolTxFromAltBlockLiveTime() : m_currency.mempoolTxLiveTime());
+
+        if (remove) {
+          logger(TRACE) << "Tx " << it->id << " removed from tx pool due to outdated, age: " << txAge;
+          m_recentlyDeletedTransactions.emplace(it->id, now);
+          it = removeTransaction(it);
+          somethingRemoved = true;
+        } else {
+          ++it;
+        }
+      }
     }
 
     if (somethingRemoved) {

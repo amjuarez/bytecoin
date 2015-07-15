@@ -18,80 +18,83 @@
 #include <chrono>
 #include <thread>
 
-#include "include_base_utils.h"
+#include <Logging/LoggerRef.h>
+#include <Logging/ConsoleLogger.h>
 
 #include "node_rpc_proxy/NodeRpcProxy.h"
 
 using namespace CryptoNote;
-using namespace CryptoNote;
+using namespace Logging;
 
+#undef ERROR
 
 class NodeObserver : public INodeObserver {
 public:
-  NodeObserver(const std::string& name, NodeRpcProxy& nodeProxy)
+  NodeObserver(const std::string& name, NodeRpcProxy& nodeProxy, ILogger& log)
     : m_name(name)
-    , m_nodeProxy(nodeProxy) {
+    , m_nodeProxy(nodeProxy)
+    , logger(log, "NodeObserver:" + name) {
   }
 
   virtual ~NodeObserver() {
   }
 
   virtual void peerCountUpdated(size_t count) {
-    LOG_PRINT_L0('[' << m_name << "] peerCountUpdated " << count << " = " << m_nodeProxy.getPeerCount());
+    logger(INFO) << '[' << m_name << "] peerCountUpdated " << count << " = " << m_nodeProxy.getPeerCount();
   }
 
   virtual void localBlockchainUpdated(uint64_t height) {
-    LOG_PRINT_L0('[' << m_name << "] localBlockchainUpdated " << height << " = " << m_nodeProxy.getLastLocalBlockHeight());
+    logger(INFO) << '[' << m_name << "] localBlockchainUpdated " << height << " = " << m_nodeProxy.getLastLocalBlockHeight();
 
     std::vector<uint64_t> amounts;
     amounts.push_back(100000000);
     auto outs = std::make_shared<std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>>();
-    m_nodeProxy.getRandomOutsByAmounts(std::move(amounts), 10, *outs.get(), [outs](std::error_code ec) {
+    m_nodeProxy.getRandomOutsByAmounts(std::move(amounts), 10, *outs.get(), [outs, this](std::error_code ec) {
       if (!ec) {
         if (1 == outs->size() && 10 == (*outs)[0].outs.size()) {
-          LOG_PRINT_L0("getRandomOutsByAmounts called successfully");
+          logger(INFO) << "getRandomOutsByAmounts called successfully";
         } else {
-          LOG_PRINT_RED_L0("getRandomOutsByAmounts returned invalid result");
+          logger(ERROR) << "getRandomOutsByAmounts returned invalid result";
         }
       } else {
-        LOG_PRINT_RED_L0("failed to call getRandomOutsByAmounts: " << ec.message() << ':' << ec.value());
+        logger(ERROR) << "failed to call getRandomOutsByAmounts: " << ec.message() << ':' << ec.value();
       }
     });
   }
 
   virtual void lastKnownBlockHeightUpdated(uint64_t height) {
-    LOG_PRINT_L0('[' << m_name << "] lastKnownBlockHeightUpdated " << height << " = " << m_nodeProxy.getLastKnownBlockHeight());
+    logger(INFO) << '[' << m_name << "] lastKnownBlockHeightUpdated " << height << " = " << m_nodeProxy.getLastKnownBlockHeight();
   }
 
 private:
+  LoggerRef logger;
   std::string m_name;
   NodeRpcProxy& m_nodeProxy;
 };
 
 int main(int argc, const char** argv) {
-  //set up logging options
-  epee::log_space::get_set_log_detalisation_level(true, LOG_LEVEL_2);
-  epee::log_space::log_singletone::add_logger(LOGGER_CONSOLE, NULL, NULL);
 
+  Logging::ConsoleLogger log;
+  Logging::LoggerRef logger(log, "main");
   NodeRpcProxy nodeProxy("127.0.0.1", 18081);
 
-  NodeObserver observer1("obs1", nodeProxy);
-  NodeObserver observer2("obs2", nodeProxy);
+  NodeObserver observer1("obs1", nodeProxy, log);
+  NodeObserver observer2("obs2", nodeProxy, log);
 
   nodeProxy.addObserver(&observer1);
   nodeProxy.addObserver(&observer2);
 
-  nodeProxy.init([](std::error_code ec) {
+  nodeProxy.init([&](std::error_code ec) {
     if (ec) {
-      LOG_PRINT_RED_L0("init error: " << ec.message() << ':' << ec.value());
+      logger(ERROR) << "init error: " << ec.message() << ':' << ec.value();
     } else {
-      LOG_PRINT_GREEN("initialized", LOG_LEVEL_0);
+      logger(INFO, BRIGHT_GREEN) << "initialized";
     }
   });
 
   //nodeProxy.init([](std::error_code ec) {
   //  if (ec) {
-  //    LOG_PRINT_RED_L0("init error: " << ec.message() << ':' << ec.value());
+  //    logger(ERROR) << "init error: " << ec.message() << ':' << ec.value();
   //  } else {
   //    LOG_PRINT_GREEN("initialized", LOG_LEVEL_0);
   //  }
@@ -99,49 +102,49 @@ int main(int argc, const char** argv) {
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
   if (nodeProxy.shutdown()) {
-    LOG_PRINT_GREEN("shutdown", LOG_LEVEL_0);
+    logger(INFO, BRIGHT_GREEN) << "shutdown";
   } else {
-    LOG_PRINT_RED_L0("shutdown error");
+    logger(ERROR) << "shutdown error";
   }
 
-  nodeProxy.init([](std::error_code ec) {
+  nodeProxy.init([&](std::error_code ec) {
     if (ec) {
-      LOG_PRINT_RED_L0("init error: " << ec.message() << ':' << ec.value());
+      logger(ERROR) << "init error: " << ec.message() << ':' << ec.value();
     } else {
-      LOG_PRINT_GREEN("initialized", LOG_LEVEL_0);
+      logger(INFO, BRIGHT_GREEN) << "initialized";
     }
   });
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
   if (nodeProxy.shutdown()) {
-    LOG_PRINT_GREEN("shutdown", LOG_LEVEL_0);
+    logger(INFO, BRIGHT_GREEN) << "shutdown";
   } else {
-    LOG_PRINT_RED_L0("shutdown error");
+    logger(ERROR) << "shutdown error";
   }
 
   CryptoNote::Transaction tx;
-  nodeProxy.relayTransaction(tx, [](std::error_code ec) {
+  nodeProxy.relayTransaction(tx, [&](std::error_code ec) {
     if (!ec) {
-      LOG_PRINT_L0("relayTransaction called successfully");
+      logger(INFO) << "relayTransaction called successfully";
     } else {
-      LOG_PRINT_RED_L0("failed to call relayTransaction: " << ec.message() << ':' << ec.value());
+      logger(ERROR) << "failed to call relayTransaction: " << ec.message() << ':' << ec.value();
     }
   });
 
-  nodeProxy.init([](std::error_code ec) {
+  nodeProxy.init([&](std::error_code ec) {
     if (ec) {
-      LOG_PRINT_RED_L0("init error: " << ec.message() << ':' << ec.value());
+      logger(ERROR) << "init error: " << ec.message() << ':' << ec.value();
     } else {
-      LOG_PRINT_GREEN("initialized", LOG_LEVEL_0);
+      logger(INFO, BRIGHT_GREEN) << "initialized";
     }
   });
 
   std::this_thread::sleep_for(std::chrono::seconds(5));
-  nodeProxy.relayTransaction(tx, [](std::error_code ec) {
+  nodeProxy.relayTransaction(tx, [&](std::error_code ec) {
     if (!ec) {
-      LOG_PRINT_L0("relayTransaction called successfully");
+      logger(INFO) << "relayTransaction called successfully";
     } else {
-      LOG_PRINT_RED_L0("failed to call relayTransaction: " << ec.message() << ':' << ec.value());
+      logger(ERROR) << "failed to call relayTransaction: " << ec.message() << ':' << ec.value();
     }
   });
 

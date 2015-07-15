@@ -25,7 +25,6 @@ namespace CryptoNote {
 
 class TransfersSubscription : public IObservableImpl < ITransfersObserver, ITransfersSubscription > {
 public:
-
   TransfersSubscription(const CryptoNote::Currency& currency, const AccountSubscription& sub);
 
   SynchronizationStart getSyncStart();
@@ -33,8 +32,8 @@ public:
   void onError(const std::error_code& ec, uint64_t height);
   bool advanceHeight(uint64_t height);
   const AccountKeys& getKeys() const;
-  void addTransaction(const BlockInfo& blockInfo, 
-    const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers);
+  void addTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx,
+                      const std::vector<TransactionOutputInformationIn>& transfers);
 
   void deleteUnconfirmedTransaction(const Hash& transactionHash);
   void markTransactionConfirmed(const BlockInfo& block, const Hash& transactionHash, const std::vector<uint64_t>& globalIndices);
@@ -44,10 +43,8 @@ public:
   virtual ITransfersContainer& getContainer() override;
 
 private:
-
   TransfersContainer m_transfers;
   AccountSubscription m_subscription;
-  const CryptoNote::Currency& m_currency;
 };
 
 }

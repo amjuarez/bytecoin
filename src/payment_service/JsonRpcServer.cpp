@@ -15,23 +15,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
-
 #include "JsonRpcServer.h"
 
 #include <fstream>
@@ -59,65 +42,21 @@
 namespace PaymentService {
 
 JsonRpcServer::JsonRpcServer(System::Dispatcher& sys, System::Event& stopEvent, WalletService& service, Logging::ILogger& loggerGroup) :
-    system(sys),
-    stopEvent(stopEvent),
-    service(service),
-    logger(loggerGroup, "JsonRpcServer")
+  HttpServer(sys, loggerGroup), 
+  system(sys),
+  stopEvent(stopEvent),
+  service(service),
+  logger(loggerGroup, "JsonRpcServer")
 {
 }
 
 void JsonRpcServer::start(const Configuration& config) {
-  logger(Logging::INFO) << "Starting server on " << config.bindAddress << ":" << config.bindPort;
-
-  try {
-    System::TcpListener listener(system, System::Ipv4Address(config.bindAddress), config.bindPort);
-    system.spawn([this, &listener] () {this->stopEvent.wait(); listener.stop(); });
-    for (;;) {
-      System::TcpConnection connection = listener.accept();
-      system.spawn(std::bind(&JsonRpcServer::sessionProcedure, this, new System::TcpConnection(std::move(connection))));
-    }
-  } catch (System::InterruptedException&) {
-    logger(Logging::DEBUGGING) << "Server is stopped";
-  } catch (std::exception& ex) {
-    logger(Logging::FATAL) << ex.what();
-  }
+  HttpServer::start(config.bindAddress, config.bindPort);
+  stopEvent.wait();
+  HttpServer::stop();
 }
 
-void JsonRpcServer::sessionProcedure(System::TcpConnection* tcpConnection) {
-  logger(Logging::DEBUGGING) << "new connection has been accepted";
-  std::unique_ptr<System::TcpConnection> connection(tcpConnection);
-
-  System::TcpStreambuf streambuf(*connection);
-  std::iostream stream(&streambuf);
-
-  CryptoNote::HttpParser parser;
-
-  try {
-    for (;;) {
-      CryptoNote::HttpRequest req;
-      CryptoNote::HttpResponse resp;
-
-      parser.receiveRequest(stream, req);
-      processHttpRequest(req, resp);
-
-      stream << resp;
-      stream.flush();
-    }
-  } catch (std::system_error& e) {
-    //todo: write error conditions
-    if (e.code().category() == CryptoNote::error::HttpParserErrorCategory::INSTANCE) {
-      if (e.code().value() == CryptoNote::error::END_OF_STREAM) {
-        logger(Logging::DEBUGGING) << "The client is disconnected";
-        return;
-      }
-    }
-    logger(Logging::WARNING) << e.code().message();
-  } catch (std::exception& e) {
-    logger(Logging::WARNING) << e.what();
-  }
-}
-
-void JsonRpcServer::processHttpRequest(const CryptoNote::HttpRequest& req, CryptoNote::HttpResponse& resp) {
+void JsonRpcServer::processRequest(const CryptoNote::HttpRequest& req, CryptoNote::HttpResponse& resp) {
   try {
     logger(Logging::TRACE) << "HTTP request came: \n" << req;
 
@@ -161,10 +100,8 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
 
     std::string method = req("method").getString();
 
-    CryptoNote::JsonInputValueSerializer inputSerializer;
+    CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
     CryptoNote::JsonOutputStreamSerializer outputSerializer;
-
-    inputSerializer.setJsonValue(&req("params"));
 
     if (method == "send_transaction") {
       SendTransactionRequest sendReq;
@@ -172,7 +109,7 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
-        sendReq.serialize(inputSerializer, "");
+        serialize(sendReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
         return;
@@ -184,7 +121,7 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      sendResp.serialize(outputSerializer, "");
+      serialize(sendResp, outputSerializer);
     } else if (method == "get_address") {
       GetAddressResponse getAddrResp;
 
@@ -194,7 +131,7 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      getAddrResp.serialize(outputSerializer, "");
+      serialize(getAddrResp, outputSerializer);
     } else if (method == "get_actual_balance") {
       GetActualBalanceResponse actualResp;
 
@@ -204,7 +141,7 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      actualResp.serialize(outputSerializer, "");
+      serialize(actualResp, outputSerializer);
     } else if (method == "get_pending_balance") {
       GetPendingBalanceResponse pendingResp;
 
@@ -214,7 +151,7 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      pendingResp.serialize(outputSerializer, "");
+      serialize(pendingResp, outputSerializer);
     } else if (method == "get_transactions_count") {
       GetTransactionsCountResponse txResp;
 
@@ -224,7 +161,7 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      txResp.serialize(outputSerializer, "");
+      serialize(txResp, outputSerializer);
     } else if (method == "get_transfers_count") {
       GetTransfersCountResponse trResp;
 
@@ -234,14 +171,14 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      trResp.serialize(outputSerializer, "");
+      serialize(trResp, outputSerializer);
     } else if (method == "get_transaction_id_by_transfer_id") {
       GetTransactionIdByTransferIdRequest getReq;
       GetTransactionIdByTransferIdResponse getResp;
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
-        getReq.serialize(inputSerializer, "");
+        serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
         return;
@@ -255,14 +192,14 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      getResp.serialize(outputSerializer, "");
+      serialize(getResp, outputSerializer);
     } else if (method == "get_transaction") {
       GetTransactionRequest getReq;
       GetTransactionResponse getResp;
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
-        getReq.serialize(inputSerializer, "");
+        serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
         return;
@@ -274,14 +211,34 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      getResp.serialize(outputSerializer, "");
+      serialize(getResp, outputSerializer);
+    } else if (method == "list_transactions") {
+      ListTransactionsRequest listReq;
+      ListTransactionsResponse listResp;
+
+      //XXX: refactor it when migrate to different exception types in different subsystems!
+      try {
+        serialize(listReq, inputSerializer);
+      } catch (std::exception&) {
+        makeGenericErrorReponse(resp, "Invalid Request", -32600);
+        return;
+      }
+
+      std::error_code ec = service.listTransactions(static_cast<CryptoNote::TransactionId>(listReq.startingTransactionId),
+        listReq.maxTransactionCount, listResp.transactions);
+      if (ec) {
+        makeErrorResponse(ec, resp);
+        return;
+      }
+
+      serialize(listResp, outputSerializer);
     } else if (method == "get_transfer") {
       GetTransferRequest getReq;
       GetTransferResponse getResp;
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
-        getReq.serialize(inputSerializer, "");
+        serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
         return;
@@ -293,14 +250,14 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         return;
       }
 
-      getResp.serialize(outputSerializer, "");
+      serialize(getResp, outputSerializer);
     } else if (method == "get_incoming_payments") {
       GetIncomingPaymentsRequest getReq;
       GetIncomingPaymentsResponse getResp;
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
-        getReq.serialize(inputSerializer, "");
+        serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
         return;
@@ -326,15 +283,14 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
         getResp.payments.push_back(std::move(pbid));
       }
 
-      getResp.serialize(outputSerializer, "");
+      serialize(getResp, outputSerializer);
     } else {
       logger(Logging::DEBUGGING) << "Requested method not found: " << method;
       makeMethodNotFoundResponse(resp);
       return;
     }
 
-    Common::JsonValue v = outputSerializer.getJsonValue();
-    fillJsonResponse(v, resp);
+    fillJsonResponse(outputSerializer.getValue(), resp);
 
   } catch (RequestSerializationError&) {
     logger(Logging::WARNING) << "Wrong request came";
@@ -348,15 +304,11 @@ void JsonRpcServer::processJsonRpcRequest(const Common::JsonValue& req, Common::
 void JsonRpcServer::prepareJsonResponse(const Common::JsonValue& req, Common::JsonValue& resp) {
   using Common::JsonValue;
 
-  if (req.count("id")) {
-    JsonValue id = req("id");
-    resp.insert("id", id);
+  if (req.contains("id")) {
+    resp.insert("id", req("id"));
   }
-
-  JsonValue jsonRpc;
-  jsonRpc = "2.0";
-
-  resp.insert("jsonrpc", jsonRpc);
+  
+  resp.insert("jsonrpc", "2.0");
 }
 
 void JsonRpcServer::makeErrorResponse(const std::error_code& ec, Common::JsonValue& resp) {

@@ -40,11 +40,6 @@ bool verifyKeys(const crypto::secret_key& sec, const crypto::public_key& expecte
   return r && expected_pub == pub;
 }
 
-void throwIfKeysMissmatch(const crypto::secret_key& sec, const crypto::public_key& expected_pub) {
-  if (!verifyKeys(sec, expected_pub))
-    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
-}
-
 class ContextCounterHolder
 {
 public:

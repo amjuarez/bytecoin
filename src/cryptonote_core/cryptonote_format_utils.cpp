@@ -22,7 +22,6 @@
 #include "cryptonote_basic_impl.h"
 
 using namespace Logging;
-using namespace epee;
 
 namespace CryptoNote {
 

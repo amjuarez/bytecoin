@@ -15,23 +15,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
-
 #include "WalletService.h"
 
 #include "WalletServiceErrorCodes.h"
@@ -50,6 +33,9 @@
 #include <unordered_set>
 
 #ifdef WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #else
 #include <unistd.h>
@@ -456,6 +442,40 @@ void WalletService::fillTransactionRpcInfo(const CryptoNote::TransactionInfo& tx
   rpcInfo.timestamp = txInfo.timestamp;
   rpcInfo.extra = Common::toHex(txInfo.extra.data(), txInfo.extra.size());
   rpcInfo.hash = Common::podToHex(txInfo.hash);
+}
+
+std::error_code WalletService::listTransactions(CryptoNote::TransactionId startingTxId, uint32_t maxTxCount, std::vector<TransactionRpcInfo>& txsRpcInfo) {
+  logger(Logging::DEBUGGING) << "listTransactions request came";
+
+  if (maxTxCount == 0) {
+    txsRpcInfo.clear();
+    return std::error_code();
+  }
+
+  try {
+    CryptoNote::TransactionId endTxId;
+    if (startingTxId > std::numeric_limits<CryptoNote::TransactionId>::max() - static_cast<CryptoNote::TransactionId>(maxTxCount)) {
+      endTxId = static_cast<CryptoNote::TransactionId>(wallet->getTransactionCount());
+    } else {
+      endTxId = startingTxId + static_cast<CryptoNote::TransactionId>(maxTxCount);
+      endTxId = std::min(endTxId, static_cast<CryptoNote::TransactionId>(wallet->getTransactionCount()));
+    }
+
+    txsRpcInfo.resize(endTxId - startingTxId);
+
+    for (auto txId = startingTxId; txId < endTxId; ++txId) {
+      CryptoNote::TransactionInfo txInfo;
+      assert(txId < wallet->getTransactionCount());
+      wallet->getTransaction(txId, txInfo);
+
+      fillTransactionRpcInfo(txInfo, txsRpcInfo[txId - startingTxId]);
+    }
+  } catch (std::system_error& x) {
+    logger(Logging::WARNING) << "Unable to list transaction: " << x.what();
+    return x.code();
+  }
+
+  return std::error_code();
 }
 
 std::error_code WalletService::getTransfer(CryptoNote::TransferId txId, bool& found, TransferRpcInfo& rpcInfo) {

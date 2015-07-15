@@ -538,51 +538,37 @@ JsonValue& JsonValue::pushBack(JsonValue&& value) {
 }
 
 JsonValue& JsonValue::operator()(const Key& key) {
-  if (type != OBJECT) {
-    throw std::runtime_error("JsonValue type is not OBJECT");
-  }
-
-  return reinterpret_cast<Object*>(valueObject)->at(key);
+  return getObject().at(key);
 }
 
 const JsonValue& JsonValue::operator()(const Key& key) const {
-  if (type != OBJECT) {
-    throw std::runtime_error("JsonValue type is not OBJECT");
-  }
-
-  return reinterpret_cast<const Object*>(valueObject)->at(key);
+  return getObject().at(key);
 }
 
-std::size_t JsonValue::count(const Key& key) const {
-  if (type != OBJECT) {
-    throw std::runtime_error("JsonValue type is not OBJECT");
-  }
-
-  return reinterpret_cast<const Object*>(valueObject)->count(key);
+bool JsonValue::contains(const Key& key) const {
+  return getObject().count(key) > 0;
 }
 
 JsonValue& JsonValue::insert(const Key& key, const JsonValue& value) {
-  if (type != OBJECT) {
-    throw std::runtime_error("JsonValue type is not OBJECT");
-  }
-
-  return reinterpret_cast<Object*>(valueObject)->emplace(key, value).first->second;
+  return getObject().emplace(key, value).first->second;
 }
 
 JsonValue& JsonValue::insert(const Key& key, JsonValue&& value) {
-  if (type != OBJECT) {
-    throw std::runtime_error("JsonValue type is not OBJECT");
-  }
+  return getObject().emplace(key, std::move(value)).first->second;
+}
 
-  return reinterpret_cast<Object*>(valueObject)->emplace(key, std::move(value)).first->second;
+JsonValue& JsonValue::set(const Key& key, const JsonValue& value) {
+  getObject()[key] = value;
+  return *this;
+}
+
+JsonValue& JsonValue::set(const Key& key, JsonValue&& value) {
+  getObject()[key] = std::move(value);
+  return *this;
 }
 
 std::size_t JsonValue::erase(const Key& key) {
-  if (type != OBJECT) {
-    throw std::runtime_error("JsonValue type is not OBJECT");
-  }
-
-  return reinterpret_cast<Object*>(valueObject)->erase(key);
+  return getObject().erase(key);
 }
 
 JsonValue JsonValue::fromString(const std::string& source) {
@@ -660,10 +646,57 @@ std::ostream& operator<<(std::ostream& out, const JsonValue& jsonValue) {
   return out;
 }
 
-std::istream& operator>>(std::istream& in, JsonValue& jsonValue) {
+
+namespace {
+
+char readChar(std::istream& in) {
   char c;
-  in >> c;
-  while (isspace(c)) in >> c;
+
+  if (!(in >> c)) {
+    throw std::runtime_error("Unable to parse: unexpected end of stream");
+  }
+
+  return c;
+}
+
+char readNonWsChar(std::istream& in) {
+  char c;
+
+  do {
+    c = readChar(in);
+  } while (isspace(c));
+
+  return c;
+}
+
+std::string readStringToken(std::istream& in) {
+  char c;
+  std::string value;
+
+  while (in) {
+    c = readChar(in);
+
+    if (c == '"') {
+      break;
+    }
+
+    if (c == '\\') {
+      value += c;
+      c = readChar(in);
+    }
+
+    value += c;
+  }
+
+  return value;
+}
+
+}
+
+
+std::istream& operator>>(std::istream& in, JsonValue& jsonValue) {
+  char c = readNonWsChar(in);
+
   if (c == '[') {
     jsonValue.readArray(in);
   } else if (c == 't') {
@@ -702,21 +735,16 @@ void JsonValue::destructValue() {
 }
 
 void JsonValue::readArray(std::istream& in) {
-  char c;
   JsonValue::Array value;
+  char c = readNonWsChar(in);
 
-  c = static_cast<char>(in.peek());
-  for (;;) {
-    if (!isspace(in.peek())) break;
-    in.read(&c, 1);
-  }
-
-  if (in.peek() != ']') {
+  if(c != ']') {
+    in.putback(c);
     for (;;) {
       value.resize(value.size() + 1);
       in >> value.back();
-      in >> c;
-      while (isspace(c)) in >> c;
+      c = readNonWsChar(in);
+
       if (c == ']') {
         break;
       }
@@ -725,8 +753,6 @@ void JsonValue::readArray(std::istream& in) {
         throw std::runtime_error("Unable to parse");
       }
     }
-  } else {
-    in.read(&c, 1);
   }
 
   if (type != JsonValue::ARRAY) {
@@ -856,42 +882,27 @@ void JsonValue::readNumber(std::istream& in, char c) {
 }
 
 void JsonValue::readObject(std::istream& in) {
-  char c;
+  char c = readNonWsChar(in);
   JsonValue::Object value;
-  in >> c;
-  while (isspace(c)) in >> c;
 
   if (c != '}') {
     std::string name;
+
     for (;;) {
       if (c != '"') {
         throw std::runtime_error("Unable to parse");
       }
 
-      name.clear();
-      for (;;) {
-        in >> c;
-        if (c == '"') {
-          break;
-        }
+      name = readStringToken(in);
+      c = readNonWsChar(in);
 
-        if (c == '\\') {
-          name += c;
-          in >> c;
-        }
-
-        name += c;
-      }
-
-      in >> c;
-      while (isspace(c)) in >> c;
       if (c != ':') {
         throw std::runtime_error("Unable to parse");
       }
 
       in >> value[name];
-      in >> c;
-      while (isspace(c)) in >> c;
+      c = readNonWsChar(in);
+
       if (c == '}') {
         break;
       }
@@ -899,8 +910,8 @@ void JsonValue::readObject(std::istream& in) {
       if (c != ',') {
         throw std::runtime_error("Unable to parse");
       }
-      in >> c;
-      while (isspace(c)) in >> c;
+
+      c = readNonWsChar(in);
     }
   }
 
@@ -915,22 +926,7 @@ void JsonValue::readObject(std::istream& in) {
 }
 
 void JsonValue::readString(std::istream& in) {
-  char c;
-  String value;
-
-  for (;;) {
-    in.read(&c, 1);
-    if (c == '"') {
-      break;
-    }
-
-    if (c == '\\') {
-      value += c;
-      in >> c;
-    }
-
-    value += c;
-  }
+  String value = readStringToken(in);
 
   if (type != JsonValue::STRING) {
     destructValue();

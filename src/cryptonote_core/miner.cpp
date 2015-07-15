@@ -25,14 +25,13 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/limits.hpp>
 #include <boost/utility/value_init.hpp>
 
 #include "cryptonote_format_utils.h"
 #include "Common/command_line.h"
-
-// epee
-#include "storages/portable_storage_template_helper.h"
+#include "serialization/SerializationTools.h"
 
 using namespace Logging;
 
@@ -182,13 +181,18 @@ namespace CryptoNote
       }
       m_config_folder_path = boost::filesystem::path(config.extraMessages).parent_path().string();
       m_config = boost::value_initialized<decltype(m_config)>();
-      epee::serialization::load_t_from_json_file(m_config, m_config_folder_path + "/" + CryptoNote::parameters::MINER_CONFIG_FILE_NAME);
+
+      std::string filebuf;
+      if (Common::loadFileToString(m_config_folder_path + "/" + CryptoNote::parameters::MINER_CONFIG_FILE_NAME, filebuf)) {
+        loadFromJson(m_config, filebuf);
+      }
+
       logger(INFO) << "Loaded " << m_extra_messages.size() << " extra messages, current index " << m_config.current_extra_message_index;
     }
 
     if(!config.startMining.empty()) {
       if (!m_currency.parseAccountAddressString(config.startMining, m_mine_address)) {
-        LOG_ERROR("Target account address " << config.startMining << " has wrong format, starting daemon canceled");
+        logger(ERROR) << "Target account address " << config.startMining << " has wrong format, starting daemon canceled";
         return false;
       }
       m_threads_total = 1;
@@ -410,7 +414,7 @@ namespace CryptoNote
           --m_config.current_extra_message_index;
         } else {
           //success update, lets update config
-          epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + CryptoNote::parameters::MINER_CONFIG_FILE_NAME);
+          Common::saveStringToFile(m_config_folder_path + "/" + CryptoNote::parameters::MINER_CONFIG_FILE_NAME, storeToJson(m_config));
         }
       }
 

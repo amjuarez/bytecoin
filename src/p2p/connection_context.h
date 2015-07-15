@@ -28,6 +28,7 @@
 namespace CryptoNote {
 
 struct cryptonote_connection_context {
+  uint8_t version;
   boost::uuids::uuid m_connection_id;
   uint32_t m_remote_ip = 0;
   uint32_t m_remote_port = 0;
@@ -40,6 +41,7 @@ struct cryptonote_connection_context {
     state_idle,
     state_normal,
     state_sync_required,
+    state_pool_sync_required,
     state_shutdown
   };
 

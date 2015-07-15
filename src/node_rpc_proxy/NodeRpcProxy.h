@@ -54,8 +54,14 @@ public:
   virtual void getNewBlocks(std::list<crypto::hash>&& knownBlockIds, std::list<CryptoNote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback);
   virtual void getTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback);
   virtual void queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) override;
-  virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) override;
-
+  // TODO INodeObserver::poolChanged() notification NOT implemented!!!
+  virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& knownTxsIds, crypto::hash tailBlockId,
+                                          bool& isTailBlockActual, std::vector<CryptoNote::Transaction>& addedTxs,
+                                          std::vector<crypto::hash>& deletedTxsIds, const Callback& callback) override;
+  virtual void getBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks, const Callback& callback) override;
+  virtual void getBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<BlockDetails>& blocks, const Callback& callback) override;
+  virtual void getTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<TransactionDetails>& transactions, const Callback& callback) override;
+  virtual void isSynchronized(bool& syncStatus, const Callback& callback) override;
 
   unsigned int rpcTimeout() const { return m_rpcTimeout; }
   void rpcTimeout(unsigned int val) { m_rpcTimeout = val; }
@@ -73,6 +79,9 @@ private:
   void doGetNewBlocks(std::list<crypto::hash>& knownBlockIds, std::list<CryptoNote::block_complete_entry>& newBlocks, uint64_t& startHeight, const Callback& callback);
   void doGetTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback);
   void doQueryBlocks(const std::list<crypto::hash>& knownBlockIds, uint64_t timestamp, std::list<CryptoNote::BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback);
+  void doGetPoolSymmetricDifference(const std::vector<crypto::hash>& knownTxsIds, const crypto::hash& tailBlockId,
+                                    bool& isTailBlockActual, std::vector<CryptoNote::Transaction>& addedTxs,
+                                    std::vector<crypto::hash>& deletedTxsIds, const Callback& callback);
 
 private:
   tools::InitState m_initState;
@@ -89,9 +98,9 @@ private:
   uint64_t m_pullInterval;
 
   // Internal state
-  size_t m_peerCount;
-  uint64_t m_nodeHeight;
-  uint64_t m_networkHeight;
+  std::atomic<size_t> m_peerCount;
+  std::atomic<uint64_t> m_nodeHeight;
+  std::atomic<uint64_t> m_networkHeight;
   crypto::hash m_lastKnowHash;
   uint64_t m_lastLocalBlockTimestamp;
 };

@@ -29,8 +29,8 @@
 namespace CryptoNote {
 
 template<typename T>
-typename std::enable_if<std::is_trivial<T>::value>::type
-serializeAsBinary(std::vector<T>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
+typename std::enable_if<std::is_pod<T>::value>::type
+serializeAsBinary(std::vector<T>& value, Common::StringView name, CryptoNote::ISerializer& serializer) {
   std::string blob;
   if (serializer.type() == ISerializer::INPUT) {
     serializer.binary(blob, name);
@@ -47,9 +47,39 @@ serializeAsBinary(std::vector<T>& value, const std::string& name, CryptoNote::IS
 }
 
 template<typename T>
-void serialize(std::vector<T>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
+typename std::enable_if<std::is_pod<T>::value>::type
+serializeAsBinary(std::list<T>& value, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  std::string blob;
+  if (serializer.type() == ISerializer::INPUT) {
+    serializer.binary(blob, name);
+
+    size_t count = blob.size() / sizeof(T);
+    const T* ptr = reinterpret_cast<const T*>(blob.data());
+
+    while (count--) {
+      value.push_back(*ptr++);
+    }
+  } else {
+    if (!value.empty()) {
+      blob.resize(value.size() * sizeof(T));
+      T* ptr = reinterpret_cast<T*>(&blob[0]);
+
+      for (const auto& item : value) {
+        *ptr++ = item;
+      }
+    }
+    serializer.binary(blob, name);
+  }
+}
+
+template <typename Cont>
+bool serializeContainer(Cont& value, Common::StringView name, CryptoNote::ISerializer& serializer) {
   std::size_t size = value.size();
-  serializer.beginArray(size, name);
+  if (!serializer.beginArray(size, name)) {
+    value.clear();
+    return false;
+  }
+
   value.resize(size);
 
   for (auto& item : value) {
@@ -57,28 +87,29 @@ void serialize(std::vector<T>& value, const std::string& name, CryptoNote::ISeri
   }
 
   serializer.endArray();
+  return true;
 }
 
 template<typename T>
-void serialize(std::list<T>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
-  std::size_t size = value.size();
-  serializer.beginArray(size, name);
-  value.resize(size);
+bool serialize(std::vector<T>& value, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializeContainer(value, name, serializer);
+}
 
-  for (auto& item : value) {
-    serializer(item, "");
-  }
-
-  serializer.endArray();
+template<typename T>
+bool serialize(std::list<T>& value, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializeContainer(value, name, serializer);
 }
 
 
 template<typename K, typename V, typename Hash>
-void serialize(std::unordered_map<K, V, Hash>& value, const std::string& name, CryptoNote::ISerializer& serializer) {
+bool serialize(std::unordered_map<K, V, Hash>& value, Common::StringView name, CryptoNote::ISerializer& serializer) {
   std::size_t size;
   size = value.size();
 
-  serializer.beginArray(size, name);
+  if (!serializer.beginArray(size, name)) {
+    value.clear();
+    return false;
+  }
 
   if (serializer.type() == CryptoNote::ISerializer::INPUT) {
     value.reserve(size);
@@ -105,11 +136,12 @@ void serialize(std::unordered_map<K, V, Hash>& value, const std::string& name, C
   }
 
   serializer.endArray();
+  return true;
 }
 
 template<std::size_t size>
-void serialize(std::array<uint8_t, size>& value, const std::string& name, CryptoNote::ISerializer& s) {
-  s.binary(value.data(), value.size(), name);
+bool serialize(std::array<uint8_t, size>& value, Common::StringView name, CryptoNote::ISerializer& s) {
+  return s.binary(value.data(), value.size(), name);
 }
 
 }

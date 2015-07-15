@@ -28,7 +28,6 @@
 #include "cryptonote_core/tx_extra.h"
 #include "serialization/binary_archive.h"
 #include "serialization/crypto.h"
-#include "serialization/keyvalue_serialization.h" // eepe named serialization
 #include "serialization/json_archive.h"
 #include "serialization/serialization.h"
 #include "serialization/variant.h"

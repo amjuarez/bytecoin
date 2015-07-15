@@ -23,11 +23,9 @@
 
 namespace CryptoNote {
 
-void serialize(AccountAddress& acc, const std::string& name, CryptoNote::ISerializer& s) {
-  s.beginObject(name);
+void serialize(AccountAddress& acc, CryptoNote::ISerializer& s) {
   s(acc.spendPublicKey, "spendKey");
   s(acc.viewPublicKey, "viewKey");
-  s.endObject();
 }
 
 const uint32_t TRANSFERS_STORAGE_ARCHIVE_VERSION = 0;

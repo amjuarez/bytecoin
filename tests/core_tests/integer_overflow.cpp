@@ -17,7 +17,6 @@
 
 #include "integer_overflow.h"
 
-using namespace epee;
 using namespace CryptoNote;
 
 namespace

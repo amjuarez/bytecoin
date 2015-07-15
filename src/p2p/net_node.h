@@ -184,10 +184,10 @@ namespace CryptoNote
       network_config m_net_config;
       uint64_t m_peer_id;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(m_net_config)
-        KV_SERIALIZE(m_peer_id)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(m_net_config)
+        KV_MEMBER(m_peer_id)
+      }
     };
 
     config m_config;

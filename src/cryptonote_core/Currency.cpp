@@ -209,6 +209,10 @@ std::string Currency::accountAddressAsString(const account_base& account) const 
   return getAccountAddressAsStr(m_publicAddressBase58Prefix, account.get_keys().m_account_address);
 }
 
+std::string Currency::accountAddressAsString(const AccountPublicAddress& accountPublicAddress) const {
+  return getAccountAddressAsStr(m_publicAddressBase58Prefix, accountPublicAddress);
+}
+
 bool Currency::parseAccountAddressString(const std::string& str, AccountPublicAddress& addr) const {
   uint64_t prefix;
   if (!CryptoNote::parseAccountAddressString(prefix, addr, str)) {
@@ -412,6 +416,7 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
 
   mempoolTxLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_LIVETIME);
   mempoolTxFromAltBlockLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME);
+  numberOfPeriodsToForgetTxDeletedFromPool(parameters::CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL);
 
   upgradeHeight(parameters::UPGRADE_HEIGHT);
   upgradeVotingThreshold(parameters::UPGRADE_VOTING_THRESHOLD);

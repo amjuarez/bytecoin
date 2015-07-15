@@ -59,4 +59,8 @@ public:
   virtual void operator()(const std::string& category, Level level, boost::posix_time::ptime time, const std::string& body) = 0;
 };
 
+#ifndef ENDL
+#define ENDL std::endl
+#endif
+
 }

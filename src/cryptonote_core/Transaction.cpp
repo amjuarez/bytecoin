@@ -179,6 +179,7 @@ namespace CryptoNote {
     virtual void setUnlockTime(uint64_t unlockTime) override;
     virtual void setPaymentId(const Hash& hash) override;
     virtual void setExtraNonce(const std::string& nonce) override;
+    virtual void appendExtra(const Blob& extraData) override;
 
     // Inputs/Outputs 
     virtual size_t addInput(const TransactionTypes::InputKey& input) override;
@@ -385,7 +386,7 @@ namespace CryptoNote {
     outMsig.requiredSignatures = requiredSignatures;
     outMsig.keys.resize(to.size());
     
-    for (int i = 0; i < to.size(); ++i) {
+    for (size_t i = 0; i < to.size(); ++i) {
       derivePublicKey(to[i], txKey, outputIndex, outMsig.keys[i]);
     }
 
@@ -488,6 +489,12 @@ namespace CryptoNote {
     extra.set(extraNonce);
     transaction.extra = extra.serialize();
     invalidateHash();
+  }
+
+  void TransactionImpl::appendExtra(const Blob& extraData) {
+    checkIfSigning();
+    transaction.extra.insert(
+      transaction.extra.end(), extraData.begin(), extraData.end());
   }
 
   bool TransactionImpl::getExtraNonce(std::string& nonce) const {

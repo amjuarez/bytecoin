@@ -24,9 +24,7 @@
 #include <System/TcpConnection.h>
 #include <System/TcpStream.h>
 
-// epee serialization
-#include "misc_log_ex.h"
-#include "storages/portable_storage_template_helper.h"
+#include "serialization/SerializationTools.h"
 
 namespace CryptoNote {
 
@@ -56,14 +54,14 @@ void invokeJsonCommand(HttpClient& client, const std::string& url, const Request
   HttpResponse hres;
 
   hreq.setUrl(url);
-  hreq.setBody(epee::serialization::store_t_to_json(req));
+  hreq.setBody(storeToJson(req));
   client.request(hreq, hres);
 
   if (hres.getStatus() != HttpResponse::STATUS_200) {
     throw std::runtime_error("HTTP status: " + std::to_string(hres.getStatus()));
   }
 
-  if (!epee::serialization::load_t_from_json(res, hres.getBody())) {
+  if (!loadFromJson(res, hres.getBody())) {
     throw std::runtime_error("Failed to parse JSON response");
   }
 }
@@ -74,10 +72,10 @@ void invokeBinaryCommand(HttpClient& client, const std::string& url, const Reque
   HttpResponse hres;
 
   hreq.setUrl(url);
-  hreq.setBody(epee::serialization::store_t_to_binary(req));
+  hreq.setBody(storeToBinaryKeyValue(req));
   client.request(hreq, hres);
 
-  if (!epee::serialization::load_t_from_binary(res, hres.getBody())) {
+  if (!loadFromBinaryKeyValue(res, hres.getBody())) {
     throw std::runtime_error("Failed to parse binary response");
   }
 }

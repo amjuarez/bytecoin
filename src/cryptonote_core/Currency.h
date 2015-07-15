@@ -69,6 +69,7 @@ public:
 
   uint64_t mempoolTxLiveTime() const { return m_mempoolTxLiveTime; }
   uint64_t mempoolTxFromAltBlockLiveTime() const { return m_mempoolTxFromAltBlockLiveTime; }
+  uint64_t numberOfPeriodsToForgetTxDeletedFromPool() const { return m_numberOfPeriodsToForgetTxDeletedFromPool; }
 
   uint64_t upgradeHeight() const { return m_upgradeHeight; }
   unsigned int upgradeVotingThreshold() const { return m_upgradeVotingThreshold; }
@@ -97,6 +98,7 @@ public:
     const blobdata& extraNonce = blobdata(), size_t maxOuts = 1, bool penalizeFee = false) const;
 
   std::string accountAddressAsString(const account_base& account) const;
+  std::string accountAddressAsString(const AccountPublicAddress& accountPublicAddress) const;
   bool parseAccountAddressString(const std::string& str, AccountPublicAddress& addr) const;
 
   std::string formatAmount(uint64_t amount) const;
@@ -153,6 +155,7 @@ private:
 
   uint64_t m_mempoolTxLiveTime;
   uint64_t m_mempoolTxFromAltBlockLiveTime;
+  uint64_t m_numberOfPeriodsToForgetTxDeletedFromPool;
 
   uint64_t m_upgradeHeight;
   unsigned int m_upgradeVotingThreshold;
@@ -220,6 +223,7 @@ public:
 
   CurrencyBuilder& mempoolTxLiveTime(uint64_t val) { m_currency.m_mempoolTxLiveTime = val; return *this; }
   CurrencyBuilder& mempoolTxFromAltBlockLiveTime(uint64_t val) { m_currency.m_mempoolTxFromAltBlockLiveTime = val; return *this; }
+  CurrencyBuilder& numberOfPeriodsToForgetTxDeletedFromPool(uint64_t val) { m_currency.m_numberOfPeriodsToForgetTxDeletedFromPool = val; return *this; }
 
   CurrencyBuilder& upgradeHeight(uint64_t val) { m_currency.m_upgradeHeight = val; return *this; }
   CurrencyBuilder& upgradeVotingThreshold(unsigned int val);

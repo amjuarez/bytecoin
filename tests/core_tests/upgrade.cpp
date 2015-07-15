@@ -17,7 +17,6 @@
 
 #include "upgrade.h"
 
-using namespace epee;
 using namespace CryptoNote;
 
 namespace {
