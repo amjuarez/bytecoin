@@ -134,8 +134,9 @@ std::vector<uint64_t> splitAmount(uint64_t amount, uint64_t dustThreshold) {
   return amounts;
 }
 
-cryptonote::Transaction convertTransaction(const ITransaction& transaction) {
+cryptonote::Transaction convertTransaction(const ITransaction& transaction, size_t upperTransactionSizeLimit) {
   Blob serializedTransaction = transaction.getTransactionData();
+  CryptoNote::throwIf(serializedTransaction.size() >= upperTransactionSizeLimit, cryptonote::error::TRANSACTION_SIZE_TOO_BIG);
 
   cryptonote::Transaction result;
   if (!parse_and_validate_tx_from_blob(std::string(serializedTransaction.begin(), serializedTransaction.end()), result)) {
@@ -425,7 +426,7 @@ std::unique_ptr<WalletRequest> WalletTransactionSender::doSendMultisigTransactio
     transactionInfo.firstDepositId = depositId;
     transactionInfo.depositCount = 1;
 
-    cryptonote::Transaction lowlevelTransaction = convertTransaction(*transaction);
+    cryptonote::Transaction lowlevelTransaction = convertTransaction(*transaction, static_cast<size_t>(m_upperTransactionSizeLimit));
     m_transactionsCache.updateTransaction(context->transactionId, lowlevelTransaction, totalAmount, context->selectedTransfers);
     m_transactionsCache.addCreatedDeposit(depositId, deposit.amount + deposit.interest);
 
@@ -479,7 +480,7 @@ std::unique_ptr<WalletRequest> WalletTransactionSender::doSendDepositWithdrawTra
 
     transactionInfo.hash = transaction->getTransactionHash();
 
-    cryptonote::Transaction lowlevelTransaction = convertTransaction(*transaction);
+    cryptonote::Transaction lowlevelTransaction = convertTransaction(*transaction, static_cast<size_t>(m_upperTransactionSizeLimit));
 
     uint64_t interestsSum;
     uint64_t totalSum;
