@@ -73,8 +73,8 @@ void NetNodeConfig::initOptions(boost::program_options::options_description& des
   command_line::add_arg(desc, arg_p2p_add_exclusive_node);
   command_line::add_arg(desc, arg_p2p_seed_node);
   command_line::add_arg(desc, arg_p2p_hide_my_port);
-command_line::add_arg(desc, arg_P2P_STAT_TRUSTED_PUB_KEY);
-command_line::add_arg(desc, arg_network_id);
+  command_line::add_arg(desc, arg_P2P_STAT_TRUSTED_PUB_KEY);
+  command_line::add_arg(desc, arg_network_id);
 }
 
 NetNodeConfig::NetNodeConfig() {
@@ -83,7 +83,7 @@ NetNodeConfig::NetNodeConfig() {
   externalPort = 0;
   allowLocalIp = false;
   hideMyPort = false;
-p2pStatTrustedPubKey = "";
+  p2pStatTrustedPubKey = "";
   configFolder = tools::get_default_data_dir();
 }
 
@@ -93,8 +93,8 @@ bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
   bindPort = command_line::get_arg(vm, arg_p2p_bind_port);
   externalPort = command_line::get_arg(vm, arg_p2p_external_port);
   allowLocalIp = command_line::get_arg(vm, arg_p2p_allow_local_ip);
-p2pStatTrustedPubKey = command_line::get_arg(vm, arg_P2P_STAT_TRUSTED_PUB_KEY);
-networkId = boost::lexical_cast<boost::uuids::uuid>(command_line::get_arg(vm, arg_network_id));
+  p2pStatTrustedPubKey = command_line::get_arg(vm, arg_P2P_STAT_TRUSTED_PUB_KEY);
+  networkId = boost::lexical_cast<boost::uuids::uuid>(command_line::get_arg(vm, arg_network_id));
   configFolder = command_line::get_arg(vm, command_line::arg_data_dir);
 
   if (command_line::has_arg(vm, arg_p2p_add_peer))

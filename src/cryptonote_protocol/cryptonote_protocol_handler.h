@@ -35,9 +35,6 @@
 
 #include <Logging/LoggerRef.h>
 
-PUSH_WARNINGS
-DISABLE_VS_WARNINGS(4355)
-
 namespace System {
   class Dispatcher;
 }
@@ -59,7 +56,7 @@ namespace CryptoNote
 
     void set_p2p_endpoint(i_p2p_endpoint* p2p);
     // ICore& get_core() { return m_core; }
-    bool is_synchronized() const { return m_synchronized; }
+    virtual bool isSynchronized() const override { return m_synchronized; }
     void log_connections();
 
     // Interface t_payload_net_handler, where t_payload_net_handler is template argument of nodetool::node_server
@@ -74,6 +71,7 @@ namespace CryptoNote
     int handleCommand(bool is_notify, int command, const std::string& in_buff, std::string& buff_out, cryptonote_connection_context& context, bool& handled);
     virtual size_t getPeerCount() const;
     virtual uint64_t getObservedHeight() const;
+    void requestMissingPoolTransactions(const cryptonote_connection_context& context);
 
   private:
     //----------------- commands handlers ----------------------------------------------
@@ -83,6 +81,7 @@ namespace CryptoNote
     int handle_response_get_objects(int command, NOTIFY_RESPONSE_GET_OBJECTS::request& arg, cryptonote_connection_context& context);
     int handle_request_chain(int command, NOTIFY_REQUEST_CHAIN::request& arg, cryptonote_connection_context& context);
     int handle_response_chain_entry(int command, NOTIFY_RESPONSE_CHAIN_ENTRY::request& arg, cryptonote_connection_context& context);
+    int handleRequestTxPool(int command, NOTIFY_REQUEST_TX_POOL::request& arg, cryptonote_connection_context& context);
 
     //----------------- i_cryptonote_protocol ----------------------------------
     virtual void relay_block(NOTIFY_NEW_BLOCK::request& arg) override;
@@ -115,5 +114,3 @@ namespace CryptoNote
     tools::ObserverManager<ICryptonoteProtocolObserver> m_observerManager;
   };
 }
-
-POP_WARNINGS

@@ -16,7 +16,10 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "gtest/gtest.h"
+
+#include <numeric>
 #include <random>
+
 #include "cryptonote_core/TransactionApi.h"
 #include "cryptonote_core/cryptonote_format_utils.h" // TODO: delete
 #include "cryptonote_core/account.h"
@@ -293,6 +296,27 @@ TEST_F(TransactionApi, setExtraNonce) {
   ASSERT_TRUE(reloadedTx(tx)->getExtraNonce(s));
   ASSERT_EQ(extraNonce, s);
 }
+
+TEST_F(TransactionApi, appendExtra) {
+  Blob blob;
+
+  blob.resize(100);
+  std::iota(blob.begin(), blob.end(), 0);
+
+  auto tx = createTransaction();
+
+  auto extra = tx->getExtra();
+
+  ASSERT_FALSE(extra.empty());
+
+  tx->appendExtra(blob);
+
+  auto newExtra = tx->getExtra();
+
+  ASSERT_EQ(blob.size() + extra.size(), newExtra.size());
+  ASSERT_EQ(0, memcmp(newExtra.data() + extra.size(), blob.data(), blob.size()));
+}
+
 
 TEST_F(TransactionApi, doubleSpendInTransactionKey) {
   TransactionTypes::InputKeyInfo info = createInputInfo(1000);

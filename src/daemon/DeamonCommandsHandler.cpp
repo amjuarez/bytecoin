@@ -265,7 +265,7 @@ bool DaemonCommandsHandler::print_tx(const std::vector<std::string>& args)
   tx_ids.push_back(tx_hash);
   std::list<CryptoNote::Transaction> txs;
   std::list<crypto::hash> missed_ids;
-  m_core.get_transactions(tx_ids, txs, missed_ids);
+  m_core.getTransactions(tx_ids, txs, missed_ids);
 
   if (1 == txs.size()) {
     print_as_json(txs.front());

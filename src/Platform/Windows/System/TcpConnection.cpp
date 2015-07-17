@@ -26,6 +26,8 @@
 #include <System/Ipv4Address.h>
 #include "Dispatcher.h"
 
+#pragma comment(lib, "Ws2_32.lib")
+
 namespace System {
 
 namespace {

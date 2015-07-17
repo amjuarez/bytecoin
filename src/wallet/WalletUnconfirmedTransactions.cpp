@@ -28,14 +28,12 @@ inline TransactionOutputId getOutputId(const TransactionOutputInformation& out) 
   return std::make_pair(out.transactionPublicKey, out.outputInTransaction);
 }
 
-void WalletUnconfirmedTransactions::serialize(CryptoNote::ISerializer& s, const std::string& name) {
-  s.beginObject(name);
+bool WalletUnconfirmedTransactions::serialize(CryptoNote::ISerializer& s) {
   s(m_unconfirmedTxs, "transactions");
-  s.endObject();
-
   if (s.type() == CryptoNote::ISerializer::INPUT) {
     collectUsedOutputs();
   }
+  return true;
 }
 
 bool WalletUnconfirmedTransactions::findTransactionId(const TransactionHash& hash, TransactionId& id) {
@@ -123,5 +121,9 @@ void WalletUnconfirmedTransactions::collectUsedOutputs() {
   m_usedOutputs = std::move(used);
 }
 
+void WalletUnconfirmedTransactions::reset() {
+  m_unconfirmedTxs.clear();
+  m_usedOutputs.clear();
+}
 
 } /* namespace CryptoNote */

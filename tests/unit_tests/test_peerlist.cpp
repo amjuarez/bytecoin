@@ -71,7 +71,6 @@ TEST(peer_list, merge_peer_lists)
   peerlist_manager plm;
   plm.init(false);
   std::list<peerlist_entry> outer_bs;
-#define ADD_NODE_TO_PL(ip_, port_, id_, timestamp_) {  peerlist_entry ple; epee::string_tools::get_ip_int32_from_string(ple.adr.ip, ip_); ple.last_seen = timestamp_; ple.adr.port = port_; ple.id = id_;outer_bs.push_back(ple);}  
 
 
 }

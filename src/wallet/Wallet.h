@@ -36,6 +36,7 @@
 
 #include "WalletTransactionSender.h"
 #include "WalletRequest.h"
+#include "cryptonote_config.h"
 
 #include "transfers/BlockchainSynchronizer.h"
 #include "transfers/TransfersSynchronizer.h"
@@ -84,6 +85,7 @@ public:
   virtual std::error_code cancelTransaction(size_t transactionId);
 
   virtual void getAccountKeys(WalletAccountKeys& keys);
+  void syncAll(bool syncWalletFromZero) { m_syncAll = syncWalletFromZero; }
 
 private:
 
@@ -136,6 +138,7 @@ private:
   tools::ObserverManager<CryptoNote::IWalletObserver> m_observerManager;
 
   std::unique_ptr<SyncStarter> m_onInitSyncStarter;
+bool m_syncAll = 0;
 };
 
 } //namespace CryptoNote

@@ -18,10 +18,8 @@
 #include <boost/lexical_cast.hpp>
 
 #include "gtest/gtest.h"
-
-#include "include_base_utils.h"
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
-#include "storages/portable_storage_template_helper.h"
+#include "serialization/SerializationTools.h"
 
 TEST(protocol_pack, protocol_pack_command) 
 {
@@ -29,14 +27,12 @@ TEST(protocol_pack, protocol_pack_command)
   CryptoNote::NOTIFY_RESPONSE_CHAIN_ENTRY::request r;
   r.start_height = 1;
   r.total_height = 3;
-  for(int i = 1; i < 10000; i += i*10)
-  {
+  for(int i = 1; i < 10000; i += i*10) {
     r.m_block_ids.resize(i, boost::value_initialized<crypto::hash>());
-    bool res = epee::serialization::store_t_to_binary(r, buff);
-    ASSERT_TRUE(res);
+    buff = CryptoNote::storeToBinaryKeyValue(r);
 
     CryptoNote::NOTIFY_RESPONSE_CHAIN_ENTRY::request r2;
-    res = epee::serialization::load_t_from_binary(r2, buff);
+    bool res = CryptoNote::loadFromBinaryKeyValue(r2, buff);
     ASSERT_TRUE(r.m_block_ids.size() == i);
     ASSERT_TRUE(r.start_height == 1);
     ASSERT_TRUE(r.total_height == 3);

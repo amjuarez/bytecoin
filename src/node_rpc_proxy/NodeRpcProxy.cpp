@@ -32,6 +32,10 @@
 #include "rpc/HttpClient.h"
 #include "rpc/JsonRpc.h"
 
+#ifndef AUTO_VAL_INIT
+#define AUTO_VAL_INIT(n) boost::value_initialized<decltype(n)>()
+#endif
+
 namespace CryptoNote {
 
 namespace {
@@ -124,9 +128,9 @@ NodeRpcProxy::~NodeRpcProxy() {
 
 void NodeRpcProxy::resetInternalState() {
   m_ioService.reset();
-  m_peerCount = 0;
-  m_nodeHeight = 0;
-  m_networkHeight = 0;
+  m_peerCount.store(0, std::memory_order_relaxed);
+  m_nodeHeight.store(0, std::memory_order_relaxed);
+  m_networkHeight.store(0, std::memory_order_relaxed);
   m_lastKnowHash = CryptoNote::null_hash;
 }
 
@@ -199,16 +203,16 @@ void NodeRpcProxy::updateNodeStatus() {
 
     if (blockHash != m_lastKnowHash) {
       m_lastKnowHash = blockHash;
-      m_nodeHeight = rsp.block_header.height;
+      m_nodeHeight.store(rsp.block_header.height, std::memory_order_relaxed);
       m_lastLocalBlockTimestamp = rsp.block_header.timestamp;
       // TODO request and update network height
-      m_networkHeight = m_nodeHeight;
-      m_observerManager.notify(&INodeObserver::lastKnownBlockHeightUpdated, m_networkHeight);
-      //if (m_networkHeight != rsp.block_header.network_height) {
-      //  m_networkHeight = rsp.block_header.network_height;
+      m_networkHeight.store(rsp.block_header.height, std::memory_order_relaxed);
+      m_observerManager.notify(&INodeObserver::lastKnownBlockHeightUpdated, m_networkHeight.load(std::memory_order_relaxed));
+      //if (m_networkHeight.load(std::memory_order_relaxed) != rsp.block_header.network_height) {
+      //  m_networkHeight.store(rsp.block_header.height, std::memory_order_relaxed);
       //  m_observerManager.notify(&INodeObserver::lastKnownBlockHeightUpdated, m_networkHeight);
       //}
-      m_observerManager.notify(&INodeObserver::localBlockchainUpdated, m_nodeHeight);
+      m_observerManager.notify(&INodeObserver::localBlockchainUpdated, m_nodeHeight.load(std::memory_order_relaxed));
     }
   }
 
@@ -226,7 +230,7 @@ void NodeRpcProxy::updatePeerCount() {
     size_t peerCount = rsp.incoming_connections_count + rsp.outgoing_connections_count;
     if (peerCount != m_peerCount) {
       m_peerCount = peerCount;
-      m_observerManager.notify(&INodeObserver::peerCountUpdated, m_peerCount);
+      m_observerManager.notify(&INodeObserver::peerCountUpdated, m_peerCount.load(std::memory_order_relaxed));
     }
   }
 }
@@ -240,15 +244,15 @@ bool NodeRpcProxy::removeObserver(INodeObserver* observer) {
 }
 
 size_t NodeRpcProxy::getPeerCount() const {
-  return m_peerCount;
+  return m_peerCount.load(std::memory_order_relaxed);
 }
 
 uint64_t NodeRpcProxy::getLastLocalBlockHeight() const {
-  return m_nodeHeight;
+  return m_nodeHeight.load(std::memory_order_relaxed);
 }
 
 uint64_t NodeRpcProxy::getLastKnownBlockHeight() const {
-  return m_networkHeight;
+  return m_networkHeight.load(std::memory_order_relaxed);
 }
 
 uint64_t NodeRpcProxy::getLocalBlockCount() const {
@@ -307,6 +311,18 @@ void NodeRpcProxy::queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t
   }
 
   m_ioService.post(std::bind(&NodeRpcProxy::doQueryBlocks, this, std::move(knownBlockIds), timestamp, std::ref(newBlocks), std::ref(startHeight), callback));
+}
+
+void NodeRpcProxy::getPoolSymmetricDifference(std::vector<crypto::hash>&& knownTxsIds, crypto::hash tailBlockId,
+                                              bool& isTailBlockActual, std::vector<CryptoNote::Transaction>& addedTxs,
+                                              std::vector<crypto::hash>& deletedTxsIds, const Callback& callback) {
+  if (!m_initState.initialized()) {
+    callback(make_error_code(error::NOT_INITIALIZED));
+    return;
+  }
+
+  m_ioService.post(std::bind(&NodeRpcProxy::doGetPoolSymmetricDifference, this, std::move(knownTxsIds), tailBlockId,
+    std::ref(isTailBlockActual), std::ref(addedTxs), std::ref(deletedTxsIds), callback));
 }
 
 void NodeRpcProxy::doRelayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) {
@@ -385,9 +401,51 @@ void NodeRpcProxy::doQueryBlocks(const std::list<crypto::hash>& knownBlockIds, u
   callback(ec);
 }
 
-void NodeRpcProxy::getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) { 
-  is_bc_actual = true;
+void NodeRpcProxy::doGetPoolSymmetricDifference(const std::vector<crypto::hash>& knownTxsIds,
+                                                const crypto::hash& tailBlockId, bool& isTailBlockActual,
+                                                std::vector<CryptoNote::Transaction>& addedTxs,
+                                                std::vector<crypto::hash>& deletedTxsIds, const Callback& callback) {
+  CryptoNote::COMMAND_RPC_GET_POOL_CHANGES::request req = AUTO_VAL_INIT(req);
+  CryptoNote::COMMAND_RPC_GET_POOL_CHANGES::response rsp = AUTO_VAL_INIT(rsp);
+
+  req.tailBlockId = tailBlockId;
+  req.knownTxsIds = knownTxsIds;
+
+  std::error_code ec = binaryCommand(*m_httpClient, "/get_pool_changes.bin", req, rsp);
+  if (!ec) {
+    isTailBlockActual = rsp.isTailBlockActual;
+    if (isTailBlockActual) {
+      deletedTxsIds = std::move(rsp.deletedTxsIds);
+
+      for (auto& txBlob : rsp.addedTxs) {
+        CryptoNote::Transaction tx;
+        if (!CryptoNote::parse_and_validate_tx_from_blob(txBlob, tx)) {
+          ec = make_error_code(error::INTERNAL_NODE_ERROR);
+          break;
+        }
+
+        addedTxs.emplace_back(std::move(tx));
+      }
+    }
+  }
+
+  callback(ec);
+}
+
+void NodeRpcProxy::getBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks, const Callback& callback) {
   callback(std::error_code()); 
-};
+}
+
+void NodeRpcProxy::getBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<BlockDetails>& blocks, const Callback& callback) {
+  callback(std::error_code()); 
+}
+
+void NodeRpcProxy::getTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<TransactionDetails>& transactions, const Callback& callback) {
+  callback(std::error_code()); 
+}
+
+void NodeRpcProxy::isSynchronized(bool& syncStatus, const Callback& callback) {
+  callback(std::error_code()); 
+}
 
 }

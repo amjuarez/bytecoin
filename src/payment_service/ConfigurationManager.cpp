@@ -15,23 +15,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
-
 #include "ConfigurationManager.h"
 
 #include <fstream>
@@ -52,7 +35,8 @@ bool ConfigurationManager::init(int argc, char** argv) {
   po::options_description cmdGeneralOptions("Common Options");
 
   cmdGeneralOptions.add_options()
-("config,c", po::value<std::string>()->default_value("./configs/-.conf"), "configuration file");
+  ("config,c", po::value<std::string>()->default_value("./configs/-.conf"), "configuration file");
+
   po::options_description confGeneralOptions;
   confGeneralOptions.add(cmdGeneralOptions).add_options()
       ("testnet", po::value<bool>(), "")
@@ -75,13 +59,15 @@ bool ConfigurationManager::init(int argc, char** argv) {
 
   po::options_description remoteNodeOptions("Remote Node Options");
   RpcNodeConfiguration::initOptions(remoteNodeOptions);
-po::options_description coinBaseOptions("Coin Base Options");
-CoinBaseConfiguration::initOptions(coinBaseOptions);
+  po::options_description coinBaseOptions("Coin Base Options");
+  CoinBaseConfiguration::initOptions(coinBaseOptions);
 
   po::options_description cmdOptionsDesc;
-cmdOptionsDesc.add(cmdGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
+  cmdOptionsDesc.add(cmdGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
+
   po::options_description confOptionsDesc;
-confOptionsDesc.add(confGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
+  confOptionsDesc.add(confGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
+
   po::variables_map cmdOptions;
   po::store(po::parse_command_line(argc, argv, cmdOptionsDesc), cmdOptions);
   po::notify(cmdOptions);
@@ -98,13 +84,14 @@ confOptionsDesc.add(confGeneralOptions).add(remoteNodeOptions).add(netNodeOption
     }
 
     po::variables_map confOptions;
-po::store(po::parse_config_file(confStream, confOptionsDesc, true), confOptions);    po::notify(confOptions);
+    po::store(po::parse_config_file(confStream, confOptionsDesc, true), confOptions);
+    po::notify(confOptions);
 
     gateConfiguration.init(confOptions);
     netNodeConfig.init(confOptions);
     coreConfig.init(confOptions);
     remoteNodeConfig.init(confOptions);
-coinBaseConfig.init(confOptions);
+    coinBaseConfig.init(confOptions);
 
     if (confOptions.count("local")) {
       startInprocess = confOptions["local"].as<bool>();

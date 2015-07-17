@@ -165,6 +165,7 @@ namespace CryptoNote
     uint16_t m_daemon_port;
 
     std::string m_wallet_file;
+    bool sync_from_zero;
 
     Common::ConsoleHandler m_consoleHandler;
     const CryptoNote::Currency& m_currency;

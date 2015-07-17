@@ -21,7 +21,7 @@
 namespace CryptoNote {
 
 TransfersSubscription::TransfersSubscription(const CryptoNote::Currency& currency, const AccountSubscription& sub)
-  : m_currency(currency), m_subscription(sub), m_transfers(currency, sub.transactionSpendableAge) {}
+  : m_subscription(sub), m_transfers(currency, sub.transactionSpendableAge) {}
 
 
 SynchronizationStart TransfersSubscription::getSyncStart() {

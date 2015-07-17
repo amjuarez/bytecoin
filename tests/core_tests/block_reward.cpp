@@ -16,11 +16,8 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "block_reward.h"
+#include <Common/Math.h>
 
-// epee
-#include "misc_language.h"
-
-using namespace epee;
 using namespace CryptoNote;
 
 namespace
@@ -136,7 +133,7 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
 
     std::vector<size_t> block_sizes;
     generator.getLastNBlockSizes(block_sizes, get_block_hash(blk_7), m_currency.rewardBlocksWindow());
-    size_t median = misc_utils::median(block_sizes);
+    size_t median = Common::medianValue(block_sizes);
 
     Transaction miner_tx;
     bool r = constructMinerTxBySize(m_currency, miner_tx, get_block_height(blk_7) + 1, generator.getAlreadyGeneratedCoins(blk_7),

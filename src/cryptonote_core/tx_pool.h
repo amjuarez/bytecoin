@@ -127,7 +127,7 @@ namespace CryptoNote {
       }
     }
 
-#define CURRENT_MEMPOOL_ARCHIVE_VER    10
+#define CURRENT_MEMPOOL_ARCHIVE_VER    11
 
     template<class archive_t>
     void serialize(archive_t & a, const unsigned int version) {
@@ -139,6 +139,7 @@ namespace CryptoNote {
       a & m_transactions;
       a & m_spent_key_images;
       a & m_spentOutputs;
+      a & m_recentlyDeletedTransactions;
     }
 
     struct TransactionCheckInfo {
@@ -212,6 +213,7 @@ namespace CryptoNote {
 
     tx_container_t m_transactions;  
     tx_container_t::nth_index<1>::type& m_fee_index;
+    std::unordered_map<crypto::hash, uint64_t> m_recentlyDeletedTransactions;
 
     Logging::LoggerRef logger;
 

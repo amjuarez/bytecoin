@@ -27,6 +27,7 @@ class ICryptonoteProtocolObserver {
 public:
   virtual void peerCountUpdated(size_t count) {}
   virtual void lastKnownBlockHeightUpdated(uint64_t height) {}
+  virtual void blockchainSynchronized(uint64_t topHeight) {}
 };
 
 } //namespace CryptoNote

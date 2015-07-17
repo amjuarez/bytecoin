@@ -44,82 +44,72 @@ ISerializer::SerializerType BinaryOutputStreamSerializer::type() const {
   return ISerializer::OUTPUT;
 }
 
-ISerializer& BinaryOutputStreamSerializer::beginObject(const std::string& name) {
-  return *this;
+bool BinaryOutputStreamSerializer::beginObject(Common::StringView name) {
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::endObject() {
-  return *this;
+void BinaryOutputStreamSerializer::endObject() {
 }
 
-ISerializer& BinaryOutputStreamSerializer::beginArray(std::size_t& size, const std::string& name) {
+bool BinaryOutputStreamSerializer::beginArray(std::size_t& size, Common::StringView name) {
   writeVarint(stream, size);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::endArray() {
-  return *this;
+void BinaryOutputStreamSerializer::endArray() {
 }
 
-ISerializer& BinaryOutputStreamSerializer::operator()(uint8_t& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(uint8_t& value, Common::StringView name) {
   writeVarint(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::operator()(uint32_t& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(uint32_t& value, Common::StringView name) {
   writeVarint(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::operator()(int32_t& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(int32_t& value, Common::StringView name) {
   writeVarint(stream, static_cast<uint32_t>(value));
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::operator()(int64_t& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(int64_t& value, Common::StringView name) {
   writeVarint(stream, static_cast<uint64_t>(value));
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::operator()(uint64_t& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(uint64_t& value, Common::StringView name) {
   writeVarint(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::operator()(bool& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(bool& value, Common::StringView name) {
   char boolVal = value;
   checkedWrite(&boolVal, 1);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::operator()(std::string& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(std::string& value, Common::StringView name) {
   writeVarint(stream, value.size());
   checkedWrite(value.data(), value.size());
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::binary(void* value, std::size_t size, const std::string& name) {
+bool BinaryOutputStreamSerializer::binary(void* value, std::size_t size, Common::StringView name) {
   checkedWrite(static_cast<const char*>(value), size);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryOutputStreamSerializer::binary(std::string& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::binary(std::string& value, Common::StringView name) {
   // write as string (with size prefix)
   return (*this)(value, name);
 }
 
-bool BinaryOutputStreamSerializer::hasObject(const std::string& name) {
-  assert(false); //the method is not supported for this type of serialization
-  throw std::runtime_error("hasObject method is not supported in BinaryOutputStreamSerializer");
-
-  return false;
-}
-
-ISerializer& BinaryOutputStreamSerializer::operator()(double& value, const std::string& name) {
+bool BinaryOutputStreamSerializer::operator()(double& value, Common::StringView name) {
   assert(false); //the method is not supported for this type of serialization
   throw std::runtime_error("double serialization is not supported in BinaryOutputStreamSerializer");
-
-  return *this;
+  return false;
 }
 
 void BinaryOutputStreamSerializer::checkedWrite(const char* buf, size_t size) {

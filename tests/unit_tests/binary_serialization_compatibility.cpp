@@ -30,7 +30,6 @@
 #include "serialization_structs_comparators.h"
 
 #include <iostream>
-#include "string_tools.h"
 
 template <typename Struct>
 void checkEqualBinary(Struct& original) {
@@ -54,8 +53,6 @@ void checkEnumeratorToLegacy(Struct& original) {
   CryptoNote::BinaryOutputStreamSerializer binarySerializer(archive);
   binarySerializer(original, "");
 
-  //std::cout << "enumerated string: " << epee::string_tools::buff_to_hex_nodelimer(archive.str()) << std::endl;
-
   Struct restored;
   binary_archive<false> ba(archive);
   bool r = ::serialization::serialize(ba, restored);
@@ -71,8 +68,6 @@ void checkLegacyToEnumerator(Struct& original) {
   binary_archive<true> ba(archive);
   bool r = ::serialization::serialize(ba, original);
   ASSERT_TRUE(r);
-
-  //std::cout << "legacy string: " << epee::string_tools::buff_to_hex_nodelimer(archive.str()) << std::endl;
 
   Struct restored;
 
@@ -462,8 +457,6 @@ void checkEnumeratorToEnumerator(CryptoNote::Block& block) {
   output(block, "");
 
   CryptoNote::Block restoredBlock;
-
-//  std::cout << "enumerated string: " << epee::string_tools::buff_to_hex_nodelimer(archive.str()) << std::endl;
 
   CryptoNote::BinaryInputStreamSerializer input(archive);
   input(restoredBlock, "");

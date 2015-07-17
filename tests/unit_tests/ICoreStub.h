@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <unordered_map>
 
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_core/ICore.h"
@@ -40,11 +41,13 @@ public:
   virtual bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs);
   virtual CryptoNote::i_cryptonote_protocol* get_protocol();
   virtual bool handle_incoming_tx(CryptoNote::blobdata const& tx_blob, CryptoNote::tx_verification_context& tvc, bool keeped_by_block);
-  virtual bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<CryptoNote::Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) override;
+  virtual std::vector<CryptoNote::Transaction> getPoolTransactions() override;
+  virtual bool getPoolChanges(const crypto::hash& tailBlockId, const std::vector<crypto::hash>& knownTxsIds,
+                              std::vector<CryptoNote::Transaction>& addedTxs, std::vector<crypto::hash>& deletedTxsIds) override;
+  virtual void getPoolChanges(const std::vector<crypto::hash>& knownTxsIds, std::vector<CryptoNote::Transaction>& addedTxs,
+                              std::vector<crypto::hash>& deletedTxsIds) override;
   virtual bool queryBlocks(const std::list<crypto::hash>& block_ids, uint64_t timestamp,
       uint64_t& start_height, uint64_t& current_height, uint64_t& full_offset, std::list<CryptoNote::BlockFullInfo>& entries);
-
-  virtual bool getBlockByHash(const crypto::hash &h, CryptoNote::Block &blk) override;
 
   virtual bool have_block(const crypto::hash& id) override { return false; }
   virtual bool get_short_chain_history(std::list<crypto::hash>& ids) override { return false; }
@@ -57,9 +60,25 @@ public:
   virtual void on_synchronized() override {}
   virtual bool is_ready() override { return true; }
 
+  virtual crypto::hash getBlockIdByHeight(uint64_t height) override;
+  virtual bool getBlockByHash(const crypto::hash &h, CryptoNote::Block &blk) override;
+  virtual void getTransactions(const std::vector<crypto::hash>& txs_ids, std::list<CryptoNote::Transaction>& txs, std::list<crypto::hash>& missed_txs, bool checkTxPool = false) override;
+  virtual bool getBackwardBlocksSizes(uint64_t fromHeight, std::vector<size_t>& sizes, size_t count) override;
+  virtual bool getBlockSize(const crypto::hash& hash, size_t& size) override;
+  virtual bool getAlreadyGeneratedCoins(const crypto::hash& hash, uint64_t& generatedCoins) override;
+  virtual bool getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee,
+      bool penalizeFee, uint64_t& reward, int64_t& emissionChange) override;
+  virtual bool scanOutputkeysForIndices(const CryptoNote::TransactionInputToKey& txInToKey, std::list<std::pair<crypto::hash, size_t>>& outputReferences) override;
+  virtual bool getBlockDifficulty(uint64_t height, CryptoNote::difficulty_type& difficulty) override;
+  virtual bool getBlockContainingTx(const crypto::hash& txId, crypto::hash& blockId, uint64_t& blockHeight) override;
+  virtual bool getMultisigOutputReference(const CryptoNote::TransactionInputMultisignature& txInMultisig, std::pair<crypto::hash, size_t>& outputReference) override;
+
   void set_blockchain_top(uint64_t height, const crypto::hash& top_id, bool result);
   void set_outputs_gindexs(const std::vector<uint64_t>& indexs, bool result);
   void set_random_outs(const CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& resp, bool result);
+
+  void addBlock(const CryptoNote::Block& block);
+  void addTransaction(const CryptoNote::Transaction& tx);
 
 private:
   uint64_t topHeight;
@@ -71,4 +90,11 @@ private:
 
   CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response randomOuts;
   bool randomOutsResult;
+
+  std::unordered_map<crypto::hash, CryptoNote::Block> blocks;
+  std::unordered_map<uint64_t, crypto::hash> blockHashByHeightIndex;
+  std::unordered_map<crypto::hash, crypto::hash> blockHashByTxHashIndex;
+
+  std::unordered_map<crypto::hash, CryptoNote::Transaction> transactions;
+
 };

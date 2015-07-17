@@ -321,33 +321,37 @@ bool BaseFunctionalTest::mineBlocks(TestNode& node, const CryptoNote::AccountPub
       return false;
     }
 
-    blockTemplate.timestamp = m_nextTimestamp;
-    m_nextTimestamp += 2 * m_currency.difficultyTarget();
-
-    if (blockTemplate.majorVersion == BLOCK_MAJOR_VERSION_2) {
-      blockTemplate.parentBlock.majorVersion = BLOCK_MAJOR_VERSION_1;
-      blockTemplate.parentBlock.minorVersion = BLOCK_MINOR_VERSION_0;
-      blockTemplate.parentBlock.numberOfTransactions = 1;
-
-      CryptoNote::tx_extra_merge_mining_tag mmTag;
-      mmTag.depth = 0;
-      if (!CryptoNote::get_aux_block_header_hash(blockTemplate, mmTag.merkle_root)) {
-        return false;
-      }
-
-      blockTemplate.parentBlock.minerTx.extra.clear();
-      if (!CryptoNote::append_mm_tag_to_extra(blockTemplate.parentBlock.minerTx.extra, mmTag)) {
-        return false;
-      }
-    }
-
-    blobdata blockBlob = block_to_blob(blockTemplate);
-    if (!node.submitBlock(::Common::toHex(blockBlob.data(), blockBlob.size()))) {
+    if (!prepareAndSubmitBlock(node, std::move(blockTemplate))) {
       return false;
     }
   }
 
   return true;
+}
+
+bool BaseFunctionalTest::prepareAndSubmitBlock(TestNode& node, CryptoNote::Block&& blockTemplate) {
+  blockTemplate.timestamp = m_nextTimestamp;
+  m_nextTimestamp += 2 * m_currency.difficultyTarget();
+
+  if (blockTemplate.majorVersion == BLOCK_MAJOR_VERSION_2) {
+    blockTemplate.parentBlock.majorVersion = BLOCK_MAJOR_VERSION_1;
+    blockTemplate.parentBlock.minorVersion = BLOCK_MINOR_VERSION_0;
+    blockTemplate.parentBlock.numberOfTransactions = 1;
+
+    CryptoNote::tx_extra_merge_mining_tag mmTag;
+    mmTag.depth = 0;
+    if (!CryptoNote::get_aux_block_header_hash(blockTemplate, mmTag.merkle_root)) {
+      return false;
+    }
+
+    blockTemplate.parentBlock.minerTx.extra.clear();
+    if (!CryptoNote::append_mm_tag_to_extra(blockTemplate.parentBlock.minerTx.extra, mmTag)) {
+      return false;
+    }
+  }
+
+  blobdata blockBlob = block_to_blob(blockTemplate);
+  return node.submitBlock(::Common::toHex(blockBlob.data(), blockBlob.size()));
 }
 
 bool BaseFunctionalTest::mineBlock(std::unique_ptr<CryptoNote::IWallet> &wallet) {

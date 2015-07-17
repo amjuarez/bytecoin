@@ -24,11 +24,9 @@
 
 #include "cryptonote_core/Currency.h"
 #include "cryptonote_core/account.h"
-#include "cryptonote_core/AccountKVSerialization.h"
 
 #include "serialization/binary_utils.h"
-#include "storages/portable_storage.h"
-#include "storages/portable_storage_template_helper.h"
+#include "serialization/SerializationTools.h"
 
 #include "wallet/WalletSerializer.h"
 #include "wallet/WalletUserTransactionsCache.h"
@@ -71,15 +69,15 @@ void loadKeysFromFile(const std::string& filename, const std::string& password, 
   account_data.resize(keys_file_data.account_data.size());
   crypto::chacha8(keys_file_data.account_data.data(), keys_file_data.account_data.size(), key, keys_file_data.iv, &account_data[0]);
 
-  const ::CryptoNote::account_keys& keys = account.get_keys();
-  CryptoNote::AccountBaseSerializer<false> accountSerializer(account);
-  bool r = epee::serialization::load_t_from_binary(accountSerializer, account_data);
-  r = r && verify_keys(keys.m_view_secret_key, keys.m_account_address.m_viewPublicKey);
-  r = r && verify_keys(keys.m_spend_secret_key, keys.m_account_address.m_spendPublicKey);
+  const CryptoNote::account_keys& keys = account.get_keys();
 
-  if (!r) {
-    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
+  if (CryptoNote::loadFromBinaryKeyValue(account, account_data) &&
+      verify_keys(keys.m_view_secret_key, keys.m_account_address.m_viewPublicKey) &&
+      verify_keys(keys.m_spend_secret_key, keys.m_account_address.m_spendPublicKey)) {
+    return;
   }
+
+  throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
 }
 
 }

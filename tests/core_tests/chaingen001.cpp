@@ -18,8 +18,6 @@
 #include "chaingen001.h"
 
 using namespace std;
-
-using namespace epee;
 using namespace CryptoNote;
 
 ////////

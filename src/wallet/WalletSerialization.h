@@ -25,16 +25,13 @@
 
 namespace CryptoNote {
 class ISerializer;
-}
-
-namespace CryptoNote {
 
 struct UnconfirmedTransferDetails;
 struct TransactionInfo;
 struct Transfer;
 
-void serialize(UnconfirmedTransferDetails& utd, const std::string& name, CryptoNote::ISerializer& serializer);
-void serialize(TransactionInfo& txi, const std::string& name, CryptoNote::ISerializer& serializer);
-void serialize(Transfer& tr, const std::string& name, CryptoNote::ISerializer& serializer);
+void serialize(UnconfirmedTransferDetails& utd, ISerializer& serializer);
+void serialize(TransactionInfo& txi, ISerializer& serializer);
+void serialize(Transfer& tr, ISerializer& serializer);
 
 }

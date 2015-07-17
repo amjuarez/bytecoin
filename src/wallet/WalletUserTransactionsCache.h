@@ -35,7 +35,7 @@ class WalletUserTransactionsCache
 public:
   WalletUserTransactionsCache() {}
 
-  void serialize(CryptoNote::ISerializer& serializer, const std::string& name);
+  bool serialize(CryptoNote::ISerializer& serializer);
 
   uint64_t unconfirmedTransactionsAmount() const;
   uint64_t unconfrimedOutsAmount() const;
@@ -57,6 +57,7 @@ public:
   Transfer& getTransfer(TransferId transferId);
 
   bool isUsed(const TransactionOutputInformation& out) const;
+  void reset();
 
 private:
 

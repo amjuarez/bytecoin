@@ -23,23 +23,28 @@
 #include <vector>
 
 #include "crypto/hash.h"
+#include "cryptonote_core/difficulty.h"
 #include "cryptonote_protocol/blobdatatype.h"
-#include "cryptonote_protocol/cryptonote_protocol_defs.h"
 
 namespace CryptoNote {
 
 struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request;
 struct COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response;
+struct NOTIFY_RESPONSE_CHAIN_ENTRY_request;
+struct NOTIFY_RESPONSE_GET_OBJECTS_request;
+struct NOTIFY_REQUEST_GET_OBJECTS_request;
 
-struct Block;
-struct Transaction;
-struct i_cryptonote_protocol;
-struct tx_verification_context;
-struct block_verification_context;
-struct core_stat_info;
-struct BlockFullInfo;
-class ICoreObserver;
 class Currency;
+class ICoreObserver;
+struct Block;
+struct block_verification_context;
+struct BlockFullInfo;
+struct core_stat_info;
+struct i_cryptonote_protocol;
+struct Transaction;
+struct TransactionInputMultisignature;
+struct TransactionInputToKey;
+struct tx_verification_context;
 
 class ICore {
 public:
@@ -55,7 +60,7 @@ public:
   virtual void pause_mining() = 0;
   virtual void update_block_template_and_resume_mining() = 0;
   virtual bool handle_incoming_block_blob(const CryptoNote::blobdata& block_blob, CryptoNote::block_verification_context& bvc, bool control_miner, bool relay_block) = 0;
-  virtual bool handle_get_objects(CryptoNote::NOTIFY_REQUEST_GET_OBJECTS::request& arg, CryptoNote::NOTIFY_RESPONSE_GET_OBJECTS::request& rsp) = 0;
+  virtual bool handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS_request& arg, NOTIFY_RESPONSE_GET_OBJECTS_request& rsp) = 0;
   virtual void on_synchronized() = 0;
   virtual bool is_ready() = 0;
 
@@ -67,11 +72,26 @@ public:
   virtual bool get_tx_outputs_gindexs(const crypto::hash& tx_id, std::vector<uint64_t>& indexs) = 0;
   virtual i_cryptonote_protocol* get_protocol() = 0;
   virtual bool handle_incoming_tx(const blobdata& tx_blob, tx_verification_context& tvc, bool keeped_by_block) = 0;
-  virtual bool getPoolSymmetricDifference(const std::vector<crypto::hash>& known_pool_tx_ids, const crypto::hash& known_block_id, bool& isBcActual, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids) = 0;
+  virtual std::vector<Transaction> getPoolTransactions() = 0;
+  virtual bool getPoolChanges(const crypto::hash& tailBlockId, const std::vector<crypto::hash>& knownTxsIds,
+                              std::vector<Transaction>& addedTxs, std::vector<crypto::hash>& deletedTxsIds) = 0;
+  virtual void getPoolChanges(const std::vector<crypto::hash>& knownTxsIds, std::vector<Transaction>& addedTxs,
+                              std::vector<crypto::hash>& deletedTxsIds) = 0;
   virtual bool queryBlocks(const std::list<crypto::hash>& block_ids, uint64_t timestamp,
       uint64_t& start_height, uint64_t& current_height, uint64_t& full_offset, std::list<BlockFullInfo>& entries) = 0;
 
+  virtual crypto::hash getBlockIdByHeight(uint64_t height) = 0;
   virtual bool getBlockByHash(const crypto::hash &h, Block &blk) = 0;
+  virtual void getTransactions(const std::vector<crypto::hash>& txs_ids, std::list<Transaction>& txs, std::list<crypto::hash>& missed_txs, bool checkTxPool = false) = 0;
+  virtual bool getBackwardBlocksSizes(uint64_t fromHeight, std::vector<size_t>& sizes, size_t count) = 0;
+  virtual bool getBlockSize(const crypto::hash& hash, size_t& size) = 0;
+  virtual bool getAlreadyGeneratedCoins(const crypto::hash& hash, uint64_t& generatedCoins) = 0;
+  virtual bool getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee,
+                        bool penalizeFee, uint64_t& reward, int64_t& emissionChange) = 0;
+  virtual bool scanOutputkeysForIndices(const TransactionInputToKey& txInToKey, std::list<std::pair<crypto::hash, size_t>>& outputReferences) = 0;
+  virtual bool getBlockDifficulty(uint64_t height, difficulty_type& difficulty) = 0;
+  virtual bool getBlockContainingTx(const crypto::hash& txId, crypto::hash& blockId, uint64_t& blockHeight) = 0;
+  virtual bool getMultisigOutputReference(const TransactionInputMultisignature& txInMultisig, std::pair<crypto::hash, size_t>& outputReference) = 0;
 };
 
 } //namespace CryptoNote

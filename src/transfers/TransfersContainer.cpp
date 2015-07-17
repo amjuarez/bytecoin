@@ -24,7 +24,7 @@
 
 namespace CryptoNote {
 
-void serialize(TransactionInformation& ti, const std::string& name, CryptoNote::ISerializer& s) {
+void serialize(TransactionInformation& ti, CryptoNote::ISerializer& s) {
   s(ti.transactionHash, "");
   s(ti.publicKey, "");
   s(ti.blockHeight, "");
@@ -99,7 +99,9 @@ SpentOutputDescriptor::SpentOutputDescriptor() :
 }
 
 SpentOutputDescriptor::SpentOutputDescriptor(const TransactionOutputInformationIn& transactionInfo) :
-    m_type(transactionInfo.type) {
+    m_type(transactionInfo.type),
+    m_amount(0),
+    m_globalOutputIndex(0) {
   if (m_type == TransactionTypes::OutputType::Key) {
     m_keyImage = &transactionInfo.keyImage;
   } else if (m_type == TransactionTypes::OutputType::Multisignature) {
@@ -212,6 +214,7 @@ void TransfersContainer::addTransaction(const BlockInfo& block, const ITransacti
   }
 
   auto result = m_transactions.emplace(std::move(txInfo));
+  (void)result; // Disable unused warning
   assert(result.second);
 }
 
@@ -244,6 +247,7 @@ bool TransfersContainer::addTransactionOutputs(const BlockInfo& block, const ITr
 
     if (transferIsUnconfirmed) {
       auto result = m_unconfirmedTransfers.emplace(std::move(info));
+      (void)result; // Disable unused warning
       assert(result.second);
     } else {
       if (info.type == TransactionTypes::OutputType::Multisignature) {
@@ -255,6 +259,7 @@ bool TransfersContainer::addTransactionOutputs(const BlockInfo& block, const ITr
       }
 
       auto result = m_availableTransfers.emplace(std::move(info));
+      (void)result; // Disable unused warning
       assert(result.second);
     }
 
@@ -400,6 +405,7 @@ bool TransfersContainer::markTransactionConfirmed(const BlockInfo& block, const 
     }
 
     auto result = m_availableTransfers.emplace(std::move(transfer));
+    (void)result; // Disable unused warning
     assert(result.second);
 
     transferIt = m_unconfirmedTransfers.get<ContainingTransactionIndex>().erase(transferIt);
@@ -479,6 +485,7 @@ void TransfersContainer::copyToSpent(const BlockInfo& block, const ITransactionR
   spentOutput.spendingTransactionHash = tx.getTransactionHash();
   spentOutput.inputInTransaction = static_cast<uint32_t>(inputIndex);
   auto result = m_spentTransfers.emplace(std::move(spentOutput));
+  (void)result; // Disable unused warning
   assert(result.second);
 }
 

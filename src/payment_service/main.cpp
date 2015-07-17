@@ -15,23 +15,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-// Copyright (c) 2012-2014, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
-
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -52,6 +35,9 @@
 #include <boost/asio/io_service.hpp>
 
 #ifdef WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <winsvc.h>
 #else
@@ -73,13 +59,19 @@
 
 #define SERVICE_NAME "Payment Gate"
 
-PaymentService::ConfigurationManager config;
-System::Dispatcher systemService;
-System::Event stopEvent(systemService);
-PaymentService::WalletService* service;
-std::unique_ptr<CryptoNote::CurrencyBuilder> currencyBuilder;
-Logging::LoggerGroup logger;
-CryptoNote::node_server * gP2pNode = nullptr;
+struct PaymentGate {
+  PaymentGate() : dispatcher(nullptr), stopEvent(nullptr), config(), service(nullptr), logger(), currencyBuilder(logger) {
+  }
+
+  System::Dispatcher* dispatcher;
+  System::Event* stopEvent;
+  PaymentService::ConfigurationManager config;
+  PaymentService::WalletService* service;
+  Logging::LoggerGroup logger;
+  CryptoNote::CurrencyBuilder currencyBuilder;
+};
+
+PaymentGate* ppg;
 
 #ifdef WIN32
 SERVICE_STATUS_HANDLE serviceStatusHandle;
@@ -88,23 +80,20 @@ SERVICE_STATUS_HANDLE serviceStatusHandle;
 void run();
 
 void stopSignalHandler() {
-  Logging::LoggerRef log(logger, "StopSignalHandler");
+  Logging::LoggerRef log(ppg->logger, "StopSignalHandler");
   log(Logging::INFO) << "Stop signal caught";
 
   try {
-    if (service) {
-      service->saveWallet();
+    if (ppg->service) {
+      ppg->service->saveWallet();
     }
   } catch (std::exception& ex) {
     log(Logging::WARNING) << "Couldn't save wallet: " << ex.what();
   }
 
-
-  if (gP2pNode != nullptr) {
-    gP2pNode->send_stop_signal();
-  } else {
-    stopEvent.set();
-  }
+  ppg->dispatcher->remoteSpawn([&]() {
+    ppg->stopEvent->set();
+  });
 }
 
 #ifdef WIN32
@@ -123,28 +112,34 @@ std::string GetLastErrorMessage(DWORD errorMessageID)
 
 void __stdcall serviceHandler(DWORD fdwControl) {
   if (fdwControl == SERVICE_CONTROL_STOP) {
-    Logging::LoggerRef log(logger, "serviceHandler");
+    Logging::LoggerRef log(ppg->logger, "serviceHandler");
     log(Logging::INFO) << "Stop signal caught";
 
     SERVICE_STATUS serviceStatus{ SERVICE_WIN32_OWN_PROCESS, SERVICE_STOP_PENDING, 0, NO_ERROR, 0, 0, 0 };
     SetServiceStatus(serviceStatusHandle, &serviceStatus);
 
     try {
-      if (service) {
+      if (ppg->service) {
         log(Logging::INFO) << "Saving wallet";
-        service->saveWallet();
+        ppg->service->saveWallet();
       }
     } catch (std::exception& ex) {
       log(Logging::WARNING) << "Couldn't save wallet: " << ex.what();
     }
 
     log(Logging::INFO) << "Stopping service";
-    stopEvent.set();
+    ppg->dispatcher->remoteSpawn([&]() {
+      ppg->stopEvent->set();
+    });
   }
 }
 
 void __stdcall serviceMain(DWORD dwArgc, char **lpszArgv) {
-  Logging::LoggerRef logRef(logger, "WindowsService");
+  System::Dispatcher dispatcher;
+  System::Event stopEvent(dispatcher);
+  ppg->dispatcher = &dispatcher;
+  ppg->stopEvent = &stopEvent;
+  Logging::LoggerRef logRef(ppg->logger, "WindowsService");
 
   serviceStatusHandle = RegisterServiceCtrlHandler("PaymentGate", serviceHandler);
   if (serviceStatusHandle == NULL) {
@@ -209,7 +204,7 @@ int runDaemon() {
 #ifdef WIN32
 
   SERVICE_TABLE_ENTRY serviceTable[] {
-    { "PaymentGate", serviceMain },
+    { "Payment Gate", serviceMain },
     { NULL, NULL }
   };
 
@@ -230,6 +225,10 @@ int runDaemon() {
     return 1;
   }
 
+  System::Dispatcher dispatcher;
+  System::Event stopEvent(dispatcher);
+  ppg->dispatcher = &dispatcher;
+  ppg->stopEvent = &stopEvent;
   run();
   return 0;
 
@@ -238,7 +237,7 @@ int runDaemon() {
 
 int registerService() {
 #ifdef WIN32
-  Logging::LoggerRef logRef(logger, "ServiceRegistrator");
+  Logging::LoggerRef logRef(ppg->logger, "ServiceRegistrator");
 
   char pathBuff[MAX_PATH];
   std::string modulePath;
@@ -295,7 +294,7 @@ int registerService() {
 
 int unregisterService() {
 #ifdef WIN32
-  Logging::LoggerRef logRef(logger, "ServiceDeregistrator");
+  Logging::LoggerRef logRef(ppg->logger, "ServiceDeregistrator");
 
   SC_HANDLE scManager = NULL;
   SC_HANDLE scService = NULL;
@@ -376,57 +375,27 @@ void changeDirectory(const std::string& path) {
 }
 
 void runInProcess() {
-  Logging::LoggerRef(logger, "run")(Logging::INFO) << "Starting Payment Gate with local node";
+  Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "Starting Payment Gate with local node";
 
-currencyBuilder->genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
-currencyBuilder->publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
-currencyBuilder->moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
-currencyBuilder->emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
-currencyBuilder->blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
-currencyBuilder->numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
-currencyBuilder->mininumFee(config.coinBaseConfig.MINIMUM_FEE);
-currencyBuilder->defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
-currencyBuilder->difficultyTarget(config.coinBaseConfig.DIFFICULTY_TARGET);
-currencyBuilder->minedMoneyUnlockWindow(config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
-currencyBuilder->maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
+  CryptoNote::Currency currency = ppg->currencyBuilder.currency();
+  CryptoNote::core core(currency, NULL, ppg->logger);
 
-if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
-{
-  currencyBuilder->difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  currencyBuilder->upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  currencyBuilder->upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-} else {
-  currencyBuilder->difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
-}
-currencyBuilder->maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
-currencyBuilder->lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
-
-if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT != 0)
-{
-  currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
-}
-currencyBuilder->difficultyLag(config.coinBaseConfig.DIFFICULTY_CUT);
-currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
-  CryptoNote::Currency currency = currencyBuilder->currency();
-  CryptoNote::core core(currency, NULL, logger);
-
-  CryptoNote::cryptonote_protocol_handler protocol(currency, systemService, core, NULL, logger);
-  CryptoNote::node_server p2pNode(systemService, protocol, logger);
-  gP2pNode = &p2pNode;
+  CryptoNote::cryptonote_protocol_handler protocol(currency, *ppg->dispatcher, core, NULL, ppg->logger);
+  CryptoNote::node_server p2pNode(*ppg->dispatcher, protocol, ppg->logger);
 
   protocol.set_p2p_endpoint(&p2pNode);
   core.set_cryptonote_protocol(&protocol);
 
   std::unique_ptr<CryptoNote::INode> node;
 
-  Logging::LoggerRef(logger, "run")(Logging::INFO) << "initializing p2pNode";
-  if (!p2pNode.init(config.netNodeConfig, config.gateConfiguration.testnet)) {
+  Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "initializing p2pNode";
+  if (!p2pNode.init(ppg->config.netNodeConfig, ppg->config.gateConfiguration.testnet)) {
     throw std::runtime_error("Failed to init p2pNode");
   }
 
-  Logging::LoggerRef(logger, "run")(Logging::INFO) << "initializing core";
+  Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "initializing core";
   CryptoNote::MinerConfig emptyMiner;
-  core.init(config.coreConfig, emptyMiner, true);
+  core.init(ppg->config.coreConfig, emptyMiner, true);
 
   std::promise<std::error_code> initPromise;
   auto initFuture = initPromise.get_future();
@@ -434,9 +403,9 @@ currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
   node.reset(new CryptoNote::InProcessNode(core, protocol));
   node->init([&initPromise](std::error_code ec) {
     if (ec) {
-      Logging::LoggerRef(logger, "run")(Logging::INFO) << "Failed to init node: " << ec.message();
+      Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "Failed to init node: " << ec.message();
     } else {
-      Logging::LoggerRef(logger, "run")(Logging::INFO) << "node is inited successfully";
+      Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "node is inited successfully";
     }
 
     initPromise.set_value(ec);
@@ -447,85 +416,57 @@ currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
     throw std::system_error(ec);
   }
 
-  Logging::LoggerRef(logger, "run")(Logging::INFO) << "Starting p2p server";
+  Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "Spawning p2p server";
 
-  System::Event p2pStarted(systemService);
+  System::Event p2pStopped(*ppg->dispatcher);
+  System::Event p2pStarted(*ppg->dispatcher);
 
-  systemService.spawn([&]() {
+  ppg->dispatcher->spawn([&]() {
     p2pStarted.set();
     p2pNode.run();
-    stopEvent.set();
+    p2pStopped.set();
   });
-
+  
   p2pStarted.wait();
-  Logging::LoggerRef(logger, "run")(Logging::INFO) << "p2p server is started";
+  Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "p2p server is started";
 
-  service = new PaymentService::WalletService(currency, systemService, *node, config.gateConfiguration, logger);
-  std::unique_ptr<PaymentService::WalletService> serviceGuard(service);
+  ppg->service = new PaymentService::WalletService(currency, *ppg->dispatcher, *node, ppg->config.gateConfiguration, ppg->logger);
+  std::unique_ptr<PaymentService::WalletService> serviceGuard(ppg->service);
 
-  service->init();
+  ppg->service->init();
 
-  PaymentService::JsonRpcServer rpcServer(systemService, stopEvent, *service, logger);
+  PaymentService::JsonRpcServer rpcServer(*ppg->dispatcher, *ppg->stopEvent, *ppg->service, ppg->logger);
 
-  rpcServer.start(config.gateConfiguration);
-
+  rpcServer.start(ppg->config.gateConfiguration);
   serviceGuard.reset();
+  p2pNode.send_stop_signal();
+  p2pStopped.wait();
   node->shutdown();
   core.deinit();
   p2pNode.deinit();
-  gP2pNode = nullptr;
 }
 
 void runRpcProxy() {
-  Logging::LoggerRef(logger, "run")(Logging::INFO) << "Starting Payment Gate with remote node";
-currencyBuilder->genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
-currencyBuilder->publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
-currencyBuilder->moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
-currencyBuilder->emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
-currencyBuilder->blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
-currencyBuilder->numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
-currencyBuilder->mininumFee(config.coinBaseConfig.MINIMUM_FEE);
-currencyBuilder->defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
-currencyBuilder->difficultyTarget(config.coinBaseConfig.DIFFICULTY_TARGET);
-currencyBuilder->minedMoneyUnlockWindow(config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
-currencyBuilder->maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
-
-if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
-{
-  currencyBuilder->difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  currencyBuilder->upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  currencyBuilder->upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-} else {
-  currencyBuilder->difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
-}
-currencyBuilder->maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
-currencyBuilder->lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
-
-if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT != 0)
-{
-  currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
-}
-currencyBuilder->difficultyLag(config.coinBaseConfig.DIFFICULTY_CUT);
-currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
-  CryptoNote::Currency currency = currencyBuilder->currency();
+  Logging::LoggerRef(ppg->logger, "run")(Logging::INFO) << "Starting Payment Gate with remote node";
+  CryptoNote::Currency currency = ppg->currencyBuilder.currency();
   std::unique_ptr<CryptoNote::INode> node;
 
-  node.reset(PaymentService::NodeFactory::createNode(config.remoteNodeConfig.daemonHost, config.remoteNodeConfig.daemonPort));
+  node.reset(PaymentService::NodeFactory::createNode(ppg->config.remoteNodeConfig.daemonHost, ppg->config.remoteNodeConfig.daemonPort));
 
-  service = new PaymentService::WalletService(currency, systemService, *node, config.gateConfiguration, logger);
-  std::unique_ptr<PaymentService::WalletService> serviceGuard(service);
+  ppg->service = new PaymentService::WalletService(currency, *ppg->dispatcher, *node, ppg->config.gateConfiguration, ppg->logger);
+  std::unique_ptr<PaymentService::WalletService> serviceGuard(ppg->service);
 
-  service->init();
+  ppg->service->init();
 
-  PaymentService::JsonRpcServer rpcServer(systemService, stopEvent, *service, logger);
+  PaymentService::JsonRpcServer rpcServer(*ppg->dispatcher, *ppg->stopEvent, *ppg->service, ppg->logger);
 
-  rpcServer.start(config.gateConfiguration);
+  rpcServer.start(ppg->config.gateConfiguration);
 }
 
 void run() {
   tools::SignalHandler::install(stopSignalHandler);
 
-  if (config.startInprocess) {
+  if (ppg->config.startInprocess) {
     runInProcess();
   } else {
     runRpcProxy();
@@ -533,91 +474,93 @@ void run() {
 }
 
 int main(int argc, char** argv) {
+  PaymentGate pg; 
+  ppg = &pg;
   try {
-    if (!config.init(argc, argv)) {
+    if (!pg.config.init(argc, argv)) {
       return 0; //help message requested or so
     }
 
-    Logging::ConsoleLogger consoleLogger(static_cast<Logging::Level>(config.gateConfiguration.logLevel));
-    logger.addLogger(consoleLogger);
+    Logging::ConsoleLogger consoleLogger(static_cast<Logging::Level>(pg.config.gateConfiguration.logLevel));
+    pg.logger.addLogger(consoleLogger);
 
-    currencyBuilder.reset(new CryptoNote::CurrencyBuilder(logger));
+    Logging::LoggerRef(pg.logger, "main")(Logging::INFO) << "PaymentService " << " v" << PROJECT_VERSION_LONG;
 
-    Logging::LoggerRef(logger, "main")(Logging::INFO) << "PaymentService " << " v" << PROJECT_VERSION_LONG;
-
-    if (config.gateConfiguration.testnet) {
-      Logging::LoggerRef(logger, "main")(Logging::INFO) << "Starting in testnet mode";
-      currencyBuilder->testnet(true);
+    if (pg.config.gateConfiguration.testnet) {
+      Logging::LoggerRef(pg.logger, "main")(Logging::INFO) << "Starting in testnet mode";
+      pg.currencyBuilder.testnet(true);
     }
 
-    if (!config.gateConfiguration.serverRoot.empty()) {
-      changeDirectory(config.gateConfiguration.serverRoot);
-      Logging::LoggerRef(logger, "main")(Logging::INFO) << "Current working directory now is " << config.gateConfiguration.serverRoot;
+    if (!pg.config.gateConfiguration.serverRoot.empty()) {
+      changeDirectory(pg.config.gateConfiguration.serverRoot);
+      Logging::LoggerRef(pg.logger, "main")(Logging::INFO) << "Current working directory now is " << pg.config.gateConfiguration.serverRoot;
     }
 
-    std::ofstream fileStream(config.gateConfiguration.logFile, std::ofstream::app);
+    std::ofstream fileStream(pg.config.gateConfiguration.logFile, std::ofstream::app);
     if (!fileStream) {
       throw std::runtime_error("Couldn't open log file");
     }
 
-    Logging::StreamLogger fileLogger(fileStream, static_cast<Logging::Level>(config.gateConfiguration.logLevel));
-    logger.addLogger(fileLogger);
+    Logging::StreamLogger fileLogger(fileStream, static_cast<Logging::Level>(pg.config.gateConfiguration.logLevel));
+    pg.logger.addLogger(fileLogger);
 
-    if (config.gateConfiguration.generateNewWallet) {
-currencyBuilder->genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
-currencyBuilder->publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
-currencyBuilder->moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
-currencyBuilder->emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
-currencyBuilder->blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
-currencyBuilder->numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
-currencyBuilder->mininumFee(config.coinBaseConfig.MINIMUM_FEE);
-currencyBuilder->defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
-currencyBuilder->difficultyTarget(config.coinBaseConfig.DIFFICULTY_TARGET);
-currencyBuilder->minedMoneyUnlockWindow(config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
-currencyBuilder->maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
-
-if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
-{
-  currencyBuilder->difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  currencyBuilder->upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  currencyBuilder->upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-} else {
-  currencyBuilder->difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
-}
-currencyBuilder->maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
-currencyBuilder->lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
-
-if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT != 0)
-{
-  currencyBuilder->upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
-}
-currencyBuilder->difficultyLag(config.coinBaseConfig.DIFFICULTY_CUT);
-currencyBuilder->difficultyCut(config.coinBaseConfig.DIFFICULTY_LAG);
-      CryptoNote::Currency currency = currencyBuilder->currency();
-      generateNewWallet(currency, config.gateConfiguration, logger);
+  pg.currencyBuilder.genesisCoinbaseTxHex(pg.config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
+  pg.currencyBuilder.publicAddressBase58Prefix(pg.config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+  pg.currencyBuilder.moneySupply(pg.config.coinBaseConfig.MONEY_SUPPLY);
+  pg.currencyBuilder.emissionSpeedFactor(pg.config.coinBaseConfig.EMISSION_SPEED_FACTOR);
+  pg.currencyBuilder.blockGrantedFullRewardZone(pg.config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+  pg.currencyBuilder.numberOfDecimalPlaces(pg.config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
+  pg.currencyBuilder.mininumFee(pg.config.coinBaseConfig.MINIMUM_FEE);
+  pg.currencyBuilder.defaultDustThreshold(pg.config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
+  pg.currencyBuilder.difficultyTarget(pg.config.coinBaseConfig.DIFFICULTY_TARGET);
+  pg.currencyBuilder.minedMoneyUnlockWindow(pg.config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+  pg.currencyBuilder.maxBlockSizeInitial(pg.config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
+  if (pg.config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && pg.config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
+  {
+    pg.currencyBuilder.difficultyWindow(pg.config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+    pg.currencyBuilder.upgradeVotingWindow(pg.config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+    pg.currencyBuilder.upgradeWindow(pg.config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  } else {
+    pg.currencyBuilder.difficultyWindow(24 * 60 * 60 / pg.config.coinBaseConfig.DIFFICULTY_TARGET);
+  }
+  pg.currencyBuilder.maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / pg.config.coinBaseConfig.DIFFICULTY_TARGET);
+  pg.currencyBuilder.lockedTxAllowedDeltaSeconds(pg.config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
+  if (pg.config.coinBaseConfig.UPGRADE_HEIGHT && pg.config.coinBaseConfig.UPGRADE_HEIGHT != 0)
+  {
+    pg.currencyBuilder.upgradeHeight(pg.config.coinBaseConfig.UPGRADE_HEIGHT);
+  }
+  pg.currencyBuilder.difficultyLag(pg.config.coinBaseConfig.DIFFICULTY_CUT);
+  pg.currencyBuilder.difficultyCut(pg.config.coinBaseConfig.DIFFICULTY_LAG);
+    if (pg.config.gateConfiguration.generateNewWallet) {
+      CryptoNote::Currency currency = pg.currencyBuilder.currency();
+      generateNewWallet(currency, pg.config.gateConfiguration, pg.logger);
       return 0;
     }
 
-    if (!config.gateConfiguration.importKeys.empty()) {
-      importLegacyKeys(config.gateConfiguration);
-      Logging::LoggerRef(logger, "KeysImporter")(Logging::INFO) << "Keys have been imported successfully";
+    if (!pg.config.gateConfiguration.importKeys.empty()) {
+      importLegacyKeys(pg.config.gateConfiguration);
+      Logging::LoggerRef(pg.logger, "KeysImporter")(Logging::INFO) << "Keys have been imported successfully";
       return 0;
     }
 
-    if (config.gateConfiguration.registerService) {
+    if (pg.config.gateConfiguration.registerService) {
       return registerService();
     }
 
-    if (config.gateConfiguration.unregisterService) {
+    if (pg.config.gateConfiguration.unregisterService) {
       return unregisterService();
     }
 
-    if (config.gateConfiguration.daemonize) {
-      logger.removeLogger(consoleLogger);
+    if (pg.config.gateConfiguration.daemonize) {
+      pg.logger.removeLogger(consoleLogger);
       if (runDaemon() != 0) {
         throw std::runtime_error("Failed to start daemon");
       }
     } else {
+      System::Dispatcher dispatcher;
+      System::Event stopEvent(dispatcher);
+      ppg->dispatcher = &dispatcher;
+      ppg->stopEvent = &stopEvent;
       run();
     }
 

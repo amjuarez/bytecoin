@@ -16,6 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "cryptonote_serialization.h"
+#include "account.h"
 
 #include "serialization/ISerializer.h"
 #include "serialization/SerializationOverloads.h"
@@ -132,13 +133,18 @@ void getVariantValue(CryptoNote::ISerializer& serializer, uint8_t tag, CryptoNot
 }
 
 template <typename T>
-void serializePod(T& v, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializer.binary(&v, sizeof(v), name);
+bool serializePod(T& v, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializer.binary(&v, sizeof(v), name);
 }
 
-void serializeVarintVector(std::vector<uint64_t>& vector, CryptoNote::ISerializer& serializer, const std::string& name) {
+bool serializeVarintVector(std::vector<uint64_t>& vector, CryptoNote::ISerializer& serializer, Common::StringView name) {
   std::size_t size = vector.size();
-  serializer.beginArray(size, name);
+  
+  if (!serializer.beginArray(size, name)) {
+    vector.clear();
+    return false;
+  }
+
   vector.resize(size);
 
   for (size_t i = 0; i < size; ++i) {
@@ -146,49 +152,51 @@ void serializeVarintVector(std::vector<uint64_t>& vector, CryptoNote::ISerialize
   }
 
   serializer.endArray();
+  return true;
 }
 
 }
 
 namespace crypto {
 
-void serialize(public_key& pubKey, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializePod(pubKey, name, serializer);
+bool serialize(public_key& pubKey, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializePod(pubKey, name, serializer);
 }
 
-void serialize(secret_key& secKey, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializePod(secKey, name, serializer);
+bool serialize(secret_key& secKey, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializePod(secKey, name, serializer);
 }
 
-void serialize(hash& h, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializePod(h, name, serializer);
+bool serialize(hash& h, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializePod(h, name, serializer);
 }
 
-void serialize(key_image& keyImage, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializePod(keyImage, name, serializer);
+bool serialize(key_image& keyImage, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializePod(keyImage, name, serializer);
 }
 
-void serialize(chacha8_iv& chacha, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializePod(chacha, name, serializer);
+bool serialize(chacha8_iv& chacha, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializePod(chacha, name, serializer);
 }
+
+bool serialize(signature& sig, Common::StringView name, CryptoNote::ISerializer& serializer) {
+  return serializePod(sig, name, serializer);
+}
+
 
 }
 
 namespace CryptoNote {
 
-void serialize(TransactionPrefix& txP, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(TransactionPrefix& txP, ISerializer& serializer) {
   serializer(txP.version, "version");
   serializer(txP.unlockTime, "unlock_time");
   serializer(txP.vin, "vin");
   serializer(txP.vout, "vout");
   serializeAsBinary(txP.extra, "extra", serializer);
-  serializer.endObject();
 }
 
-void serialize(Transaction& tx, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-
+void serialize(Transaction& tx, ISerializer& serializer) {
   serializer(tx.version, "version");
   serializer(tx.unlockTime, "unlock_time");
   serializer(tx.vin, "vin");
@@ -228,13 +236,9 @@ void serialize(Transaction& tx, const std::string& name, ISerializer& serializer
     }
   }
 //  serializer.endArray();
-
-  serializer.endObject();
 }
 
-void serialize(TransactionInput& in, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-
+void serialize(TransactionInput& in, ISerializer& serializer) {
   if (serializer.type() == ISerializer::OUTPUT) {
     BinaryVariantTagGetter tagGetter;
     uint8_t tag = boost::apply_visitor(tagGetter, in);
@@ -248,52 +252,33 @@ void serialize(TransactionInput& in, const std::string& name, ISerializer& seria
 
     getVariantValue(serializer, tag, in);
   }
-
-  serializer.endObject();
 }
 
-void serialize(TransactionInputGenerate& gen, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(TransactionInputGenerate& gen, ISerializer& serializer) {
   serializer(gen.height, "height");
-  serializer.endObject();
 }
 
-void serialize(TransactionInputToScript& script, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-  serializer.endObject();
-}
+void serialize(TransactionInputToScript& script, ISerializer& serializer) {}
+void serialize(TransactionInputToScriptHash& scripthash, ISerializer& serializer) {}
 
-void serialize(TransactionInputToScriptHash& scripthash, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-  serializer.endObject();
-}
-
-void serialize(TransactionInputToKey& key, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(TransactionInputToKey& key, ISerializer& serializer) {
   serializer(key.amount, "amount");
   serializeVarintVector(key.keyOffsets, serializer, "key_offsets");
   serializer(key.keyImage, "k_image");
-  serializer.endObject();
 }
 
-void serialize(TransactionInputMultisignature& multisignature, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(TransactionInputMultisignature& multisignature, ISerializer& serializer) {
   serializer(multisignature.amount, "amount");
   serializer(multisignature.signatures, "signatures");
   serializer(multisignature.outputIndex, "outputIndex");
-  serializer.endObject();
 }
 
-void serialize(TransactionOutput& output, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(TransactionOutput& output, ISerializer& serializer) {
   serializer(output.amount, "amount");
   serializer(output.target, "target");
-  serializer.endObject();
 }
 
-void serialize(TransactionOutputTarget& output, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-
+void serialize(TransactionOutputTarget& output, ISerializer& serializer) {
   if (serializer.type() == ISerializer::OUTPUT) {
     BinaryVariantTagGetter tagGetter;
     uint8_t tag = boost::apply_visitor(tagGetter, output);
@@ -307,36 +292,21 @@ void serialize(TransactionOutputTarget& output, const std::string& name, ISerial
 
     getVariantValue(serializer, tag, output);
   }
-
-  serializer.endObject();
 }
 
-void serialize(TransactionOutputToScript& script, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-  serializer.endObject();
-}
+void serialize(TransactionOutputToScript& script, ISerializer& serializer) {}
+void serialize(TransactionOutputToScriptHash& scripthash, ISerializer& serializer) {}
 
-void serialize(TransactionOutputToScriptHash& scripthash, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-  serializer.endObject();
-}
-
-void serialize(TransactionOutputToKey& key, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(TransactionOutputToKey& key, ISerializer& serializer) {
   serializer(key.key, "key");
-  serializer.endObject();
 }
 
-void serialize(TransactionOutputMultisignature& multisignature, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(TransactionOutputMultisignature& multisignature, ISerializer& serializer) {
   serializer(multisignature.keys, "keys");
   serializer(multisignature.requiredSignatures, "required_signatures");
-  serializer.endObject();
 }
 
-void serialize(ParentBlockSerializer& pbs, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-
+void serialize(ParentBlockSerializer& pbs, ISerializer& serializer) {
   serializer(pbs.m_parentBlock.majorVersion, "majorVersion");
 
   if (BLOCK_MAJOR_VERSION_1 < pbs.m_parentBlock.majorVersion) {
@@ -410,8 +380,6 @@ void serialize(ParentBlockSerializer& pbs, const std::string& name, ISerializer&
   for (crypto::hash& hash: pbs.m_parentBlock.blockchainBranch) {
     serializer(hash, "");
   }
-
-  serializer.endObject();
 }
 
 void serializeBlockHeader(BlockHeader& header, ISerializer& serializer) {
@@ -432,15 +400,11 @@ void serializeBlockHeader(BlockHeader& header, ISerializer& serializer) {
   }
 }
 
-void serialize(BlockHeader& header, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(BlockHeader& header, ISerializer& serializer) {
   serializeBlockHeader(header, serializer);
-  serializer.endObject();
 }
 
-void serialize(Block& block, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-
+void serialize(Block& block, ISerializer& serializer) {
   serializeBlockHeader(block, serializer);
 
   if (block.majorVersion == BLOCK_MAJOR_VERSION_2) {
@@ -450,45 +414,40 @@ void serialize(Block& block, const std::string& name, ISerializer& serializer) {
 
   serializer(block.minerTx, "miner_tx");
   serializer(block.txHashes, "tx_hashes");
-
-  serializer.endObject();
 }
 
-void serialize(AccountPublicAddress& address, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-
-  serializer(address.m_spendPublicKey, "spend_public_key");
-  serializer(address.m_viewPublicKey, "view_public_key");
-
-  serializer.endObject();
+void serialize(AccountPublicAddress& address, ISerializer& serializer) {
+  serializer(address.m_spendPublicKey, "m_spend_public_key");
+  serializer(address.m_viewPublicKey, "m_view_public_key");
 }
 
-void doSerialize(tx_extra_merge_mining_tag& tag, const std::string& name, ISerializer& serializer) {
+void serialize(account_keys& keys, ISerializer& s) {
+  s(keys.m_account_address, "m_account_address");
+  s(keys.m_spend_secret_key, "m_spend_secret_key");
+  s(keys.m_view_secret_key, "m_view_secret_key");
+}
+
+void doSerialize(tx_extra_merge_mining_tag& tag, ISerializer& serializer) {
   uint64_t depth = static_cast<uint64_t>(tag.depth);
   serializer(depth, "depth");
   tag.depth = static_cast<size_t>(depth);
   serializer(tag.merkle_root, "merkle_root");
 }
 
-void serialize(tx_extra_merge_mining_tag& tag, const std::string& name, ISerializer& serializer) {
-  serializer.beginObject(name);
-
+void serialize(tx_extra_merge_mining_tag& tag, ISerializer& serializer) {
   if (serializer.type() == ISerializer::OUTPUT) {
     std::stringstream stream;
     BinaryOutputStreamSerializer output(stream);
-    doSerialize(tag, "", output);
+    doSerialize(tag, output);
     std::string field = stream.str();
     serializer(field, "");
   } else {
     std::string field;
     serializer(field, "");
-
     std::stringstream stream(field);
     BinaryInputStreamSerializer input(stream);
-    doSerialize(tag, "", input);
+    doSerialize(tag, input);
   }
-
-  serializer.endObject();
 }
 
 } //namespace CryptoNote

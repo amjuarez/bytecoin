@@ -17,10 +17,8 @@
 
 #pragma once
 
-#include "misc_log_ex.h"
-#include "storages/portable_storage.h"
-#include "storages/portable_storage_from_bin.h"
-#include "storages/portable_storage_to_bin.h"
+#include "serialization/KVBinaryInputStreamSerializer.h"
+#include "serialization/KVBinaryOutputStreamSerializer.h"
 
 namespace System {
 class TcpConnection;
@@ -72,20 +70,24 @@ public:
 
   template <typename T>
   static bool decode(const std::string& buf, T& value) {
-    epee::serialization::portable_storage stg;
-    if (!stg.load_from_binary(buf)) {
+    try {
+      std::stringstream stream(buf);
+      KVBinaryInputStreamSerializer serializer(stream);
+      serialize(value, serializer);
+    } catch (std::exception&) {
       return false;
     }
-    return value.load(stg);
+
+    return true;
   }
 
   template <typename T>
   static std::string encode(const T& value) {
-    std::string buf;
-    epee::serialization::portable_storage stg;
-    value.store(stg);
-    stg.store_to_binary(buf);
-    return buf;
+    KVBinaryOutputStreamSerializer serializer;
+    serialize(const_cast<T&>(value), serializer);
+    std::stringstream stream;
+    serializer.write(stream);
+    return stream.str();
   }
 
 private:

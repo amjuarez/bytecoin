@@ -34,10 +34,15 @@
 #include "p2p/LevinProtocol.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 #include "rpc/HttpClient.h"
+#include "serialization/SerializationTools.h"
 #include "version.h"
 
 namespace po = boost::program_options;
 using namespace CryptoNote;
+
+#ifndef ENDL
+#define ENDL std::endl
+#endif
 
 namespace {
   const command_line::arg_descriptor<std::string, true> arg_ip           = {"ip", "set ip"};
@@ -98,7 +103,7 @@ std::ostream& get_response_schema_as_json(std::ostream& ss, response_schema &rs)
      << "  \"COMMAND_REQUEST_STAT_INFO_status\": \"" << rs.COMMAND_REQUEST_STAT_INFO_status << "\"";
 
   if (rs.si_rsp.is_initialized()) {
-    ss << "," << ENDL << "  \"si_rsp\": " << epee::serialization::store_t_to_json(rs.si_rsp.get(), 1);
+    ss << "," << ENDL << "  \"si_rsp\": " << storeToJson(rs.si_rsp.get());
   }
 
   if (rs.ns_rsp.is_initialized()) {
@@ -195,8 +200,8 @@ bool handle_get_daemon_info(po::variables_map& vm) {
     System::Dispatcher dispatcher;
     HttpClient httpClient(dispatcher, command_line::get_arg(vm, arg_ip), command_line::get_arg(vm, arg_rpc_port));
 
-    CryptoNote::COMMAND_RPC_GET_INFO::request req = AUTO_VAL_INIT(req);
-    CryptoNote::COMMAND_RPC_GET_INFO::response res = AUTO_VAL_INIT(res);
+    CryptoNote::COMMAND_RPC_GET_INFO::request req;
+    CryptoNote::COMMAND_RPC_GET_INFO::response res;
 
     invokeJsonCommand(httpClient, "/getinfo", req, res); // TODO: timeout
 
@@ -225,13 +230,13 @@ bool handle_request_stat(po::variables_map& vm, peerid_type peer_id) {
     return false;
   }
 
-  crypto::secret_key prvk = AUTO_VAL_INIT(prvk);
+  crypto::secret_key prvk;
   if (!Common::podFromHex(command_line::get_arg(vm, arg_priv_key), prvk)) {
     std::cout << "{" << ENDL << "  \"status\": \"ERROR: " << "wrong secret key set \"" << ENDL << "}";
     return false;
   }
 
-  response_schema rs = AUTO_VAL_INIT(rs);
+  response_schema rs;
   unsigned timeout = command_line::get_arg(vm, arg_timeout);
 
   try {
@@ -262,17 +267,17 @@ bool handle_request_stat(po::variables_map& vm, peerid_type peer_id) {
       peer_id = rsp.my_id;
     }
 
-    proof_of_trust pot = AUTO_VAL_INIT(pot);
+    proof_of_trust pot;
     pot.peer_id = peer_id;
     pot.time = time(NULL);
-    crypto::public_key pubk = AUTO_VAL_INIT(pubk);
+    crypto::public_key pubk;
     Common::podFromHex(P2P_STAT_TRUSTED_PUB_KEY, pubk);
     crypto::hash h = get_proof_of_trust_hash(pot);
     crypto::generate_signature(h, pubk, prvk, pot.sign);
 
     if (command_line::get_arg(vm, arg_request_stat_info)) {
-      COMMAND_REQUEST_STAT_INFO::request req = AUTO_VAL_INIT(req);
-      COMMAND_REQUEST_STAT_INFO::response res = AUTO_VAL_INIT(res);
+      COMMAND_REQUEST_STAT_INFO::request req;
+      COMMAND_REQUEST_STAT_INFO::response res;
 
       req.tr = pot;
 
@@ -295,9 +300,8 @@ bool handle_request_stat(po::variables_map& vm, peerid_type peer_id) {
       ++pot.time;
       h = get_proof_of_trust_hash(pot);
       crypto::generate_signature(h, pubk, prvk, pot.sign);
-      COMMAND_REQUEST_NETWORK_STATE::request req = AUTO_VAL_INIT(req);
-      COMMAND_REQUEST_NETWORK_STATE::response res = AUTO_VAL_INIT(res);
-      req.tr = pot;
+      COMMAND_REQUEST_NETWORK_STATE::request req{ pot };
+      COMMAND_REQUEST_NETWORK_STATE::response res;
 
       try {
         withTimeout(dispatcher, connection, timeout, [&] {
@@ -324,8 +328,8 @@ bool handle_request_stat(po::variables_map& vm, peerid_type peer_id) {
 
 //---------------------------------------------------------------------------------------------------------------
 bool generate_and_print_keys() {
-  crypto::public_key pk = AUTO_VAL_INIT(pk);
-  crypto::secret_key sk = AUTO_VAL_INIT(sk);
+  crypto::public_key pk;
+  crypto::secret_key sk;
   generate_keys(pk, sk);
   std::cout << "PUBLIC KEY: " << Common::podToHex(pk) << ENDL
             << "PRIVATE KEY: " << Common::podToHex(sk);

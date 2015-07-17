@@ -93,6 +93,10 @@ bool Currency::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64
   assert(m_emissionSpeedFactor > 0 && m_emissionSpeedFactor <= 8 * sizeof(uint64_t));
 
   uint64_t baseReward = (m_moneySupply - alreadyGeneratedCoins) >> m_emissionSpeedFactor;
+  if (alreadyGeneratedCoins == 0 && m_genesisBlockReward != 0) {
+    baseReward = m_genesisBlockReward;
+    std::cout << "Genesis block reward: " << baseReward << std::endl;
+  }
 
   size_t blockGrantedFullRewardZone = penalizeFee ?
   m_blockGrantedFullRewardZone :
@@ -207,6 +211,10 @@ bool Currency::constructMinerTx(uint32_t height, size_t medianSize, uint64_t alr
 
 std::string Currency::accountAddressAsString(const account_base& account) const {
   return getAccountAddressAsStr(m_publicAddressBase58Prefix, account.get_keys().m_account_address);
+}
+
+std::string Currency::accountAddressAsString(const AccountPublicAddress& accountPublicAddress) const {
+  return getAccountAddressAsStr(m_publicAddressBase58Prefix, accountPublicAddress);
 }
 
 bool Currency::parseAccountAddressString(const std::string& str, AccountPublicAddress& addr) const {
@@ -388,6 +396,7 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
 
   moneySupply(parameters::MONEY_SUPPLY);
   emissionSpeedFactor(parameters::EMISSION_SPEED_FACTOR);
+genesisBlockReward(parameters::GENESIS_BLOCK_REWARD);
 
   rewardBlocksWindow(parameters::CRYPTONOTE_REWARD_BLOCKS_WINDOW);
   blockGrantedFullRewardZone(parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
@@ -412,6 +421,7 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
 
   mempoolTxLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_LIVETIME);
   mempoolTxFromAltBlockLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME);
+  numberOfPeriodsToForgetTxDeletedFromPool(parameters::CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL);
 
   upgradeHeight(parameters::UPGRADE_HEIGHT);
   upgradeVotingThreshold(parameters::UPGRADE_VOTING_THRESHOLD);
@@ -426,14 +436,48 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
   testnet(false);
 }
 
- Transaction CurrencyBuilder::generateGenesisTransaction() {
+Transaction CurrencyBuilder::generateGenesisTransaction() {
   CryptoNote::Transaction tx;
   CryptoNote::AccountPublicAddress ac = boost::value_initialized<CryptoNote::AccountPublicAddress>();
   m_currency.constructMinerTx(0, 0, 0, 0, 0, ac, tx); // zero fee in genesis
-
   return tx;
 }
-
+ Transaction CurrencyBuilder::generateGenesisTransaction(const std::vector<AccountPublicAddress>& targets) {
+    assert(!targets.empty());
+ 
+    CryptoNote::Transaction tx;
+    tx.vin.clear();
+    tx.vout.clear();
+    tx.extra.clear();
+    tx.version = CURRENT_TRANSACTION_VERSION;
+    tx.unlockTime = m_currency.m_minedMoneyUnlockWindow;
+    KeyPair txkey = KeyPair::generate();
+    add_tx_pub_key_to_extra(tx, txkey.pub);
+    TransactionInputGenerate in;
+    in.height = 0;
+    tx.vin.push_back(in);
+    uint64_t block_reward = m_currency.m_genesisBlockReward;
+    uint64_t target_amount = block_reward / targets.size();
+    uint64_t first_target_amount = target_amount + block_reward % targets.size();
+    for (size_t i = 0; i < targets.size(); ++i) {
+      crypto::key_derivation derivation = boost::value_initialized<crypto::key_derivation>();
+      crypto::public_key out_eph_public_key = boost::value_initialized<crypto::public_key>();
+      bool r = crypto::generate_key_derivation(targets[i].m_viewPublicKey, txkey.sec, derivation);
+      assert(r == true);
+//      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << targets[i].m_viewPublicKey << ", " << txkey.sec << ")");
+      r = crypto::derive_public_key(derivation, i, targets[i].m_spendPublicKey, out_eph_public_key);
+      assert(r == true);
+ //     CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << i << ", " << targets[i].m_spendPublicKey << ")");
+      TransactionOutputToKey tk;
+      tk.key = out_eph_public_key;
+      TransactionOutput out;
+      out.amount = (i == 0) ? first_target_amount : target_amount;
+      std::cout << "outs: " << std::to_string(out.amount) << std::endl;
+      out.target = tk;
+      tx.vout.push_back(out);
+    }
+    return tx;
+}
 CurrencyBuilder& CurrencyBuilder::emissionSpeedFactor(unsigned int val) {
   if (val <= 0 || val > 8 * sizeof(uint64_t)) {
     throw std::invalid_argument("val at emissionSpeedFactor()");

@@ -37,7 +37,7 @@ void LoggerManager::configure(const JsonValue& val) {
   loggers.clear();
   LoggerGroup::loggers.clear();
   Level globalLevel;
-  if (val.count("globalLevel")) {
+  if (val.contains("globalLevel")) {
     auto levelVal = val("globalLevel");
     if (levelVal.isInteger()) {
       globalLevel = static_cast<Level>(levelVal.getInteger());
@@ -49,7 +49,7 @@ void LoggerManager::configure(const JsonValue& val) {
   }
   std::vector<std::string> globalDisabledCategories;
 
-  if (val.count("globalDisabledCategories")) {
+  if (val.contains("globalDisabledCategories")) {
     auto globalDisabledCategoriesList = val("globalDisabledCategories");
     if (globalDisabledCategoriesList.isArray()) {
       size_t countOfCategories = globalDisabledCategoriesList.size();
@@ -64,7 +64,7 @@ void LoggerManager::configure(const JsonValue& val) {
     }
   }
 
-  if (val.count("loggers")) {
+  if (val.contains("loggers")) {
     auto loggersList = val("loggers");
     if (loggersList.isArray()) {
       size_t countOfLoggers = loggersList.size();
@@ -75,7 +75,7 @@ void LoggerManager::configure(const JsonValue& val) {
         }
 
         Level level = INFO;
-        if (loggerConfiguration.count("level")) {
+        if (loggerConfiguration.contains("level")) {
           level = static_cast<Level>(loggerConfiguration("level").getInteger());
         }
 
@@ -93,12 +93,12 @@ void LoggerManager::configure(const JsonValue& val) {
           throw std::runtime_error("Unknown logger type: " + type);
         }
 
-        if (loggerConfiguration.count("pattern")) {
+        if (loggerConfiguration.contains("pattern")) {
           logger->setPattern(loggerConfiguration("pattern").getString());
         }
 
         std::vector<std::string> disabledCategories;
-        if (loggerConfiguration.count("disabledCategories")) {
+        if (loggerConfiguration.contains("disabledCategories")) {
           auto disabledCategoriesVal = loggerConfiguration("disabledCategories");
           size_t countOfCategories = disabledCategoriesVal.size();
           for (size_t i = 0; i < countOfCategories; ++i) {

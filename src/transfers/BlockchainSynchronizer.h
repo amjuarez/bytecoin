@@ -125,7 +125,6 @@ private:
   INode& m_node;
   const crypto::hash m_genesisBlockHash;
 
-  std::vector<crypto::hash> knownTxIds;
   crypto::hash lastBlockId;
 
   State m_currentState;

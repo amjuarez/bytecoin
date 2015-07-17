@@ -16,34 +16,35 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "account.h"
+#include "cryptonote_serialization.h"
 
-namespace CryptoNote
-{
-  //-----------------------------------------------------------------
-  account_base::account_base()
-  {
-    set_null();
-  }
-  //-----------------------------------------------------------------
-  void account_base::set_null()
-  {
-    m_keys = account_keys();
-  }
-  //-----------------------------------------------------------------
-  void account_base::generate()
-  {
-    crypto::generate_keys(m_keys.m_account_address.m_spendPublicKey, m_keys.m_spend_secret_key);
-    crypto::generate_keys(m_keys.m_account_address.m_viewPublicKey, m_keys.m_view_secret_key);
-    m_creation_timestamp = time(NULL);
-  }
-  //-----------------------------------------------------------------
-  const account_keys& account_base::get_keys() const
-  {
-    return m_keys;
-  }
+namespace CryptoNote {
+//-----------------------------------------------------------------
+account_base::account_base() {
+  set_null();
+}
+//-----------------------------------------------------------------
+void account_base::set_null() {
+  m_keys = account_keys();
+}
+//-----------------------------------------------------------------
+void account_base::generate() {
+  crypto::generate_keys(m_keys.m_account_address.m_spendPublicKey, m_keys.m_spend_secret_key);
+  crypto::generate_keys(m_keys.m_account_address.m_viewPublicKey, m_keys.m_view_secret_key);
+  m_creation_timestamp = time(NULL);
+}
+//-----------------------------------------------------------------
+const account_keys &account_base::get_keys() const {
+  return m_keys;
+}
 
-  void account_base::set_keys(const account_keys& keys) {
-    m_keys = keys;
-  }
-  //-----------------------------------------------------------------
+void account_base::set_keys(const account_keys &keys) {
+  m_keys = keys;
+}
+//-----------------------------------------------------------------
+
+void account_base::serialize(ISerializer &s) {
+  s(m_keys, "m_keys");
+  s(m_creation_timestamp, "m_creation_timestamp");
+}
 }

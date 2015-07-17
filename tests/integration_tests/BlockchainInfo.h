@@ -21,12 +21,13 @@
 #include "cryptonote_core/cryptonote_serialization.h"
 
 namespace CryptoNote {
-  void serialize(BlockCompleteEntry& v, const std::string& name, ISerializer& s) {
+  bool serialize(BlockCompleteEntry& v, const Common::StringView& name, ISerializer& s) {
     s.beginObject(name);
     s(v.blockHash, "hash");
     s.binary(v.block, "block");
     s(v.txs, "transactions");
     s.endObject();
+    return true;
   }
 
   bool operator == (const BlockCompleteEntry& a, const BlockCompleteEntry& b) {
@@ -44,11 +45,10 @@ namespace CryptoNote {
       return blocks == other.blocks && globalOutputs == other.globalOutputs;
     }
 
-    void serialize(ISerializer& s, const std::string& name) {
-      s.beginObject(name);
+    ISerializer& serialize(ISerializer& s) {
       s(blocks, "blocks");
       s(globalOutputs, "outputs");
-      s.endObject();
+      return s;
     }
   };
 

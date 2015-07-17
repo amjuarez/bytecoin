@@ -18,10 +18,13 @@
 #pragma once
 
 #include <list>
-#include "serialization/keyvalue_serialization.h"
 #include "cryptonote_core/cryptonote_basic.h"
 #include "cryptonote_protocol/blobdatatype.h"
 
+// ISerializer-based serialization
+#include "serialization/ISerializer.h"
+#include "serialization/SerializationOverloads.h"
+#include "cryptonote_core/cryptonote_serialization.h"
 
 namespace CryptoNote
 {
@@ -35,21 +38,24 @@ namespace CryptoNote
   {
     blobdata block;
     std::list<blobdata> txs;
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(block)
-      KV_SERIALIZE(txs)
-    END_KV_SERIALIZE_MAP()
+
+    void serialize(ISerializer& s) {
+      KV_MEMBER(block);
+      KV_MEMBER(txs);
+    }
+
   };
 
   struct BlockFullInfo : public block_complete_entry
   {
     crypto::hash block_id;
 
-    BEGIN_KV_SERIALIZE_MAP()
-    KV_SERIALIZE_VAL_POD_AS_BLOB(block_id)
-    KV_SERIALIZE(block)
-    KV_SERIALIZE(txs)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(block_id);
+      KV_MEMBER(block);
+      KV_MEMBER(txs);
+    }
+
   };
 
   /************************************************************************/
@@ -61,11 +67,11 @@ namespace CryptoNote
     uint64_t current_blockchain_height;
     uint32_t hop;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(b)
-      KV_SERIALIZE(current_blockchain_height)
-      KV_SERIALIZE(hop)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(b)
+      KV_MEMBER(current_blockchain_height)
+      KV_MEMBER(hop)
+    }
   };
 
   struct NOTIFY_NEW_BLOCK
@@ -81,9 +87,10 @@ namespace CryptoNote
   {
     std::list<blobdata>   txs;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(txs)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(txs);
+    }
+
   };
 
   struct NOTIFY_NEW_TRANSACTIONS
@@ -100,10 +107,10 @@ namespace CryptoNote
     std::list<crypto::hash>    txs;
     std::list<crypto::hash>    blocks;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(txs)
-      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(blocks)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      serializeAsBinary(txs, "txs", s);
+      serializeAsBinary(blocks, "blocks", s);
+    }
   };
 
   struct NOTIFY_REQUEST_GET_OBJECTS
@@ -114,17 +121,18 @@ namespace CryptoNote
 
   struct NOTIFY_RESPONSE_GET_OBJECTS_request
   {
-    std::list<blobdata>              txs;
-    std::list<block_complete_entry>  blocks;
-    std::list<crypto::hash>               missed_ids;
-    uint64_t                         current_blockchain_height;
+    std::list<blobdata> txs;
+    std::list<block_complete_entry> blocks;
+    std::list<crypto::hash> missed_ids;
+    uint64_t current_blockchain_height;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(txs)
-      KV_SERIALIZE(blocks)
-      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(missed_ids)
-      KV_SERIALIZE(current_blockchain_height)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(txs)
+      KV_MEMBER(blocks)
+      serializeAsBinary(missed_ids, "missed_ids", s);
+      KV_MEMBER(current_blockchain_height)
+    }
+
   };
 
   struct NOTIFY_RESPONSE_GET_OBJECTS
@@ -141,9 +149,9 @@ namespace CryptoNote
     {
       std::list<crypto::hash> block_ids; /*IDs of the first 10 blocks are sequential, next goes with pow(2,n) offset, like 2, 4, 8, 16, 32, 64 and so on, and the last one is always genesis block */
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(block_ids)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        serializeAsBinary(block_ids, "block_ids", s);
+      }
     };
   };
 
@@ -153,11 +161,11 @@ namespace CryptoNote
     uint64_t total_height;
     std::list<crypto::hash> m_block_ids;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(start_height)
-      KV_SERIALIZE(total_height)
-      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(m_block_ids)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(start_height)
+      KV_MEMBER(total_height)
+      serializeAsBinary(m_block_ids, "m_block_ids", s);
+    }
   };
 
   struct NOTIFY_RESPONSE_CHAIN_ENTRY
@@ -166,4 +174,19 @@ namespace CryptoNote
     typedef NOTIFY_RESPONSE_CHAIN_ENTRY_request request;
   };
 
+  /************************************************************************/
+  /*                                                                      */
+  /************************************************************************/
+  struct NOTIFY_REQUEST_TX_POOL_request {
+    std::vector<crypto::hash> txs;
+
+    void serialize(ISerializer& s) {
+      serializeAsBinary(txs, "txs", s);
+    }
+  };
+
+  struct NOTIFY_REQUEST_TX_POOL {
+    const static int ID = BC_COMMANDS_POOL_BASE + 8;
+    typedef NOTIFY_REQUEST_TX_POOL_request request;
+  };
 }

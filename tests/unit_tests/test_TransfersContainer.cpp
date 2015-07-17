@@ -399,7 +399,7 @@ TEST_F(TransfersContainer_addTransaction, addingEmptyTransactionOuptutsDoesNotCh
 
   auto tx = createTransaction();
   addTestInput(*tx, TEST_OUTPUT_AMOUNT + 1);
-  auto outInfo = addTestKeyOutput(*tx, TEST_OUTPUT_AMOUNT, TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX);
+  addTestKeyOutput(*tx, TEST_OUTPUT_AMOUNT, TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX);
 
   std::vector<TransactionOutputInformationIn> outputs;
 
@@ -615,7 +615,7 @@ TEST_F(TransfersContainer_deleteUnconfirmedTransaction, deleteUnconfirmedSpendin
   {
     CryptoNote::BlockInfo blockInfo{ UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
     addInput(*spendingTx, account, transfers[0]);
-    auto outInfo = addTestKeyOutput(*spendingTx, TEST_OUTPUT_AMOUNT - 1, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX);
+    addTestKeyOutput(*spendingTx, TEST_OUTPUT_AMOUNT - 1, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX);
     std::vector<TransactionOutputInformationIn> outputs;
     ASSERT_TRUE(container.addTransaction(blockInfo, *spendingTx, outputs));
   }

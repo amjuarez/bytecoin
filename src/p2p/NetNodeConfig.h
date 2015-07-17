@@ -44,8 +44,8 @@ public:
   std::vector<net_address> exclusiveNodes;
   std::vector<net_address> seedNodes;
   bool hideMyPort;
-boost::uuids::uuid networkId;
-std::string p2pStatTrustedPubKey;
+  boost::uuids::uuid networkId;
+  std::string p2pStatTrustedPubKey;
   std::string configFolder;
 };
 

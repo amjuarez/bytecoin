@@ -283,7 +283,7 @@ namespace CryptoNote
       std::vector<std::string> perrs = command_line::get_arg(vm, arg_p2p_add_peer);
       for(const std::string& pr_str: perrs)
       {
-        peerlist_entry pe = AUTO_VAL_INIT(pe);
+        peerlist_entry pe = boost::value_initialized<peerlist_entry>();
         pe.id = crypto::rand<uint64_t>();
         bool r = parse_peer_from_string(pe.adr, pr_str);
         if (!(r)) { logger(ERROR, BRIGHT_RED) << "Failed to parse address from string: " << pr_str; return false; }
@@ -316,8 +316,8 @@ namespace CryptoNote
     m_port = config.bindPort;
     m_external_port = config.externalPort;
     m_allow_local_ip = config.allowLocalIp;
-m_network_id = config.networkId;
-m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
+    m_network_id = config.networkId;
+    m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
 
     std::copy(config.peers.begin(), config.peers.end(), std::back_inserter(m_command_line_peers));
     std::copy(config.exclusiveNodes.begin(), config.exclusiveNodes.end(), std::back_inserter(m_exclusive_peers));
@@ -437,7 +437,11 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
     m_idleTimer.stop();
     m_timedSyncTimer.stop();
 
-    logger(INFO) << "Stopping " << m_connections.size() << " connections";
+    logger(INFO) << "Stopping " << m_connections.size() + m_raw_connections.size() << " connections";
+
+    for (auto& conn : m_raw_connections) {
+      conn.second.connection.stop();
+    }
 
     for (auto& conn : m_connections) {
       conn.second.connection.stop();
@@ -510,6 +514,8 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
 
     proto.invoke(COMMAND_HANDSHAKE::ID, arg, rsp);
 
+    context.version = rsp.node_data.version;
+
     if (rsp.node_data.network_id != m_network_id) {
       logger(Logging::ERROR) << context << "COMMAND_HANDSHAKE Failed, wrong network!  (" << rsp.node_data.network_id << "), closing connection.";
       return false;
@@ -543,7 +549,7 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
 
   
   bool node_server::timedSync() {   
-    COMMAND_TIMED_SYNC::request arg = AUTO_VAL_INIT(arg);
+    COMMAND_TIMED_SYNC::request arg = boost::value_initialized<COMMAND_TIMED_SYNC::request>();
     m_payload_handler.get_payload_sync_data(arg.payload_data);
     auto cmdBuf = LevinProtocol::encode<COMMAND_TIMED_SYNC::request>(arg);
 
@@ -673,32 +679,44 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
       ctx.m_is_income = false;
       ctx.m_started = time(nullptr);
 
-      CryptoNote::LevinProtocol proto(ctx.connection);
+      auto raw = m_raw_connections.emplace(ctx.m_connection_id, std::move(ctx)).first;
+      try {
+        CryptoNote::LevinProtocol proto(raw->second.connection);
 
-      if (!handshake(proto, ctx, just_take_peerlist)) {
-        logger(WARNING) << "Failed to HANDSHAKE with peer " << na;
-        return false;
+        if (!handshake(proto, raw->second, just_take_peerlist)) {
+          logger(WARNING) << "Failed to HANDSHAKE with peer " << na;
+          m_raw_connections.erase(raw);
+          return false;
+        }
+      } catch (...) {
+        m_raw_connections.erase(raw);
+        throw;
       }
 
       if (just_take_peerlist) {
-        logger(Logging::DEBUGGING, Logging::BRIGHT_GREEN) << ctx << "CONNECTION HANDSHAKED OK AND CLOSED.";
+        logger(Logging::DEBUGGING, Logging::BRIGHT_GREEN) << raw->second << "CONNECTION HANDSHAKED OK AND CLOSED.";
+        m_raw_connections.erase(raw);
         return true;
       }
 
-      peerlist_entry pe_local = AUTO_VAL_INIT(pe_local);
+      peerlist_entry pe_local = boost::value_initialized<peerlist_entry>();
       pe_local.adr = na;
-      pe_local.id = ctx.peer_id;
+      pe_local.id = raw->second.peer_id;
       time(&pe_local.last_seen);
       m_peerlist.append_with_peer_white(pe_local);
 
       if (m_stop) {
+        m_raw_connections.erase(raw);
         throw System::InterruptedException();
       }
 
-      auto iter = m_connections.emplace(ctx.m_connection_id, std::move(ctx)).first;
+      auto iter = m_connections.emplace(raw->first, std::move(raw->second)).first;
+      m_raw_connections.erase(raw);
+      const boost::uuids::uuid& connectionId = iter->first;
+      p2p_connection_context& connectionContext = iter->second;
 
       ++m_spawnCount;
-      m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, iter));
+      m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, std::cref(connectionId), std::ref(connectionContext)));
 
       return true;
     } catch (System::InterruptedException&) {
@@ -733,7 +751,7 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
         continue;
 
       tried_peers.insert(random_index);
-      peerlist_entry pe = AUTO_VAL_INIT(pe);
+      peerlist_entry pe = boost::value_initialized<peerlist_entry>();
       bool r = use_white_list ? m_peerlist.get_white_peer_by_index(pe, random_index):m_peerlist.get_gray_peer_by_index(pe, random_index);
       if (!(r)) { logger(ERROR, BRIGHT_RED) << "Failed to get random peer from peerlist(white:" << use_white_list << ")"; return false; }
 
@@ -880,6 +898,7 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
   
   bool node_server::get_local_node_data(basic_node_data& node_data)
   {
+    node_data.version = P2PProtocolVersion::CURRENT;
     time_t local_time;
     time(&local_time);
     node_data.local_time = local_time;
@@ -893,33 +912,34 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
   }
   //-----------------------------------------------------------------------------------
 #ifdef ALLOW_DEBUG_COMMANDS
-  
-  bool node_server::check_trust(const proof_of_trust& tr)
-  {
+
+  bool node_server::check_trust(const proof_of_trust &tr) {
     uint64_t local_time = time(NULL);
-    uint64_t time_delata = local_time > tr.time ? local_time - tr.time: tr.time - local_time;
-    if(time_delata > 24*60*60 )
-    {
-      logger(ERROR) << "check_trust failed to check time conditions, local_time=" <<  local_time << ", proof_time=" << tr.time;
+    uint64_t time_delata = local_time > tr.time ? local_time - tr.time : tr.time - local_time;
+
+    if (time_delata > 24 * 60 * 60) {
+      logger(ERROR) << "check_trust failed to check time conditions, local_time=" << local_time << ", proof_time=" << tr.time;
       return false;
     }
-    if(m_last_stat_request_time >= tr.time )
-    {
-      logger(ERROR) << "check_trust failed to check time conditions, last_stat_request_time=" <<  m_last_stat_request_time << ", proof_time=" << tr.time;
+
+    if (m_last_stat_request_time >= tr.time) {
+      logger(ERROR) << "check_trust failed to check time conditions, last_stat_request_time=" << m_last_stat_request_time << ", proof_time=" << tr.time;
       return false;
     }
-    if(m_config.m_peer_id != tr.peer_id)
-    {
-      logger(ERROR) << "check_trust failed: peer_id mismatch (passed " << tr.peer_id << ", expected " << m_config.m_peer_id<< ")";
+
+    if (m_config.m_peer_id != tr.peer_id) {
+      logger(ERROR) << "check_trust failed: peer_id mismatch (passed " << tr.peer_id << ", expected " << m_config.m_peer_id << ")";
       return false;
     }
-    crypto::public_key pk = AUTO_VAL_INIT(pk);
-    Common::podFromHex(m_p2pStatTrustedPubKey, pk);    crypto::hash h = get_proof_of_trust_hash(tr);
-    if(!crypto::check_signature(h, pk, tr.sign))
-    {
+
+    crypto::public_key pk;
+    Common::podFromHex(m_p2pStatTrustedPubKey, pk);
+    crypto::hash h = get_proof_of_trust_hash(tr);
+    if (!crypto::check_signature(h, pk, tr.sign)) {
       logger(ERROR) << "check_trust failed: sign check failed";
       return false;
     }
+
     //update last request time
     m_last_stat_request_time = tr.time;
     return true;
@@ -1066,7 +1086,9 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
   
   int node_server::handle_handshake(int command, COMMAND_HANDSHAKE::request& arg, COMMAND_HANDSHAKE::response& rsp, p2p_connection_context& context)
   {
-    if(arg.node_data.network_id != m_network_id) {
+    context.version = arg.node_data.version;
+
+    if (arg.node_data.network_id != m_network_id) {
       logger(Logging::INFO) << context << "WRONG NETWORK AGENT CONNECTED! id=" << arg.node_data.network_id;
       context.m_state = cryptonote_connection_context::state_shutdown;
       return 1;
@@ -1196,7 +1218,7 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
     std::vector<std::string> perrs = command_line::get_arg(vm, arg);
 
     for(const std::string& pr_str: perrs) {
-      net_address na = AUTO_VAL_INIT(na);
+      net_address na;
       if (!parse_peer_from_string(na, pr_str)) { 
         logger(ERROR, BRIGHT_RED) << "Failed to parse address from string: " << pr_str; 
         return false; 
@@ -1208,8 +1230,8 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
   }
 
   void node_server::acceptLoop() {
-    try {
-      for (;;) {
+    for (;;) {
+      try {
         p2p_connection_context ctx(m_dispatcher, m_listener.accept());
         ctx.m_connection_id = boost::uuids::random_generator()();
         ctx.m_is_income = true;
@@ -1220,13 +1242,16 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
         ctx.m_remote_port = addressAndPort.second;
 
         auto iter = m_connections.emplace(ctx.m_connection_id, std::move(ctx)).first;
+        const boost::uuids::uuid& connectionId = iter->first;
+        p2p_connection_context& connection = iter->second;
 
         ++m_spawnCount;
-        m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, iter));
+        m_dispatcher.spawn(std::bind(&node_server::connectionHandler, this, std::cref(connectionId), std::ref(connection)));
+      } catch (System::InterruptedException&) {
+        break;
+      } catch (const std::exception& e) {
+        logger(WARNING) << "Exception in acceptLoop: " << e.what();
       }
-    } catch (System::InterruptedException&) {
-    } catch (const std::exception& e) {
-      logger(WARNING) << "Exception in acceptLoop: " << e.what();
     }
 
     logger(DEBUGGING) << "acceptLoop finished";
@@ -1275,20 +1300,21 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
     }
   }
 
-  void node_server::connectionHandler(ConnectionIterator connIter) {
+  void node_server::connectionHandler(const boost::uuids::uuid& connectionId, p2p_connection_context& ctx) {
 
     try {
-      auto& ctx = connIter->second;
       on_connection_new(ctx);
 
       LevinProtocol proto(ctx.connection);
       LevinProtocol::Command cmd;
 
       for (;;) {
-
         if (ctx.m_state == cryptonote_connection_context::state_sync_required) {
           ctx.m_state = cryptonote_connection_context::state_synchronizing;
           m_payload_handler.start_sync(ctx);
+        } else if (ctx.m_state == cryptonote_connection_context::state_pool_sync_required) {
+          ctx.m_state = cryptonote_connection_context::state_normal;
+          m_payload_handler.requestMissingPoolTransactions(ctx);
         }
 
         if (!proto.readCommand(cmd)) {
@@ -1321,10 +1347,10 @@ m_p2pStatTrustedPubKey = config.p2pStatTrustedPubKey;
       logger(WARNING) << "Exception in connectionHandler: " << e.what();
     }
 
-    connIter->second.writeLatch.wait();
+    ctx.writeLatch.wait();
 
-    on_connection_close(connIter->second);
-    m_connections.erase(connIter);
+    on_connection_close(ctx);
+    m_connections.erase(connectionId);
  
     if (--m_spawnCount == 0) {
       m_shutdownCompleteEvent.set();

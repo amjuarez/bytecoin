@@ -60,7 +60,7 @@ private:
   TransactionTypes::OutputType m_type;
   union {
     const KeyImage* m_keyImage;
-struct {
+    struct {
       uint64_t m_amount;
       uint64_t m_globalOutputIndex;
     };
@@ -86,7 +86,7 @@ struct TransactionOutputInformationEx : public TransactionOutputInformationIn {
   SpentOutputDescriptor getSpentOutputDescriptor() const { return SpentOutputDescriptor(*this); }
   const Hash& getTransactionHash() const { return transactionHash; }
 
-  void serialize(CryptoNote::ISerializer& s, const std::string& name) {
+  void serialize(CryptoNote::ISerializer& s) {
     s(reinterpret_cast<uint8_t&>(type), "type");
     s(amount, "");
     s(globalOutputIndex, "");
@@ -112,7 +112,7 @@ struct BlockInfo {
   uint64_t timestamp;
   uint32_t transactionIndex;
 
-  void serialize(ISerializer& s, const std::string& name) {
+  void serialize(ISerializer& s) {
     s(height, "height");
     s(timestamp, "timestamp");
     s(transactionIndex, "transactionIndex");
@@ -128,8 +128,8 @@ struct SpentTransactionOutput : TransactionOutputInformationEx {
     return spendingTransactionHash;
   }
 
-  void serialize(ISerializer& s, const std::string& name) {
-    TransactionOutputInformationEx::serialize(s, name);
+  void serialize(ISerializer& s) {
+    TransactionOutputInformationEx::serialize(s);
     s(spendingBlock, "spendingBlock");
     s(spendingTransactionHash, "spendingTransactionHash");
     s(inputInTransaction, "inputInTransaction");

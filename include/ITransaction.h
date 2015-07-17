@@ -152,6 +152,7 @@ public:
   // extra
   virtual void setPaymentId(const Hash& paymentId) = 0;
   virtual void setExtraNonce(const std::string& nonce) = 0;
+  virtual void appendExtra(const Blob& extraData) = 0;
 
   // Inputs/Outputs 
   virtual size_t addInput(const TransactionTypes::InputKey& input) = 0;

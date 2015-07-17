@@ -61,6 +61,8 @@ SynchronizationState::CheckResult SynchronizationState::checkInterval(const Bloc
 
   size_t intervalEnd = interval.startHeight + interval.blocks.size();
   size_t iterationEnd = std::min(m_blockchain.size(), intervalEnd);
+  if (iterationEnd == 1)
+    iterationEnd = 0;
 
   for (size_t i = interval.startHeight; i < iterationEnd; ++i) {
     if (m_blockchain[i] != interval.blocks[i - interval.startHeight]) {

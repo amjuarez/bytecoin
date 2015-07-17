@@ -237,10 +237,6 @@ std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() {
 }
 
 TcpConnection::TcpConnection(Dispatcher& dispatcher, int socket) : dispatcher(&dispatcher), connection(socket), stopped(false), readContext(nullptr), writeContext(nullptr) {
-  int val = 1;
-  if (setsockopt(connection, SOL_SOCKET, SO_NOSIGPIPE, (void*)&val, sizeof val) == -1) {
-    throw std::runtime_error("TcpConnection::TcpConnection, setsockopt failed, result=" + std::to_string(errno));
-  }
 }
 
 }

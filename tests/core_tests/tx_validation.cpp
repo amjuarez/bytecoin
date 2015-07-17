@@ -18,7 +18,6 @@
 #include "tx_validation.h"
 #include "TestGenerator.h"
 
-using namespace epee;
 using namespace crypto;
 using namespace CryptoNote;
 

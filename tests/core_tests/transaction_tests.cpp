@@ -15,12 +15,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "include_base_utils.h"
 #include "cryptonote_core/cryptonote_basic_impl.h"
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/Currency.h"
-#include "misc_language.h"
+
+#include <Common/Math.h>
 
 #include "chaingen.h"
 
@@ -147,7 +147,7 @@ bool test_block_creation()
   bool r = currency.parseAccountAddressString("272xWzbWsP4cfNFfxY5ETN5moU8x81PKfWPwynrrqsNGDBQGLmD1kCkKCvPeDUXu5XfmZkCrQ53wsWmdfvHBGLNjGcRiDcK", adr);
   CHECK_AND_ASSERT_MES(r, false, "failed to import");
   Block b;
-  r = currency.constructMinerTx(90, epee::misc_utils::median(szs), 3553616528562147, 33094, 10000000, adr, b.minerTx, blobdata(), 11);
+  r = currency.constructMinerTx(90, Common::medianValue(szs), 3553616528562147, 33094, 10000000, adr, b.minerTx, blobdata(), 11);
   return r;
 }
 

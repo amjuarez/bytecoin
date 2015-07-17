@@ -25,9 +25,6 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/program_options.hpp>
 
-#include "include_base_utils.h"
-#include "misc_language.h"
-
 #include "Common/command_line.h"
 #include "cryptonote_core/account_boost_serialization.h"
 #include "cryptonote_core/cryptonote_basic.h"
@@ -39,8 +36,6 @@
 #include "cryptonote_core/UpgradeDetector.h"
 
 using namespace std;
-
-using namespace epee;
 using namespace CryptoNote;
 
 struct output_index {

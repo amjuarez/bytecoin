@@ -18,45 +18,46 @@
 #pragma once
 
 #include "cryptonote_basic.h"
-
-namespace CryptoNote {
-class ISerializer;
-}
+#include "serialization/ISerializer.h"
 
 namespace crypto {
 
-void serialize(public_key& pubKey, const std::string& name, CryptoNote::ISerializer& enumerator);
-void serialize(secret_key& secKey, const std::string& name, CryptoNote::ISerializer& enumerator);
-void serialize(hash& h, const std::string& name, CryptoNote::ISerializer& enumerator);
-void serialize(chacha8_iv& chacha, const std::string& name, CryptoNote::ISerializer& enumerator);
-void serialize(key_image& keyImage, const std::string& name, CryptoNote::ISerializer& enumerator);
+bool serialize(public_key& pubKey, Common::StringView name, CryptoNote::ISerializer& serializer);
+bool serialize(secret_key& secKey, Common::StringView name, CryptoNote::ISerializer& serializer);
+bool serialize(hash& h, Common::StringView name, CryptoNote::ISerializer& serializer);
+bool serialize(chacha8_iv& chacha, Common::StringView name, CryptoNote::ISerializer& serializer);
+bool serialize(key_image& keyImage, Common::StringView name, CryptoNote::ISerializer& serializer);
+bool serialize(signature& sig, Common::StringView name, CryptoNote::ISerializer& serializer);
 
 } //namespace crypto
 
 namespace CryptoNote {
-void serialize(ParentBlockSerializer& pbs, const std::string& name, ISerializer& serializer);
-void serialize(TransactionPrefix& txP, const std::string& name, ISerializer& serializer);
-void serialize(Transaction& tx, const std::string& name, ISerializer& serializer);
-void serialize(TransactionInput& in, const std::string& name, ISerializer& serializer);
-void serialize(TransactionOutput& in, const std::string& name, ISerializer& serializer);
+void serialize(ParentBlockSerializer& pbs, ISerializer& serializer);
+void serialize(TransactionPrefix& txP, ISerializer& serializer);
+void serialize(Transaction& tx, ISerializer& serializer);
+void serialize(TransactionInput& in, ISerializer& serializer);
+void serialize(TransactionOutput& in, ISerializer& serializer);
 
-void serialize(TransactionInputGenerate& gen, const std::string& name, ISerializer& serializer);
-void serialize(TransactionInputToScript& script, const std::string& name, ISerializer& serializer);
-void serialize(TransactionInputToScriptHash& scripthash, const std::string& name, ISerializer& serializer);
-void serialize(TransactionInputToKey& key, const std::string& name, ISerializer& serializer);
-void serialize(TransactionInputMultisignature& multisignature, const std::string& name, ISerializer& serializer);
+void serialize(TransactionInputGenerate& gen, ISerializer& serializer);
+void serialize(TransactionInputToScript& script, ISerializer& serializer);
+void serialize(TransactionInputToScriptHash& scripthash, ISerializer& serializer);
+void serialize(TransactionInputToKey& key, ISerializer& serializer);
+void serialize(TransactionInputMultisignature& multisignature, ISerializer& serializer);
 
-void serialize(TransactionOutput& output, const std::string& name, ISerializer& serializer);
+void serialize(TransactionOutput& output, ISerializer& serializer);
 
-void serialize(TransactionOutputTarget& output, const std::string& name, ISerializer& serializer);
+void serialize(TransactionOutputTarget& output, ISerializer& serializer);
 
-void serialize(TransactionOutputToScript& script, const std::string& name, ISerializer& serializer);
-void serialize(TransactionOutputToScriptHash& scripthash, const std::string& name, ISerializer& serializer);
-void serialize(TransactionOutputToKey& key, const std::string& name, ISerializer& serializer);
-void serialize(TransactionOutputMultisignature& multisignature, const std::string& name, ISerializer& serializer);
-void serialize(BlockHeader& header, const std::string& name, ISerializer& serializer);
-void serialize(Block& block, const std::string& name, ISerializer& serializer);
-void serialize(AccountPublicAddress& address, const std::string& name, ISerializer& serializer);
-void serialize(tx_extra_merge_mining_tag& tag, const std::string& name, ISerializer& serializer);
+void serialize(TransactionOutputToScript& script, ISerializer& serializer);
+void serialize(TransactionOutputToScriptHash& scripthash, ISerializer& serializer);
+void serialize(TransactionOutputToKey& key, ISerializer& serializer);
+void serialize(TransactionOutputMultisignature& multisignature, ISerializer& serializer);
+void serialize(BlockHeader& header, ISerializer& serializer);
+void serialize(Block& block, ISerializer& serializer);
+void serialize(tx_extra_merge_mining_tag& tag, ISerializer& serializer);
+
+void serialize(AccountPublicAddress& address, ISerializer& serializer);
+void serialize(account_keys& keys, ISerializer& s);
+
 
 } //namespace CryptoNote

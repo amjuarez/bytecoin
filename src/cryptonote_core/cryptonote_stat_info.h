@@ -16,8 +16,8 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
-#include "serialization/keyvalue_serialization.h"
 
+#include "serialization/ISerializer.h"
 
 namespace CryptoNote
 {
@@ -29,12 +29,12 @@ namespace CryptoNote
     uint64_t alternative_blocks;
     std::string top_block_id_str;
     
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(tx_pool_size)
-      KV_SERIALIZE(blockchain_height)
-      KV_SERIALIZE(mining_speed)
-      KV_SERIALIZE(alternative_blocks)
-      KV_SERIALIZE(top_block_id_str)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(tx_pool_size)
+      KV_MEMBER(blockchain_height)
+      KV_MEMBER(mining_speed)
+      KV_MEMBER(alternative_blocks)
+      KV_MEMBER(top_block_id_str)
+    }
   };
 }

@@ -31,36 +31,31 @@ public:
 
   virtual ISerializer::SerializerType type() const;
 
-  virtual ISerializer& beginObject(const std::string& name) override;
-  virtual ISerializer& endObject() override;
+  virtual bool beginObject(Common::StringView name) override;
+  virtual void endObject() override;
 
-  virtual ISerializer& beginArray(std::size_t& size, const std::string& name) override;
-  virtual ISerializer& endArray() override;
+  virtual bool beginArray(std::size_t& size, Common::StringView name) override;
+  virtual void endArray() override;
 
-  virtual ISerializer& operator()(uint8_t& value, const std::string& name) override;
-  virtual ISerializer& operator()(int32_t& value, const std::string& name) override;
-
-  virtual ISerializer& operator()(uint32_t& value, const std::string& name) override;
-  virtual ISerializer& operator()(int64_t& value, const std::string& name) override;
-  virtual ISerializer& operator()(uint64_t& value, const std::string& name) override;
-  virtual ISerializer& operator()(double& value, const std::string& name) override;
-  virtual ISerializer& operator()(bool& value, const std::string& name) override;
-  virtual ISerializer& operator()(std::string& value, const std::string& name) override;
-
-  virtual ISerializer& binary(void* value, std::size_t size, const std::string& name) override;
-  virtual ISerializer& binary(std::string& value, const std::string& name) override;
-
-  virtual bool hasObject(const std::string& name) override;
+  virtual bool operator()(uint8_t& value, Common::StringView name) override;
+  virtual bool operator()(int32_t& value, Common::StringView name) override;
+  virtual bool operator()(uint32_t& value, Common::StringView name) override;
+  virtual bool operator()(int64_t& value, Common::StringView name) override;
+  virtual bool operator()(uint64_t& value, Common::StringView name) override;
+  virtual bool operator()(double& value, Common::StringView name) override;
+  virtual bool operator()(bool& value, Common::StringView name) override;
+  virtual bool operator()(std::string& value, Common::StringView name) override;
+  virtual bool binary(void* value, std::size_t size, Common::StringView name) override;
+  virtual bool binary(std::string& value, Common::StringView name) override;
 
   template<typename T>
-  ISerializer& operator()(T& value, const std::string& name) {
+  bool operator()(T& value, Common::StringView name) {
     return ISerializer::operator()(value, name);
   }
 
 private:
 
   void checkedRead(char* buf, size_t size);
-
   std::istream& stream;
 };
 

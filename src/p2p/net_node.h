@@ -171,10 +171,11 @@ namespace CryptoNote
 
     typedef std::unordered_map<boost::uuids::uuid, p2p_connection_context, boost::hash<boost::uuids::uuid>> ConnectionContainer;
     typedef ConnectionContainer::iterator ConnectionIterator;
+    ConnectionContainer m_raw_connections;
     ConnectionContainer m_connections;
 
     void acceptLoop();
-    void connectionHandler(ConnectionIterator connIter);
+    void connectionHandler(const boost::uuids::uuid& connectionId, p2p_connection_context& connection);
     void onIdle();
     void timedSyncLoop();
 
@@ -183,10 +184,10 @@ namespace CryptoNote
       network_config m_net_config;
       uint64_t m_peer_id;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(m_net_config)
-        KV_SERIALIZE(m_peer_id)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(m_net_config)
+        KV_MEMBER(m_peer_id)
+      }
     };
 
     config m_config;
@@ -228,6 +229,6 @@ namespace CryptoNote
     std::list<peerlist_entry> m_command_line_peers;
     uint64_t m_peer_livetime;
     boost::uuids::uuid m_network_id;
-std::string m_p2pStatTrustedPubKey;
+    std::string m_p2pStatTrustedPubKey;
   };
 }

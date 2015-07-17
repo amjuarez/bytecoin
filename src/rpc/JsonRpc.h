@@ -21,10 +21,9 @@
 #include <boost/foreach.hpp>
 #include <functional>
 
-#include "misc_log_ex.h"
-#include "storages/portable_storage_template_helper.h"
-#include "serialization/enableable.h"
-#include "serialization/keyvalue_serialization_overloads.h"
+#include "serialization/ISerializer.h"
+#include "serialization/SerializationTools.h"
+#include <Common/JsonValue.h>
 
 namespace CryptoNote {
 
@@ -52,27 +51,37 @@ public:
     return message.c_str();
   }
 
+  void serialize(ISerializer& s) {
+    s(code, "code");
+    s(message, "message");
+  }
+
   int code;
   std::string message;
 };
 
-typedef boost::optional<epee::serialization::storage_entry> OptionalId;
+typedef boost::optional<Common::JsonValue> OptionalId;
 
 class JsonRpcRequest {
 public:
+  
+  JsonRpcRequest() : psReq(Common::JsonValue::OBJECT) {}
 
   bool parseRequest(const std::string& requestBody) {
-    if (!psReq.load_from_json(requestBody)) {
+    try {
+      psReq = Common::JsonValue::fromString(requestBody);
+    } catch (std::exception&) {
       throw JsonRpcError(errParseError);
     }
 
-    OptionalId::value_type idValue;
-    if (psReq.get_value("id", idValue, nullptr)) {
-      id = idValue;
+    if (!psReq.contains("method")) {
+      throw JsonRpcError(errInvalidRequest);
     }
 
-    if (!psReq.get_value("method", method, nullptr)) {
-      throw JsonRpcError(errInvalidRequest);
+    method = psReq("method").getString();
+
+    if (psReq.contains("id")) {
+      id = psReq("id");
     }
 
     return true;
@@ -80,13 +89,15 @@ public:
 
   template <typename T>
   bool loadParams(T& v) const {
-    return epee::serialization::kv_unserialize(v, 
-      const_cast<epee::serialization::portable_storage&>(psReq), nullptr, "params");
+    loadFromJsonValue(v, psReq.contains("params") ? 
+      psReq("params") : Common::JsonValue(Common::JsonValue::NIL));
+    return true;
   }
 
   template <typename T>
   bool setParams(const T& v) {
-    return epee::serialization::kv_serialize(v, psReq, nullptr, "params");
+    psReq.set("params", storeToJsonValue(v));
+    return true;
   }
 
   const std::string& getMethod() const {
@@ -102,16 +113,14 @@ public:
   }
 
   std::string getBody() {
-    std::string reqBody;
-    psReq.set_value("jsonrpc", std::string("2.0"), nullptr);
-    psReq.set_value("method", method, nullptr);
-    psReq.dump_as_json(reqBody);
-    return reqBody;
+    psReq.set("jsonrpc", std::string("2.0"));
+    psReq.set("method", method);
+    return psReq.toString();
   }
 
 private:
 
-  epee::serialization::portable_storage psReq;
+  Common::JsonValue psReq;
   OptionalId id;
   std::string method;
 };
@@ -120,55 +129,58 @@ private:
 class JsonRpcResponse {
 public:
 
-  void parse(const std::string& resonseBody) {
-    if (!psResp.load_from_json(resonseBody)) {
+  JsonRpcResponse() : psResp(Common::JsonValue::OBJECT) {}
+
+  void parse(const std::string& responseBody) {
+    try {
+      psResp = Common::JsonValue::fromString(responseBody);
+    } catch (std::exception&) {
       throw JsonRpcError(errParseError);
     }
   }
 
   void setId(const OptionalId& id) {
     if (id.is_initialized()) {
-      psResp.set_value("id", id.get(), nullptr);
+      psResp.insert("id", id.get());
     }
   }
 
   void setError(const JsonRpcError& err) {
-    auto errorSection = psResp.open_section("error", nullptr, true);
-    psResp.set_value("code", err.code, errorSection);
-    psResp.set_value("message", err.message, errorSection);
+    psResp.set("error", storeToJsonValue(err));
   }
 
-  bool getError(JsonRpcError& err) {
-    auto errorSection = psResp.open_section("error", nullptr, false);
-    if (!errorSection) {
+  bool getError(JsonRpcError& err) const {
+    if (!psResp.contains("error")) {
       return false;
     }
 
-    psResp.get_value("code", err.code, errorSection);
-    psResp.get_value("message", err.message, errorSection);
+    loadFromJsonValue(err, psResp("error"));
     return true;
   }
 
   std::string getBody() {
-    std::string responseBody;
-    psResp.set_value("jsonrpc", std::string("2.0"), nullptr);
-    psResp.dump_as_json(responseBody);
-    return responseBody;
+    psResp.set("jsonrpc", std::string("2.0"));
+    return psResp.toString();
   }
 
   template <typename T>
   bool setResult(const T& v) {
-    return epee::serialization::kv_serialize(v, psResp, nullptr, "result");
+    psResp.set("result", storeToJsonValue(v));
+    return true;
   }
 
   template <typename T>
   bool getResult(T& v) const {
-    return epee::serialization::kv_unserialize(v,
-      const_cast<epee::serialization::portable_storage&>(psResp), nullptr, "result");
+    if (!psResp.contains("result")) {
+      return false;
+    }
+
+    loadFromJsonValue(v, psResp("result"));
+    return true;
   }
 
 private:
-  epee::serialization::portable_storage psResp;
+  Common::JsonValue psResp;
 };
 
 

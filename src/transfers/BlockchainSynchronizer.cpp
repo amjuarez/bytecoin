@@ -429,6 +429,8 @@ BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateCons
       kv.second->detach(result.detachHeight);
     }
 
+    if (result.newBlockHeight == 1)
+      result.newBlockHeight = 0;
     if (result.hasNewBlocks) {
       size_t startOffset = result.newBlockHeight - interval.startHeight;
       // update consumer

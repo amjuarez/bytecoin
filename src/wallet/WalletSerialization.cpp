@@ -25,8 +25,7 @@
 
 namespace CryptoNote {
 
-void serialize(UnconfirmedTransferDetails& utd, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(UnconfirmedTransferDetails& utd, CryptoNote::ISerializer& serializer) {
   serializer(utd.tx, "transaction");
   serializer(utd.amount, "amount");
   serializer(utd.outsAmount, "outs_amount");
@@ -36,12 +35,9 @@ void serialize(UnconfirmedTransferDetails& utd, const std::string& name, CryptoN
   uint64_t txId = static_cast<uint64_t>(utd.transactionId);
   serializer(txId, "transaction_id");
   utd.transactionId = static_cast<size_t>(txId);
-  serializer.endObject();
 }
 
-void serialize(TransactionInfo& txi, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializer.beginObject(name);
-
+void serialize(TransactionInfo& txi, CryptoNote::ISerializer& serializer) {
   uint64_t trId = static_cast<uint64_t>(txi.firstTransferId);
   serializer(trId, "first_transfer_id");
   txi.firstTransferId = static_cast<size_t>(trId);
@@ -59,14 +55,11 @@ void serialize(TransactionInfo& txi, const std::string& name, CryptoNote::ISeria
   serializer(txi.timestamp, "timestamp");
   serializer(txi.unlockTime, "unlock_time");
   serializer(txi.extra, "extra");
-  serializer.endObject();
 }
 
-void serialize(Transfer& tr, const std::string& name, CryptoNote::ISerializer& serializer) {
-  serializer.beginObject(name);
+void serialize(Transfer& tr, CryptoNote::ISerializer& serializer) {
   serializer(tr.address, "address");
   serializer(tr.amount, "amount");
-  serializer.endObject();
 }
 
 } //namespace CryptoNote

@@ -316,7 +316,11 @@ namespace {
 
 template<typename URNG, typename T>
 T popRandomValue(URNG& randomGenerator, std::vector<T>& vec) {
-  CHECK_AND_ASSERT_MES(!vec.empty(), T(), "Vector must be non-empty");
+  assert(!vec.empty());
+
+  if (vec.empty()) {
+    return T();
+  }
 
   std::uniform_int_distribution<size_t> distribution(0, vec.size() - 1);
   size_t idx = distribution(randomGenerator);

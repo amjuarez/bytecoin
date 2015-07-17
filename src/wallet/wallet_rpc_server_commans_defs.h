@@ -20,30 +20,34 @@
 #include "cryptonote_core/cryptonote_basic.h"
 #include "crypto/hash.h"
 #include "wallet_rpc_server_error_codes.h"
+
 namespace tools
 {
 namespace wallet_rpc
 {
+
+using CryptoNote::ISerializer;
+
 #define WALLET_RPC_STATUS_OK      "OK"
 #define WALLET_RPC_STATUS_BUSY    "BUSY"
 
+  struct EMPTY_STRUCT {
+    void serialize(ISerializer& s) {}
+  };
+
   struct COMMAND_RPC_GET_BALANCE
   {
-    struct request
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef EMPTY_STRUCT request;
 
     struct response
     {
       uint64_t locked_amount;
       uint64_t available_balance;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(locked_amount)
-        KV_SERIALIZE(available_balance)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(locked_amount)
+        KV_MEMBER(available_balance)
+      }
     };
   };
 
@@ -51,10 +55,11 @@ namespace wallet_rpc
   {
     uint64_t amount;
     std::string address;
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(amount)
-      KV_SERIALIZE(address)
-    END_KV_SERIALIZE_MAP()
+
+    void serialize(ISerializer& s) {
+      KV_MEMBER(amount)
+      KV_MEMBER(address)
+    }
   };
 
   struct COMMAND_RPC_TRANSFER
@@ -67,38 +72,29 @@ namespace wallet_rpc
       uint64_t unlock_time;
       std::string payment_id;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(destinations)
-        KV_SERIALIZE(fee)
-        KV_SERIALIZE(mixin)
-        KV_SERIALIZE(unlock_time)
-        KV_SERIALIZE(payment_id)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(destinations)
+        KV_MEMBER(fee)
+        KV_MEMBER(mixin)
+        KV_MEMBER(unlock_time)
+        KV_MEMBER(payment_id)
+      }
     };
 
     struct response
     {
       std::string tx_hash;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(tx_hash)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(tx_hash)
+      }
     };
   };
 
   struct COMMAND_RPC_STORE
   {
-    struct request
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-
-    struct response
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef EMPTY_STRUCT request;
+    typedef EMPTY_STRUCT response;
   };
 
   struct payment_details
@@ -108,12 +104,12 @@ namespace wallet_rpc
     uint64_t block_height;
     uint64_t unlock_time;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(tx_hash)
-      KV_SERIALIZE(amount)
-      KV_SERIALIZE(block_height)
-      KV_SERIALIZE(unlock_time)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(tx_hash)
+      KV_MEMBER(amount)
+      KV_MEMBER(block_height)
+      KV_MEMBER(unlock_time)
+    }
   };
 
   struct COMMAND_RPC_GET_PAYMENTS
@@ -122,18 +118,18 @@ namespace wallet_rpc
     {
       std::string payment_id;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(payment_id)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(payment_id)
+      }
     };
 
     struct response
     {
       std::list<payment_details> payments;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(payments)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(payments)
+      }
     };
   };
 
@@ -148,59 +144,46 @@ namespace wallet_rpc
     uint64_t blockIndex;
     uint64_t unlockTime;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(time)
-      KV_SERIALIZE(output)
-      KV_SERIALIZE(transactionHash)
-      KV_SERIALIZE(amount)
-      KV_SERIALIZE(fee)
-      KV_SERIALIZE(paymentId)
-      KV_SERIALIZE(address)
-      KV_SERIALIZE(blockIndex)
-      KV_SERIALIZE(unlockTime)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(time)
+      KV_MEMBER(output)
+      KV_MEMBER(transactionHash)
+      KV_MEMBER(amount)
+      KV_MEMBER(fee)
+      KV_MEMBER(paymentId)
+      KV_MEMBER(address)
+      KV_MEMBER(blockIndex)
+      KV_MEMBER(unlockTime)
+    }
   };
 
   struct COMMAND_RPC_GET_TRANSFERS {
-    struct request {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef EMPTY_STRUCT request;
 
     struct response {
       std::list<Transfer> transfers;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(transfers)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(transfers)
+      }
     };
   };
 
   struct COMMAND_RPC_GET_HEIGHT {
-    struct request {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef EMPTY_STRUCT request;
 
     struct response {
       uint64_t height;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(height)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(height)
+      }
     };
   };
 
   struct COMMAND_RPC_RESET {
-    struct request {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-
-    struct response {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
+    typedef EMPTY_STRUCT request;
+    typedef EMPTY_STRUCT response;
   };
 }
 }

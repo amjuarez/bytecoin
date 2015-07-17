@@ -27,6 +27,8 @@
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "rpc/core_rpc_server_commands_defs.h"
 
+#include "BlockchainExplorerData.h"
+
 namespace CryptoNote {
 
 class INodeObserver {
@@ -36,6 +38,7 @@ public:
   virtual void localBlockchainUpdated(uint64_t height) {}
   virtual void lastKnownBlockHeightUpdated(uint64_t height) {}
   virtual void poolChanged() {}
+  virtual void blockchainSynchronized(uint64_t topHeight) {}
 };
 
 struct OutEntry {
@@ -78,6 +81,11 @@ public:
   virtual void getTransactionOutsGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices, const Callback& callback) = 0;
   virtual void queryBlocks(std::list<crypto::hash>&& knownBlockIds, uint64_t timestamp, std::list<BlockCompleteEntry>& newBlocks, uint64_t& startHeight, const Callback& callback) = 0;
   virtual void getPoolSymmetricDifference(std::vector<crypto::hash>&& known_pool_tx_ids, crypto::hash known_block_id, bool& is_bc_actual, std::vector<Transaction>& new_txs, std::vector<crypto::hash>& deleted_tx_ids, const Callback& callback) = 0;
+
+  virtual void getBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks, const Callback& callback) = 0;
+  virtual void getBlocks(const std::vector<crypto::hash>& blockHashes, std::vector<BlockDetails>& blocks, const Callback& callback) = 0;
+  virtual void getTransactions(const std::vector<crypto::hash>& transactionHashes, std::vector<TransactionDetails>& transactions, const Callback& callback) = 0;
+  virtual void isSynchronized(bool& syncStatus, const Callback& callback) = 0;
 };
 
 }

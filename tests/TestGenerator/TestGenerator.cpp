@@ -17,16 +17,16 @@
 
 #include "TestGenerator.h"
 
-// epee
-#include "misc_language.h"
-
+#include <Common/Math.h>
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/miner.h"
 
 using namespace std;
-
-using namespace epee;
 using namespace CryptoNote;
+
+#ifndef CHECK_AND_ASSERT_MES
+#define CHECK_AND_ASSERT_MES(expr, fail_ret_val, message)   do{if(!(expr)) {std::cerr << message << std::endl; return fail_ret_val;};}while(0)
+#endif
 
 
 void test_generator::getBlockchain(std::vector<BlockInfo>& blockchain, const crypto::hash& head, size_t n) const {
@@ -73,7 +73,7 @@ void test_generator::addBlock(const CryptoNote::Block& blk, size_t tsxSize, uint
   int64_t emissionChange;
   uint64_t blockReward;
   bool penalizeFee = blk.majorVersion > BLOCK_MAJOR_VERSION_1;
-  m_currency.getBlockReward(misc_utils::median(blockSizes), blockSize, alreadyGeneratedCoins, fee, penalizeFee,
+  m_currency.getBlockReward(Common::medianValue(blockSizes), blockSize, alreadyGeneratedCoins, fee, penalizeFee,
     blockReward, emissionChange);
   m_blocksInfo[get_block_hash(blk)] = BlockInfo(blk.prevId, alreadyGeneratedCoins + emissionChange, blockSize);
 }
@@ -103,10 +103,10 @@ bool test_generator::constructBlock(CryptoNote::Block& blk, uint32_t height, con
     txsSize += get_object_blobsize(tx);
   }
 
-  blk.minerTx = AUTO_VAL_INIT(blk.minerTx);
+  blk.minerTx = boost::value_initialized<Transaction>();
   size_t targetBlockSize = txsSize + get_object_blobsize(blk.minerTx);
   while (true) {
-    if (!m_currency.constructMinerTx(height, misc_utils::median(blockSizes), alreadyGeneratedCoins, targetBlockSize,
+    if (!m_currency.constructMinerTx(height, Common::medianValue(blockSizes), alreadyGeneratedCoins, targetBlockSize,
       totalFee, minerAcc.get_keys().m_account_address, blk.minerTx, blobdata(), 10)) {
       return false;
     }
@@ -209,7 +209,7 @@ bool test_generator::constructBlockManually(Block& blk, const Block& prevBlock, 
   } else {
     size_t currentBlockSize = txsSizes + get_object_blobsize(blk.minerTx);
     // TODO: This will work, until size of constructed block is less then m_currency.blockGrantedFullRewardZone()
-    if (!m_currency.constructMinerTx(height, misc_utils::median(blockSizes), alreadyGeneratedCoins, currentBlockSize, 0,
+    if (!m_currency.constructMinerTx(height, Common::medianValue(blockSizes), alreadyGeneratedCoins, currentBlockSize, 0,
       minerAcc.get_keys().m_account_address, blk.minerTx, blobdata(), 1, blk.majorVersion > BLOCK_MAJOR_VERSION_1)) {
         return false;
     }
@@ -257,7 +257,7 @@ bool test_generator::constructMaxSizeBlock(CryptoNote::Block& blk, const CryptoN
   medianBlockCount = medianBlockCount == 0 ? m_currency.rewardBlocksWindow() : medianBlockCount;
   getLastNBlockSizes(blockSizes, get_block_hash(blkPrev), medianBlockCount);
 
-  size_t median = misc_utils::median(blockSizes);
+  size_t median = Common::medianValue(blockSizes);
   size_t blockGrantedFullRewardZone = defaultMajorVersion <= BLOCK_MAJOR_VERSION_1 ?
     CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 :
     m_currency.blockGrantedFullRewardZone();
@@ -314,7 +314,7 @@ bool constructMinerTxManually(const CryptoNote::Currency& currency, uint32_t hei
   int64_t emissionChange;
   uint64_t blockReward;
   if (!currency.getBlockReward(0, 0, alreadyGeneratedCoins, fee, false, blockReward, emissionChange)) {
-    LOG_PRINT_L0("Block is too big");
+    std::cerr << "Block is too big" << std::endl;
     return false;
   }
 
@@ -338,7 +338,7 @@ bool constructMinerTxBySize(const CryptoNote::Currency& currency, CryptoNote::Tr
                             uint64_t alreadyGeneratedCoins, const CryptoNote::AccountPublicAddress& minerAddress,
                             std::vector<size_t>& blockSizes, size_t targetTxSize, size_t targetBlockSize,
                             uint64_t fee/* = 0*/, bool penalizeFee/* = false*/) {
-  if (!currency.constructMinerTx(height, misc_utils::median(blockSizes), alreadyGeneratedCoins, targetBlockSize,
+  if (!currency.constructMinerTx(height, Common::medianValue(blockSizes), alreadyGeneratedCoins, targetBlockSize,
       fee, minerAddress, minerTx, CryptoNote::blobdata(), 1, penalizeFee)) {
     return false;
   }

@@ -68,54 +68,52 @@ ISerializer::SerializerType BinaryInputStreamSerializer::type() const {
   return ISerializer::INPUT;
 }
 
-ISerializer& BinaryInputStreamSerializer::beginObject(const std::string& name) {
-  return *this;
+bool BinaryInputStreamSerializer::beginObject(Common::StringView name) {
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::endObject() {
-  return *this;
+void BinaryInputStreamSerializer::endObject() {
 }
 
-ISerializer& BinaryInputStreamSerializer::beginArray(std::size_t& size, const std::string& name) {
+bool BinaryInputStreamSerializer::beginArray(std::size_t& size, Common::StringView name) {
   readVarintAs<uint64_t>(stream, size);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::endArray() {
-  return *this;
+void BinaryInputStreamSerializer::endArray() {
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(uint8_t& value, const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(uint8_t& value, Common::StringView name) {
   readVarint(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(uint32_t& value, const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(uint32_t& value, Common::StringView name) {
   readVarint(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(int32_t& value, const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(int32_t& value, Common::StringView name) {
   readVarintAs<uint32_t>(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(int64_t& value, const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(int64_t& value, Common::StringView name) {
   readVarintAs<uint64_t>(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(uint64_t& value, const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(uint64_t& value, Common::StringView name) {
   readVarint(stream, value);
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(bool& value, const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(bool& value, Common::StringView name) {
   value = stream.get() != 0;
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(std::string& value, const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(std::string& value, Common::StringView name) {
   uint64_t size;
   readVarint(stream, size);
 
@@ -129,39 +127,28 @@ ISerializer& BinaryInputStreamSerializer::operator()(std::string& value, const s
     value.clear();
   }
 
-  return *this;
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::binary(void* value, std::size_t size, const std::string& name) {
-  stream.read(static_cast<char*>(value), size);
-  return *this;
+bool BinaryInputStreamSerializer::binary(void* value, std::size_t size, Common::StringView name) {
+  checkedRead(static_cast<char*>(value), size);
+  return true;
 }
 
-ISerializer& BinaryInputStreamSerializer::binary(std::string& value, const std::string& name) {
+bool BinaryInputStreamSerializer::binary(std::string& value, Common::StringView name) {
   return (*this)(value, name);
 }
 
-
-bool BinaryInputStreamSerializer::hasObject(const std::string& name) {
+bool BinaryInputStreamSerializer::operator()(double& value, Common::StringView name) {
   assert(false); //the method is not supported for this type of serialization
-  throw std::runtime_error("hasObject method is not supported in BinaryInputStreamSerializer");
-
+  throw std::runtime_error("double serialization is not supported in BinaryInputStreamSerializer");
   return false;
 }
 
-ISerializer& BinaryInputStreamSerializer::operator()(double& value, const std::string& name) {
-  assert(false); //the method is not supported for this type of serialization
-  throw std::runtime_error("double serialization is not supported in BinaryInputStreamSerializer");
-
-  return *this;
-}
-
 void BinaryInputStreamSerializer::checkedRead(char* buf, size_t size) {
-  stream.read(buf, size);
-  if (!stream) {
+  if (stream.read(buf, size).gcount() != size) {
     throw std::runtime_error("Stream read error");
   }
 }
-
 
 }

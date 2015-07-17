@@ -23,6 +23,8 @@
 
 #include "Common/boost_serialization_helper.h"
 #include "Common/command_line.h"
+#include "Common/ConsoleTools.h"
+
 #include "cryptonote_core/account_boost_serialization.h"
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_core.h"
@@ -32,45 +34,52 @@
 #include <Logging/LoggerGroup.h>
 #include <Logging/ConsoleLogger.h>
 
+
+
 namespace concolor
 {
+  using namespace Common::Console;
+
   inline std::basic_ostream<char, std::char_traits<char> >& bright_white(std::basic_ostream<char, std::char_traits<char> >& ostr)
   {
-    epee::log_space::set_console_color(epee::log_space::console_color_white, true);
+    setTextColor(Color::BrightWhite);
     return ostr;
   }
 
   inline std::basic_ostream<char, std::char_traits<char> >& red(std::basic_ostream<char, std::char_traits<char> >& ostr)
   {
-    epee::log_space::set_console_color(epee::log_space::console_color_red, true);
+    setTextColor(Color::BrightRed);
     return ostr;
   }
 
   inline std::basic_ostream<char, std::char_traits<char> >& green(std::basic_ostream<char, std::char_traits<char> >& ostr)
   {
-    epee::log_space::set_console_color(epee::log_space::console_color_green, true);
+    setTextColor(Color::BrightGreen);
     return ostr;
   }
 
   inline std::basic_ostream<char, std::char_traits<char> >& magenta(std::basic_ostream<char, std::char_traits<char> >& ostr)
   {
-    epee::log_space::set_console_color(epee::log_space::console_color_magenta, true);
+    setTextColor(Color::BrightMagenta);
     return ostr;
   }
 
   inline std::basic_ostream<char, std::char_traits<char> >& yellow(std::basic_ostream<char, std::char_traits<char> >& ostr)
   {
-    epee::log_space::set_console_color(epee::log_space::console_color_yellow, true);
+    setTextColor(Color::BrightYellow);
     return ostr;
   }
 
   inline std::basic_ostream<char, std::char_traits<char> >& normal(std::basic_ostream<char, std::char_traits<char> >& ostr)
   {
-    epee::log_space::reset_console_color();
+    setTextColor(Color::Default);
     return ostr;
   }
 }
 
+#define LOG_ERROR(msg) std::cout << concolor::red << msg << concolor::normal << std::endl
+#define CHECK_AND_ASSERT_MES(expr, fail_ret_val, message)   do{if(!(expr)) {std::cout << concolor::red << message << concolor::normal << std::endl; return fail_ret_val;};}while(0)
+#define CHECK_AND_NO_ASSERT_MES(expr, fail_ret_val, message)   do{if(!(expr)) {std::cout << concolor::red << message << concolor::normal << std::endl; return fail_ret_val;};}while(0)
 
 struct callback_entry
 {
@@ -372,24 +381,23 @@ private:
 template<class t_test_class>
 inline bool replay_events_through_core(CryptoNote::core& cr, const std::vector<test_event_entry>& events, t_test_class& validator)
 {
-  TRY_ENTRY();
+  try {
+    CHECK_AND_ASSERT_MES(typeid(CryptoNote::Block) == events[0].type(), false, "First event must be genesis block creation");
+    cr.set_genesis_block(boost::get<CryptoNote::Block>(events[0]));
 
-  //init core here
+    bool r = true;
+    push_core_event_visitor<t_test_class> visitor(cr, events, validator);
+    for (size_t i = 1; i < events.size() && r; ++i)
+    {
+      visitor.event_index(i);
+      r = boost::apply_visitor(visitor, events[i]);
+    }
 
-  CHECK_AND_ASSERT_MES(typeid(CryptoNote::Block) == events[0].type(), false, "First event must be genesis block creation");
-  cr.set_genesis_block(boost::get<CryptoNote::Block>(events[0]));
-
-  bool r = true;
-  push_core_event_visitor<t_test_class> visitor(cr, events, validator);
-  for(size_t i = 1; i < events.size() && r; ++i)
-  {
-    visitor.event_index(i);
-    r = boost::apply_visitor(visitor, events[i]);
+    return r;
+  } catch (std::exception& e) {
+    std::cout << "replay_events_through_core: " << e.what();
+    return false;
   }
-
-  return r;
-
-  CATCH_ENTRY_L0("replay_events_through_core", false);
 }
 //--------------------------------------------------------------------------
 template<class t_test_class>
@@ -562,11 +570,11 @@ inline bool do_replay_file(const std::string& filename)
     }                                                                                                      \
     catch (const std::exception& ex)                                                                       \
     {                                                                                                      \
-      LOG_PRINT(#genclass << " generation failed: what=" << ex.what(), 0);                                 \
+      std::cout << #genclass << " generation failed: what=" << ex.what();                                  \
     }                                                                                                      \
     catch (...)                                                                                            \
     {                                                                                                      \
-      LOG_PRINT(#genclass << " generation failed: generic exception", 0);                                  \
+      std::cout << #genclass << " generation failed: generic exception";                                   \
     }                                                                                                      \
     genclass validator;                                                                                    \
     if (generated && do_replay_events< genclass >(events, validator))                                      \
@@ -590,9 +598,9 @@ bool GenerateAndPlay(const char* testname, GenClassT&& g) {
   try {
     generated = g.generate(events);
   } catch (const std::exception& ex) {
-    LOG_PRINT(testname << " generation failed: what=" << ex.what(), 0);
+    std::cout << testname << " generation failed: what=" << ex.what();
   } catch (...) {
-    LOG_PRINT(testname << " generation failed: generic exception", 0);
+    std::cout << testname << " generation failed: generic exception";
   }
 
   bool succeeded = generated && do_replay_events<GenClassT>(events, g);

@@ -23,19 +23,25 @@
 #include "cryptonote_config.h"
 #include "cryptonote_core/cryptonote_stat_info.h"
 
-// epee
-#include "serialization/keyvalue_serialization.h"
+// new serialization
+#include "serialization/ISerializer.h"
+#include "serialization/SerializationOverloads.h"
+#include "cryptonote_core/cryptonote_serialization.h"
 
 namespace CryptoNote
 {
+  inline bool serialize(uuid& v, Common::StringView name, ISerializer& s) {
+    return s.binary(&v, sizeof(v), name);
+  }
+
   struct network_config
   {
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(connections_count)
-      KV_SERIALIZE(handshake_interval)
-      KV_SERIALIZE(packet_max_size)
-      KV_SERIALIZE(config_id)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(connections_count)
+      KV_MEMBER(handshake_interval)
+      KV_MEMBER(packet_max_size)
+      KV_MEMBER(config_id)
+    }
 
     uint32_t connections_count;
     uint32_t connection_timeout;
@@ -46,19 +52,30 @@ namespace CryptoNote
     uint32_t send_peerlist_sz;
   };
 
+  enum P2PProtocolVersion : uint8_t {
+    V0 = 0,
+    V1 = 1,
+    CURRENT = V1
+  };
+
   struct basic_node_data
   {
-    uuid network_id;                   
+    uuid network_id;
+    uint8_t version;
     uint64_t local_time;
     uint32_t my_port;
     peerid_type peer_id;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE_VAL_POD_AS_BLOB(network_id)
-      KV_SERIALIZE(peer_id)
-      KV_SERIALIZE(local_time)
-      KV_SERIALIZE(my_port)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(network_id)
+      if (s.type() == ISerializer::INPUT) {
+        version = 0;
+      }
+      KV_MEMBER(version)
+      KV_MEMBER(peer_id)
+      KV_MEMBER(local_time)
+      KV_MEMBER(my_port)
+    }
   };
   
   struct CORE_SYNC_DATA
@@ -66,10 +83,10 @@ namespace CryptoNote
     uint64_t current_height;
     crypto::hash top_id;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(current_height)
-      KV_SERIALIZE_VAL_POD_AS_BLOB(top_id)
-    END_KV_SERIALIZE_MAP()
+    void serialize(ISerializer& s) {
+      KV_MEMBER(current_height)
+      KV_MEMBER(top_id)
+    }
   };
 
 #define P2P_COMMANDS_POOL_BASE 1000
@@ -86,10 +103,11 @@ namespace CryptoNote
       basic_node_data node_data;
       CORE_SYNC_DATA payload_data;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(node_data)
-        KV_SERIALIZE(payload_data)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(node_data)
+        KV_MEMBER(payload_data)
+      }
+
     };
 
     struct response
@@ -98,11 +116,11 @@ namespace CryptoNote
       CORE_SYNC_DATA payload_data;
       std::list<peerlist_entry> local_peerlist; 
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(node_data)
-        KV_SERIALIZE(payload_data)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(local_peerlist)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(node_data)
+        KV_MEMBER(payload_data)
+        serializeAsBinary(local_peerlist, "local_peerlist", s);
+      }
     };
   };
 
@@ -117,9 +135,11 @@ namespace CryptoNote
     struct request
     {
       CORE_SYNC_DATA payload_data;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(payload_data)
-      END_KV_SERIALIZE_MAP()
+
+      void serialize(ISerializer& s) {
+        KV_MEMBER(payload_data)
+      }
+
     };
 
     struct response
@@ -128,11 +148,11 @@ namespace CryptoNote
       CORE_SYNC_DATA payload_data;
       std::list<peerlist_entry> local_peerlist; 
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(local_time)
-        KV_SERIALIZE(payload_data)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(local_peerlist)
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {
+        KV_MEMBER(local_time)
+        KV_MEMBER(payload_data)
+        serializeAsBinary(local_peerlist, "local_peerlist", s);
+      }
     };
   };
 
@@ -154,9 +174,7 @@ namespace CryptoNote
     struct request
     {
       /*actually we don't need to send any real data*/
-
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
+      void serialize(ISerializer& s) {}
     };
 
     struct response
@@ -164,10 +182,10 @@ namespace CryptoNote
       std::string status;
       peerid_type peer_id;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(peer_id)
-      END_KV_SERIALIZE_MAP()    
+      void serialize(ISerializer& s) {
+        KV_MEMBER(status)
+        KV_MEMBER(peer_id)
+      }
     };
   };
 
@@ -182,11 +200,11 @@ namespace CryptoNote
     uint64_t    time;
     crypto::signature sign;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(peer_id)
-      KV_SERIALIZE(time)        
-      KV_SERIALIZE_VAL_POD_AS_BLOB(sign)  
-    END_KV_SERIALIZE_MAP()    
+    void serialize(ISerializer& s) {
+      KV_MEMBER(peer_id)
+      KV_MEMBER(time)
+      KV_MEMBER(sign)
+    }
   };
 
   inline crypto::hash get_proof_of_trust_hash(const proof_of_trust& pot) {
@@ -203,9 +221,10 @@ namespace CryptoNote
     struct request
     {
       proof_of_trust tr;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(tr)
-      END_KV_SERIALIZE_MAP()    
+
+      void serialize(ISerializer& s) {
+        KV_MEMBER(tr)
+      }
     };
     
     struct response
@@ -216,13 +235,13 @@ namespace CryptoNote
       uint64_t incoming_connections_count;
       core_stat_info payload_info;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(version)
-        KV_SERIALIZE(os_version)
-        KV_SERIALIZE(connections_count)
-        KV_SERIALIZE(incoming_connections_count)
-        KV_SERIALIZE(payload_info)
-      END_KV_SERIALIZE_MAP()    
+      void serialize(ISerializer& s) {
+        KV_MEMBER(version)
+        KV_MEMBER(os_version)
+        KV_MEMBER(connections_count)
+        KV_MEMBER(incoming_connections_count)
+        KV_MEMBER(payload_info)
+      }
     };
   };
 
@@ -237,25 +256,27 @@ namespace CryptoNote
     struct request
     {
       proof_of_trust tr;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(tr)
-      END_KV_SERIALIZE_MAP()    
+
+      void serialize(ISerializer& s) {
+        KV_MEMBER(tr)
+      }
     };
 
     struct response
     {
-      std::list<peerlist_entry> local_peerlist_white; 
-      std::list<peerlist_entry> local_peerlist_gray; 
-      std::list<connection_entry> connections_list; 
+      std::list<peerlist_entry> local_peerlist_white;
+      std::list<peerlist_entry> local_peerlist_gray;
+      std::list<connection_entry> connections_list;
       peerid_type my_id;
-      uint64_t    local_time;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(local_peerlist_white)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(local_peerlist_gray)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(connections_list)
-        KV_SERIALIZE(my_id)
-        KV_SERIALIZE(local_time)
-      END_KV_SERIALIZE_MAP()    
+      uint64_t local_time;
+
+      void serialize(ISerializer& s) {
+        serializeAsBinary(local_peerlist_white, "local_peerlist_white", s);
+        serializeAsBinary(local_peerlist_gray, "local_peerlist_gray", s);
+        serializeAsBinary(connections_list, "connections_list", s);
+        KV_MEMBER(my_id)
+        KV_MEMBER(local_time)
+      }
     };
   };
 
@@ -268,17 +289,16 @@ namespace CryptoNote
 
     struct request
     {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()    
+      void serialize(ISerializer& s) {}
     };
 
     struct response
     {
       peerid_type my_id;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(my_id)
-      END_KV_SERIALIZE_MAP()    
+      void serialize(ISerializer& s) {
+        KV_MEMBER(my_id)
+      }
     };
   };
 

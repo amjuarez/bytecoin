@@ -53,7 +53,7 @@ class WalletUnconfirmedTransactions
 {
 public:
 
-  void serialize(CryptoNote::ISerializer& s, const std::string& name);
+  bool serialize(CryptoNote::ISerializer& s);
 
   bool findTransactionId(const TransactionHash& hash, TransactionId& id);
   void erase(const TransactionHash& hash);
@@ -64,6 +64,7 @@ public:
   uint64_t countUnconfirmedOutsAmount() const;
   uint64_t countUnconfirmedTransactionsAmount() const;
   bool isUsed(const TransactionOutputInformation& out) const;
+  void reset();
 
 private:
 

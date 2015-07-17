@@ -16,14 +16,15 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "Wallet.h"
-#include "serialization/binary_utils.h"
-#include "WalletUtils.h"
-#include "WalletSerializer.h"
 
-#include <time.h>
 #include <string.h>
+#include <time.h>
 
+#include "serialization/binary_utils.h"
+#include "WalletHelper.h"
 #include "WalletSerialization.h"
+#include "WalletSerializer.h"
+#include "WalletUtils.h"
 
 namespace {
 
@@ -37,11 +38,6 @@ bool verifyKeys(const crypto::secret_key& sec, const crypto::public_key& expecte
   crypto::public_key pub;
   bool r = crypto::secret_key_to_public_key(sec, pub);
   return r && expected_pub == pub;
-}
-
-void throwIfKeysMissmatch(const crypto::secret_key& sec, const crypto::public_key& expected_pub) {
-  if (!verifyKeys(sec, expected_pub))
-    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
 }
 
 class ContextCounterHolder
@@ -93,6 +89,7 @@ private:
   std::promise<std::error_code> promise;
   std::future<std::error_code> future;
 };
+
 } //namespace
 
 namespace CryptoNote {
@@ -125,7 +122,6 @@ Wallet::Wallet(const CryptoNote::Currency& currency, INode& node) :
   m_onInitSyncStarter(new SyncStarter(m_blockchainSync))
 {
   addObserver(m_onInitSyncStarter.get());
-  m_blockchainSync.addObserver(this);
 }
 
 Wallet::~Wallet() {
@@ -139,10 +135,10 @@ Wallet::~Wallet() {
     }
   }
 
-    m_blockchainSync.removeObserver(this);
-    m_blockchainSync.stop();
-    m_asyncContextCounter.waitAsyncContextsFinish();
-    m_sender.release();
+  m_blockchainSync.removeObserver(this);
+  m_blockchainSync.stop();
+  m_asyncContextCounter.waitAsyncContextsFinish();
+  m_sender.release();
 }
 
 void Wallet::addObserver(IWalletObserver* observer) {
@@ -215,7 +211,7 @@ void Wallet::initAndLoad(std::istream& source, const std::string& password) {
 
   m_password = password;
   m_state = LOADING;
-
+      
   m_asyncContextCounter.addAsyncContext();
   std::thread loader(&Wallet::doLoad, this, std::ref(source));
   loader.detach();
@@ -227,6 +223,9 @@ void Wallet::initSync() {
   sub.transactionSpendableAge = 1;
   sub.syncStart.height = 0;
   sub.syncStart.timestamp = m_account.get_createtime() - ACCOUN_CREATE_TIME_ACCURACY;
+  if (m_syncAll == 1)
+    sub.syncStart.timestamp = 0;
+  std::cout << "Sync from timestamp: " << sub.syncStart.timestamp << std::endl;
   
   auto& subObject = m_transfersSync.addSubscription(sub);
   m_transferDetails = &subObject.getContainer();
@@ -234,6 +233,8 @@ void Wallet::initSync() {
 
   m_sender.reset(new WalletTransactionSender(m_currency, m_transactionsCache, m_account.get_keys(), *m_transferDetails));
   m_state = INITIALIZED;
+  
+  m_blockchainSync.addObserver(this);
 }
 
 void Wallet::doLoad(std::istream& source) {
@@ -248,20 +249,18 @@ void Wallet::doLoad(std::istream& source) {
     initSync();
 
     try {
-    if (!cache.empty()) {
-      std::stringstream stream(cache);
-      m_transfersSync.load(stream);
-    }
+      if (!cache.empty()) {
+        std::stringstream stream(cache);
+        m_transfersSync.load(stream);
+      }
     } catch (const std::exception&) {
       // ignore cache loading errors
-  }
-  }
-  catch (std::system_error& e) {
+    }
+  } catch (std::system_error& e) {
     runAtomic(m_cacheMutex, [this] () {this->m_state = Wallet::NOT_INITIALIZED;} );
     m_observerManager.notify(&IWalletObserver::initCompleted, e.code());
     return;
-  }
-  catch (std::exception&) {
+  } catch (std::exception&) {
     runAtomic(m_cacheMutex, [this] () {this->m_state = Wallet::NOT_INITIALIZED;} );
     m_observerManager.notify(&IWalletObserver::initCompleted, make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR));
     return;
@@ -295,31 +294,39 @@ void Wallet::shutdown() {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
     m_isStopping = false;
     m_state = NOT_INITIALIZED;
+
+    const AccountAddress& accountAddress = reinterpret_cast<const AccountAddress&>(m_account.get_keys().m_account_address);
+    auto subObject = m_transfersSync.getSubscription(accountAddress);
+    assert(subObject != nullptr);
+    subObject->removeObserver(this);
+    m_transfersSync.removeSubscription(accountAddress);
+    m_transferDetails = nullptr;
+
+    m_transactionsCache.reset();
+    m_lastNotifiedActualBalance = 0;
+    m_lastNotifiedPendingBalance = 0;
   }
 }
 
 void Wallet::reset() {
   InitWaiter initWaiter;
   SaveWaiter saveWaiter;
-
-  addObserver(&initWaiter);
-  addObserver(&saveWaiter);
+  WalletHelper::IWalletRemoveObserverGuard initGuarantee(*this, initWaiter);
+  WalletHelper::IWalletRemoveObserverGuard saveGuarantee(*this, saveWaiter);
 
   std::stringstream ss;
   try {
-  save(ss, false, false);
+    save(ss, false, false);
 
     auto saveError = saveWaiter.waitSave();
-  if (!saveError) {
-    shutdown();
-    initAndLoad(ss, m_password);
+    if (!saveError) {
+      shutdown();
+      initAndLoad(ss, m_password);
       initWaiter.waitInit();
+    }
+  } catch (std::exception& e) {
+    std::cout << "exception in reset: " << e.what() << std::endl;
   }
-  } catch (std::exception&) {
-  }
-
-  removeObserver(&saveWaiter);
-  removeObserver(&initWaiter);
 }
 
 void Wallet::save(std::ostream& destination, bool saveDetailed, bool saveCache) {

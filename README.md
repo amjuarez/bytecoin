@@ -36,6 +36,7 @@ seed-node=127.0.0.2:33669
 UPGRADE_HEIGHT=1             // REQUIRED. Use 1 for new cryptotokens
 MONEY_SUPPLY=18446744073709551615
 EMISSION_SPEED_FACTOR=18
+PREMINED_PERCENT=0           // premined coins. Default: 0
 DIFFICULTY_TARGET=120
 CRYPTONOTE_DISPLAY_DECIMAL_POINT=12
 DEFAULT_DUST_THRESHOLD=1000000
@@ -51,6 +52,7 @@ CHECKPOINT=20000:80d2dd05d8819526629235722e15f5f9ab36dd05d881952662992f2e4dcfcaf
 // Wallet parameters
 wallet-rpc-bind-ip=127.0.0.1        // instead rpc-bind-ip
 wallet-rpc-bind-port=33671          // instead rpc-bind-port
+SYNC_FROM_ZERO=1                    // to sync the wallet from block 0. Used for premine coins or brain wallets
 ```
 
 ---

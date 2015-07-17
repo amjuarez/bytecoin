@@ -43,6 +43,7 @@ public:
 
   uint64_t moneySupply() const { return m_moneySupply; }
   unsigned int emissionSpeedFactor() const { return m_emissionSpeedFactor; }
+  uint64_t genesisBlockReward() const { return m_genesisBlockReward; }
 
   size_t rewardBlocksWindow() const { return m_rewardBlocksWindow; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
@@ -69,6 +70,7 @@ public:
 
   uint64_t mempoolTxLiveTime() const { return m_mempoolTxLiveTime; }
   uint64_t mempoolTxFromAltBlockLiveTime() const { return m_mempoolTxFromAltBlockLiveTime; }
+  uint64_t numberOfPeriodsToForgetTxDeletedFromPool() const { return m_numberOfPeriodsToForgetTxDeletedFromPool; }
 
   uint64_t upgradeHeight() const { return m_upgradeHeight; }
   unsigned int upgradeVotingThreshold() const { return m_upgradeVotingThreshold; }
@@ -97,6 +99,7 @@ public:
     const blobdata& extraNonce = blobdata(), size_t maxOuts = 1, bool penalizeFee = false) const;
 
   std::string accountAddressAsString(const account_base& account) const;
+  std::string accountAddressAsString(const AccountPublicAddress& accountPublicAddress) const;
   bool parseAccountAddressString(const std::string& str, AccountPublicAddress& addr) const;
 
   std::string formatAmount(uint64_t amount) const;
@@ -128,6 +131,7 @@ private:
 
   uint64_t m_moneySupply;
   unsigned int m_emissionSpeedFactor;
+  uint64_t m_genesisBlockReward;
 
   size_t m_rewardBlocksWindow;
   size_t m_blockGrantedFullRewardZone;
@@ -153,6 +157,7 @@ private:
 
   uint64_t m_mempoolTxLiveTime;
   uint64_t m_mempoolTxFromAltBlockLiveTime;
+  uint64_t m_numberOfPeriodsToForgetTxDeletedFromPool;
 
   uint64_t m_upgradeHeight;
   unsigned int m_upgradeVotingThreshold;
@@ -165,7 +170,7 @@ private:
   std::string m_txPoolFileName;
 
   bool m_testnet;
-std::string m_genesisCoinbaseTxHex;
+  std::string m_genesisCoinbaseTxHex;
 
   Block m_genesisBlock;
   crypto::hash m_genesisBlockHash;
@@ -186,7 +191,8 @@ public:
     return m_currency;
   }
 
-Transaction generateGenesisTransaction();
+  Transaction generateGenesisTransaction();
+  Transaction generateGenesisTransaction(const std::vector<AccountPublicAddress>& targets);
   CurrencyBuilder& maxBlockNumber(uint64_t val) { m_currency.m_maxBlockHeight = val; return *this; }
   CurrencyBuilder& maxBlockBlobSize(size_t val) { m_currency.m_maxBlockBlobSize = val; return *this; }
   CurrencyBuilder& maxTxSize(size_t val) { m_currency.m_maxTxSize = val; return *this; }
@@ -198,6 +204,7 @@ Transaction generateGenesisTransaction();
 
   CurrencyBuilder& moneySupply(uint64_t val) { m_currency.m_moneySupply = val; return *this; }
   CurrencyBuilder& emissionSpeedFactor(unsigned int val);
+  CurrencyBuilder& genesisBlockReward(uint64_t val) { m_currency.m_genesisBlockReward = val; return *this; }
 
   CurrencyBuilder& rewardBlocksWindow(size_t val) { m_currency.m_rewardBlocksWindow = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
@@ -222,6 +229,7 @@ Transaction generateGenesisTransaction();
 
   CurrencyBuilder& mempoolTxLiveTime(uint64_t val) { m_currency.m_mempoolTxLiveTime = val; return *this; }
   CurrencyBuilder& mempoolTxFromAltBlockLiveTime(uint64_t val) { m_currency.m_mempoolTxFromAltBlockLiveTime = val; return *this; }
+  CurrencyBuilder& numberOfPeriodsToForgetTxDeletedFromPool(uint64_t val) { m_currency.m_numberOfPeriodsToForgetTxDeletedFromPool = val; return *this; }
 
   CurrencyBuilder& upgradeHeight(uint64_t val) { m_currency.m_upgradeHeight = val; return *this; }
   CurrencyBuilder& upgradeVotingThreshold(unsigned int val);
@@ -233,7 +241,7 @@ Transaction generateGenesisTransaction();
   CurrencyBuilder& blockIndexesFileName(const std::string& val) { m_currency.m_blockIndexesFileName = val; return *this; }
   CurrencyBuilder& txPoolFileName(const std::string& val) { m_currency.m_txPoolFileName = val; return *this; }
 
-CurrencyBuilder& genesisCoinbaseTxHex(const std::string& val) { m_currency.m_genesisCoinbaseTxHex = val; return *this; }
+  CurrencyBuilder& genesisCoinbaseTxHex(const std::string& val) { m_currency.m_genesisCoinbaseTxHex = val; return *this; }
   CurrencyBuilder& testnet(bool val) { m_currency.m_testnet = val; return *this; }
 
 private:

@@ -1,5 +1,6 @@
 add_definitions(-DSTATICLIB)
 
+file(GLOB_RECURSE BlockchainExplorer BlockchainExplorer/*)
 file(GLOB_RECURSE Common Common/*)
 file(GLOB_RECURSE ConnectivityTool connectivity_tool/*)
 file(GLOB_RECURSE Crypto crypto/*)
@@ -26,8 +27,10 @@ file(GLOB_RECURSE Transfers transfers/*)
 file(GLOB_RECURSE Wallet wallet/*)
 file(GLOB_RECURSE PaymentService payment_service/*)
 
+
 source_group("" FILES ${Common} ${ConnectivityTool} ${Crypto} ${CryptoNote} ${CryptoNoteCore} ${CryptoNoteProtocol} ${Daemon} ${Http} ${Logging} ${NodeRpcProxy} ${P2p} ${Rpc} ${Serialization} ${SimpleWallet} ${System} ${Transfers} ${Wallet})
 
+add_library(BlockchainExplorer ${BlockchainExplorer})
 add_library(Common ${Common})
 add_library(Crypto ${Crypto})
 add_library(CryptoNote ${CryptoNote})
@@ -43,15 +46,15 @@ add_library(System ${System})
 add_library(Transfers ${Transfers})
 add_library(Wallet ${Wallet})
 
-add_executable(ConnectivityTool ${ConnectivityTool} p2p/LevinProtocol.cpp p2p/LevinProtocol.h)
+add_executable(ConnectivityTool ${ConnectivityTool})
 add_executable(Daemon ${Daemon})
 add_executable(SimpleWallet ${SimpleWallet})
 add_executable(PaymentGate ${PaymentService})
 
-target_link_libraries(ConnectivityTool epee Common Crypto Rpc Http System ${Boost_LIBRARIES})
-target_link_libraries(Daemon epee CryptoNoteCore P2P Rpc Serialization System Http Logging Common Crypto upnpc-static ${Boost_LIBRARIES})
-target_link_libraries(SimpleWallet epee Wallet NodeRpcProxy Transfers Rpc Http Serialization CryptoNoteCore System Logging Common Crypto ${Boost_LIBRARIES})
-target_link_libraries(PaymentGate epee Wallet NodeRpcProxy Transfers CryptoNoteCore Crypto P2P Rpc Http Serialization System Logging Common InProcessNode upnpc-static ${Boost_LIBRARIES})
+target_link_libraries(ConnectivityTool CryptoNoteCore Common Logging Crypto P2P Rpc Http Serialization System ${Boost_LIBRARIES})
+target_link_libraries(Daemon CryptoNoteCore P2P Rpc Serialization System Http Logging Common Crypto upnpc-static ${Boost_LIBRARIES})
+target_link_libraries(SimpleWallet Wallet NodeRpcProxy Transfers Rpc Http Serialization CryptoNoteCore System Logging Common Crypto ${Boost_LIBRARIES})
+target_link_libraries(PaymentGate Wallet NodeRpcProxy Transfers CryptoNoteCore Crypto P2P Rpc Http Serialization System Logging Common InProcessNode BlockchainExplorer upnpc-static ${Boost_LIBRARIES})
 
 add_dependencies(Rpc version)
 

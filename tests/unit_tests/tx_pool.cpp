@@ -19,6 +19,8 @@
 
 #include <algorithm>
 
+#include <boost/filesystem/operations.hpp>
+
 #include "cryptonote_core/account.h"
 #include "cryptonote_core/cryptonote_format_utils.h"
 #include "cryptonote_core/Currency.h"
@@ -137,8 +139,19 @@ public:
     currency(CryptoNote::CurrencyBuilder(logger).currency()) {}
 
 protected:
+  virtual void SetUp() override {
+    m_configDir = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("test_data_%%%%%%%%%%%%");
+  }
+
+  virtual void TearDown() override {
+    boost::system::error_code ignoredErrorCode;
+    boost::filesystem::remove_all(m_configDir, ignoredErrorCode);
+  }
+
+protected:
   Logging::ConsoleLogger logger;
   CryptoNote::Currency currency;
+  boost::filesystem::path m_configDir;
 };
 
 namespace
@@ -421,7 +434,11 @@ TEST_F(tx_pool, add_tx_after_cleanup)
   ASSERT_TRUE(pool.add_tx(tx, tvc, false)); // main chain
   ASSERT_TRUE(tvc.m_added_to_pool);
 
-  pool.timeProvider.timeNow = startTime + currency.mempoolTxLiveTime() + 1;
+  uint64_t cleanupTime = startTime + currency.mempoolTxLiveTime() + 1;
+  pool.timeProvider.timeNow = cleanupTime;
+  pool.on_idle();
+
+  pool.timeProvider.timeNow = cleanupTime + currency.numberOfPeriodsToForgetTxDeletedFromPool() * currency.mempoolTxLiveTime() + 1;
   pool.on_idle();
 
   ASSERT_EQ(0, pool.get_transactions_count());
@@ -432,4 +449,204 @@ TEST_F(tx_pool, add_tx_after_cleanup)
 
   ASSERT_EQ(1, pool.get_transactions_count());
 
+}
+
+TEST_F(tx_pool, RecentlyDeletedTransactionCannotBeAddedToTxPoolAgain) {
+  TestPool<TransactionValidator, FakeTimeProvider> pool(currency, logger);
+
+  uint64_t startTime = pool.timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, currency.minimumFee(), 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  uint64_t deleteTime = startTime + currency.mempoolTxLiveTime() + 1;
+  pool.timeProvider.timeNow = deleteTime;
+  pool.on_idle();
+  ASSERT_EQ(0, pool.get_transactions_count());
+
+  // Try to add tx again
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false));
+  ASSERT_FALSE(tvc.m_added_to_pool);
+  ASSERT_FALSE(tvc.m_should_be_relayed);
+  ASSERT_FALSE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+
+  ASSERT_EQ(0, pool.get_transactions_count());
+}
+
+TEST_F(tx_pool, RecentlyDeletedTransactionCanBeAddedAgainAfterSomeTime) {
+  TestPool<TransactionValidator, FakeTimeProvider> pool(currency, logger);
+
+  uint64_t startTime = pool.timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, currency.minimumFee(), 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  uint64_t deleteTime = startTime + currency.mempoolTxLiveTime() + 1;
+  pool.timeProvider.timeNow = deleteTime;
+  pool.on_idle();
+  ASSERT_EQ(0, pool.get_transactions_count());
+
+  uint64_t forgetDeletedTxTime = deleteTime + currency.numberOfPeriodsToForgetTxDeletedFromPool() * currency.mempoolTxLiveTime() + 1;
+  pool.timeProvider.timeNow = forgetDeletedTxTime;
+  pool.on_idle();
+
+  // Try to add tx again
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+  ASSERT_TRUE(tvc.m_should_be_relayed);
+  ASSERT_FALSE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+
+  ASSERT_EQ(1, pool.get_transactions_count());
+}
+
+TEST_F(tx_pool, RecentlyDeletedTransactionCanBeAddedToTxPoolIfItIsReceivedInBlock) {
+  TestPool<TransactionValidator, FakeTimeProvider> pool(currency, logger);
+
+  uint64_t startTime = pool.timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, currency.minimumFee(), 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool.add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  uint64_t deleteTime = startTime + currency.mempoolTxLiveTime() + 1;
+  pool.timeProvider.timeNow = deleteTime;
+  pool.on_idle();
+  ASSERT_EQ(0, pool.get_transactions_count());
+
+  // Try to add tx again
+  ASSERT_TRUE(pool.add_tx(tx, tvc, true));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+  ASSERT_TRUE(tvc.m_should_be_relayed);
+  ASSERT_FALSE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+
+  ASSERT_EQ(1, pool.get_transactions_count());
+}
+
+TEST_F(tx_pool, OldTransactionIsDeletedDuringTxPoolInitialization) {
+  TransactionValidator validator;
+  FakeTimeProvider timeProvider;
+  std::unique_ptr<tx_memory_pool> pool(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+
+  uint64_t startTime = timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, currency.minimumFee(), 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool->add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  ASSERT_TRUE(pool->deinit());
+  pool.reset();
+
+  uint64_t deleteTime = startTime + currency.mempoolTxLiveTime() + 1;
+  timeProvider.timeNow = deleteTime;
+
+  pool.reset(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+  ASSERT_EQ(0, pool->get_transactions_count());
+}
+
+TEST_F(tx_pool, TransactionThatWasDeletedLongAgoIsForgottenDuringTxPoolInitialization) {
+  TransactionValidator validator;
+  FakeTimeProvider timeProvider;
+  std::unique_ptr<tx_memory_pool> pool(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+
+  uint64_t startTime = timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, currency.minimumFee(), 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool->add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  uint64_t deleteTime = startTime + currency.mempoolTxLiveTime() + 1;
+  timeProvider.timeNow = deleteTime;
+  pool->on_idle();
+  ASSERT_EQ(0, pool->get_transactions_count());
+
+  ASSERT_TRUE(pool->deinit());
+  pool.reset();
+
+  uint64_t forgetDeletedTxTime = deleteTime + currency.numberOfPeriodsToForgetTxDeletedFromPool() * currency.mempoolTxLiveTime() + 1;
+  timeProvider.timeNow = forgetDeletedTxTime;
+
+  pool.reset(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+
+  // Try to add tx again
+  ASSERT_TRUE(pool->add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+  ASSERT_TRUE(tvc.m_should_be_relayed);
+  ASSERT_FALSE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+
+  ASSERT_EQ(1, pool->get_transactions_count());
+}
+
+TEST_F(tx_pool, RecentlyDeletedTxInfoIsSerializedAndDeserialized) {
+  TransactionValidator validator;
+  FakeTimeProvider timeProvider;
+  std::unique_ptr<tx_memory_pool> pool(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+
+  uint64_t startTime = timeProvider.now();
+
+  Transaction tx;
+  GenerateTransaction(currency, tx, currency.minimumFee(), 1);
+
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+  ASSERT_TRUE(pool->add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+
+  uint64_t deleteTime = startTime + currency.mempoolTxLiveTime() + 1;
+  timeProvider.timeNow = deleteTime;
+  pool->on_idle();
+  ASSERT_EQ(0, pool->get_transactions_count());
+
+  ASSERT_TRUE(pool->deinit());
+
+  pool.reset(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+
+  uint64_t timeBeforeCleanupDeletedTx = deleteTime + currency.numberOfPeriodsToForgetTxDeletedFromPool() * currency.mempoolTxLiveTime();
+  timeProvider.timeNow = timeBeforeCleanupDeletedTx;
+  pool->on_idle();
+
+  ASSERT_TRUE(pool->add_tx(tx, tvc, false));
+  ASSERT_FALSE(tvc.m_added_to_pool);
+  ASSERT_FALSE(tvc.m_should_be_relayed);
+  ASSERT_FALSE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+
+  ASSERT_EQ(0, pool->get_transactions_count());
+
+  timeProvider.timeNow = timeBeforeCleanupDeletedTx + 61;
+  pool->on_idle();
+
+  // Try to add tx again
+  ASSERT_TRUE(pool->add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+  ASSERT_TRUE(tvc.m_should_be_relayed);
+  ASSERT_FALSE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+
+  ASSERT_EQ(1, pool->get_transactions_count());
 }

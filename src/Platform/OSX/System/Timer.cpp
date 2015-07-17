@@ -93,7 +93,7 @@ void Timer::stop() {
   stopped = true;
 }
 
-void Timer::sleep(std::chrono::milliseconds duration) {
+void Timer::sleep(std::chrono::nanoseconds duration) {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
   if (stopped) {
@@ -106,7 +106,7 @@ void Timer::sleep(std::chrono::milliseconds duration) {
   timer = dispatcher->getTimer();
 
   struct kevent event;
-  EV_SET(&event, timer, EVFILT_TIMER, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, duration.count(), &timerContext);
+  EV_SET(&event, timer, EVFILT_TIMER, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, duration.count() / 1000000, &timerContext);
 
   if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
     throw std::runtime_error("Timer::stop, kevent() failed, errno=" + std::to_string(errno));

@@ -1,3 +1,11 @@
+Release notes 1.0.5
+
+- High-level API for blockchain explorer
+- Full network layer refactoring
+- Transactions pool synchronization
+- list_transactions method for RPC Wallet
+- Various improvements
+
 Release notes 1.0.4
 
 - Bytecoin RPC Wallet

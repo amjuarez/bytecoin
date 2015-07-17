@@ -20,6 +20,8 @@
 #include <string>
 #include <cstdint>
 
+#include <Common/StringView.h>
+
 namespace CryptoNote {
 
 class ISerializer {
@@ -34,40 +36,49 @@ public:
 
   virtual SerializerType type() const = 0;
 
-  virtual ISerializer& beginObject(const std::string& name) = 0;
-  virtual ISerializer& endObject() = 0;
-  virtual ISerializer& beginArray(std::size_t& size, const std::string& name) = 0;
-  virtual ISerializer& endArray() = 0;
+  virtual bool beginObject(Common::StringView name) = 0;
+  virtual void endObject() = 0;
+  virtual bool beginArray(std::size_t& size, Common::StringView name) = 0;
+  virtual void endArray() = 0;
 
-  virtual ISerializer& operator()(uint8_t& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(int32_t& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(uint32_t& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(int64_t& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(uint64_t& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(double& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(bool& value, const std::string& name) = 0;
-  virtual ISerializer& operator()(std::string& value, const std::string& name) = 0;
+  virtual bool operator()(uint8_t& value, Common::StringView name) = 0;
+  virtual bool operator()(int32_t& value, Common::StringView name) = 0;
+  virtual bool operator()(uint32_t& value, Common::StringView name) = 0;
+  virtual bool operator()(int64_t& value, Common::StringView name) = 0;
+  virtual bool operator()(uint64_t& value, Common::StringView name) = 0;
+  virtual bool operator()(double& value, Common::StringView name) = 0;
+  virtual bool operator()(bool& value, Common::StringView name) = 0;
+  virtual bool operator()(std::string& value, Common::StringView name) = 0;
   
   // read/write binary block
-  virtual ISerializer& binary(void* value, std::size_t size, const std::string& name) = 0;
-  virtual ISerializer& binary(std::string& value, const std::string& name) = 0;
-
-  virtual bool hasObject(const std::string& name) = 0;
+  virtual bool binary(void* value, std::size_t size, Common::StringView name) = 0;
+  virtual bool binary(std::string& value, Common::StringView name) = 0;
 
   template<typename T>
-  ISerializer& operator()(T& value, const std::string& name);
+  bool operator()(T& value, Common::StringView name);
 };
 
 template<typename T>
-ISerializer& ISerializer::operator()(T& value, const std::string& name) {
-  serialize(value, name, *this);
-  return *this;
+bool ISerializer::operator()(T& value, Common::StringView name) {
+  return serialize(value, name, *this);
 }
 
 template<typename T>
-void serialize(T& value, const std::string& name, ISerializer& serializer) {
-  value.serialize(serializer, name);
-  return;
+bool serialize(T& value, Common::StringView name, ISerializer& serializer) {
+  if (!serializer.beginObject(name)) {
+    return false;
+  }
+
+  serialize(value, serializer);
+  serializer.endObject();
+  return true;
 }
+
+template<typename T>
+void serialize(T& value, ISerializer& serializer) {
+  value.serialize(serializer);
+}
+
+#define KV_MEMBER(member) s(member, #member);
 
 }
