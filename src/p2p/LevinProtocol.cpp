@@ -66,7 +66,9 @@ std::string LevinProtocol::sendBuf(uint32_t command, const std::string& out, boo
   std::string response;
 
   if (readResponse) {
-    m_conn.read(reinterpret_cast<uint8_t*>(&head), sizeof(head));
+    if (!readStrict(reinterpret_cast<uint8_t*>(&head), sizeof(head))) {
+      throw std::runtime_error("Levin::sendBuf, failed to read header, peer closed connection");
+    }
 
     if (head.m_signature != LEVIN_SIGNATURE) {
       throw std::runtime_error("Levin signature mismatch");
@@ -79,7 +81,9 @@ std::string LevinProtocol::sendBuf(uint32_t command, const std::string& out, boo
     response.resize(head.m_cb);
 
     if (response.size()) {
-      readStrict(&response[0], head.m_cb);
+      if (!readStrict(&response[0], head.m_cb)) {
+        throw std::runtime_error("Levin::sendBuf, failed to read body, peer closed connection");
+      }
     }
   }
 
