@@ -25,9 +25,10 @@ public:
   DepositAmount fullDepositAmount() const; 
   DepositInterest depositInterestAtHeight(DepositHeight height) const;
   DepositInterest fullInterestAmount() const; 
-  DepositHeight lastHeight() const;
+  DepositHeight size() const;
   template <class Archive> void serialize(Archive& ar, const unsigned int version) {
     ar & index;
+    ar & blockCount;
   }
 
 private:
@@ -43,8 +44,8 @@ private:
   };
 
   using IndexType = std::vector<DepositIndexEntry>;
-  IndexType::const_iterator elementAt(DepositHeight height) const;
+  IndexType::const_iterator upperBound(DepositHeight height) const;
   IndexType index;
-  DepositHeight height;
+  DepositHeight blockCount;
 };
 }

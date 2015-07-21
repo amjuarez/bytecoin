@@ -13,15 +13,11 @@
 
 namespace CryptoNote {
 
-DepositIndex::DepositIndex() {
-  index.push_back({0, 0, 0});
-  height = 0;
+DepositIndex::DepositIndex() : blockCount(0) {
 }
 
-DepositIndex::DepositIndex(DepositHeight expectedHeight) {
+DepositIndex::DepositIndex(DepositHeight expectedHeight) : blockCount(0) {
   index.reserve(expectedHeight + 1);
-  index.push_back({0, 0, 0});
-  height = 0;
 }
 
 void DepositIndex::reserve(DepositHeight expectedHeight) {
@@ -29,13 +25,11 @@ void DepositIndex::reserve(DepositHeight expectedHeight) {
 }
 
 auto DepositIndex::fullDepositAmount() const -> DepositAmount {
-  assert(!index.empty());
-  return index.back().amount;
+  return index.empty() ? 0 : index.back().amount;
 }
 
 auto DepositIndex::fullInterestAmount() const -> DepositInterest {
-  assert(!index.empty());
-  return index.back().interest;
+  return index.empty() ? 0 : index.back().interest;
 }
 
 static inline bool sumWillOverflow(int64_t x, int64_t y) {
@@ -59,63 +53,79 @@ static inline bool sumWillOverflow(uint64_t x, uint64_t y) {
 }
 
 void DepositIndex::pushBlock(DepositAmount amount, DepositInterest interest) {
-  auto lastAmount = index.back().amount;
-  auto lastInterest = index.back().interest;
-  assert(!sumWillOverflow(interest, lastInterest));
-  assert(!sumWillOverflow(amount, lastAmount));
-  assert(amount + lastAmount >= 0);
-  ++height;
-  if (amount != 0 || interest > 0) {
-    index.push_back({height, amount + lastAmount, interest + lastInterest});
+  DepositAmount lastAmount;
+  DepositInterest lastInterest;
+  if (index.empty()) {
+    lastAmount = 0;
+    lastInterest = 0;
+  } else {
+    lastAmount = index.back().amount;
+    lastInterest = index.back().interest;
   }
+
+  assert(!sumWillOverflow(amount, lastAmount));
+  assert(!sumWillOverflow(interest, lastInterest));
+  assert(amount + lastAmount >= 0);
+  if (amount != 0 || interest > 0) {
+    index.push_back({blockCount, amount + lastAmount, interest + lastInterest});
+  }
+
+  ++blockCount;
 }
 
 void DepositIndex::popBlock() {
-  assert(!index.empty());
-  assert(height > 0);
-  if (index.back().height == height) {
-    assert(index.size() > 1);
+  assert(blockCount > 0);
+  --blockCount;
+  if (!index.empty() && index.back().height == blockCount) {
     index.pop_back();
   }
-
-  --height;
 }
   
-auto DepositIndex::lastHeight() const -> DepositHeight {
-  return height;
+auto DepositIndex::size() const -> DepositHeight {
+  return blockCount;
 }
 
-auto DepositIndex::elementAt(DepositHeight height) const -> IndexType::const_iterator {
+auto DepositIndex::upperBound(DepositHeight height) const -> IndexType::const_iterator {
   return std::upper_bound(
       index.cbegin(), index.cend(), height,
-      [] (DepositHeight height, const DepositIndexEntry& left) { return height < left.height; }) - 1;
+      [] (DepositHeight height, const DepositIndexEntry& left) { return height < left.height; });
 }
 
 size_t DepositIndex::popBlocks(DepositHeight from) {
-  from = from == 0 ? 1 : from;
-  if (from > height) {
+  if (from >= blockCount) {
     return 0;
   }
 
   IndexType::iterator it = index.begin();
-  std::advance(it, std::distance(index.cbegin(), elementAt(from)));
-  if (it->height < from) {
-    ++it;
+  std::advance(it, std::distance(index.cbegin(), upperBound(from)));
+  if (it != index.begin()) {
+    --it;
+    if (it->height != from) {
+      ++it;
+    }
   }
 
-  auto diff = height - from + 1;
   index.erase(it, index.end());
-  height -= diff;
+  auto diff = blockCount - from;
+  blockCount -= diff;
   return diff;
 }
 
 auto DepositIndex::depositAmountAtHeight(DepositHeight height) const -> DepositAmount {
-  assert(!index.empty());
-  return elementAt(height)->amount;
+  if (blockCount == 0) {
+    return 0;
+  } else {
+    auto it = upperBound(height);
+    return it == index.cbegin() ? 0 : (--it)->amount;
+  }
 }
 
 auto DepositIndex::depositInterestAtHeight(DepositHeight height) const -> DepositInterest {
-  assert(!index.empty());
-  return elementAt(height)->interest;
+  if (blockCount == 0) {
+    return 0;
+  } else {
+    auto it = upperBound(height);
+    return it == index.cbegin() ? 0 : (--it)->interest;
+  }
 }
 }

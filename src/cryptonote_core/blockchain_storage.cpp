@@ -81,7 +81,7 @@ template<class Archive> void cryptonote::blockchain_storage::MultisignatureOutpu
 namespace cryptonote
 {
 
-#define CURRENT_BLOCKCACHE_STORAGE_ARCHIVE_VER 2
+#define CURRENT_BLOCKCACHE_STORAGE_ARCHIVE_VER 3
 
   class BlockCacheSerializer {
 
