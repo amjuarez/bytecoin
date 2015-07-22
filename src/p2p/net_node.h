@@ -102,7 +102,7 @@ namespace CryptoNote
     // debug functions
     bool log_peerlist();
     bool log_connections();
-    virtual uint64_t get_connections_count();
+    virtual uint64_t get_connections_count() override;
     size_t get_outgoing_connections_count();
 
     CryptoNote::peerlist_manager& get_peerlist_manager() { return m_peerlist; }
@@ -171,7 +171,6 @@ namespace CryptoNote
 
     typedef std::unordered_map<boost::uuids::uuid, p2p_connection_context, boost::hash<boost::uuids::uuid>> ConnectionContainer;
     typedef ConnectionContainer::iterator ConnectionIterator;
-    ConnectionContainer m_raw_connections;
     ConnectionContainer m_connections;
 
     void acceptLoop();

@@ -110,8 +110,8 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
     {
       currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
     }
-    currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-    currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+    currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+    currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
     currencyBuilder.genesisBlockReward((command_line::get_arg(vm, arg_MONEY_SUPPLY) / 100) * command_line::get_arg(vm, arg_PREMINED_PERCENT));
   CryptoNote::Currency currency = currencyBuilder.currency();
   for (const auto& address_string : genesis_block_reward_addresses) {
@@ -152,8 +152,8 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   {
     currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
   }
-  currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-  currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+  currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+  currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction();
   CryptoNote::blobdata txb = tx_to_blob(tx);
   std::string tx_hex = blobToHex(txb);
@@ -187,8 +187,8 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   {
     currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
   }
-  currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-  currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+  currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+  currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   currencyBuilder.genesisBlockReward((command_line::get_arg(vm, arg_MONEY_SUPPLY) / 100) * command_line::get_arg(vm, arg_PREMINED_PERCENT));
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction(targets);
       CryptoNote::blobdata txb = tx_to_blob(tx);
@@ -297,7 +297,13 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
 
       boost::system::error_code ec;
       if (boost::filesystem::exists(config_path, ec)) {
+        std::cout << "config path exist" << std::endl;
         po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), desc_cmd_sett, true), vm);
+      }
+      else
+      {
+        std::cout << "config path does not exist" << std::endl;
+        return false;
       }
       po::notify(vm);
       if (command_line::get_arg(vm, arg_print_genesis_tx)) {
@@ -366,8 +372,8 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
     {
       currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
     }
-    currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-    currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+    currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+    currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
     currencyBuilder.genesisBlockReward((command_line::get_arg(vm, arg_MONEY_SUPPLY) / 100) * command_line::get_arg(vm, arg_PREMINED_PERCENT));
     currencyBuilder.testnet(testnet_mode);
     try {

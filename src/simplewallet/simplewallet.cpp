@@ -1064,16 +1064,12 @@ int main(int argc, char* argv[])
     po::store(parser.run(), vm);
     std::string data_dir = command_line::get_arg(vm, command_line::arg_data_dir);
     std::string config = command_line::get_arg(vm, arg_config_file);
-      std::cout << config << std::endl;
     boost::filesystem::path data_dir_path(data_dir);
     boost::filesystem::path config_path(config);
-      std::cout << "boost filesystem passed" << std::endl;
     if (!config_path.has_parent_path())
     {
-      std::cout << "file not found" << std::endl;
       config_path = data_dir_path / config_path;
     }
-      std::cout << "boost filesystem passed" << std::endl;
     boost::system::error_code ec;
     if (boost::filesystem::exists(config_path, ec))
     {
@@ -1083,6 +1079,7 @@ int main(int argc, char* argv[])
     else
     {
       std::cout << "config path does not exist" << std::endl;
+      return false;
     }
     po::notify(vm);
     return true;
@@ -1128,8 +1125,8 @@ int main(int argc, char* argv[])
   {
     currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
   }
-  currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-  currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+  currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+  currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
 currencyBuilder.testnet(command_line::get_arg(vm, arg_testnet));
 CryptoNote::Currency currency = currencyBuilder.currency();
 

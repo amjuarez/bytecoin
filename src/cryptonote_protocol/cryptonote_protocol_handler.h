@@ -51,8 +51,8 @@ namespace CryptoNote
 
     cryptonote_protocol_handler(const Currency& currency, System::Dispatcher& dispatcher, ICore& rcore, i_p2p_endpoint* p_net_layout, Logging::ILogger& log);
 
-    virtual bool addObserver(ICryptonoteProtocolObserver* observer);
-    virtual bool removeObserver(ICryptonoteProtocolObserver* observer);
+    virtual bool addObserver(ICryptonoteProtocolObserver* observer) override;
+    virtual bool removeObserver(ICryptonoteProtocolObserver* observer) override;
 
     void set_p2p_endpoint(i_p2p_endpoint* p2p);
     // ICore& get_core() { return m_core; }
@@ -69,8 +69,8 @@ namespace CryptoNote
     bool get_payload_sync_data(CORE_SYNC_DATA& hshd);
     bool process_payload_sync_data(const CORE_SYNC_DATA& hshd, cryptonote_connection_context& context, bool is_inital);
     int handleCommand(bool is_notify, int command, const std::string& in_buff, std::string& buff_out, cryptonote_connection_context& context, bool& handled);
-    virtual size_t getPeerCount() const;
-    virtual uint64_t getObservedHeight() const;
+    virtual size_t getPeerCount() const override;
+    virtual uint64_t getObservedHeight() const override;
     void requestMissingPoolTransactions(const cryptonote_connection_context& context);
 
   private:

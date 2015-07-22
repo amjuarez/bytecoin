@@ -18,6 +18,7 @@
 #include "net_node.h"
 
 #include <algorithm>
+#include <exception>
 #include <fstream>
 
 #include <boost/archive/binary_oarchive.hpp>
@@ -437,11 +438,7 @@ namespace CryptoNote
     m_idleTimer.stop();
     m_timedSyncTimer.stop();
 
-    logger(INFO) << "Stopping " << m_connections.size() + m_raw_connections.size() << " connections";
-
-    for (auto& conn : m_raw_connections) {
-      conn.second.connection.stop();
-    }
+    logger(INFO) << "Stopping " << m_connections.size() << " connections";
 
     for (auto& conn : m_connections) {
       conn.second.connection.stop();
@@ -641,35 +638,38 @@ namespace CryptoNote
 
     try {
       System::TcpConnector connector(m_dispatcher);
-      
-      System::Event timeoutEvent(m_dispatcher);
-      System::Timer timeoutTimer(m_dispatcher);
 
-      m_dispatcher.spawn([&](){
+      System::Event connectorTimeoutEvent(m_dispatcher);
+      System::Timer connectorTimeoutTimer(m_dispatcher);
+
+      m_dispatcher.spawn([&]() {
         try {
-          timeoutTimer.sleep(std::chrono::milliseconds(m_config.m_net_config.connection_timeout));
+          connectorTimeoutTimer.sleep(std::chrono::milliseconds(m_config.m_net_config.connection_timeout));
           connector.stop();
-        } catch (std::exception&) {}
-        timeoutEvent.set();
+        } catch (std::exception&) {
+        }
+
+        connectorTimeoutEvent.set();
       });
 
       System::TcpConnection connection;
 
       try {
-        connection = connector.connect(System::Ipv4Address(Common::ipAddressToString(na.ip)), static_cast<uint16_t>(na.port));
+        connection =
+            connector.connect(System::Ipv4Address(Common::ipAddressToString(na.ip)), static_cast<uint16_t>(na.port));
       } catch (System::InterruptedException&) {
-        timeoutEvent.wait();
+        connectorTimeoutEvent.wait();
         return false;
-      } catch (std::exception&) {
-        timeoutTimer.stop();
-        timeoutEvent.wait();
+      } catch (std::exception& e) {
+        connectorTimeoutTimer.stop();
+        connectorTimeoutEvent.wait();
         throw;
       }
 
       p2p_connection_context ctx(m_dispatcher, std::move(connection));
 
-      timeoutTimer.stop();
-      timeoutEvent.wait();
+      connectorTimeoutTimer.stop();
+      connectorTimeoutEvent.wait();
 
       // p2p_connection_context ctx(m_dispatcher, std::move(connector.connect()));
 
@@ -679,39 +679,68 @@ namespace CryptoNote
       ctx.m_is_income = false;
       ctx.m_started = time(nullptr);
 
-      auto raw = m_raw_connections.emplace(ctx.m_connection_id, std::move(ctx)).first;
-      try {
-        CryptoNote::LevinProtocol proto(raw->second.connection);
-
-        if (!handshake(proto, raw->second, just_take_peerlist)) {
-          logger(WARNING) << "Failed to HANDSHAKE with peer " << na;
-          m_raw_connections.erase(raw);
-          return false;
+      System::Event handshakeTimeoutFinishedEvent(m_dispatcher);
+      System::Event handshakeFinishedEvent(m_dispatcher);
+      System::Timer handshakeTimeoutTimer(m_dispatcher);
+      m_dispatcher.spawn([&] {
+        try {
+          handshakeTimeoutTimer.sleep(std::chrono::milliseconds(m_config.m_net_config.connection_timeout));
+          ctx.connection.stop();
+        } catch (std::exception& e) {
         }
-      } catch (...) {
-        m_raw_connections.erase(raw);
-        throw;
+
+        handshakeTimeoutFinishedEvent.set();
+      });
+
+      CryptoNote::LevinProtocol proto(ctx.connection);
+      bool error = false;
+      std::exception_ptr exceptionHolder;
+      m_dispatcher.spawn([&] {
+        try {
+          if (!handshake(proto, ctx, just_take_peerlist)) {
+            logger(WARNING) << "Failed to HANDSHAKE with peer " << na;
+            error = true;
+          }
+
+        } catch (System::InterruptedException&) {
+          error = true;
+          handshakeFinishedEvent.set();
+          return;
+        } catch (...) {
+          exceptionHolder = std::current_exception();
+        }
+
+        handshakeTimeoutTimer.stop();
+        handshakeFinishedEvent.set();
+      });
+
+      handshakeFinishedEvent.wait();
+      handshakeTimeoutFinishedEvent.wait();
+      if (error) {
+        return false;
+      }
+
+      if (exceptionHolder != nullptr) {
+        std::rethrow_exception(exceptionHolder);
       }
 
       if (just_take_peerlist) {
-        logger(Logging::DEBUGGING, Logging::BRIGHT_GREEN) << raw->second << "CONNECTION HANDSHAKED OK AND CLOSED.";
-        m_raw_connections.erase(raw);
+        logger(Logging::DEBUGGING, Logging::BRIGHT_GREEN) << ctx << "CONNECTION HANDSHAKED OK AND CLOSED.";
         return true;
       }
 
       peerlist_entry pe_local = boost::value_initialized<peerlist_entry>();
       pe_local.adr = na;
-      pe_local.id = raw->second.peer_id;
+      pe_local.id = ctx.peer_id;
       time(&pe_local.last_seen);
       m_peerlist.append_with_peer_white(pe_local);
 
       if (m_stop) {
-        m_raw_connections.erase(raw);
         throw System::InterruptedException();
       }
 
-      auto iter = m_connections.emplace(raw->first, std::move(raw->second)).first;
-      m_raw_connections.erase(raw);
+      auto key = ctx.m_connection_id;
+      auto iter = m_connections.emplace(key, std::move(ctx)).first;
       const boost::uuids::uuid& connectionId = iter->first;
       p2p_connection_context& connectionContext = iter->second;
 
@@ -786,7 +815,7 @@ namespace CryptoNote
       size_t try_count = 0;
       size_t current_index = crypto::rand<size_t>()%m_seed_nodes.size();
       
-      while(true) {        
+      while(true) {
         if(try_to_connect_and_handshake_with_new_peer(m_seed_nodes[current_index], true))
           break;
 
@@ -857,8 +886,12 @@ namespace CryptoNote
 
   //-----------------------------------------------------------------------------------
   bool node_server::idle_worker() {
-    m_connections_maker_interval.call(std::bind(&node_server::connections_maker, this));
-    m_peerlist_store_interval.call(std::bind(&node_server::store_config, this));
+    try {
+      m_connections_maker_interval.call(std::bind(&node_server::connections_maker, this));
+      m_peerlist_store_interval.call(std::bind(&node_server::store_config, this));
+    } catch (std::exception& e) {
+      logger(DEBUGGING) << "exception in idle_worker: " << e.what();
+    }
     return true;
   }
 
