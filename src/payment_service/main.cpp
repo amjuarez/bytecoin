@@ -509,6 +509,7 @@ int main(int argc, char** argv) {
   pg.currencyBuilder.moneySupply(pg.config.coinBaseConfig.MONEY_SUPPLY);
   pg.currencyBuilder.emissionSpeedFactor(pg.config.coinBaseConfig.EMISSION_SPEED_FACTOR);
   pg.currencyBuilder.blockGrantedFullRewardZone(pg.config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+  pg.currencyBuilder.blockGrantedFullRewardZoneV1(pg.config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1);
   pg.currencyBuilder.numberOfDecimalPlaces(pg.config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
   pg.currencyBuilder.mininumFee(pg.config.coinBaseConfig.MINIMUM_FEE);
   pg.currencyBuilder.defaultDustThreshold(pg.config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);

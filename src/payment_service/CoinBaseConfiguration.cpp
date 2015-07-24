@@ -44,6 +44,7 @@ CoinBaseConfiguration::CoinBaseConfiguration() {
     MONEY_SUPPLY=CryptoNote::parameters::MONEY_SUPPLY;
     EMISSION_SPEED_FACTOR=CryptoNote::parameters::EMISSION_SPEED_FACTOR;
     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE=CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+    CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1=CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
     CRYPTONOTE_DISPLAY_DECIMAL_POINT=CryptoNote::parameters::CRYPTONOTE_DISPLAY_DECIMAL_POINT;
     MINIMUM_FEE=CryptoNote::parameters::MINIMUM_FEE;
     DEFAULT_DUST_THRESHOLD=CryptoNote::parameters::DEFAULT_DUST_THRESHOLD;
@@ -63,6 +64,7 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("MONEY_SUPPLY", po::value<uint64_t>()->default_value(CryptoNote::parameters::MONEY_SUPPLY), "uint64_t")
     ("EMISSION_SPEED_FACTOR", po::value<unsigned int>()->default_value(CryptoNote::parameters::EMISSION_SPEED_FACTOR), "unsigned int")
     ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE), "uint64_t")
+    ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1), "uint64_t")
     ("CRYPTONOTE_DISPLAY_DECIMAL_POINT", po::value<size_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_DISPLAY_DECIMAL_POINT), "size_t")
     ("MINIMUM_FEE", po::value<uint64_t>()->default_value(CryptoNote::parameters::MINIMUM_FEE), "uint64_t")
     ("DEFAULT_DUST_THRESHOLD", po::value<uint64_t>()->default_value(CryptoNote::parameters::DEFAULT_DUST_THRESHOLD), "uint64_t")
@@ -93,6 +95,9 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
   }
   if (options.count("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE")) {
     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE = options["CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE"].as<uint64_t>();
+  }
+  if (options.count("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1")) {
+    CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 = options["CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1"].as<uint64_t>();
   }
   if (options.count("CRYPTONOTE_DISPLAY_DECIMAL_POINT")) {
     CRYPTONOTE_DISPLAY_DECIMAL_POINT = options["CRYPTONOTE_DISPLAY_DECIMAL_POINT"].as<size_t>();

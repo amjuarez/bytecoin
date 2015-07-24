@@ -47,6 +47,7 @@ public:
 
   size_t rewardBlocksWindow() const { return m_rewardBlocksWindow; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
+  size_t blockGrantedFullRewardZoneV1() const { return m_blockGrantedFullRewardZoneV1; }
   size_t minerTxBlobReservedSize() const { return m_minerTxBlobReservedSize; }
 
   size_t numberOfDecimalPlaces() const { return m_numberOfDecimalPlaces; }
@@ -135,6 +136,7 @@ private:
 
   size_t m_rewardBlocksWindow;
   size_t m_blockGrantedFullRewardZone;
+  size_t m_blockGrantedFullRewardZoneV1;
   size_t m_minerTxBlobReservedSize;
 
   size_t m_numberOfDecimalPlaces;
@@ -208,6 +210,7 @@ public:
 
   CurrencyBuilder& rewardBlocksWindow(size_t val) { m_currency.m_rewardBlocksWindow = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
+  CurrencyBuilder& blockGrantedFullRewardZoneV1(size_t val) { m_currency.m_blockGrantedFullRewardZoneV1 = val; return *this; }
   CurrencyBuilder& minerTxBlobReservedSize(size_t val) { m_currency.m_minerTxBlobReservedSize = val; return *this; }
 
   CurrencyBuilder& numberOfDecimalPlaces(size_t val);

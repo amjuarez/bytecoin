@@ -1579,7 +1579,7 @@ bool blockchain_storage::getBlockCumulativeSize(const Block& block, size_t& cumu
 bool blockchain_storage::update_next_comulative_size_limit() {
   uint8_t nextBlockMajorVersion = get_block_major_version_for_height(m_blocks.size());
   size_t nextBlockGrantedFullRewardZone = nextBlockMajorVersion == BLOCK_MAJOR_VERSION_1 ?
-    parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 :
+    m_currency.blockGrantedFullRewardZoneV1() :
     m_currency.blockGrantedFullRewardZone();
 
   std::vector<size_t> sz;

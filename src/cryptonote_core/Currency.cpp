@@ -100,7 +100,7 @@ bool Currency::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64
 
   size_t blockGrantedFullRewardZone = penalizeFee ?
   m_blockGrantedFullRewardZone :
-                               CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
+                               m_blockGrantedFullRewardZoneV1;
   medianSize = std::max(medianSize, blockGrantedFullRewardZone);
   if (currentBlockSize > UINT64_C(2) * medianSize) {
     logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
