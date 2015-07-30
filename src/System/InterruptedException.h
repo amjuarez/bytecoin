@@ -22,6 +22,10 @@
 namespace System {
 
 class InterruptedException : public std::exception {
+  public:
+    const char* what() const throw() {
+      return "interrupted";
+    }
 };
 
 }

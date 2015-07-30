@@ -18,14 +18,17 @@
 #include "Event.h"
 #include <cassert>
 #include <System/Dispatcher.h>
+#include <System/InterruptedException.h>
 
 namespace System {
 
 namespace {
 
 struct EventWaiter {
+  bool interrupted;
+  EventWaiter* prev;
   EventWaiter* next;
-  void* context;
+  NativeContext* context;
 };
 
 }
@@ -86,6 +89,7 @@ void Event::set() {
   if (!state) {
     state = true;
     for (EventWaiter* waiter = static_cast<EventWaiter*>(first); waiter != nullptr; waiter = waiter->next) {
+      waiter->context->interruptProcedure = nullptr;
       dispatcher->pushContext(waiter->context);
     }
   }
@@ -93,10 +97,37 @@ void Event::set() {
 
 void Event::wait() {
   assert(dispatcher != nullptr);
+  if (dispatcher->interrupted()) {
+    throw InterruptedException();
+  }
+
   if (!state) {
-    EventWaiter waiter = {nullptr, dispatcher->getCurrentContext()};
+    EventWaiter waiter = { false, nullptr, nullptr, dispatcher->getCurrentContext() };
+    waiter.context->interruptProcedure = [&] {
+      if (waiter.next != nullptr) {
+        assert(waiter.next->prev == &waiter);
+        waiter.next->prev = waiter.prev;
+      } else {
+        assert(last == &waiter);
+        last = waiter.prev;
+      }
+
+      if (waiter.prev != nullptr) { 
+        assert(waiter.prev->next == &waiter);
+        waiter.prev->next = waiter.next;
+      } else {
+        assert(first == &waiter);
+        first = waiter.next;
+      }
+
+      assert(!waiter.interrupted);
+      waiter.interrupted = true;
+      dispatcher->pushContext(waiter.context);
+    };
+
     if (first != nullptr) {
       static_cast<EventWaiter*>(last)->next = &waiter;
+      waiter.prev = static_cast<EventWaiter*>(last);
     } else {
       first = &waiter;
     }
@@ -104,7 +135,11 @@ void Event::wait() {
     last = &waiter;
     dispatcher->dispatch();
     assert(waiter.context == dispatcher->getCurrentContext());
+    assert( waiter.context->interruptProcedure == nullptr);
     assert(dispatcher != nullptr);
+    if (waiter.interrupted) {
+      throw InterruptedException();
+    } 
   }
 }
 

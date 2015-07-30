@@ -18,11 +18,38 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <functional>
 #include <queue>
 #include <stack>
 
 namespace System {
+
+struct NativeContextGroup;
+
+struct NativeContext {
+  void* uctx;
+  void* stackPtr;
+  bool interrupted;
+  NativeContext* next;
+  NativeContextGroup* group;
+  NativeContext* groupPrev;
+  NativeContext* groupNext;
+  std::function<void()> procedure;
+  std::function<void()> interruptProcedure;
+};
+
+struct NativeContextGroup {
+  NativeContext* firstContext;
+  NativeContext* lastContext;
+  NativeContext* firstWaiter;
+  NativeContext* lastWaiter;
+};
+
+struct OperationContext {
+  NativeContext* context;
+  bool interrupted;
+};
 
 class Dispatcher {
 public:
@@ -32,18 +59,17 @@ public:
   Dispatcher& operator=(const Dispatcher&) = delete;
   void clear();
   void dispatch();
-  void* getCurrentContext() const;
-  void pushContext(void* context);
+  NativeContext* getCurrentContext() const;
+  void interrupt();
+  void interrupt(NativeContext* context);
+  bool interrupted();
+  void pushContext(NativeContext* context);
   void remoteSpawn(std::function<void()>&& procedure);
-  void spawn(std::function<void()>&& procedure);
   void yield();
 
-  struct OperationContext {
-    void *context;
-    bool interrupted;
-  };
-
   int getKqueue() const;
+  NativeContext& getReusableContext();
+  void pushReusableContext(NativeContext&);
   int getTimer();
   void pushTimer(int timer);
 
@@ -54,20 +80,24 @@ public:
 #endif
 
 private:
-  std::stack<uint8_t*> allocatedStacks;
-  std::size_t contextCount;
-  void* currentContext;
+  void spawn(std::function<void()>&& procedure);
+
   int kqueue;
   int lastCreatedTimer;
-  uint8_t mutex[SIZEOF_PTHREAD_MUTEX_T];
+  alignas(std::max_align_t) uint8_t mutex[SIZEOF_PTHREAD_MUTEX_T];
   std::atomic<bool> remoteSpawned;
   std::queue<std::function<void()>> remoteSpawningProcedures;
-  std::queue<void*> resumingContexts;
-  std::queue<std::function<void()>> spawningProcedures;
-  std::stack<void*> reusableContexts;
   std::stack<int> timers;
 
-  void contextProcedure();
+  NativeContext mainContext;
+  NativeContextGroup contextGroup;
+  NativeContext* currentContext;
+  NativeContext* firstResumingContext;
+  NativeContext* lastResumingContext;
+  NativeContext* firstReusableContext;
+  size_t runningContextCount;
+
+  void contextProcedure(void* uctx);
   static void contextProcedureStatic(intptr_t context);
 };
 

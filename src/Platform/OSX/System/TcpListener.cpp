@@ -61,12 +61,11 @@ TcpListener::TcpListener(Dispatcher& dispatcher, const Ipv4Address& addr, uint16
           message = "listen failed, errno=" + std::to_string(errno);
         } else {
           struct kevent event;
-          EV_SET(&event, listener, EVFILT_READ, EV_ADD | EV_DISABLE, 0, SOMAXCONN, NULL);
+          EV_SET(&event, listener, EVFILT_READ, EV_ADD | EV_DISABLE | EV_CLEAR, 0, SOMAXCONN, NULL);
 
           if (kevent(dispatcher.getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
             message = "kevent() failed, errno=" + std::to_string(errno);
           } else {
-            stopped = false;
             context = nullptr;
             return;
           }
@@ -86,7 +85,6 @@ TcpListener::TcpListener(TcpListener&& other) : dispatcher(other.dispatcher) {
   if (other.dispatcher != nullptr) {
     assert(other.context == nullptr);
     listener = other.listener;
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -112,7 +110,6 @@ TcpListener& TcpListener::operator=(TcpListener&& other) {
   if (other.dispatcher != nullptr) {
     assert(other.context == nullptr);
     listener = other.listener;
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -120,52 +117,43 @@ TcpListener& TcpListener::operator=(TcpListener&& other) {
   return *this;
 }
 
-void TcpListener::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void TcpListener::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (context != nullptr) {
-    Dispatcher::OperationContext* listenerContext = static_cast<Dispatcher::OperationContext*>(context);
-    if (!listenerContext->interrupted) {
-
-      struct kevent event;
-      EV_SET(&event, listener, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, NULL);
-
-      if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        throw std::runtime_error("TcpListener::stop, kevent() failed, errno=" + std::to_string(errno));
-      }
-
-      listenerContext->interrupted = true;
-      dispatcher->pushContext(listenerContext->context);
-    }
-  }
-
-  stopped = true;
-}
-
 TcpConnection TcpListener::accept() {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
   std::string message;
-  Dispatcher::OperationContext listenerContext;
+  OperationContext listenerContext;
   listenerContext.context = dispatcher->getCurrentContext();
   listenerContext.interrupted = false;
   struct kevent event;
-  EV_SET(&event, listener, EVFILT_READ, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, SOMAXCONN, &listenerContext);
+  EV_SET(&event, listener, EVFILT_READ, EV_ADD | EV_ENABLE | EV_CLEAR , 0, SOMAXCONN, &listenerContext);
   if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
     message = "kevent() failed, errno=" + std::to_string(errno);
   } else {
     context = &listenerContext;
+    dispatcher->getCurrentContext()->interruptProcedure = [&] {
+      assert(dispatcher != nullptr);
+      assert(context != nullptr);
+      OperationContext* listenerContext = static_cast<OperationContext*>(context);
+      if (!listenerContext->interrupted) {
+        
+        struct kevent event;
+        EV_SET(&event, listener, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, NULL);
+        
+        if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
+          throw std::runtime_error("TcpListener::stop, kevent() failed, errno=" + std::to_string(errno));
+        }
+        
+        listenerContext->interrupted = true;
+        dispatcher->pushContext(listenerContext->context);
+      }
+    };
+    
     dispatcher->dispatch();
+    dispatcher->getCurrentContext()->interruptProcedure = nullptr;
     assert(dispatcher != nullptr);
     assert(listenerContext.context == dispatcher->getCurrentContext());
     assert(context == &listenerContext);

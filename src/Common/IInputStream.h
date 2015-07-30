@@ -24,7 +24,7 @@ namespace Common {
 class IInputStream {
 public:
   virtual ~IInputStream() { }
-  virtual std::size_t readSome(void* data, std::size_t size) = 0;
+  virtual size_t readSome(void* data, size_t size) = 0;
 };
 
 }

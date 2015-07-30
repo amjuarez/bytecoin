@@ -23,4 +23,4 @@ namespace error {
 HttpParserErrorCategory HttpParserErrorCategory::INSTANCE;
 
 } //namespace error
-} //namespace cryptonote
+} //namespace CryptoNote

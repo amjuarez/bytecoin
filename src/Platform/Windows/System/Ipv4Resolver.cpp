@@ -22,6 +22,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <ws2tcpip.h>
+#include <System/Dispatcher.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 
@@ -30,12 +31,11 @@ namespace System {
 Ipv4Resolver::Ipv4Resolver() : dispatcher(nullptr) {
 }
 
-Ipv4Resolver::Ipv4Resolver(Dispatcher& dispatcher) : dispatcher(&dispatcher), stopped(false) {
+Ipv4Resolver::Ipv4Resolver(Dispatcher& dispatcher) : dispatcher(&dispatcher) {
 }
 
 Ipv4Resolver::Ipv4Resolver(Ipv4Resolver&& other) : dispatcher(other.dispatcher) {
   if (dispatcher != nullptr) {
-    stopped = other.stopped;
     other.dispatcher = nullptr;
   }
 }
@@ -46,28 +46,15 @@ Ipv4Resolver::~Ipv4Resolver() {
 Ipv4Resolver& Ipv4Resolver::operator=(Ipv4Resolver&& other) {
   dispatcher = other.dispatcher;
   if (dispatcher != nullptr) {
-    stopped = other.stopped;
     other.dispatcher = nullptr;
   }
 
   return *this;
 }
 
-void Ipv4Resolver::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void Ipv4Resolver::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  stopped = true;
-}
-
 Ipv4Address Ipv4Resolver::resolve(const std::string& host) {
   assert(dispatcher != nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -78,15 +65,15 @@ Ipv4Address Ipv4Resolver::resolve(const std::string& host) {
     throw std::runtime_error("Ipv4Resolver::resolve, getaddrinfo failed, result=" + std::to_string(result));
   }
   
-  std::size_t count = 0;
+  size_t count = 0;
   for (addrinfo* addressInfo = addressInfos; addressInfo != nullptr; addressInfo = addressInfo->ai_next) {
     ++count;
   }
 
   std::mt19937 generator{ std::random_device()() };
-  std::size_t index = std::uniform_int_distribution<std::size_t>(0, count - 1)(generator);
+  size_t index = std::uniform_int_distribution<size_t>(0, count - 1)(generator);
   addrinfo* addressInfo = addressInfos;
-  for (std::size_t i = 0; i < index; ++i) {
+  for (size_t i = 0; i < index; ++i) {
     addressInfo = addressInfo->ai_next;
   }
 

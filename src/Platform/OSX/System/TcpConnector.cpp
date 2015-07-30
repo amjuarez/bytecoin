@@ -35,7 +35,7 @@ namespace System {
 
 namespace {
 
-struct ConnectorContext : public Dispatcher::OperationContext {
+struct ConnectorContext : public OperationContext {
   int connection;
 };
 
@@ -44,13 +44,12 @@ struct ConnectorContext : public Dispatcher::OperationContext {
 TcpConnector::TcpConnector() : dispatcher(nullptr) {
 }
 
-TcpConnector::TcpConnector(Dispatcher& dispatcher) : dispatcher(&dispatcher), stopped(false), context(nullptr) {
+TcpConnector::TcpConnector(Dispatcher& dispatcher) : dispatcher(&dispatcher), context(nullptr) {
 }
 
 TcpConnector::TcpConnector(TcpConnector&& other) : dispatcher(other.dispatcher) {
   if (other.dispatcher != nullptr) {
     assert(other.context == nullptr);
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -64,7 +63,6 @@ TcpConnector& TcpConnector::operator=(TcpConnector&& other) {
   dispatcher = other.dispatcher;
   if (other.dispatcher != nullptr) {
     assert(other.context == nullptr);
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -72,34 +70,10 @@ TcpConnector& TcpConnector::operator=(TcpConnector&& other) {
   return *this;
 }
 
-void TcpConnector::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void TcpConnector::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (context != nullptr) {
-    ConnectorContext* connectorContext = static_cast<ConnectorContext*>(context);
-    if (!connectorContext->interrupted) {
-      if (close(connectorContext->connection) == -1) {
-        throw std::runtime_error("TcpListener::stop, close failed, errno=" + std::to_string(errno));
-      }
-
-      dispatcher->pushContext(connectorContext->context);
-      connectorContext->interrupted = true;
-    }
-  }
-
-  stopped = true;
-}
-
 TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -137,7 +111,22 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
               message = "kevent() failed, errno=" + std::to_string(errno);
             } else {
               context = &connectorContext;
+              dispatcher->getCurrentContext()->interruptProcedure = [&] {
+                assert(dispatcher != nullptr);
+                assert(context != nullptr);
+                ConnectorContext* connectorContext = static_cast<ConnectorContext*>(context);
+                if (!connectorContext->interrupted) {
+                  if (close(connectorContext->connection) == -1) {
+                    throw std::runtime_error("TcpListener::stop, close failed, errno=" + std::to_string(errno));
+                  }
+                  
+                  dispatcher->pushContext(connectorContext->context);
+                  connectorContext->interrupted = true;
+                }                
+              };
+              
               dispatcher->dispatch();
+              dispatcher->getCurrentContext()->interruptProcedure = nullptr;
               assert(dispatcher != nullptr);
               assert(connectorContext.context == dispatcher->getCurrentContext());
               assert(context == &connectorContext);

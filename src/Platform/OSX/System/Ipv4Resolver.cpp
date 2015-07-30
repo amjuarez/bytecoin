@@ -22,6 +22,7 @@
 
 #include <netdb.h>
 
+#include <System/Dispatcher.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 
@@ -30,12 +31,11 @@ namespace System {
 Ipv4Resolver::Ipv4Resolver() : dispatcher(nullptr) {
 }
 
-Ipv4Resolver::Ipv4Resolver(Dispatcher& dispatcher) : dispatcher(&dispatcher), stopped(false) {
+Ipv4Resolver::Ipv4Resolver(Dispatcher& dispatcher) : dispatcher(&dispatcher) {
 }
 
 Ipv4Resolver::Ipv4Resolver(Ipv4Resolver&& other) : dispatcher(other.dispatcher) {
   if (dispatcher != nullptr) {
-    stopped = other.stopped;
     other.dispatcher = nullptr;
   }
 }
@@ -46,28 +46,15 @@ Ipv4Resolver::~Ipv4Resolver() {
 Ipv4Resolver& Ipv4Resolver::operator=(Ipv4Resolver&& other) {
   dispatcher = other.dispatcher;
   if (dispatcher != nullptr) {
-    stopped = other.stopped;
     other.dispatcher = nullptr;
   }
 
   return *this;
 }
 
-void Ipv4Resolver::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void Ipv4Resolver::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  stopped = true;
-}
-
 Ipv4Address Ipv4Resolver::resolve(const std::string& host) {
   assert(dispatcher != nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 

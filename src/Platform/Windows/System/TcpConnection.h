@@ -33,23 +33,20 @@ public:
   ~TcpConnection();
   TcpConnection& operator=(const TcpConnection&) = delete;
   TcpConnection& operator=(TcpConnection&& other);
-  void start();
-  void stop();
-  std::size_t read(uint8_t* data, std::size_t size);
-  std::size_t write(const uint8_t* data, std::size_t size);
-  std::pair<Ipv4Address, uint16_t> getPeerAddressAndPort();
+  size_t read(uint8_t* data, size_t size);
+  size_t write(const uint8_t* data, size_t size);
+  std::pair<Ipv4Address, uint16_t> getPeerAddressAndPort() const;
 
 private:
   friend class TcpConnector;
   friend class TcpListener;
 
   Dispatcher* dispatcher;
-  std::size_t connection;
-  bool stopped;
+  size_t connection;
   void* readContext;
   void* writeContext;
 
-  TcpConnection(Dispatcher& dispatcher, std::size_t connection);
+  TcpConnection(Dispatcher& dispatcher, size_t connection);
 };
 
 }

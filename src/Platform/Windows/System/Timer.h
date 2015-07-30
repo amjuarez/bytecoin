@@ -32,13 +32,10 @@ public:
   ~Timer();
   Timer& operator=(const Timer&) = delete;
   Timer& operator=(Timer&& other);
-  void start();
-  void stop();
   void sleep(std::chrono::nanoseconds duration);
 
 private:
   Dispatcher* dispatcher;
-  bool stopped;
   void* context;
 };
 

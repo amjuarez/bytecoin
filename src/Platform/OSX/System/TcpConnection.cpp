@@ -38,7 +38,6 @@ TcpConnection::TcpConnection(TcpConnection&& other) : dispatcher(other.dispatche
     assert(other.readContext == nullptr);
     assert(other.writeContext == nullptr);
     connection = other.connection;
-    stopped = other.stopped;
     readContext = nullptr;
     writeContext = nullptr;
     other.dispatcher = nullptr;
@@ -68,7 +67,6 @@ TcpConnection& TcpConnection::operator=(TcpConnection&& other) {
     assert(other.readContext == nullptr);
     assert(other.writeContext == nullptr);
     connection = other.connection;
-    stopped = other.stopped;
     readContext = nullptr;
     writeContext = nullptr;
     other.dispatcher = nullptr;
@@ -77,52 +75,10 @@ TcpConnection& TcpConnection::operator=(TcpConnection&& other) {
   return *this;
 }
 
-void TcpConnection::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void TcpConnection::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (writeContext != nullptr) {
-    Dispatcher::OperationContext* context = static_cast<Dispatcher::OperationContext*>(writeContext);
-    if (!context->interrupted) {
-      struct kevent event;
-      EV_SET(&event, connection, EVFILT_WRITE, EV_DELETE | EV_DISABLE, 0, 0, NULL);
-
-      if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        throw std::runtime_error("TcpListener::stop, kevent() failed, errno=" + std::to_string(errno));
-      }
-
-      context->interrupted = true;
-      dispatcher->pushContext(context->context);
-    }
-  }
-
-  if (readContext != nullptr) {
-    Dispatcher::OperationContext* context = static_cast<Dispatcher::OperationContext*>(readContext);
-    if (!context->interrupted) {
-      struct kevent event;
-      EV_SET(&event, connection, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, NULL);
-
-      if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        throw std::runtime_error("TcpListener::stop, kevent() failed, errno=" + std::to_string(errno));
-      }
-
-      context->interrupted = true;
-      dispatcher->pushContext(context->context);
-    }
-  }
-
-  stopped = true;
-}
-
 size_t TcpConnection::read(uint8_t* data, size_t size) {
   assert(dispatcher != nullptr);
   assert(readContext == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -132,7 +88,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
     if (errno != EAGAIN  && errno != EWOULDBLOCK) {
       message = "recv failed, errno=" + std::to_string(errno);
     } else {
-      Dispatcher::OperationContext context;
+      OperationContext context;
       context.context = dispatcher->getCurrentContext();
       context.interrupted = false;
       struct kevent event;
@@ -141,7 +97,25 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
         message = "kevent() failed, errno=" + std::to_string(errno);
       } else {
         readContext = &context;
+        dispatcher->getCurrentContext()->interruptProcedure = [&] {
+          assert(dispatcher != nullptr);
+          assert(readContext != nullptr);
+          OperationContext* context = static_cast<OperationContext*>(readContext);
+          if (!context->interrupted) {
+            struct kevent event;
+            EV_SET(&event, connection, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, NULL);
+            
+            if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
+              throw std::runtime_error("TcpListener::interruptionProcedure, kevent() failed, errno=" + std::to_string(errno));
+            }
+            
+            context->interrupted = true;
+            dispatcher->pushContext(context->context);
+          }
+        };
+        
         dispatcher->dispatch();
+        dispatcher->getCurrentContext()->interruptProcedure = nullptr;
         assert(dispatcher != nullptr);
         assert(context.context == dispatcher->getCurrentContext());
         assert(readContext == &context);
@@ -171,7 +145,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
 size_t TcpConnection::write(const uint8_t* data, size_t size) {
   assert(dispatcher != nullptr);
   assert(writeContext == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -189,7 +163,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
     if (errno != EAGAIN  && errno != EWOULDBLOCK) {
       message = "send failed, result=" + std::to_string(errno);
     } else {
-      Dispatcher::OperationContext context;
+      OperationContext context;
       context.context = dispatcher->getCurrentContext();
       context.interrupted = false;
       struct kevent event;
@@ -198,7 +172,25 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
         message = "kevent() failed, errno=" + std::to_string(errno);
       } else {
         writeContext = &context;
+        dispatcher->getCurrentContext()->interruptProcedure = [&] {
+          assert(dispatcher != nullptr);
+          assert(writeContext != nullptr);
+          OperationContext* context = static_cast<OperationContext*>(writeContext);
+          if (!context->interrupted) {
+            struct kevent event;
+            EV_SET(&event, connection, EVFILT_WRITE, EV_DELETE | EV_DISABLE, 0, 0, NULL);
+            
+            if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
+              throw std::runtime_error("TcpListener::stop, kevent() failed, errno=" + std::to_string(errno));
+            }
+            
+            context->interrupted = true;
+            dispatcher->pushContext(context->context);            
+          }
+        };
+        
         dispatcher->dispatch();
+        dispatcher->getCurrentContext()->interruptProcedure = nullptr;
         assert(dispatcher != nullptr);
         assert(context.context == dispatcher->getCurrentContext());
         assert(writeContext == &context);
@@ -225,7 +217,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
   return transferred;
 }
 
-std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() {
+std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() const {
   sockaddr_in addr;
   socklen_t size = sizeof(addr);
   if (getpeername(connection, reinterpret_cast<sockaddr*>(&addr), &size) != 0) {
@@ -236,7 +228,11 @@ std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() {
   return std::make_pair(Ipv4Address(htonl(addr.sin_addr.s_addr)), htons(addr.sin_port));
 }
 
-TcpConnection::TcpConnection(Dispatcher& dispatcher, int socket) : dispatcher(&dispatcher), connection(socket), stopped(false), readContext(nullptr), writeContext(nullptr) {
+TcpConnection::TcpConnection(Dispatcher& dispatcher, int socket) : dispatcher(&dispatcher), connection(socket), readContext(nullptr), writeContext(nullptr) {
+  int val = 1;
+  if (setsockopt(connection, SOL_SOCKET, SO_NOSIGPIPE, (void*)&val, sizeof val) == -1) {
+    throw std::runtime_error("TcpConnection::TcpConnection, setsockopt failed, result=" + std::to_string(errno));
+  }
 }
 
 }

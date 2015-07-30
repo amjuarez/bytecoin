@@ -24,10 +24,10 @@
 namespace Common {
 
 // 'StringBuffer' is a string of fixed maximum size.
-template<std::size_t MAXIMUM_SIZE_VALUE> class StringBuffer {
+template<size_t MAXIMUM_SIZE_VALUE> class StringBuffer {
 public:
   typedef char Object;
-  typedef std::size_t Size;
+  typedef size_t Size;
 
   const static Size MAXIMUM_SIZE = MAXIMUM_SIZE_VALUE;
   const static Size INVALID;
@@ -549,6 +549,6 @@ protected:
   Size size;
 };
 
-template<std::size_t MAXIMUM_SIZE> const typename StringBuffer<MAXIMUM_SIZE>::Size StringBuffer<MAXIMUM_SIZE>::INVALID = std::numeric_limits<typename StringBuffer<MAXIMUM_SIZE>::Size>::max();
+template<size_t MAXIMUM_SIZE> const typename StringBuffer<MAXIMUM_SIZE>::Size StringBuffer<MAXIMUM_SIZE>::INVALID = std::numeric_limits<typename StringBuffer<MAXIMUM_SIZE>::Size>::max();
 
 }

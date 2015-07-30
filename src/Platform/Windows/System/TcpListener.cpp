@@ -32,7 +32,7 @@ namespace System {
 namespace {
 
 struct TcpListenerContext : public OVERLAPPED {
-  void* context;
+  NativeContext* context;
   bool interrupted;
 };
 
@@ -67,7 +67,6 @@ TcpListener::TcpListener(Dispatcher& dispatcher, const Ipv4Address& address, uin
         if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(listener), dispatcher.getCompletionPort(), 0, 0) != dispatcher.getCompletionPort()) {
           message = "CreateIoCompletionPort failed, result=" + std::to_string(GetLastError());
         } else {
-          stopped = false;
           context = nullptr;
           return;
         }
@@ -85,7 +84,6 @@ TcpListener::TcpListener(TcpListener&& other) : dispatcher(other.dispatcher) {
   if (dispatcher != nullptr) {
     assert(other.context == nullptr);
     listener = other.listener;
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -111,7 +109,6 @@ TcpListener& TcpListener::operator=(TcpListener&& other) {
   if (dispatcher != nullptr) {
     assert(other.context == nullptr);
     listener = other.listener;
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -119,36 +116,10 @@ TcpListener& TcpListener::operator=(TcpListener&& other) {
   return *this;
 }
 
-void TcpListener::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void TcpListener::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (context != nullptr) {
-    TcpListenerContext* context2 = static_cast<TcpListenerContext*>(context);
-    if (!context2->interrupted) {
-      if (CancelIoEx(reinterpret_cast<HANDLE>(listener), context2) != TRUE) {
-        DWORD lastError = GetLastError();
-        if (lastError != ERROR_NOT_FOUND) {
-          throw std::runtime_error("TcpListener::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
-        }
-      }
-
-      context2->interrupted = true;
-    }
-  }
-
-  stopped = true;
-}
-
 TcpConnection TcpListener::accept() {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -168,11 +139,30 @@ TcpConnection TcpListener::accept() {
       if (lastError != WSA_IO_PENDING) {
         message = "AcceptEx failed, result=" + std::to_string(lastError);
       } else {
-        context2.context = GetCurrentFiber();
+        context2.context = dispatcher->getCurrentContext();
         context2.interrupted = false;
         context = &context2;
+        dispatcher->getCurrentContext()->interruptProcedure = [&]() {
+          assert(dispatcher != nullptr);
+          assert(context != nullptr);
+          TcpListenerContext* context2 = static_cast<TcpListenerContext*>(context);
+          if (!context2->interrupted) {
+            if (CancelIoEx(reinterpret_cast<HANDLE>(listener), context2) != TRUE) {
+              DWORD lastError = GetLastError();
+              if (lastError != ERROR_NOT_FOUND) {
+                throw std::runtime_error("TcpListener::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
+              }
+
+              context2->context->interrupted = true;
+            }
+
+            context2->interrupted = true;
+          }
+        };
+
         dispatcher->dispatch();
-        assert(context2.context == GetCurrentFiber());
+        dispatcher->getCurrentContext()->interruptProcedure = nullptr;
+        assert(context2.context == dispatcher->getCurrentContext());
         assert(dispatcher != nullptr);
         assert(context == &context2);
         context = nullptr;

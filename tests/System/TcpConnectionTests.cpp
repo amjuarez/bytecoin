@@ -16,6 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <System/Dispatcher.h>
+#include <System/ContextGroup.h>
 #include <System/Event.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
@@ -46,7 +47,7 @@ void fillRandomString(std::string& buf) {
 }
 
 std::string removePort(const std::string& address) {
-  std::size_t colonPosition = address.rfind(':');
+  size_t colonPosition = address.rfind(':');
   if (colonPosition == std::string::npos) {
     throw std::runtime_error("removePort");
   }
@@ -56,10 +57,9 @@ std::string removePort(const std::string& address) {
 
 }
 
-class TcpConnectionTest : public testing::Test {
+class TcpConnectionTests : public testing::Test {
 public:
-  TcpConnectionTest() :
-    listener(dispatcher, LISTEN_ADDRESS, LISTEN_PORT) {
+  TcpConnectionTests() : listener(dispatcher, LISTEN_ADDRESS, LISTEN_PORT), contextGroup(dispatcher) {
   }
 
   void connect() {
@@ -72,15 +72,16 @@ protected:
   TcpListener listener;
   TcpConnection connection1;
   TcpConnection connection2;
+  ContextGroup contextGroup;
 };
 
-TEST_F(TcpConnectionTest, sendAndClose) {
+TEST_F(TcpConnectionTests, sendAndClose) {
   connect();
   ASSERT_EQ(LISTEN_ADDRESS, connection1.getPeerAddressAndPort().first);
   ASSERT_EQ(LISTEN_ADDRESS, connection2.getPeerAddressAndPort().first);
   connection1.write(reinterpret_cast<const uint8_t*>("Test"), 4);
   uint8_t data[1024];
-  std::size_t size = connection2.read(data, 1024);
+  size_t size = connection2.read(data, 1024);
   ASSERT_EQ(4, size);
   ASSERT_EQ(0, memcmp(data, "Test", 4));
   connection1 = TcpConnection();
@@ -88,50 +89,154 @@ TEST_F(TcpConnectionTest, sendAndClose) {
   ASSERT_EQ(0, size);
 }
 
-TEST_F(TcpConnectionTest, stoppedState) {
+TEST_F(TcpConnectionTests, stoppedState) {
   connect();
-  connection1.stop();
   bool stopped = false;
-  try {
-    uint8_t data[1024];
-    std::size_t size = connection1.read(data, 1024);
-  } catch (InterruptedException&) {
-    stopped = true;
-  }
+  contextGroup.spawn([&] {
+    try {
+      uint8_t data[1024];
+      connection1.read(data, 1024);
+    } catch (InterruptedException&) {
+      stopped = true;
+    }
 
-  ASSERT_TRUE(stopped);
-  stopped = false;
-  try {
-    connection1.write(reinterpret_cast<const uint8_t*>("Test"), 4);
-  } catch (InterruptedException&) {
-    stopped = true;
-  }
+    ASSERT_TRUE(stopped);
+    contextGroup.interrupt();
+    stopped = false;
+    try {
+      connection1.write(reinterpret_cast<const uint8_t*>("Test"), 4);
+    } catch (InterruptedException&) {
+      stopped = true;
+    }
+  });
+  contextGroup.interrupt();
+  contextGroup.wait();
 
   ASSERT_TRUE(stopped);
 }
 
-TEST_F(TcpConnectionTest, interruptRead) {
+TEST_F(TcpConnectionTests, interruptRead) {
   connect();
-  Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  contextGroup.spawn([&]() {
     Timer(dispatcher).sleep(std::chrono::milliseconds(10));
-    connection1.stop();
-    event.set();
+    contextGroup.interrupt();
   });
 
   bool stopped = false;
-  try {
-    uint8_t data[1024];
-    std::size_t size = connection1.read(data, 1024);
-  } catch (InterruptedException&) {
-    stopped = true;
-  }
+  contextGroup.spawn([&]() {
+    try {
+      uint8_t data[1024];
+      connection1.read(data, 1024);
+    } catch (InterruptedException &) {
+      stopped = true;
+    }
+  });
 
-  event.wait();
+  contextGroup.wait();
   ASSERT_TRUE(stopped);
 }
 
-TEST_F(TcpConnectionTest, sendBigChunk) {
+TEST_F(TcpConnectionTests, reuseWriteAfterInterrupt) {
+  connect();
+  contextGroup.spawn([&]() {
+    Timer(dispatcher).sleep(std::chrono::milliseconds(10));
+    contextGroup.interrupt();
+  });
+
+  bool stopped = false;
+  contextGroup.spawn([&]() {
+    try {
+      uint8_t data[1024];
+      connection1.read(data, 1024);
+    } catch (InterruptedException &) {
+      stopped = true;
+    }
+  });
+
+  contextGroup.wait();
+  ASSERT_TRUE(stopped);
+  stopped = false;
+
+  contextGroup.spawn([&]() {
+    Timer(dispatcher).sleep(std::chrono::milliseconds(10));
+    contextGroup.interrupt();
+  });
+
+  contextGroup.spawn([&] {
+    try {
+      uint8_t buff[1024];
+      std::fill(std::begin(buff), std::end(buff), 0xff);
+      connection1.write(buff, sizeof(buff)); // write smth
+      connection1 = TcpConnection();         // close connection
+    } catch (InterruptedException&) {
+      stopped = true;
+    }
+  });
+
+  contextGroup.spawn([&]() {
+    try {
+      uint8_t data[1024];
+      connection2.read(data, 1024);
+    } catch (InterruptedException &) {
+      stopped = true;
+    }
+  });
+
+  contextGroup.wait();
+  ASSERT_TRUE(!stopped);
+}
+
+TEST_F(TcpConnectionTests, reuseReadAfterInterrupt) {
+  connect();
+  contextGroup.spawn([&]() {
+    Timer(dispatcher).sleep(std::chrono::milliseconds(10));
+    contextGroup.interrupt();
+  });
+
+  bool stopped = false;
+  contextGroup.spawn([&]() {
+    try {
+      uint8_t data[1024];
+      connection1.read(data, 1024);
+    } catch (InterruptedException &) {
+      stopped = true;
+    }
+  });
+
+  contextGroup.wait();
+  ASSERT_TRUE(stopped);
+  stopped = false;
+
+  contextGroup.spawn([&]() {
+    Timer(dispatcher).sleep(std::chrono::milliseconds(10));
+    contextGroup.interrupt();
+  });
+
+  contextGroup.spawn([&] {
+    try {
+      uint8_t buff[1024];
+      std::fill(std::begin(buff), std::end(buff), 0xff);
+      connection2.write(buff, sizeof(buff)); // write smth
+      connection2 = TcpConnection();         // close connection
+    } catch (InterruptedException&) {
+      stopped = true;
+    }
+  });
+
+  contextGroup.spawn([&]() {
+    try {
+      uint8_t data[1024];
+      connection1.read(data, 1024);
+    } catch (InterruptedException &) {
+      stopped = true;
+    }
+  });
+
+  contextGroup.wait();
+  ASSERT_TRUE(!stopped);
+}
+
+TEST_F(TcpConnectionTests, sendBigChunk) {
   connect();
   
   const size_t bufsize =  15* 1024 * 1024; // 15MB
@@ -142,7 +247,7 @@ TEST_F(TcpConnectionTest, sendBigChunk) {
   std::vector<uint8_t> incoming;
   Event readComplete(dispatcher);
 
-  dispatcher.spawn([&]{
+  contextGroup.spawn([&]{
     uint8_t readBuf[1024];
     size_t readSize;
     while ((readSize = connection2.read(readBuf, sizeof(readBuf))) > 0) {
@@ -152,7 +257,7 @@ TEST_F(TcpConnectionTest, sendBigChunk) {
     readComplete.set();
   });
 
-  dispatcher.spawn([&]{
+  contextGroup.spawn([&]{
     uint8_t* bufPtr = &buf[0];
     size_t left = bufsize;
     while(left > 0) {
@@ -170,7 +275,7 @@ TEST_F(TcpConnectionTest, sendBigChunk) {
   ASSERT_EQ(buf, incoming);
 }
 
-TEST_F(TcpConnectionTest, writeWhenReadWaiting) {
+TEST_F(TcpConnectionTests, writeWhenReadWaiting) {
   connect();
 
   Event readStarted(dispatcher);
@@ -180,7 +285,7 @@ TEST_F(TcpConnectionTest, writeWhenReadWaiting) {
   size_t writeSize = 0;
   bool readStopped = false;
 
-  dispatcher.spawn([&]{
+  contextGroup.spawn([&]{
     try {
       uint8_t readBuf[1024];
       size_t readSize;
@@ -196,12 +301,13 @@ TEST_F(TcpConnectionTest, writeWhenReadWaiting) {
 
   readStarted.wait();
 
-  dispatcher.spawn([&]{
+  contextGroup.spawn([&]{
     uint8_t writeBuf[1024];
     for (int i = 0; i < 100; ++i) {
       writeSize += connection2.write(writeBuf, sizeof(writeBuf));
     }
-    connection2.stop();
+    //connection2.stop();
+    contextGroup.interrupt();
     writeCompleted.set();
   });
 
@@ -218,7 +324,7 @@ TEST_F(TcpConnectionTest, writeWhenReadWaiting) {
   writeCompleted.wait();
 }
 
-TEST_F(TcpConnectionTest, sendBigChunkThruTcpStream) {
+TEST_F(TcpConnectionTests, sendBigChunkThruTcpStream) {
   connect();
   const size_t bufsize = 15 * 1024 * 1024; // 15MB
   std::string buf;
@@ -228,7 +334,7 @@ TEST_F(TcpConnectionTest, sendBigChunkThruTcpStream) {
   std::string incoming;
   Event readComplete(dispatcher);
 
-  dispatcher.spawn([&]{
+  contextGroup.spawn([&]{
     uint8_t readBuf[1024];
     size_t readSize;
     while ((readSize = connection2.read(readBuf, sizeof(readBuf))) > 0) {
@@ -239,7 +345,7 @@ TEST_F(TcpConnectionTest, sendBigChunkThruTcpStream) {
   });
 
 
-  dispatcher.spawn([&]{
+  contextGroup.spawn([&]{
     TcpStreambuf streambuf(connection1);
     std::iostream stream(&streambuf);
 

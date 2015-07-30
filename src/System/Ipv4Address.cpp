@@ -22,7 +22,7 @@ namespace System {
 
 namespace {
 
-uint8_t readUint8(const std::string& source, std::size_t& offset) {
+uint8_t readUint8(const std::string& source, size_t& offset) {
   if (offset == source.size() || source[offset] < '0' || source[offset] > '9') {
     throw std::runtime_error("Unable to read value from string");
   }
@@ -58,7 +58,7 @@ Ipv4Address::Ipv4Address(uint32_t value) : value(value) {
 }
 
 Ipv4Address::Ipv4Address(const std::string& dottedDecimal) {
-  std::size_t offset = 0;
+  size_t offset = 0;
   value = readUint8(dottedDecimal, offset);
   if (offset == dottedDecimal.size() || dottedDecimal[offset] != '.') {
     throw std::runtime_error("Invalid Ipv4 address string");
@@ -115,11 +115,11 @@ bool Ipv4Address::isLoopback() const {
 bool Ipv4Address::isPrivate() const {
   return
     // 10.0.0.0/8
-    (value & UINT32_C(0xff000000)) == (UINT32_C(10) << 24) ||
+    (value & 0xff000000) == (10 << 24) ||
     // 172.16.0.0/12
-    (value & UINT32_C(0xfff00000)) == ((UINT32_C(172) << 24) | (UINT32_C(16) << 16)) ||
+    (value & 0xfff00000) == ((172 << 24) | (16 << 16)) ||
     // 192.168.0.0/16
-    (value & UINT32_C(0xffff0000)) == ((UINT32_C(192) << 24) | (UINT32_C(168) << 16));
+    (value & 0xffff0000) == ((192 << 24) | (168 << 16));
 }
 
 }

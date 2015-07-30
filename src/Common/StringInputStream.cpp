@@ -23,7 +23,7 @@ namespace Common {
 StringInputStream::StringInputStream(const std::string& in) : in(in), offset(0) {
 }
 
-std::size_t StringInputStream::readSome(void* data, std::size_t size) {
+size_t StringInputStream::readSome(void* data, size_t size) {
   if (size > in.size() - offset) {
     size = in.size() - offset;
   }

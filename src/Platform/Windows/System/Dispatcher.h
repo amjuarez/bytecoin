@@ -21,9 +21,28 @@
 #include <functional>
 #include <map>
 #include <queue>
-#include <stack>
 
 namespace System {
+
+struct NativeContextGroup;
+
+struct NativeContext {
+  void* fiber;
+  bool interrupted;
+  NativeContext* next;
+  NativeContextGroup* group;
+  NativeContext* groupPrev;
+  NativeContext* groupNext;
+  std::function<void()> procedure;
+  std::function<void()> interruptProcedure;
+};
+
+struct NativeContextGroup {
+  NativeContext* firstContext;
+  NativeContext* lastContext;
+  NativeContext* firstWaiter;
+  NativeContext* lastWaiter;
+};
 
 class Dispatcher {
 public:
@@ -33,30 +52,38 @@ public:
   Dispatcher& operator=(const Dispatcher&) = delete;
   void clear();
   void dispatch();
-  void* getCurrentContext() const;
-  void pushContext(void* context);
+  NativeContext* getCurrentContext() const;
+  void interrupt();
+  void interrupt(NativeContext* context);
+  bool interrupted();
+  void pushContext(NativeContext* context);
   void remoteSpawn(std::function<void()>&& procedure);
-  void spawn(std::function<void()>&& procedure);
   void yield();
 
   // Platform-specific
-  void addTimer(uint64_t time, void* context);
+  void addTimer(uint64_t time, NativeContext* context);
   void* getCompletionPort() const;
-  void interruptTimer(uint64_t time, void* context);
+  NativeContext& getReusableContext();
+  void pushReusableContext(NativeContext&);
+  void interruptTimer(uint64_t time, NativeContext* context);
 
 private:
+  void spawn(std::function<void()>&& procedure);
   void* completionPort;
-  std::size_t contextCount;
   uint8_t criticalSection[2 * sizeof(long) + 4 * sizeof(void*)];
-  std::queue<void*> resumingContexts;
   bool remoteNotificationSent;
   std::queue<std::function<void()>> remoteSpawningProcedures;
   uint8_t remoteSpawnOverlapped[4 * sizeof(void*)];
-  std::stack<void*> reusableContexts;
-  std::queue<std::function<void()>> spawningProcedures;
-  void* threadHandle;
   uint32_t threadId;
-  std::multimap<uint64_t, void*> timers;
+  std::multimap<uint64_t, NativeContext*> timers;
+
+  NativeContext mainContext;
+  NativeContextGroup contextGroup;
+  NativeContext* currentContext;
+  NativeContext* firstResumingContext;
+  NativeContext* lastResumingContext;
+  NativeContext* firstReusableContext;
+  size_t runningContextCount;
 
   void contextProcedure();
   static void __stdcall contextProcedureStatic(void* context);

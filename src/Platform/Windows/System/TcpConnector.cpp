@@ -32,8 +32,8 @@ namespace System {
 namespace {
 
 struct TcpConnectorContext : public OVERLAPPED {
-  void* context;
-  std::size_t connection;
+  NativeContext* context;
+  size_t connection;
   bool interrupted;
 };
 
@@ -44,13 +44,12 @@ LPFN_CONNECTEX connectEx = nullptr;
 TcpConnector::TcpConnector() : dispatcher(nullptr) {
 }
 
-TcpConnector::TcpConnector(Dispatcher& dispatcher) : dispatcher(&dispatcher), stopped(false), context(nullptr) {
+TcpConnector::TcpConnector(Dispatcher& dispatcher) : dispatcher(&dispatcher), context(nullptr) {
 }
 
 TcpConnector::TcpConnector(TcpConnector&& other) : dispatcher(other.dispatcher) {
   if (dispatcher != nullptr) {
     assert(other.context == nullptr);
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -65,7 +64,6 @@ TcpConnector& TcpConnector::operator=(TcpConnector&& other) {
   dispatcher = other.dispatcher;
   if (dispatcher != nullptr) {
     assert(other.context == nullptr);
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -73,36 +71,10 @@ TcpConnector& TcpConnector::operator=(TcpConnector&& other) {
   return *this;
 }
 
-void TcpConnector::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void TcpConnector::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (context != nullptr) {
-    TcpConnectorContext* context2 = static_cast<TcpConnectorContext*>(context);
-    if (!context2->interrupted) {
-      if (CancelIoEx(reinterpret_cast<HANDLE>(context2->connection), context2) != TRUE) {
-        DWORD lastError = GetLastError();
-        if (lastError != ERROR_NOT_FOUND) {
-          throw std::runtime_error("TcpConnector::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
-        }
-      }
-
-      context2->interrupted = true;
-    }
-  }
-
-  stopped = true;
-}
-
 TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -140,12 +112,31 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
             if (lastError != WSA_IO_PENDING) {
               message = "ConnectEx failed, result=" + std::to_string(lastError);
             } else {
-              context2.context = GetCurrentFiber();
+              context2.context = dispatcher->getCurrentContext();
               context2.connection = connection;
               context2.interrupted = false;
               context = &context2;
+              dispatcher->getCurrentContext()->interruptProcedure = [&]() {
+                assert(dispatcher != nullptr);
+                assert(context != nullptr);
+                TcpConnectorContext* context2 = static_cast<TcpConnectorContext*>(context);
+                if (!context2->interrupted) {
+                  if (CancelIoEx(reinterpret_cast<HANDLE>(context2->connection), context2) != TRUE) {
+                    DWORD lastError = GetLastError();
+                    if (lastError != ERROR_NOT_FOUND) {
+                      throw std::runtime_error("TcpConnector::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
+                    }
+
+                    context2->context->interrupted = true;
+                  }
+
+                  context2->interrupted = true;
+                }
+              };
+
               dispatcher->dispatch();
-              assert(context2.context == GetCurrentFiber());
+              dispatcher->getCurrentContext()->interruptProcedure = nullptr;
+              assert(context2.context == dispatcher->getCurrentContext());
               assert(context2.connection == connection);
               assert(dispatcher != nullptr);
               assert(context == &context2);

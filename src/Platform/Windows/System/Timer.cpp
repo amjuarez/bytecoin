@@ -31,7 +31,7 @@ namespace {
 
 struct TimerContext {
   uint64_t time;
-  void* context;
+  NativeContext* context;
   bool interrupted;
 };
 
@@ -40,13 +40,12 @@ struct TimerContext {
 Timer::Timer() : dispatcher(nullptr) {
 }
 
-Timer::Timer(Dispatcher& dispatcher) : dispatcher(&dispatcher), stopped(false), context(nullptr) {
+Timer::Timer(Dispatcher& dispatcher) : dispatcher(&dispatcher), context(nullptr) {
 }
 
 Timer::Timer(Timer&& other) : dispatcher(other.dispatcher) {
   if (dispatcher != nullptr) {
     assert(other.context == nullptr);
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -61,7 +60,6 @@ Timer& Timer::operator=(Timer&& other) {
   dispatcher = other.dispatcher;
   if (dispatcher != nullptr) {
     assert(other.context == nullptr);
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -69,30 +67,10 @@ Timer& Timer::operator=(Timer&& other) {
   return *this;
 }
 
-void Timer::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void Timer::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (context != nullptr) {
-    TimerContext* timerContext = static_cast<TimerContext*>(context);
-    if (!timerContext->interrupted) {
-      dispatcher->interruptTimer(timerContext->time, timerContext->context);
-      timerContext->interrupted = true;
-    }
-  }
-
-  stopped = true;
-}
-
 void Timer::sleep(std::chrono::nanoseconds duration) {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -102,12 +80,22 @@ void Timer::sleep(std::chrono::nanoseconds duration) {
   QueryPerformanceFrequency(&frequency);
   uint64_t currentTime = ticks.QuadPart / (frequency.QuadPart / 1000);
   uint64_t time = currentTime + duration.count() / 1000000;
-  void* fiber = GetCurrentFiber();
-  TimerContext timerContext{ time, fiber, false };
+  TimerContext timerContext{ time, dispatcher->getCurrentContext(), false };
   context = &timerContext;
-  dispatcher->addTimer(time, fiber);
+  dispatcher->addTimer(time, dispatcher->getCurrentContext());
+  dispatcher->getCurrentContext()->interruptProcedure = [&]() {
+    assert(dispatcher != nullptr);
+    assert(context != nullptr);
+    TimerContext* timerContext = static_cast<TimerContext*>(context);
+    if (!timerContext->interrupted) {
+      dispatcher->interruptTimer(timerContext->time, timerContext->context);
+      timerContext->interrupted = true;
+    }
+  };
+
   dispatcher->dispatch();
-  assert(timerContext.context == GetCurrentFiber());
+  dispatcher->getCurrentContext()->interruptProcedure = nullptr;
+  assert(timerContext.context == dispatcher->getCurrentContext());
   assert(dispatcher != nullptr);
   assert(context == &timerContext);
   context = nullptr;

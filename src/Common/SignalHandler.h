@@ -19,7 +19,7 @@
 
 #include <functional>
 
-namespace tools {
+namespace Tools {
   
   class SignalHandler
   {

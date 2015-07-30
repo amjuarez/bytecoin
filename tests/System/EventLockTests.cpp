@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <System/Context.h>
 #include <System/Dispatcher.h>
 #include <System/Event.h>
 #include <System/EventLock.h>
@@ -26,7 +27,7 @@ TEST(EventLockTests, eventLockIsLocking) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   bool done = false;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     EventLock lock(event);
     done = true;
   });
@@ -44,7 +45,7 @@ TEST(EventLockTests, eventLockIsNotLocking) {
   Event event(dispatcher);
   event.set();
   bool done = false;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     EventLock lock(event);
     done = true;
   });
@@ -58,14 +59,14 @@ TEST(EventLockTests, eventLockIsUnlockOnlyOnce) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   auto i = 0;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     EventLock lock(event);
     i++;
     dispatcher.yield();
     i++;
   });
 
-  dispatcher.spawn([&]() {
+  Context<> contextSecond(dispatcher, [&]() {
     EventLock lock(event);
     i += 2;
     dispatcher.yield();

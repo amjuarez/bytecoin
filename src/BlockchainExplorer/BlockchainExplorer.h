@@ -27,6 +27,8 @@
 #include "Common/ObserverManager.h"
 #include "BlockchainExplorerErrors.h"
 
+#include "Wallet/WalletAsyncContextCounter.h"
+
 #include "Logging/LoggerRef.h"
 
 namespace CryptoNote {
@@ -46,13 +48,16 @@ public:
   virtual bool addObserver(IBlockchainObserver* observer) override;
   virtual bool removeObserver(IBlockchainObserver* observer) override;
 
-  virtual bool getBlocks(const std::vector<uint64_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks) override;
-  virtual bool getBlocks(const std::vector<std::array<uint8_t, 32>>& blockHashes, std::vector<BlockDetails>& blocks) override;
+  virtual bool getBlocks(const std::vector<uint32_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks) override;
+  virtual bool getBlocks(const std::vector<Crypto::Hash>& blockHashes, std::vector<BlockDetails>& blocks) override;
+  virtual bool getBlocks(uint64_t timestampBegin, uint64_t timestampEnd, uint32_t blocksNumberLimit, std::vector<BlockDetails>& blocks, uint32_t& blocksNumberWithinTimestamps) override;
 
   virtual bool getBlockchainTop(BlockDetails& topBlock) override;
 
-  virtual bool getTransactions(const std::vector<std::array<uint8_t, 32>>& transactionHashes, std::vector<TransactionDetails>& transactions) override;
-  virtual bool getPoolState(const std::vector<std::array<uint8_t, 32>>& knownPoolTransactionHashes, std::array<uint8_t, 32> knownBlockchainTop, bool& isBlockchainActual, std::vector<TransactionDetails>& newTransactions, std::vector<std::array<uint8_t, 32>>& removedTransactions) override;
+  virtual bool getTransactions(const std::vector<Crypto::Hash>& transactionHashes, std::vector<TransactionDetails>& transactions) override;
+  virtual bool getTransactionsByPaymentId(const Crypto::Hash& paymentId, std::vector<TransactionDetails>& transactions) override;
+  virtual bool getPoolTransactions(uint64_t timestampBegin, uint64_t timestampEnd, uint32_t transactionsNumberLimit, std::vector<TransactionDetails>& transactions, uint64_t& transactionsNumberWithinTimestamps) override;
+  virtual bool getPoolState(const std::vector<Crypto::Hash>& knownPoolTransactionHashes, Crypto::Hash knownBlockchainTop, bool& isBlockchainActual, std::vector<TransactionDetails>& newTransactions, std::vector<Crypto::Hash>& removedTransactions) override;
 
   virtual uint64_t getRewardBlocksWindow() override;
   virtual uint64_t getFullRewardMaxBlockSize(uint8_t majorVersion) override;
@@ -63,8 +68,10 @@ public:
   virtual void shutdown() override;
 
   virtual void poolChanged() override;
-  virtual void blockchainSynchronized(uint64_t topHeight) override;
-  virtual void localBlockchainUpdated(uint64_t height) override;
+  virtual void blockchainSynchronized(uint32_t topHeight) override;
+  virtual void localBlockchainUpdated(uint32_t height) override;
+
+  typedef WalletAsyncContextCounter AsyncContextCounter;
 
 private:
   enum State {
@@ -73,16 +80,20 @@ private:
   };
 
   BlockDetails knownBlockchainTop;
-  uint64_t knownBlockchainTopHeight;
-  std::unordered_set<crypto::hash> knownPoolState;
+  uint32_t knownBlockchainTopHeight;
+  std::unordered_set<Crypto::Hash> knownPoolState;
 
   std::atomic<State> state;
-  tools::ObserverManager<IBlockchainObserver> observerManager;
+  std::atomic<bool> synchronized;
+  std::atomic<uint32_t> observersCounter;
+  Tools::ObserverManager<IBlockchainObserver> observerManager;
 
   std::mutex mutex;
 
   INode& node;
   Logging::LoggerRef logger;
+
+  AsyncContextCounter asyncContextCounter;
   
 };
 }

@@ -33,14 +33,13 @@ namespace System {
 Timer::Timer() : dispatcher(nullptr) {
 }
 
-Timer::Timer(Dispatcher& dispatcher) : dispatcher(&dispatcher), stopped(false), context(nullptr), timer(-1) {
+Timer::Timer(Dispatcher& dispatcher) : dispatcher(&dispatcher), context(nullptr), timer(-1) {
 }
 
 Timer::Timer(Timer&& other) : dispatcher(other.dispatcher) {
   if (other.dispatcher != nullptr) {
     assert(other.context == nullptr);
     timer = other.timer;
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
   }
@@ -56,7 +55,6 @@ Timer& Timer::operator=(Timer&& other) {
   if (other.dispatcher != nullptr) {
     assert(other.context == nullptr);
     timer = other.timer;
-    stopped = other.stopped;
     context = nullptr;
     other.dispatcher = nullptr;
     other.timer = -1;
@@ -65,21 +63,33 @@ Timer& Timer::operator=(Timer&& other) {
   return *this;
 }
 
-void Timer::start() {
+void Timer::sleep(std::chrono::nanoseconds duration) {
   assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
+  assert(context == nullptr);
+  if (dispatcher->interrupted()) {
+    throw InterruptedException();
+  }
 
-void Timer::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
+  OperationContext timerContext;
+  timerContext.context = dispatcher->getCurrentContext();
+  timerContext.interrupted = false;
+  timer = dispatcher->getTimer();
 
-  if (context != nullptr) {
-    Dispatcher::OperationContext* timerContext = static_cast<Dispatcher::OperationContext*>(context);
+  struct kevent event;
+  EV_SET(&event, timer, EVFILT_TIMER, EV_ADD | EV_ENABLE | EV_ONESHOT, NOTE_NSECONDS, duration.count(), &timerContext);
+
+  if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
+    throw std::runtime_error("Timer::stop, kevent() failed, errno=" + std::to_string(errno));
+  }
+
+  context = &timerContext;
+  dispatcher->getCurrentContext()->interruptProcedure = [&] {
+    assert(dispatcher != nullptr);
+    assert(context != nullptr);
+    OperationContext* timerContext = static_cast<OperationContext*>(context);
     if (!timerContext->interrupted) {
       struct kevent event;
-      EV_SET(&event, timer, EVFILT_TIMER, EV_DISABLE, 0, 0, NULL);
+      EV_SET(&event, timer, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
 
       if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
         throw std::runtime_error("Timer::stop, kevent() failed, errno=" + std::to_string(errno));
@@ -88,32 +98,10 @@ void Timer::stop() {
       dispatcher->pushContext(timerContext->context);
       timerContext->interrupted = true;
     }
-  }
-
-  stopped = true;
-}
-
-void Timer::sleep(std::chrono::nanoseconds duration) {
-  assert(dispatcher != nullptr);
-  assert(context == nullptr);
-  if (stopped) {
-    throw InterruptedException();
-  }
-
-  Dispatcher::OperationContext timerContext;
-  timerContext.context = dispatcher->getCurrentContext();
-  timerContext.interrupted = false;
-  timer = dispatcher->getTimer();
-
-  struct kevent event;
-  EV_SET(&event, timer, EVFILT_TIMER, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, duration.count() / 1000000, &timerContext);
-
-  if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-    throw std::runtime_error("Timer::stop, kevent() failed, errno=" + std::to_string(errno));
-  }
-
-  context = &timerContext;
+  };
+  
   dispatcher->dispatch();
+  dispatcher->getCurrentContext()->interruptProcedure = nullptr;
   assert(dispatcher != nullptr);
   assert(timerContext.context == dispatcher->getCurrentContext());
   assert(context == &timerContext);

@@ -21,7 +21,7 @@
 #include <mutex>
 #include <vector>
 
-namespace tools {
+namespace Tools {
 
 template<typename T>
 class ObserverManager {
@@ -39,6 +39,7 @@ public:
 
   bool remove(T* observer) {
     std::unique_lock<std::mutex> lock(m_observersMutex);
+
     auto it = std::find(m_observers.begin(), m_observers.end(), observer);
     if (m_observers.end() == it) {
       return false;

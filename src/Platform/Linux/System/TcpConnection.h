@@ -34,11 +34,9 @@ public:
   ~TcpConnection();
   TcpConnection& operator=(const TcpConnection&) = delete;
   TcpConnection& operator=(TcpConnection&& other);
-  void start();
-  void stop();
   std::size_t read(uint8_t* data, std::size_t size);
   std::size_t write(const uint8_t* data, std::size_t size);
-  std::pair<Ipv4Address, uint16_t> getPeerAddressAndPort();
+  std::pair<Ipv4Address, uint16_t> getPeerAddressAndPort() const;
 
 private:
   friend class TcpConnector;
@@ -46,8 +44,7 @@ private:
   
   Dispatcher* dispatcher;
   int connection;
-  bool stopped;
-  Dispatcher::ContextPair contextPair;
+  ContextPair contextPair;
 
   TcpConnection(Dispatcher& dispatcher, int socket);
 };

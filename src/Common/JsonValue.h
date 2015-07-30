@@ -61,7 +61,7 @@ public:
   JsonValue(Real value);
   JsonValue(const String& value);
   JsonValue(String&& value);
-  template<std::size_t size> JsonValue(const char(&value)[size]) {
+  template<size_t size> JsonValue(const char(&value)[size]) {
     new(valueString)String(value, size - 1);
     type = STRING;
   }
@@ -80,7 +80,7 @@ public:
   JsonValue& operator=(Real value);
   JsonValue& operator=(const String& value);
   JsonValue& operator=(String&& value);
-  template<std::size_t size> JsonValue& operator=(const char(&value)[size]) {
+  template<size_t size> JsonValue& operator=(const char(&value)[size]) {
     if (type != STRING) {
       destructValue();
       type = NIL;
@@ -112,10 +112,10 @@ public:
   String& getString();
   const String& getString() const;
 
-  std::size_t size() const;
+  size_t size() const;
 
-  JsonValue& operator[](std::size_t index);
-  const JsonValue& operator[](std::size_t index) const;
+  JsonValue& operator[](size_t index);
+  const JsonValue& operator[](size_t index) const;
   JsonValue& pushBack(const JsonValue& value);
   JsonValue& pushBack(JsonValue&& value);
 
@@ -129,7 +129,7 @@ public:
   JsonValue& set(const Key& key, const JsonValue& value);
   JsonValue& set(const Key& key, JsonValue&& value);
 
-  std::size_t erase(const Key& key);
+  size_t erase(const Key& key);
 
   static JsonValue fromString(const std::string& source);
   std::string toString() const;

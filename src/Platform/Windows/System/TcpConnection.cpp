@@ -26,14 +26,12 @@
 #include <System/Ipv4Address.h>
 #include "Dispatcher.h"
 
-#pragma comment(lib, "Ws2_32.lib")
-
 namespace System {
 
 namespace {
 
 struct TcpConnectionContext : public OVERLAPPED {
-  void* context;
+  NativeContext* context;
   bool interrupted;
 };
 
@@ -47,7 +45,6 @@ TcpConnection::TcpConnection(TcpConnection&& other) : dispatcher(other.dispatche
     assert(other.readContext == nullptr);
     assert(other.writeContext == nullptr);
     connection = other.connection;
-    stopped = other.stopped;
     readContext = nullptr;
     writeContext = nullptr;
     other.dispatcher = nullptr;
@@ -77,7 +74,6 @@ TcpConnection& TcpConnection::operator=(TcpConnection&& other) {
     assert(other.readContext == nullptr);
     assert(other.writeContext == nullptr);
     connection = other.connection;
-    stopped = other.stopped;
     readContext = nullptr;
     writeContext = nullptr;
     other.dispatcher = nullptr;
@@ -86,50 +82,10 @@ TcpConnection& TcpConnection::operator=(TcpConnection&& other) {
   return *this;
 }
 
-void TcpConnection::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void TcpConnection::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (readContext != nullptr) {
-    TcpConnectionContext* context = static_cast<TcpConnectionContext*>(readContext);
-    if (!context->interrupted) {
-      if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
-        DWORD lastError = GetLastError();
-        if (lastError != ERROR_NOT_FOUND) {
-          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
-        }
-      }
-
-      context->interrupted = true;
-    }
-  }
-
-  if (writeContext != nullptr) {
-    TcpConnectionContext* context = static_cast<TcpConnectionContext*>(writeContext);
-    if (!context->interrupted) {
-      if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
-        DWORD lastError = GetLastError();
-        if (lastError != ERROR_NOT_FOUND) {
-          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
-        }
-      }
-
-      context->interrupted = true;
-    }
-  }
-
-  stopped = true;
-}
-
 size_t TcpConnection::read(uint8_t* data, size_t size) {
   assert(dispatcher != nullptr);
   assert(readContext == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -145,11 +101,30 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
   }
 
   assert(flags == 0);
-  context.context = GetCurrentFiber();
+  context.context = dispatcher->getCurrentContext();
   context.interrupted = false;
   readContext = &context;
+  dispatcher->getCurrentContext()->interruptProcedure = [&]() {
+    assert(dispatcher != nullptr);
+    assert(readContext != nullptr);
+    TcpConnectionContext* context = static_cast<TcpConnectionContext*>(readContext);
+    if (!context->interrupted) {
+      if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
+        DWORD lastError = GetLastError();
+        if (lastError != ERROR_NOT_FOUND) {
+          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
+        }
+
+        context->context->interrupted = true;
+      }
+
+      context->interrupted = true;
+    }
+  };
+
   dispatcher->dispatch();
-  assert(context.context == GetCurrentFiber());
+  dispatcher->getCurrentContext()->interruptProcedure = nullptr;
+  assert(context.context == dispatcher->getCurrentContext());
   assert(dispatcher != nullptr);
   assert(readContext == &context);
   readContext = nullptr;
@@ -157,7 +132,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
   if (WSAGetOverlappedResult(connection, &context, &transferred, FALSE, &flags) != TRUE) {
     int lastError = WSAGetLastError();
     if (lastError != ERROR_OPERATION_ABORTED) {
-      throw std::runtime_error("TcpConnection::read, WSARecv failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("TcpConnection::read, WSAGetOverlappedResult failed, result=" + std::to_string(lastError));
     }
 
     assert(context.interrupted);
@@ -169,10 +144,10 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
   return transferred;
 }
 
-std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
+size_t TcpConnection::write(const uint8_t* data, size_t size) {
   assert(dispatcher != nullptr);
   assert(writeContext == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
@@ -194,11 +169,30 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
     }
   }
 
-  context.context = GetCurrentFiber();
+  context.context = dispatcher->getCurrentContext();
   context.interrupted = false;
   writeContext = &context;
+  dispatcher->getCurrentContext()->interruptProcedure = [&]() {
+    assert(dispatcher != nullptr);
+    assert(writeContext != nullptr);
+    TcpConnectionContext* context = static_cast<TcpConnectionContext*>(writeContext);
+    if (!context->interrupted) {
+      if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
+        DWORD lastError = GetLastError();
+        if (lastError != ERROR_NOT_FOUND) {
+          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
+        }
+
+        context->context->interrupted = true;
+      }
+
+      context->interrupted = true;
+    }
+  };
+
   dispatcher->dispatch();
-  assert(context.context == GetCurrentFiber());
+  dispatcher->getCurrentContext()->interruptProcedure = nullptr;
+  assert(context.context == dispatcher->getCurrentContext());
   assert(dispatcher != nullptr);
   assert(writeContext == &context);
   writeContext = nullptr;
@@ -207,7 +201,7 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
   if (WSAGetOverlappedResult(connection, &context, &transferred, FALSE, &flags) != TRUE) {
     int lastError = WSAGetLastError();
     if (lastError != ERROR_OPERATION_ABORTED) {
-      throw std::runtime_error("TcpConnection::write, WSASend failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("TcpConnection::write, WSAGetOverlappedResult failed, result=" + std::to_string(lastError));
     }
 
     assert(context.interrupted);
@@ -219,7 +213,7 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
   return transferred;
 }
 
-std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() {
+std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() const {
   sockaddr_in address;
   int size = sizeof(address);
   if (getpeername(connection, reinterpret_cast<sockaddr*>(&address), &size) != 0) {
@@ -230,7 +224,7 @@ std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() {
   return std::make_pair(Ipv4Address(htonl(address.sin_addr.S_un.S_addr)), htons(address.sin_port));
 }
 
-TcpConnection::TcpConnection(Dispatcher& dispatcher, std::size_t connection) : dispatcher(&dispatcher), connection(connection), stopped(false), readContext(nullptr), writeContext(nullptr) {
+TcpConnection::TcpConnection(Dispatcher& dispatcher, size_t connection) : dispatcher(&dispatcher), connection(connection), readContext(nullptr), writeContext(nullptr) {
 }
 
 }
