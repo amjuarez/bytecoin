@@ -52,18 +52,7 @@ void serialize(WalletLegacyTransaction& txi, CryptoNote::ISerializer& serializer
   serializer(txi.hash, "hash");
   serializer(txi.isCoinbase, "is_coinbase");
 
-  if (serializer.type() == ISerializer::INPUT) {
-    uint64_t height = 0;
-    serializer(height, "block_height");
-
-    if (height == std::numeric_limits<uint64_t>::max()) {
-      txi.blockHeight = WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT;
-    } else {
-      txi.blockHeight = static_cast<uint32_t>(height);
-    }
-  } else {
-    serializer(txi.blockHeight, "block_height");
-  }
+  CryptoNote::serializeBlockHeight(serializer, txi.blockHeight, "block_height");
 
   serializer(txi.timestamp, "timestamp");
   serializer(txi.unlockTime, "unlock_time");

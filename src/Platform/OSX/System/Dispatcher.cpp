@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "Context.h"
+#include "ErrorMessage.h"
 
 namespace System {
 
@@ -42,7 +43,7 @@ public:
   MutextGuard(pthread_mutex_t& _mutex) : mutex(_mutex) {
     auto ret = pthread_mutex_lock(&mutex);
     if (ret != 0) {
-      throw std::runtime_error("failed to acquire mutex, errno=" + std::to_string(ret) + ": " + strerror(ret));
+      throw std::runtime_error("MutextGuard::MutextGuard, pthread_mutex_lock failed, " + errorMessage(ret));
     }
   }
 
@@ -64,19 +65,19 @@ Dispatcher::Dispatcher() : lastCreatedTimer(0) {
   std::string message;
   kqueue = ::kqueue();
   if (kqueue == -1) {
-    message = "kqueue() fail errno=" + std::to_string(errno);
+    message = "kqueue failed, " + lastErrorMessage();
   } else {
     mainContext.uctx = new uctx;
     if (getcontext(static_cast<uctx*>(mainContext.uctx)) == -1) {
-      message = "getcontext() fail errno=" + std::to_string(errno);
+      message = "getcontext failed, " + lastErrorMessage();
     } else {
       struct kevent event;
       EV_SET(&event, 0, EVFILT_USER, EV_ADD, NOTE_FFNOP, 0, NULL);
       if (kevent(kqueue, &event, 1, NULL, 0, NULL) == -1) {
-        message = "kevent() fail errno=" + std::to_string(errno);
+        message = "kevent failed, " + lastErrorMessage();
       } else {
         if(pthread_mutex_init(reinterpret_cast<pthread_mutex_t*>(this->mutex), NULL) == -1) {
-          message = "pthread_mutex_init() fail errno=" + std::to_string(errno);
+          message = "pthread_mutex_init failed, " + lastErrorMessage();
         } else {
           remoteSpawned = false;
           
@@ -165,7 +166,7 @@ void Dispatcher::dispatch() {
         struct kevent event;
         EV_SET(&event, 0, EVFILT_USER, EV_ADD | EV_DISABLE, NOTE_FFNOP, 0, NULL);
         if (kevent(kqueue, &event, 1, NULL, 0, NULL) == -1) {
-          throw std::runtime_error("kevent() fail errno=" + std::to_string(errno));
+          throw std::runtime_error("Dispatcher::dispatch, kevent failed, " + lastErrorMessage());
         }
 
         continue;
@@ -176,7 +177,7 @@ void Dispatcher::dispatch() {
     }
 
     if (errno != EINTR) {
-      throw std::runtime_error("Dispatcher::dispatch(), kqueue() fail errno=" + std::to_string(errno));
+      throw std::runtime_error("Dispatcher::dispatch, kqueue failed, " + lastErrorMessage());
     } else {
       MutextGuard guard(*reinterpret_cast<pthread_mutex_t*>(this->mutex));
       while (!remoteSpawningProcedures.empty()) {
@@ -191,7 +192,7 @@ void Dispatcher::dispatch() {
     uctx* oldContext = static_cast<uctx*>(currentContext->uctx);
     currentContext = context;
     if (swapcontext(oldContext,static_cast<uctx*>(currentContext->uctx)) == -1) {
-      throw std::runtime_error("Dispatcher::dispatch(), swapcontext() failed, errno=" + std::to_string(errno));
+      throw std::runtime_error("Dispatcher::dispatch, swapcontext failed, " + lastErrorMessage());
     }
   }
 }
@@ -246,7 +247,7 @@ void Dispatcher::remoteSpawn(std::function<void()>&& procedure) {
     struct kevent event;
     EV_SET(&event, 0, EVFILT_USER, EV_ADD | EV_ENABLE, NOTE_FFCOPY | NOTE_TRIGGER, 0, NULL);
     if (kevent(kqueue, &event, 1, NULL, 0, NULL) == -1) {
-      throw std::runtime_error("Dispatcher::remoteSpawn(), kevent() fail errno=" + std::to_string(errno));
+      throw std::runtime_error("Dispatcher::remoteSpawn, kevent failed, " + lastErrorMessage());
     };
   }
 }
@@ -286,7 +287,7 @@ void Dispatcher::yield() {
           struct kevent event;
           EV_SET(&event, 0, EVFILT_USER, EV_ADD | EV_DISABLE, NOTE_FFNOP, 0, NULL);
           if (kevent(kqueue, &event, 1, NULL, 0, NULL) == -1) {
-            throw std::runtime_error("kevent() fail errno=" + std::to_string(errno));
+            throw std::runtime_error("Dispatcher::yield, kevent failed, " + lastErrorMessage());
           }
           
           MutextGuard guard(*reinterpret_cast<pthread_mutex_t*>(this->mutex));
@@ -304,7 +305,7 @@ void Dispatcher::yield() {
       }
     } else {
       if (errno != EINTR) {
-        throw std::runtime_error("Dispatcher::dispatch(), epoll_wait() failed, errno=" + std::to_string(errno));
+        throw std::runtime_error("Dispatcher::dispatch, kevent failed, " + lastErrorMessage());
       }
     }
   }
@@ -331,7 +332,7 @@ NativeContext& Dispatcher::getReusableContext() {
    
    uctx* oldContext = static_cast<uctx*>(currentContext->uctx);
    if (swapcontext(oldContext, newlyCreatedContext) == -1) {
-     throw std::runtime_error("Dispatcher::getReusableContext(), swapcontext() failed, errno=" + std::to_string(errno));
+     throw std::runtime_error("Dispatcher::getReusableContext, swapcontext failed, " + lastErrorMessage());
    }
    
    assert(firstReusableContext != nullptr);
@@ -375,7 +376,7 @@ void Dispatcher::contextProcedure(void* ucontext) {
   firstReusableContext = &context;
   uctx* oldContext = static_cast<uctx*>(context.uctx);
   if (swapcontext(oldContext, static_cast<uctx*>(currentContext->uctx)) == -1) {
-    throw std::runtime_error("Dispatcher::contextProcedure() swapcontext() failed, errno=" + std::to_string(errno));
+    throw std::runtime_error("Dispatcher::contextProcedure, swapcontext failed, " + lastErrorMessage());
   }
 
   for (;;) {

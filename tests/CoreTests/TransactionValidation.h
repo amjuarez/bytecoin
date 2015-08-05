@@ -141,6 +141,14 @@ struct gen_tx_signatures_are_invalid : public get_tx_validation_base
   bool generate(std::vector<test_event_entry>& events) const;
 };
 
+struct GenerateTransactionWithZeroFee : public get_tx_validation_base
+{
+  explicit GenerateTransactionWithZeroFee(bool keptByBlock);
+  bool generate(std::vector<test_event_entry>& events) const;
+
+  bool m_keptByBlock;
+};
+
 // MultiSignature
 
 class TestGenerator;

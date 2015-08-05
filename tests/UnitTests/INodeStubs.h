@@ -104,6 +104,7 @@ public:
   virtual void startAlternativeChain(uint32_t height);
   void setNextTransactionError();
   void setNextTransactionToPool();
+  void cleanTransactionPool();
   void setMaxMixinCount(uint64_t maxMixin);
   void includeTransactionsFromPoolToBlock();
 

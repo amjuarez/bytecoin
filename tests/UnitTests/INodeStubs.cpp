@@ -291,6 +291,10 @@ void INodeTrivialRefreshStub::setNextTransactionToPool() {
   m_nextTxToPool = true;
 }
 
+void INodeTrivialRefreshStub::cleanTransactionPool() {
+  m_blockchainGenerator.clearTxPool();
+}
+
 void INodeTrivialRefreshStub::getPoolSymmetricDifference(std::vector<Crypto::Hash>&& known_pool_tx_ids, Crypto::Hash known_block_id, bool& is_bc_actual,
         std::vector<std::unique_ptr<ITransactionReader>>& new_txs, std::vector<Crypto::Hash>& deleted_tx_ids, const Callback& callback)
 {

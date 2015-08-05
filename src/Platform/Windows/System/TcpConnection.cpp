@@ -25,6 +25,7 @@
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 #include "Dispatcher.h"
+#include "ErrorMessage.h"
 
 namespace System {
 
@@ -65,7 +66,7 @@ TcpConnection& TcpConnection::operator=(TcpConnection&& other) {
     assert(readContext == nullptr);
     assert(writeContext == nullptr);
     if (closesocket(connection) != 0) {
-      throw std::runtime_error("TcpConnection::operator=, closesocket failed, result=" + std::to_string(WSAGetLastError()));
+      throw std::runtime_error("TcpConnection::operator=, closesocket failed, " + errorMessage(WSAGetLastError()));
     }
   }
 
@@ -96,7 +97,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
   if (WSARecv(connection, &buf, 1, NULL, &flags, &context, NULL) != 0) {
     int lastError = WSAGetLastError();
     if (lastError != WSA_IO_PENDING) {
-      throw std::runtime_error("TcpConnection::read, WSARecv failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("TcpConnection::read, WSARecv failed, " + errorMessage(lastError));
     }
   }
 
@@ -112,7 +113,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
       if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
         DWORD lastError = GetLastError();
         if (lastError != ERROR_NOT_FOUND) {
-          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
+          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, " + lastErrorMessage());
         }
 
         context->context->interrupted = true;
@@ -132,7 +133,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
   if (WSAGetOverlappedResult(connection, &context, &transferred, FALSE, &flags) != TRUE) {
     int lastError = WSAGetLastError();
     if (lastError != ERROR_OPERATION_ABORTED) {
-      throw std::runtime_error("TcpConnection::read, WSAGetOverlappedResult failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("TcpConnection::read, WSAGetOverlappedResult failed, " + errorMessage(lastError));
     }
 
     assert(context.interrupted);
@@ -153,7 +154,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
 
   if (size == 0) {
     if (shutdown(connection, SD_SEND) != 0) {
-      throw std::runtime_error("TcpConnection::write, shutdown failed, result=" + std::to_string(WSAGetLastError()));
+      throw std::runtime_error("TcpConnection::write, shutdown failed, " + errorMessage(WSAGetLastError()));
     }
 
     return 0;
@@ -165,7 +166,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
   if (WSASend(connection, &buf, 1, NULL, 0, &context, NULL) != 0) {
     int lastError = WSAGetLastError();
     if (lastError != WSA_IO_PENDING) {
-      throw std::runtime_error("TcpConnection::write, WSASend failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("TcpConnection::write, WSASend failed, " + errorMessage(lastError));
     }
   }
 
@@ -180,7 +181,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
       if (CancelIoEx(reinterpret_cast<HANDLE>(connection), context) != TRUE) {
         DWORD lastError = GetLastError();
         if (lastError != ERROR_NOT_FOUND) {
-          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, result=" + std::to_string(GetLastError()));
+          throw std::runtime_error("TcpConnection::stop, CancelIoEx failed, " + lastErrorMessage());
         }
 
         context->context->interrupted = true;
@@ -201,7 +202,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
   if (WSAGetOverlappedResult(connection, &context, &transferred, FALSE, &flags) != TRUE) {
     int lastError = WSAGetLastError();
     if (lastError != ERROR_OPERATION_ABORTED) {
-      throw std::runtime_error("TcpConnection::write, WSAGetOverlappedResult failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("TcpConnection::write, WSAGetOverlappedResult failed, " + errorMessage(lastError));
     }
 
     assert(context.interrupted);
@@ -217,7 +218,7 @@ std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() const {
   sockaddr_in address;
   int size = sizeof(address);
   if (getpeername(connection, reinterpret_cast<sockaddr*>(&address), &size) != 0) {
-    throw std::runtime_error("TcpConnection::getPeerAddress, getpeername failed, result=" + std::to_string(WSAGetLastError()));
+    throw std::runtime_error("TcpConnection::getPeerAddress, getpeername failed, " + errorMessage(WSAGetLastError()));
   }
 
   assert(size == sizeof(sockaddr_in));

@@ -22,6 +22,7 @@
 #include "CryptoNoteCore/CryptoNoteFormatUtils.h"
 #include "Serialization/BinaryInputStreamSerializer.h"
 #include "Serialization/BinaryOutputStreamSerializer.h"
+#include "Serialization/SerializationOverloads.h"
 
 using namespace Common;
 using namespace Crypto;
@@ -31,7 +32,7 @@ namespace CryptoNote {
 void serialize(TransactionInformation& ti, CryptoNote::ISerializer& s) {
   s(ti.transactionHash, "");
   s(ti.publicKey, "");
-  s(ti.blockHeight, "");
+  serializeBlockHeight(s, ti.blockHeight, "");
   s(ti.timestamp, "");
   s(ti.unlockTime, "");
   s(ti.totalAmountIn, "");

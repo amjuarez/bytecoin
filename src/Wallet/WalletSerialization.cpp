@@ -144,7 +144,7 @@ void serialize(WalletTransactionDto& value, CryptoNote::ISerializer& serializer)
   value.state = static_cast<CryptoNote::WalletTransactionState>(state);
 
   serializer(value.timestamp, "timestamp");
-  serializer(value.blockHeight, "block_height");
+  CryptoNote::serializeBlockHeight(serializer, value.blockHeight, "block_height");
   serializer(value.hash, "hash");
   serializer(value.totalAmount, "total_amount");
   serializer(value.fee, "fee");

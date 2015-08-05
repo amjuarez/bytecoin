@@ -113,6 +113,7 @@ WalletLegacy::WalletLegacy(const CryptoNote::Currency& currency, INode& node) :
   m_blockchainSync(node, currency.genesisBlockHash()),
   m_transfersSync(currency, m_blockchainSync, node),
   m_transferDetails(nullptr),
+  m_transactionsCache(m_currency.mempoolTxLiveTime()),
   m_sender(nullptr),
   m_onInitSyncStarter(new SyncStarter(m_blockchainSync))
 {
@@ -501,8 +502,14 @@ std::error_code WalletLegacy::cancelTransaction(size_t transactionId) {
 }
 
 void WalletLegacy::synchronizationProgressUpdated(uint32_t current, uint32_t total) {
+  auto deletedTransactions = deleteOutdatedUnconfirmedTransactions();
+
   // forward notification
   m_observerManager.notify(&IWalletLegacyObserver::synchronizationProgressUpdated, current, total);
+
+  for (auto transactionId: deletedTransactions) {
+    m_observerManager.notify(&IWalletLegacyObserver::transactionUpdated, transactionId);
+  }
 
   // check if balance has changed and notify client
   notifyIfBalanceChanged();
@@ -513,9 +520,16 @@ void WalletLegacy::synchronizationCompleted(std::error_code result) {
     m_observerManager.notify(&IWalletLegacyObserver::synchronizationCompleted, result);
   }
 
-  if (!result) {
-    notifyIfBalanceChanged();
+  if (result) {
+    return;
   }
+
+  auto deletedTransactions = deleteOutdatedUnconfirmedTransactions();
+  std::for_each(deletedTransactions.begin(), deletedTransactions.end(), [&] (TransactionId transactionId) {
+    m_observerManager.notify(&IWalletLegacyObserver::transactionUpdated, transactionId);
+  });
+
+  notifyIfBalanceChanged();
 }
 
 void WalletLegacy::onTransactionUpdated(ITransfersSubscription* object, const Hash& transactionHash) {
@@ -584,6 +598,11 @@ void WalletLegacy::getAccountKeys(AccountKeys& keys) {
   }
 
   keys = m_account.getAccountKeys();
+}
+
+std::vector<TransactionId> WalletLegacy::deleteOutdatedUnconfirmedTransactions() {
+  std::lock_guard<std::mutex> lock(m_cacheMutex);
+  return m_transactionsCache.deleteOutdatedTransactions();
 }
 
 } //namespace CryptoNote

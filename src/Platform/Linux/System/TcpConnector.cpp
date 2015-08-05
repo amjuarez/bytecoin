@@ -27,6 +27,7 @@
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 #include "Dispatcher.h"
+#include "ErrorMessage.h"
 #include "TcpConnection.h"
 
 namespace System {
@@ -77,18 +78,18 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
   std::string message;
   int connection = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (connection == -1) {
-    message = "socket() failed, errno=" + std::to_string(errno);
+    message = "socket failed, " + lastErrorMessage();
   } else {
     sockaddr_in bindAddress;
     bindAddress.sin_family = AF_INET;
     bindAddress.sin_port = 0;
     bindAddress.sin_addr.s_addr = INADDR_ANY;
     if (bind(connection, reinterpret_cast<sockaddr*>(&bindAddress), sizeof bindAddress) != 0) {
-      message = "bind failed, errno=" + std::to_string(errno);
+      message = "bind failed, " + lastErrorMessage();
     } else {
       int flags = fcntl(connection, F_GETFL, 0);
       if (flags == -1 || fcntl(connection, F_SETFL, flags | O_NONBLOCK) == -1) {
-        message = "fcntl() failed errno=" + std::to_string(errno);
+        message = "fcntl failed, " + lastErrorMessage();
       } else {
         sockaddr_in addressData;
         addressData.sin_family = AF_INET;
@@ -111,14 +112,14 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
             connectEvent.events = EPOLLOUT | EPOLLRDHUP | EPOLLERR | EPOLLONESHOT;
             connectEvent.data.ptr = &contextPair;
             if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_ADD, connection, &connectEvent) == -1) {
-              message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+              message = "epoll_ctl failed, " + lastErrorMessage();
             } else {
               context = &connectorContext;
               dispatcher->getCurrentContext()->interruptProcedure = [&] {
                 TcpConnectorContextExt* connectorContext1 = static_cast<TcpConnectorContextExt*>(context);
                 if (!connectorContext1->interrupted) {
                   if (close(connectorContext1->connection) == -1) {
-                    throw std::runtime_error("TcpListener::stop, close failed, errno=" + std::to_string(errno));
+                    throw std::runtime_error("TcpListener::stop, close failed, " + lastErrorMessage());
                   }
 
                   connectorContext1->interrupted = true;
@@ -139,7 +140,7 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
               }
 
               if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_DEL, connection, NULL) == -1) {
-                message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+                message = "epoll_ctl failed, " + lastErrorMessage();
               } else {
                 if((connectorContext.events & (EPOLLERR | EPOLLHUP)) != 0) {
                   int result = close(connection);
@@ -152,10 +153,10 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
                 socklen_t retValLen = sizeof(retval);
                 int s = getsockopt(connection, SOL_SOCKET, SO_ERROR, &retval, &retValLen);
                 if (s == -1) {
-                  message =  "getsockopt() failed, errno=" + std::to_string(errno);
+                  message =  "getsockopt failed, " + lastErrorMessage();
                 } else {
                   if (retval != 0) {
-                    message = "connect failed; getsockopt retval =" + std::to_string(errno);
+                    message = "getsockopt failed, " + lastErrorMessage();
                   } else {
                     return TcpConnection(*dispatcher, connection);
                   }

@@ -106,6 +106,8 @@ private:
   void notifyClients(std::deque<std::shared_ptr<WalletLegacyEvent> >& events);
   void notifyIfBalanceChanged();
 
+  std::vector<TransactionId> deleteOutdatedUnconfirmedTransactions();
+
   enum WalletState
   {
     NOT_INITIALIZED = 0,

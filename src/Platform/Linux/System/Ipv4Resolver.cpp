@@ -23,6 +23,7 @@
 #include <netdb.h>
 
 #include <System/Dispatcher.h>
+#include <System/ErrorMessage.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 
@@ -62,7 +63,7 @@ Ipv4Address Ipv4Resolver::resolve(const std::string& host) {
   addrinfo* addressInfos;
   int result = getaddrinfo(host.c_str(), NULL, &hints, &addressInfos);
   if (result != 0) {
-    throw std::runtime_error("Ipv4Resolver::resolve, getaddrinfo failed, result=" + std::to_string(result));
+    throw std::runtime_error("Ipv4Resolver::resolve, getaddrinfo failed, " + errorMessage(result));
   }
   
   std::size_t count = 0;

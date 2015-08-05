@@ -33,7 +33,7 @@ namespace CryptoNote {
 class WalletUserTransactionsCache
 {
 public:
-  WalletUserTransactionsCache() {}
+  explicit WalletUserTransactionsCache(uint64_t mempoolTxLiveTime = 60 * 60 * 24);
 
   bool serialize(CryptoNote::ISerializer& serializer);
 
@@ -58,6 +58,8 @@ public:
 
   bool isUsed(const TransactionOutputInformation& out) const;
   void reset();
+
+  std::vector<TransactionId> deleteOutdatedTransactions();
 
 private:
 

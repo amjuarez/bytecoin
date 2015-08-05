@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "Dispatcher.h"
+#include <System/ErrorMessage.h>
 #include <System/InterruptedException.h>
 
 namespace System {
@@ -92,7 +93,7 @@ void Timer::sleep(std::chrono::nanoseconds duration) {
     timerEvent.data.ptr = &contextPair;
 
     if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, timer, &timerEvent) == -1) {
-      throw std::runtime_error("Timer::sleep, epoll_ctl() failed, errno=" + std::to_string(errno));
+      throw std::runtime_error("Timer::sleep, epoll_ctl failed, " + lastErrorMessage());
     }
     dispatcher->getCurrentContext()->interruptProcedure = [&]() {
         assert(dispatcher != nullptr);
@@ -105,7 +106,7 @@ void Timer::sleep(std::chrono::nanoseconds duration) {
               timerContext->interrupted = true;
               dispatcher->pushContext(timerContext->context);
             } else {
-              throw std::runtime_error("Timer::interrupt, read failed, errno="  + std::to_string(errno));
+              throw std::runtime_error("Timer::interrupt, read failed, "  + lastErrorMessage());
             }
           } else {
             assert(value>0);
@@ -117,7 +118,7 @@ void Timer::sleep(std::chrono::nanoseconds duration) {
           timerEvent.data.ptr = nullptr;
 
           if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, timer, &timerEvent) == -1) {
-            throw std::runtime_error("Timer::interrupt epoll_ctl() failed, errno=" + std::to_string(errno));
+            throw std::runtime_error("Timer::interrupt, epoll_ctl failed, " + lastErrorMessage());
           }
         }
     };

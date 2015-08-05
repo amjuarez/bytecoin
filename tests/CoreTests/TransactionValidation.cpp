@@ -682,6 +682,34 @@ bool gen_tx_signatures_are_invalid::generate(std::vector<test_event_entry>& even
   return true;
 }
 
+GenerateTransactionWithZeroFee::GenerateTransactionWithZeroFee(bool keptByBlock) : m_keptByBlock(keptByBlock) {
+}
+
+bool GenerateTransactionWithZeroFee::generate(std::vector<test_event_entry>& events) const {
+  uint64_t ts_start = 1338224400;
+
+  GENERATE_ACCOUNT(alice_account);
+  GENERATE_ACCOUNT(bob_account);
+  MAKE_GENESIS_BLOCK(events, blk_0, alice_account, ts_start);
+  REWIND_BLOCKS(events, blk_0r, blk_0, alice_account);
+
+  CryptoNote::Transaction tx;
+  construct_tx_to_key(m_logger, events, tx, blk_0, alice_account, bob_account, MK_COINS(1), 0, 0);
+
+  if (!m_keptByBlock) {
+    DO_CALLBACK(events, "mark_invalid_tx");
+  } else {
+    event_visitor_settings settings;
+    settings.txs_keeped_by_block = true;
+    settings.valid_mask = 1;
+    events.push_back(settings);
+  }
+
+  events.push_back(tx);
+
+  return true;
+}
+
 MultiSigTx_OutputSignatures::MultiSigTx_OutputSignatures(size_t givenKeys, uint32_t requiredSignatures, bool shouldSucceed) :
   m_givenKeys(givenKeys), m_requiredSignatures(requiredSignatures), m_shouldSucceed(shouldSucceed) {
 

@@ -27,6 +27,7 @@
 
 #include "Dispatcher.h"
 #include "TcpConnection.h"
+#include <System/ErrorMessage.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 
@@ -39,31 +40,31 @@ TcpListener::TcpListener(Dispatcher& dispatcher, const Ipv4Address& addr, uint16
   std::string message;
   listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (listener == -1) {
-    message = "socket() failed, errno=" + std::to_string(errno) + ": " + strerror(errno);
+    message = "socket failed, " + lastErrorMessage();
   } else {
     int flags = fcntl(listener, F_GETFL, 0);
     if (flags == -1 || fcntl(listener, F_SETFL, flags | O_NONBLOCK) == -1) {
-      message = "fcntl() failed errno=" + std::to_string(errno) + ": " + strerror(errno);
+      message = "fcntl failed, " + lastErrorMessage();
     } else {
       int on = 1;
       if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on) == -1) {
-        message = "setsockopt failed, errno=" + std::to_string(errno) + ": " + strerror(errno);
+        message = "setsockopt failed, " + lastErrorMessage();
       } else {
         sockaddr_in address;
         address.sin_family = AF_INET;
         address.sin_port = htons(port);
         address.sin_addr.s_addr = htonl( addr.getValue());
         if (bind(listener, reinterpret_cast<sockaddr *>(&address), sizeof address) != 0) {
-          message = "bind failed, errno=" + std::to_string(errno) + ": " + strerror(errno);
+          message = "bind failed, " + lastErrorMessage();
         } else if (listen(listener, SOMAXCONN) != 0) {
-          message = "listen failed, errno=" + std::to_string(errno) + ": " + strerror(errno);
+          message = "listen failed, " + lastErrorMessage();
         } else {
           epoll_event listenEvent;
           listenEvent.events = 0;
           listenEvent.data.ptr = nullptr;
 
           if (epoll_ctl(dispatcher.getEpoll(), EPOLL_CTL_ADD, listener, &listenEvent) == -1) {
-            message = "epoll_ctl() failed, errno=" + std::to_string(errno) + ": " + strerror(errno);
+            message = "epoll_ctl failed, " + lastErrorMessage();
           } else {
             context = nullptr;
             return;
@@ -100,7 +101,7 @@ TcpListener& TcpListener::operator=(TcpListener&& other) {
   if (dispatcher != nullptr) {
     assert(context == nullptr);
     if (close(listener) == -1) {
-      throw std::runtime_error("TcpListener::operator=, close failed, errno=" + std::to_string(errno));
+      throw std::runtime_error("TcpListener::operator=, close failed, " + lastErrorMessage());
     }
   }
 
@@ -135,7 +136,7 @@ TcpConnection TcpListener::accept() {
   listenEvent.data.ptr = &contextPair;
   std::string message;
   if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, listener, &listenEvent) == -1) {
-    message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+    message = "epoll_ctl failed, " + lastErrorMessage();
   } else {
     context = &listenerContext;
     dispatcher->getCurrentContext()->interruptProcedure = [&]() {
@@ -148,7 +149,7 @@ TcpConnection TcpListener::accept() {
           listenEvent.data.ptr = nullptr;
 
           if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, listener, &listenEvent) == -1) {
-            throw std::runtime_error("TcpListener::stop, epoll_ctl() failed, errno=" + std::to_string(errno) );
+            throw std::runtime_error("TcpListener::stop, epoll_ctl failed, " + lastErrorMessage() );
           }
 
           listenerContext->interrupted = true;
@@ -176,11 +177,11 @@ TcpConnection TcpListener::accept() {
     socklen_t inLen = sizeof(inAddr);
     int connection = ::accept(listener, &inAddr, &inLen);
     if (connection == -1) {
-      message = "accept() failed, errno=" + std::to_string(errno);
+      message = "accept failed, " + lastErrorMessage();
     } else {
       int flags = fcntl(connection, F_GETFL, 0);
       if (flags == -1 || fcntl(connection, F_SETFL, flags | O_NONBLOCK) == -1) {
-        message = "fcntl() failed errno=" + std::to_string(errno);
+        message = "fcntl failed, " + lastErrorMessage();
       } else {
         return TcpConnection(*dispatcher, connection);
       }

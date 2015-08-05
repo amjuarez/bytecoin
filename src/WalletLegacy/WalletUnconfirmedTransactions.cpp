@@ -30,6 +30,11 @@ inline TransactionOutputId getOutputId(const TransactionOutputInformation& out) 
   return std::make_pair(out.transactionPublicKey, out.outputInTransaction);
 }
 
+WalletUnconfirmedTransactions::WalletUnconfirmedTransactions(uint64_t uncofirmedTransactionsLiveTime):
+  m_uncofirmedTransactionsLiveTime(uncofirmedTransactionsLiveTime) {
+
+}
+
 bool WalletUnconfirmedTransactions::serialize(ISerializer& s) {
   s(m_unconfirmedTxs, "transactions");
   if (s.type() == ISerializer::INPUT) {
@@ -54,9 +59,7 @@ void WalletUnconfirmedTransactions::erase(const Hash& hash) {
     return;
   }
 
-  for (const auto& o : it->second.usedOutputs) {
-    m_usedOutputs.erase(o);
-  }
+  deleteUsedOutputs(it->second.usedOutputs);
   m_unconfirmedTxs.erase(it);
 }
 
@@ -123,6 +126,31 @@ void WalletUnconfirmedTransactions::collectUsedOutputs() {
 void WalletUnconfirmedTransactions::reset() {
   m_unconfirmedTxs.clear();
   m_usedOutputs.clear();
+}
+
+void WalletUnconfirmedTransactions::deleteUsedOutputs(const std::vector<TransactionOutputId>& usedOutputs) {
+  for (const auto& output: usedOutputs) {
+    m_usedOutputs.erase(output);
+  }
+}
+
+std::vector<TransactionId> WalletUnconfirmedTransactions::deleteOutdatedTransactions() {
+  std::vector<TransactionId> deletedTransactions;
+
+  uint64_t now = static_cast<uint64_t>(time(nullptr));
+  assert(now >= m_uncofirmedTransactionsLiveTime);
+
+  for (auto it = m_unconfirmedTxs.begin(); it != m_unconfirmedTxs.end();) {
+    if (static_cast<uint64_t>(it->second.sentTime) <= now - m_uncofirmedTransactionsLiveTime) {
+      deleteUsedOutputs(it->second.usedOutputs);
+      deletedTransactions.push_back(it->second.transactionId);
+      it = m_unconfirmedTxs.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  return deletedTransactions;
 }
 
 } /* namespace CryptoNote */

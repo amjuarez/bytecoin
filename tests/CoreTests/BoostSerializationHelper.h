@@ -17,90 +17,47 @@
 
 #pragma once
 
-#ifdef _WIN32
-#include <io.h>
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
-
 #include <fstream>
+#include <memory>
+#include <string>
 
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 
-namespace Tools
-{
-  template<class t_object>
-  bool serialize_obj_to_file(t_object& obj, const std::string& file_path)
-  {
-    try {
-#ifdef _WIN32
-      // Need to know HANDLE of file to call FlushFileBuffers
-      HANDLE data_file_handle = ::CreateFile(file_path.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-      if (INVALID_HANDLE_VALUE == data_file_handle)
-        return false;
+namespace Tools {
 
-      int data_file_descriptor = _open_osfhandle((intptr_t)data_file_handle, 0);
-      if (-1 == data_file_descriptor) {
-        ::CloseHandle(data_file_handle);
-        return false;
-      }
-
-      FILE* data_file_file = _fdopen(data_file_descriptor, "wb");
-      if (0 == data_file_file) {
-        // Call CloseHandle is not necessary
-        _close(data_file_descriptor);
-        return false;
-      }
-
-      // HACK: undocumented constructor, this code may not compile
-      std::ofstream data_file(data_file_file);
-      if (data_file.fail()) {
-        // Call CloseHandle and _close are not necessary
-        fclose(data_file_file);
-        return false;
-      }
-#else
-      std::ofstream data_file;
-      data_file.open(file_path , std::ios_base::binary | std::ios_base::out| std::ios::trunc);
-      if (data_file.fail())
-        return false;
-#endif
-
-      boost::archive::binary_oarchive a(data_file);
-      a << obj;
-      if (data_file.fail())
-        return false;
-
-      data_file.flush();
-#ifdef _WIN32
-      // To make sure the file is fully stored on disk
-      ::FlushFileBuffers(data_file_handle);
-      fclose(data_file_file);
-#endif
-
-      return true;
-    } catch (std::exception&) {
+template <class t_object>
+bool serialize_obj_to_file(t_object& obj, const std::string& file_path) {
+  try {
+    std::ofstream file(file_path);
+    boost::archive::binary_oarchive a(file);
+    a << obj;
+    if (file.fail()) {
       return false;
     }
+
+    file.flush();
+    return true;
+  } catch (std::exception&) {
+    return false;
   }
+}
 
-  template<class t_object>
-  bool unserialize_obj_from_file(t_object& obj, const std::string& file_path)
-  {
-    try {
-      std::ifstream data_file;  
-      data_file.open( file_path, std::ios_base::binary | std::ios_base::in);
-      if(data_file.fail())
-        return false;
-      boost::archive::binary_iarchive a(data_file);
-
-      a >> obj;
-      return !data_file.fail();
-    } catch (std::exception&) {
+template <class t_object>
+bool unserialize_obj_from_file(t_object& obj, const std::string& file_path) {
+  try {
+    std::ifstream dataFile;
+    dataFile.open(file_path, std::ios_base::binary | std::ios_base::in);
+    if (dataFile.fail()) {
       return false;
     }
+
+    boost::archive::binary_iarchive a(dataFile);
+    a >> obj;
+    return !dataFile.fail();
+  } catch (std::exception&) {
+    return false;
   }
+}
+
 }

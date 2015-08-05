@@ -22,6 +22,7 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
+#include <System/ErrorMessage.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 
@@ -54,7 +55,7 @@ TcpConnection& TcpConnection::operator=(TcpConnection&& other) {
     assert(contextPair.readContext == nullptr);
     assert(contextPair.writeContext == nullptr);
     if (close(connection) == -1) {
-      throw std::runtime_error("TcpConnection::operator=, close() failed, errno=" + std::to_string(errno));
+      throw std::runtime_error("TcpConnection::operator=, close failed, " + lastErrorMessage());
     }
   }
 
@@ -81,7 +82,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
   ssize_t transferred = ::recv(connection, (void *)data, size, 0);
   if (transferred == -1) {
     if (errno != EAGAIN  && errno != EWOULDBLOCK) {
-      message = "recv failed, errno=" + std::to_string(errno);
+      message = "recv failed, " + lastErrorMessage();
     } else {
       epoll_event connectionEvent;
       OperationContext operationContext;
@@ -97,7 +98,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
       }
 
       if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, connection, &connectionEvent) == -1) {
-        message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+        message = "epoll_ctl failed, " + lastErrorMessage();
       } else {
         dispatcher->getCurrentContext()->interruptProcedure = [&]() {
             assert(dispatcher != nullptr);
@@ -107,7 +108,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
             connectionEvent.data.ptr = nullptr;
 
             if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, connection, &connectionEvent) == -1) {
-              throw std::runtime_error("TcpConnection::stop, epoll_ctl() fail, errno=" + std::to_string(errno));
+              throw std::runtime_error("TcpConnection::stop, epoll_ctl failed, " + lastErrorMessage());
             }
 
             contextPair.readContext->interrupted = true;
@@ -132,7 +133,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
           connectionEvent.data.ptr = &contextPair;
 
           if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, connection, &connectionEvent) == -1) {
-            message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+            message = "epoll_ctl failed, " + lastErrorMessage();
             throw std::runtime_error("TcpConnection::read");
           }
         }
@@ -143,7 +144,7 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
 
         ssize_t transferred = ::recv(connection, (void *)data, size, 0);
         if (transferred == -1) {
-          message = "recv failed, errno=" + std::to_string(errno);
+          message = "recv failed, " + lastErrorMessage();
         } else {
           assert(transferred <= static_cast<ssize_t>(size));
           return transferred;
@@ -168,7 +169,7 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
   std::string message;
   if(size == 0) {
     if(shutdown(connection, SHUT_WR) == -1) {
-      throw std::runtime_error("TcpConnection::write, shutdown failed, result=" + std::to_string(errno));
+      throw std::runtime_error("TcpConnection::write, shutdown failed, " + lastErrorMessage());
     }
 
     return 0;
@@ -177,7 +178,7 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
   ssize_t transferred = ::send(connection, (void *)data, size, MSG_NOSIGNAL);
   if (transferred == -1) {
     if (errno != EAGAIN  && errno != EWOULDBLOCK) {
-      message = "send failed, result=" + std::to_string(errno);
+      message = "send failed, " + lastErrorMessage();
     } else {
       epoll_event connectionEvent;
       OperationContext operationContext;
@@ -193,7 +194,7 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
       }
 
       if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, connection, &connectionEvent) == -1) {
-        message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+        message = "epoll_ctl failed, " + lastErrorMessage();
       } else {
         dispatcher->getCurrentContext()->interruptProcedure = [&]() {
             assert(dispatcher != nullptr);
@@ -203,7 +204,7 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
             connectionEvent.data.ptr = nullptr;
 
             if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, connection, &connectionEvent) == -1) {
-              throw std::runtime_error("TcpConnection::stop, epoll_ctl() fail" + std::to_string(errno));
+              throw std::runtime_error("TcpConnection::stop, epoll_ctl failed, " + lastErrorMessage());
             }
 
             contextPair.writeContext->interrupted = true;
@@ -228,18 +229,18 @@ std::size_t TcpConnection::write(const uint8_t* data, size_t size) {
           connectionEvent.data.ptr = &contextPair;
 
           if (epoll_ctl(dispatcher->getEpoll(), EPOLL_CTL_MOD, connection, &connectionEvent) == -1) {
-            message = "epoll_ctl() failed, errno=" + std::to_string(errno);
+            message = "epoll_ctl failed, " + lastErrorMessage();
             throw std::runtime_error("TcpConnection::write, " + message);
           }
         }
 
         if((operationContext.events & (EPOLLERR | EPOLLHUP)) != 0) {
-          throw std::runtime_error("TcpConnection::write: events & (EPOLLERR | EPOLLHUP) != 0");
+          throw std::runtime_error("TcpConnection::write, events & (EPOLLERR | EPOLLHUP) != 0");
         }
 
         ssize_t transferred = ::send(connection, (void *)data, size, 0);
         if (transferred == -1) {
-          message = "send failed, errno="  + std::to_string(errno);
+          message = "send failed, "  + lastErrorMessage();
         } else {
           assert(transferred <= static_cast<ssize_t>(size));
           return transferred;
@@ -258,7 +259,7 @@ std::pair<Ipv4Address, uint16_t> TcpConnection::getPeerAddressAndPort() const {
   sockaddr_in addr;
   socklen_t size = sizeof(addr);
   if (getpeername(connection, reinterpret_cast<sockaddr*>(&addr), &size) != 0) {
-    throw std::runtime_error("TcpConnection::getPeerAddress, getpeername failed, errno=" + std::to_string(errno));
+    throw std::runtime_error("TcpConnection::getPeerAddress, getpeername failed, " + lastErrorMessage());
   }
 
   assert(size == sizeof(sockaddr_in));
@@ -273,7 +274,7 @@ TcpConnection::TcpConnection(Dispatcher& dispatcher, int socket) : dispatcher(&d
   connectionEvent.data.ptr = nullptr;
 
   if (epoll_ctl(dispatcher.getEpoll(), EPOLL_CTL_ADD, socket, &connectionEvent) == -1) {
-    throw std::runtime_error("TcpConnection::TcpConnection, epoll_ctl() fail, errno=" + std::to_string(errno));
+    throw std::runtime_error("TcpConnection::TcpConnection, epoll_ctl failed, " + lastErrorMessage());
   }
 }
 

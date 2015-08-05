@@ -28,12 +28,18 @@
 using namespace Crypto;
 
 namespace CryptoNote {
+
+WalletUserTransactionsCache::WalletUserTransactionsCache(uint64_t mempoolTxLiveTime) : m_unconfirmedTransactions(mempoolTxLiveTime) {
+}
+
 bool WalletUserTransactionsCache::serialize(CryptoNote::ISerializer& s) {
   if (s.type() == CryptoNote::ISerializer::INPUT) {
     s(m_transactions, "transactions");
     s(m_transfers, "transfers");
     s(m_unconfirmedTransactions, "unconfirmed");
+
     updateUnconfirmedTransactions();
+    deleteOutdatedTransactions();
   } else {
     UserTransactions txsToSave;
     UserTransfers transfersToSave;
@@ -296,6 +302,17 @@ void WalletUserTransactionsCache::reset() {
   m_transactions.clear();
   m_transfers.clear();
   m_unconfirmedTransactions.reset();
+}
+
+std::vector<TransactionId> WalletUserTransactionsCache::deleteOutdatedTransactions() {
+  auto deletedTransactions = m_unconfirmedTransactions.deleteOutdatedTransactions();
+
+  for (auto id: deletedTransactions) {
+    assert(id < m_transactions.size());
+    m_transactions[id].state = WalletLegacyTransactionState::Deleted;
+  }
+
+  return deletedTransactions;
 }
 
 } //namespace CryptoNote

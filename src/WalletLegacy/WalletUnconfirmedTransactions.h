@@ -65,6 +65,8 @@ class WalletUnconfirmedTransactions
 {
 public:
 
+  explicit WalletUnconfirmedTransactions(uint64_t uncofirmedTransactionsLiveTime);
+
   bool serialize(CryptoNote::ISerializer& s);
 
   bool findTransactionId(const Crypto::Hash& hash, TransactionId& id);
@@ -78,15 +80,19 @@ public:
   bool isUsed(const TransactionOutputInformation& out) const;
   void reset();
 
+  std::vector<TransactionId> deleteOutdatedTransactions();
+
 private:
 
   void collectUsedOutputs();
+  void deleteUsedOutputs(const std::vector<TransactionOutputId>& usedOutputs);
 
   typedef std::unordered_map<Crypto::Hash, UnconfirmedTransferDetails, boost::hash<Crypto::Hash>> UnconfirmedTxsContainer;
   typedef std::unordered_set<TransactionOutputId> UsedOutputsContainer;
 
   UnconfirmedTxsContainer m_unconfirmedTxs;
   UsedOutputsContainer m_usedOutputs;
+  uint64_t m_uncofirmedTransactionsLiveTime;
 };
 
 } // namespace CryptoNote

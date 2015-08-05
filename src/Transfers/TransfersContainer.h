@@ -89,12 +89,12 @@ struct TransactionOutputInformationEx : public TransactionOutputInformationIn {
   void serialize(CryptoNote::ISerializer& s) {
     s(reinterpret_cast<uint8_t&>(type), "type");
     s(amount, "");
-    s(globalOutputIndex, "");
+    serializeGlobalOutputIndex(s, globalOutputIndex, "");
     s(outputInTransaction, "");
     s(transactionPublicKey, "");
     s(keyImage, "");
     s(unlockTime, "");
-    s(blockHeight, "");
+    serializeBlockHeight(s, blockHeight, "");
     s(transactionIndex, "");
     s(transactionHash, "");
     s(visible, "");
@@ -113,7 +113,7 @@ struct BlockInfo {
   uint32_t transactionIndex;
 
   void serialize(ISerializer& s) {
-    s(height, "height");
+    serializeBlockHeight(s, height, "height");
     s(timestamp, "timestamp");
     s(transactionIndex, "transactionIndex");
   }

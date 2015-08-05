@@ -249,4 +249,10 @@ void readSequence(Iterator outputIterator, Common::StringView name, ISerializer&
   s.endArray();
 }
 
+//convinience function since we change block height type
+void serializeBlockHeight(ISerializer& s, uint32_t& blockHeight, Common::StringView name);
+
+//convinience function since we change global output index type
+void serializeGlobalOutputIndex(ISerializer& s, uint32_t& globalOutputIndex, Common::StringView name);
+
 }

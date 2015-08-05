@@ -25,6 +25,7 @@
 #define NOMINMAX
 #endif
 #include <winsock2.h>
+#include "ErrorMessage.h"
 
 namespace System {
 
@@ -44,16 +45,16 @@ Dispatcher::Dispatcher() {
   assert(result != FALSE);
   std::string message;
   if (ConvertThreadToFiberEx(NULL, 0) == NULL) {
-    message = "ConvertThreadToFiberEx failed, result=" + std::to_string(GetLastError());
+    message = "ConvertThreadToFiberEx failed, " + lastErrorMessage();
   } else {
     completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
     if (completionPort == NULL) {
-      message = "CreateIoCompletionPort failed, result=" + std::to_string(GetLastError());
+      message = "CreateIoCompletionPort failed, " + lastErrorMessage();
     } else {
       WSADATA wsaData;
       int wsaResult = WSAStartup(0x0202, &wsaData);
       if (wsaResult != 0) {
-        message = "WSAStartup failed, result=" + std::to_string(wsaResult);
+        message = "WSAStartup failed, " + errorMessage(wsaResult);
       } else {
         remoteNotificationSent = false;
         reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)->hEvent = NULL;
@@ -179,7 +180,7 @@ void Dispatcher::dispatch() {
     }
 
     if (lastError != WAIT_IO_COMPLETION) {
-      throw std::runtime_error("Dispatcher::dispatch, GetQueuedCompletionStatusEx failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("Dispatcher::dispatch, GetQueuedCompletionStatusEx failed, " + errorMessage(lastError));
     }
   }
 
@@ -241,7 +242,7 @@ void Dispatcher::remoteSpawn(std::function<void()>&& procedure) {
     remoteNotificationSent = true;
     if (PostQueuedCompletionStatus(completionPort, 0, 0, reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)) == NULL) {
       LeaveCriticalSection(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection));
-      throw std::runtime_error("Dispatcher::remoteSpawn, PostQueuedCompletionStatus failed, result=" + std::to_string(GetLastError()));
+      throw std::runtime_error("Dispatcher::remoteSpawn, PostQueuedCompletionStatus failed, " + lastErrorMessage());
     };
   }
 
@@ -313,7 +314,7 @@ void Dispatcher::yield() {
       if (lastError == WAIT_TIMEOUT) {
         break;
       } else if (lastError != WAIT_IO_COMPLETION) {
-        throw std::runtime_error("Dispatcher::yield, GetQueuedCompletionStatusEx failed, result=" + std::to_string(lastError));
+        throw std::runtime_error("Dispatcher::yield, GetQueuedCompletionStatusEx failed, " + errorMessage(lastError));
       }
     }
   }
@@ -337,7 +338,7 @@ NativeContext& Dispatcher::getReusableContext() {
   if (firstReusableContext == nullptr) {
     void* fiber = CreateFiberEx(STACK_SIZE, RESERVE_STACK_SIZE, 0, contextProcedureStatic, this);
     if (fiber == NULL) {
-      throw std::runtime_error("Dispatcher::getReusableContext, CreateFiberEx failed, result=" + std::to_string(GetLastError()));
+      throw std::runtime_error("Dispatcher::getReusableContext, CreateFiberEx failed, " + lastErrorMessage());
     }
 
     SwitchToFiber(fiber);

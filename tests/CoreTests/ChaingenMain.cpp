@@ -150,6 +150,8 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(gen_tx_txout_to_key_has_invalid_key);
     GENERATE_AND_PLAY(gen_tx_output_with_zero_amount);
     GENERATE_AND_PLAY(gen_tx_signatures_are_invalid);
+    GENERATE_AND_PLAY_EX(GenerateTransactionWithZeroFee(false));
+    GENERATE_AND_PLAY_EX(GenerateTransactionWithZeroFee(true));
 
     // multisignature output
     GENERATE_AND_PLAY_EX(MultiSigTx_OutputSignatures(1, 1, true));
@@ -187,7 +189,7 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendInTx(false));
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendInTx(true));
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendSameBlock(false));
-    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendSameBlock(true));   
+    GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendSameBlock(true));
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendDifferentBlocks(false));
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendDifferentBlocks(true));
     GENERATE_AND_PLAY_EX(MultiSigTx_DoubleSpendAltChainSameBlock(false));

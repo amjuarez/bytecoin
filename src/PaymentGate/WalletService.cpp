@@ -23,15 +23,7 @@
 #include <sstream>
 #include <unordered_set>
 
-#ifdef WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <unistd.h>
-#include <stdio.h>
-#endif
+#include <boost/filesystem/operations.hpp>
 
 #include <System/Timer.h>
 #include <System/InterruptedException.h>
@@ -114,11 +106,8 @@ std::string createTemporaryFile(const std::string& path, std::fstream& tempFile)
 
 //returns true on success
 bool deleteFile(const std::string& filename) {
-#ifdef WIN32
-  return DeleteFile(filename.c_str()) != 0;
-#else
-  return unlink(filename.c_str()) == 0;
-#endif
+  boost::system::error_code err;
+  return boost::filesystem::remove(filename, err) && !err;
 }
 
 void replaceWalletFiles(const std::string &path, const std::string &tempFilePath) {

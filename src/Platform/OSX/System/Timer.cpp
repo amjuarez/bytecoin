@@ -26,6 +26,7 @@
 #include <unistd.h>
 
 #include "Dispatcher.h"
+#include <System/ErrorMessage.h>
 #include <System/InterruptedException.h>
 
 namespace System {
@@ -79,7 +80,7 @@ void Timer::sleep(std::chrono::nanoseconds duration) {
   EV_SET(&event, timer, EVFILT_TIMER, EV_ADD | EV_ENABLE | EV_ONESHOT, NOTE_NSECONDS, duration.count(), &timerContext);
 
   if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-    throw std::runtime_error("Timer::stop, kevent() failed, errno=" + std::to_string(errno));
+    throw std::runtime_error("Timer::stop, kevent failed, " + lastErrorMessage());
   }
 
   context = &timerContext;
@@ -92,7 +93,7 @@ void Timer::sleep(std::chrono::nanoseconds duration) {
       EV_SET(&event, timer, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
 
       if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
-        throw std::runtime_error("Timer::stop, kevent() failed, errno=" + std::to_string(errno));
+        throw std::runtime_error("Timer::stop, kevent failed, " + lastErrorMessage());
       }
 
       dispatcher->pushContext(timerContext->context);
