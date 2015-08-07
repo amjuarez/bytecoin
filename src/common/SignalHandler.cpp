@@ -27,6 +27,7 @@
 #include <Windows.h>
 #else
 #include <signal.h>
+#include <cstring>
 #endif
 
 namespace {
@@ -65,7 +66,7 @@ void posixHandler(int /*type*/) {
 }
 
 
-namespace tools {
+namespace Tools {
 
   bool SignalHandler::install(std::function<void(void)> t)
   {
@@ -76,9 +77,23 @@ namespace tools {
     }
     return r;
 #else
-    signal(SIGINT, posixHandler);
-    signal(SIGTERM, posixHandler);
-    signal(SIGPIPE, SIG_IGN);
+    struct sigaction newMask;
+    std::memset(&newMask, 0, sizeof(struct sigaction));
+    newMask.sa_handler = posixHandler;
+    if (sigaction(SIGINT, &newMask, nullptr) != 0) {
+      return false;
+    }
+
+    if (sigaction(SIGTERM, &newMask, nullptr) != 0) {
+      return false;
+    }
+
+    std::memset(&newMask, 0, sizeof(struct sigaction));
+    newMask.sa_handler = SIG_IGN;
+    if (sigaction(SIGPIPE, &newMask, nullptr) != 0) {
+      return false;
+    }
+
     m_handler = t;
     return true;
 #endif

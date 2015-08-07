@@ -24,8 +24,8 @@
 #include <boost/program_options.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include "p2p_networks.h"
-#include "p2p_protocol_types.h"
+#include "P2pNetworks.h"
+#include "P2pProtocolTypes.h"
 
 namespace CryptoNote {
 
@@ -35,18 +35,51 @@ public:
   static void initOptions(boost::program_options::options_description& desc);
   bool init(const boost::program_options::variables_map& vm);
 
+  std::string getP2pStateFilename() const;
+  bool getTestnet() const;
+  std::string getBindIp() const;
+  uint16_t getBindPort() const;
+  uint16_t getExternalPort() const;
+  bool getAllowLocalIp() const;
+  std::vector<PeerlistEntry> getPeers() const;
+  std::vector<NetworkAddress> getPriorityNodes() const;
+  std::vector<NetworkAddress> getExclusiveNodes() const;
+  std::vector<NetworkAddress> getSeedNodes() const;
+  bool getHideMyPort() const;
+  boost::uuids::uuid getNetworkId() const;
+  std::string getP2pStatTrustedPubKey() const;
+  std::string getConfigFolder() const;
+
+  void setP2pStateFilename(const std::string& filename);
+  void setTestnet(bool isTestnet);
+  void setBindIp(const std::string& ip);
+  void setBindPort(uint16_t port);
+  void setExternalPort(uint16_t port);
+  void setAllowLocalIp(bool allow);
+  void setPeers(const std::vector<PeerlistEntry>& peerList);
+  void setPriorityNodes(const std::vector<NetworkAddress>& addresses);
+  void setExclusiveNodes(const std::vector<NetworkAddress>& addresses);
+  void setSeedNodes(const std::vector<NetworkAddress>& addresses);
+  void setHideMyPort(bool hide);
+  void setNetworkId(const boost::uuids::uuid id);
+  void setP2pStatTrustedPubKey(const std::string key);
+  void setConfigFolder(const std::string& folder);
+
+private:
   std::string bindIp;
-  std::string bindPort;
-  uint32_t externalPort;
+  uint16_t bindPort;
+  uint16_t externalPort;
   bool allowLocalIp;
-  std::vector<peerlist_entry> peers;
-  std::vector<net_address> priorityNodes;
-  std::vector<net_address> exclusiveNodes;
-  std::vector<net_address> seedNodes;
+  std::vector<PeerlistEntry> peers;
+  std::vector<NetworkAddress> priorityNodes;
+  std::vector<NetworkAddress> exclusiveNodes;
+  std::vector<NetworkAddress> seedNodes;
   bool hideMyPort;
   boost::uuids::uuid networkId;
   std::string p2pStatTrustedPubKey;
   std::string configFolder;
+  std::string p2pStateFilename;
+  bool testnet = false;
 };
 
 } //namespace nodetool

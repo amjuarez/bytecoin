@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include "../Common/JsonValue.h"
+#include "Common/JsonValue.h"
 #include "ISerializer.h"
 
 namespace CryptoNote {
@@ -26,6 +26,7 @@ namespace CryptoNote {
 class JsonInputValueSerializer : public ISerializer {
 public:
   JsonInputValueSerializer(const Common::JsonValue& value);
+  JsonInputValueSerializer(Common::JsonValue&& value);
   virtual ~JsonInputValueSerializer();
 
   SerializerType type() const;
@@ -33,10 +34,12 @@ public:
   virtual bool beginObject(Common::StringView name) override;
   virtual void endObject() override;
 
-  virtual bool beginArray(std::size_t& size, Common::StringView name) override;
+  virtual bool beginArray(size_t& size, Common::StringView name) override;
   virtual void endArray() override;
 
   virtual bool operator()(uint8_t& value, Common::StringView name) override;
+  virtual bool operator()(int16_t& value, Common::StringView name) override;
+  virtual bool operator()(uint16_t& value, Common::StringView name) override;
   virtual bool operator()(int32_t& value, Common::StringView name) override;
   virtual bool operator()(uint32_t& value, Common::StringView name) override;
   virtual bool operator()(int64_t& value, Common::StringView name) override;
@@ -44,7 +47,7 @@ public:
   virtual bool operator()(double& value, Common::StringView name) override;
   virtual bool operator()(bool& value, Common::StringView name) override;
   virtual bool operator()(std::string& value, Common::StringView name) override;
-  virtual bool binary(void* value, std::size_t size, Common::StringView name) override;
+  virtual bool binary(void* value, size_t size, Common::StringView name) override;
   virtual bool binary(std::string& value, Common::StringView name) override;
 
   template<typename T>
@@ -53,7 +56,7 @@ public:
   }
 
 private:
-  const Common::JsonValue& root;
+  Common::JsonValue value;
   std::vector<const Common::JsonValue*> chain;
   std::vector<size_t> idxs;
 

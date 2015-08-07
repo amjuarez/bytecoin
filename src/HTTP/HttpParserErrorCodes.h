@@ -59,7 +59,7 @@ private:
 };
 
 } //namespace error
-} //namespace cryptonote
+} //namespace CryptoNote
 
 inline std::error_code make_error_code(CryptoNote::error::HttpParserErrorCodes e) {
   return std::error_code(static_cast<int>(e), CryptoNote::error::HttpParserErrorCategory::INSTANCE);

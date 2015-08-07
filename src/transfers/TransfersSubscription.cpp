@@ -16,65 +16,66 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "TransfersSubscription.h"
-#include "IWallet.h"
+#include "IWalletLegacy.h"
+
+using namespace Crypto;
 
 namespace CryptoNote {
 
 TransfersSubscription::TransfersSubscription(const CryptoNote::Currency& currency, const AccountSubscription& sub)
-  : m_subscription(sub), m_transfers(currency, sub.transactionSpendableAge) {}
+  : subscription(sub), transfers(currency, sub.transactionSpendableAge) {}
 
 
 SynchronizationStart TransfersSubscription::getSyncStart() {
-  return m_subscription.syncStart;
+  return subscription.syncStart;
 }
 
-void TransfersSubscription::onBlockchainDetach(uint64_t height) {
-  std::vector<Hash> deletedTransactions = m_transfers.detach(height);
+void TransfersSubscription::onBlockchainDetach(uint32_t height) {
+  std::vector<Hash> deletedTransactions = transfers.detach(height);
   for (auto& hash : deletedTransactions) {
     m_observerManager.notify(&ITransfersObserver::onTransactionDeleted, this, hash);
   }
 }
 
-void TransfersSubscription::onError(const std::error_code& ec, uint64_t height) {
-  if (height != UNCONFIRMED_TRANSACTION_HEIGHT) {
-  m_transfers.detach(height);
+void TransfersSubscription::onError(const std::error_code& ec, uint32_t height) {
+  if (height != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
+  transfers.detach(height);
   }
   m_observerManager.notify(&ITransfersObserver::onError, this, height, ec);
 }
 
-bool TransfersSubscription::advanceHeight(uint64_t height) {
-  return m_transfers.advanceHeight(height);
+bool TransfersSubscription::advanceHeight(uint32_t height) {
+  return transfers.advanceHeight(height);
 }
 
 const AccountKeys& TransfersSubscription::getKeys() const {
-  return m_subscription.keys;
+  return subscription.keys;
 }
 
 void TransfersSubscription::addTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx,
-                                           const std::vector<TransactionOutputInformationIn>& transfers) {
-
-  bool added = m_transfers.addTransaction(blockInfo, tx, transfers);
+                                           const std::vector<TransactionOutputInformationIn>& transfersList) {
+  bool added = transfers.addTransaction(blockInfo, tx, transfersList);
   if (added) {
     m_observerManager.notify(&ITransfersObserver::onTransactionUpdated, this, tx.getTransactionHash());
   }
 }
 
-AccountAddress TransfersSubscription::getAddress() {
-  return m_subscription.keys.address;
+AccountPublicAddress TransfersSubscription::getAddress() {
+  return subscription.keys.address;
 }
 
 ITransfersContainer& TransfersSubscription::getContainer() {
-  return m_transfers;
+  return transfers;
 }
 
 void TransfersSubscription::deleteUnconfirmedTransaction(const Hash& transactionHash) {
-  m_transfers.deleteUnconfirmedTransaction(transactionHash);
+  transfers.deleteUnconfirmedTransaction(transactionHash);
   m_observerManager.notify(&ITransfersObserver::onTransactionDeleted, this, transactionHash);
 }
 
 void TransfersSubscription::markTransactionConfirmed(const BlockInfo& block, const Hash& transactionHash,
-                                                     const std::vector<uint64_t>& globalIndices) {
-  m_transfers.markTransactionConfirmed(block, transactionHash, globalIndices);
+                                                     const std::vector<uint32_t>& globalIndices) {
+  transfers.markTransactionConfirmed(block, transactionHash, globalIndices);
   m_observerManager.notify(&ITransfersObserver::onTransactionUpdated, this, transactionHash);
 }
 

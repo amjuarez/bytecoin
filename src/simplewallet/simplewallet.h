@@ -22,14 +22,14 @@
 
 #include <boost/program_options/variables_map.hpp>
 
-#include "IWallet.h"
+#include "IWalletLegacy.h"
 #include "INode.h"
-#include "password_container.h"
+#include "PasswordContainer.h"
 
 #include "Common/ConsoleHandler.h"
-#include "cryptonote_core/cryptonote_basic_impl.h"
-#include "cryptonote_core/Currency.h"
-#include "wallet/WalletHelper.h"
+#include "CryptoNoteCore/CryptoNoteBasicImpl.h"
+#include "CryptoNoteCore/Currency.h"
+#include "WalletLegacy/WalletHelper.h"
 
 #include <Logging/LoggerRef.h>
 #include <Logging/LoggerManager.h>
@@ -42,7 +42,7 @@ namespace CryptoNote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  class simple_wallet : public CryptoNote::INodeObserver, public CryptoNote::IWalletObserver
+  class simple_wallet : public CryptoNote::INodeObserver, public CryptoNote::IWalletLegacyObserver
   {
   public:
     simple_wallet(System::Dispatcher& dispatcher, const CryptoNote::Currency& currency, Logging::LoggerManager& log);
@@ -100,7 +100,7 @@ namespace CryptoNote
     //----------------------------------------------------------
 
     //----------------- INodeObserver --------------------------
-    virtual void localBlockchainUpdated(uint64_t height) override;
+    virtual void localBlockchainUpdated(uint32_t height) override;
     //----------------------------------------------------------
 
     friend class refresh_progress_reporter_t;
@@ -163,9 +163,13 @@ namespace CryptoNote
     std::string m_daemon_address;
     std::string m_daemon_host;
     uint16_t m_daemon_port;
+uint64_t m_maxTransactionSizeLimit;
+uint64_t m_default_fee;
 
     std::string m_wallet_file;
     bool sync_from_zero;
+
+    std::unique_ptr<std::promise<std::error_code>> m_initResultPromise;
 
     Common::ConsoleHandler m_consoleHandler;
     const CryptoNote::Currency& m_currency;
@@ -174,8 +178,7 @@ namespace CryptoNote
     Logging::LoggerRef logger;
 
     std::unique_ptr<CryptoNote::INode> m_node;
-    std::unique_ptr<CryptoNote::IWallet> m_wallet;
+    std::unique_ptr<CryptoNote::IWalletLegacy> m_wallet;
     refresh_progress_reporter_t m_refresh_progress_reporter;
-    std::unique_ptr<std::promise<std::error_code>> m_initResultPromise;
   };
 }

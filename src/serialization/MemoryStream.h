@@ -17,25 +17,23 @@
 
 #pragma once
 
-
-#include "IStream.h"
-#include <vector>
 #include <algorithm>
+#include <cstdint>
 #include <cstring> // memcpy
+#include <vector>
+#include <Common/IOutputStream.h>
 
 namespace CryptoNote {
 
-class MemoryStream: 
-  public IInputStream, 
-  public IOutputStream {
+class MemoryStream: public Common::IOutputStream {
 public:
 
-  MemoryStream() : 
-    m_readPos(0), m_writePos(0) {}
+  MemoryStream() : m_writePos(0) {
+  }
 
-  virtual void write(const char* data, std::size_t size) override {
+  virtual size_t writeSome(const void* data, size_t size) override {
     if (size == 0) {
-      return;
+      return 0;
     }
 
     if (m_writePos + size > m_buffer.size()) {
@@ -44,38 +42,25 @@ public:
 
     memcpy(&m_buffer[m_writePos], data, size);
     m_writePos += size;
-  }
-
-  virtual std::size_t read(char* data, std::size_t size) override {
-    size_t readSize = std::min(size, m_buffer.size() - m_readPos);
-    
-    if (readSize > 0) {
-      memcpy(data, &m_buffer[m_readPos], readSize);
-      m_readPos += readSize;
-    }
-
-    return readSize;
+    return size;
   }
 
   size_t size() {
     return m_buffer.size();
   }
 
-  const char* data() {
+  const uint8_t* data() {
     return m_buffer.data();
   }
 
   void clear() {
-    m_readPos = 0;
     m_writePos = 0;
     m_buffer.resize(0);
   }
 
 private:
-
-  size_t m_readPos;
   size_t m_writePos;
-  std::vector<char> m_buffer;
+  std::vector<uint8_t> m_buffer;
 };
 
 }

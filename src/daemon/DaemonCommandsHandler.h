@@ -24,13 +24,13 @@
 
 namespace CryptoNote {
 class core;
-class node_server;
+class NodeServer;
 }
 
 class DaemonCommandsHandler
 {
 public:
-  DaemonCommandsHandler(CryptoNote::core& core, CryptoNote::node_server& srv, Logging::LoggerManager& log);
+  DaemonCommandsHandler(CryptoNote::core& core, CryptoNote::NodeServer& srv, Logging::LoggerManager& log);
 
   bool start_handling() {
     m_consoleHandler.start();
@@ -45,12 +45,12 @@ private:
 
   Common::ConsoleHandler m_consoleHandler;
   CryptoNote::core& m_core;
-  CryptoNote::node_server& m_srv;
+  CryptoNote::NodeServer& m_srv;
   Logging::LoggerRef logger;
   Logging::LoggerManager& m_logManager;
 
   std::string get_commands_str();
-  bool print_block_by_height(uint64_t height);
+  bool print_block_by_height(uint32_t height);
   bool print_block_by_hash(const std::string& arg);
 
   bool exit(const std::vector<std::string>& args);

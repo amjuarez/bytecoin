@@ -29,12 +29,12 @@
 namespace CryptoNote {
 
 struct BlockchainInterval {
-  uint64_t startHeight;
-  std::vector<crypto::hash> blocks;
+  uint32_t startHeight;
+  std::vector<Crypto::Hash> blocks;
 };
 
 struct CompleteBlock {
-  crypto::hash blockHash;
+  Crypto::Hash blockHash;
   boost::optional<CryptoNote::Block> block;
   // first transaction is always coinbase
   std::list<std::shared_ptr<ITransactionReader>> transactions;

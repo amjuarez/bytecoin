@@ -24,7 +24,7 @@
 #include <System/TcpConnection.h>
 #include <System/TcpStream.h>
 
-#include "serialization/SerializationTools.h"
+#include "Serialization/SerializationTools.h"
 
 namespace CryptoNote {
 
@@ -32,6 +32,7 @@ class HttpClient {
 public:
 
   HttpClient(System::Dispatcher& dispatcher, const std::string& address, uint16_t port);
+  ~HttpClient();
   void request(const HttpRequest& req, HttpResponse& res);
 
 private:

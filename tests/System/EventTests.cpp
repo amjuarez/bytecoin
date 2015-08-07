@@ -15,8 +15,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <System/Context.h>
 #include <System/Dispatcher.h>
 #include <System/Event.h>
+#include <System/InterruptedException.h>
 #include <gtest/gtest.h>
 
 using namespace System;
@@ -30,7 +32,7 @@ TEST(EventTests, newEventIsNotSet) {
 TEST(EventTests, eventIsWorking) {
   Dispatcher dispatcher;
   Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -41,7 +43,7 @@ TEST(EventTests, eventIsWorking) {
 TEST(EventTests, movedEventIsWorking) {
   Dispatcher dispatcher;
   Event event(std::move(Event(dispatcher)));
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -52,7 +54,7 @@ TEST(EventTests, movedEventIsWorking) {
 TEST(EventTests, movedEventKeepsState) {
   Dispatcher dispatcher;
   Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -66,7 +68,7 @@ TEST(EventTests, movedEventIsWorking2) {
   Event srcEvent(dispatcher);
   Event event;
   event = std::move(srcEvent);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -77,7 +79,7 @@ TEST(EventTests, movedEventIsWorking2) {
 TEST(EventTests, movedEventKeepsState2) {
   Dispatcher dispatcher;
   Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -90,7 +92,7 @@ TEST(EventTests, movedEventKeepsState2) {
 TEST(EventTests, moveClearsEventState) {
   Dispatcher dispatcher;
   Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -115,7 +117,7 @@ TEST(EventTests, eventIsWorkingAfterClear) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   event.clear();
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -126,7 +128,7 @@ TEST(EventTests, eventIsWorkingAfterClear) {
 TEST(EventTests, eventIsWorkingAfterClearOnWaiting) {
   Dispatcher dispatcher;
   Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.clear();
     event.set();
   });
@@ -138,7 +140,7 @@ TEST(EventTests, eventIsWorkingAfterClearOnWaiting) {
 TEST(EventTests, eventIsReusableAfterClear) {
   Dispatcher dispatcher;
   Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
     dispatcher.yield();
     event.set();
@@ -160,7 +162,7 @@ TEST(EventTests, eventSetIsWorkingOnNewEvent) {
 TEST(EventTests, setActuallySets) {
   Dispatcher dispatcher;
   Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
   });
 
@@ -172,7 +174,7 @@ TEST(EventTests, setJustSets) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   bool done = false;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.wait();
     done = true;
   });
@@ -189,7 +191,7 @@ TEST(EventTests, setSetsOnlyOnce) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   auto i = 0;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
     event.set();
     event.set();
@@ -209,7 +211,7 @@ TEST(EventTests, waitIsWaiting) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   bool done = false;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.wait();
     done = true;
   });
@@ -225,7 +227,7 @@ TEST(EventTests, setEventIsNotWaiting) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   auto i = 0;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.set();
     dispatcher.yield();
     i++;
@@ -244,7 +246,7 @@ TEST(EventTests, waitIsParallel) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   auto i = 0;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     i++;
     event.set();
   });
@@ -258,12 +260,12 @@ TEST(EventTests, waitIsMultispawn) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   auto i = 0;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.wait();
     i++;
   });
 
-  dispatcher.spawn([&]() {
+  Context<> contextSecond(dispatcher, [&]() {
     event.wait();
     i++;
   });
@@ -280,12 +282,12 @@ TEST(EventTests, setEventInPastUnblocksWaitersEvenAfterClear) {
   Dispatcher dispatcher;
   Event event(dispatcher);
   auto i = 0;
-  dispatcher.spawn([&]() {
+  Context<> context(dispatcher, [&]() {
     event.wait();
     i++;
   });
 
-  dispatcher.spawn([&]() {
+  Context<> contextSecond(dispatcher, [&]() {
     event.wait();
     i++;
   });
@@ -296,4 +298,39 @@ TEST(EventTests, setEventInPastUnblocksWaitersEvenAfterClear) {
   event.clear();
   dispatcher.yield();
   ASSERT_EQ(i, 2);
+}
+
+TEST(EventTests, waitIsInterruptibleOnFront) {
+  Dispatcher dispatcher;
+  Event event(dispatcher);
+  bool interrupted = false;
+  Context<>(dispatcher, [&] {
+    try {
+      event.wait();
+    } catch (InterruptedException&) {
+      interrupted = true;
+    }
+  });
+  
+  ASSERT_TRUE(interrupted);  
+}
+
+TEST(EventTests, waitIsInterruptibleOnBody) {
+  Dispatcher dispatcher;
+  Event event(dispatcher);
+  Event event2(dispatcher);
+  bool interrupted = false;
+  Context<> context(dispatcher, [&] {
+    try {
+      event2.set();
+      event.wait();
+    } catch (InterruptedException&) {
+      interrupted = true;
+    }
+  });
+
+  event2.wait();
+  context.interrupt();
+  context.get();
+  ASSERT_TRUE(interrupted);
 }

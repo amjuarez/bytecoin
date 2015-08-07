@@ -16,96 +16,98 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "KVBinaryInputStreamSerializer.h"
+
 #include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
+#include <Common/StreamTools.h>
 #include "KVBinaryCommon.h"
 
-using Common::JsonValue;
+using namespace Common;
 using namespace CryptoNote;
 
 namespace {
 
-void strictRead(std::istream& s, void* ptr, size_t size) {
-  if (s.read(reinterpret_cast<char*>(ptr), size).gcount() != size) {
-    throw std::runtime_error("read error");
-  }
-}
-
 template <typename T>
-T readPod(std::istream& s) {
+T readPod(Common::IInputStream& s) {
   T v;
-  strictRead(s, &v, sizeof(T));
+  read(s, &v, sizeof(T));
   return v;
 }
 
 template <typename T, typename JsonT = T>
-JsonValue readPodJson(std::istream& s) {
+JsonValue readPodJson(Common::IInputStream& s) {
   JsonValue jv;
   jv = static_cast<JsonT>(readPod<T>(s));
   return jv;
 }
 
 template <typename T>
-JsonValue readIntegerJson(std::istream& s) {
+JsonValue readIntegerJson(Common::IInputStream& s) {
   return readPodJson<T, int64_t>(s);
 }
 
-size_t readVarint(std::istream& s) {
-  size_t v = 0;
-  uint8_t size_mask = uint8_t(s.peek()) & PORTABLE_RAW_SIZE_MARK_MASK;
+size_t readVarint(Common::IInputStream& s) {
+  uint8_t b = read<uint8_t>(s);
+  uint8_t size_mask = b & PORTABLE_RAW_SIZE_MARK_MASK;
+  size_t bytesLeft = 0;
 
-  switch (size_mask) {
+  switch (size_mask){
   case PORTABLE_RAW_SIZE_MARK_BYTE:
-    v = readPod<uint8_t>(s);
+    bytesLeft = 0;
     break;
   case PORTABLE_RAW_SIZE_MARK_WORD:
-    v = readPod<uint16_t>(s);
+    bytesLeft = 1;
     break;
   case PORTABLE_RAW_SIZE_MARK_DWORD:
-    v = readPod<uint32_t>(s);
+    bytesLeft = 3;
     break;
   case PORTABLE_RAW_SIZE_MARK_INT64:
-    v = readPod<uint64_t>(s);
+    bytesLeft = 7;
     break;
-  default:
-    throw std::runtime_error("unknown varint size_mask");
   }
 
-  v >>= 2;
-  return v;
+  size_t value = b;
+
+  for (size_t i = 1; i <= bytesLeft; ++i) {
+    size_t n = read<uint8_t>(s);
+    value |= n << (i * 8);
+  }
+
+  value >>= 2;
+  return value;
 }
 
-std::string readString(std::istream& s) {
+std::string readString(Common::IInputStream& s) {
   auto size = readVarint(s);
   std::string str;
   str.resize(size);
   if (size) {
-    strictRead(s, &str[0], size);
+    read(s, &str[0], size);
   }
   return str;
 }
 
-JsonValue readStringJson(std::istream& s) {
+JsonValue readStringJson(Common::IInputStream& s) {
   return JsonValue(readString(s));
 }
 
-void readName(std::istream& s, std::string& name) {
+void readName(Common::IInputStream& s, std::string& name) {
   uint8_t len = readPod<uint8_t>(s);
   if (len) {
     name.resize(len);
-    strictRead(s, &name[0], len);
+    read(s, &name[0], len);
   }
 }
 
-JsonValue loadValue(std::istream& stream, uint8_t type);
-JsonValue loadSection(std::istream& stream);
-JsonValue loadEntry(std::istream& stream);
-JsonValue loadArray(std::istream& stream, uint8_t itemType);
+JsonValue loadValue(Common::IInputStream& stream, uint8_t type);
+JsonValue loadSection(Common::IInputStream& stream);
+JsonValue loadEntry(Common::IInputStream& stream);
+JsonValue loadArray(Common::IInputStream& stream, uint8_t itemType);
 
 
-JsonValue loadSection(std::istream& stream) {
+JsonValue loadSection(Common::IInputStream& stream) {
   JsonValue sec(JsonValue::OBJECT);
   size_t count = readVarint(stream);
   std::string name;
@@ -118,7 +120,7 @@ JsonValue loadSection(std::istream& stream) {
   return sec;
 }
 
-JsonValue loadValue(std::istream& stream, uint8_t type) {
+JsonValue loadValue(Common::IInputStream& stream, uint8_t type) {
   switch (type) {
   case BIN_KV_SERIALIZE_TYPE_INT64:  return readIntegerJson<int64_t>(stream);
   case BIN_KV_SERIALIZE_TYPE_INT32:  return readIntegerJson<int32_t>(stream);
@@ -129,7 +131,7 @@ JsonValue loadValue(std::istream& stream, uint8_t type) {
   case BIN_KV_SERIALIZE_TYPE_UINT16: return readIntegerJson<uint16_t>(stream);
   case BIN_KV_SERIALIZE_TYPE_UINT8:  return readIntegerJson<uint8_t>(stream);
   case BIN_KV_SERIALIZE_TYPE_DOUBLE: return readPodJson<double>(stream);
-  case BIN_KV_SERIALIZE_TYPE_BOOL:   return JsonValue(stream.get() != 0);
+  case BIN_KV_SERIALIZE_TYPE_BOOL:   return JsonValue(read<uint8_t>(stream) != 0);
   case BIN_KV_SERIALIZE_TYPE_STRING: return readStringJson(stream);
   case BIN_KV_SERIALIZE_TYPE_OBJECT: return loadSection(stream);
   case BIN_KV_SERIALIZE_TYPE_ARRAY:  return loadArray(stream, type);
@@ -139,7 +141,7 @@ JsonValue loadValue(std::istream& stream, uint8_t type) {
   }
 }
 
-JsonValue loadEntry(std::istream& stream) {
+JsonValue loadEntry(Common::IInputStream& stream) {
   uint8_t type = readPod<uint8_t>(stream);
 
   if (type & BIN_KV_SERIALIZE_FLAG_ARRAY) {
@@ -150,7 +152,7 @@ JsonValue loadEntry(std::istream& stream) {
   return loadValue(stream, type);
 }
 
-JsonValue loadArray(std::istream& stream, uint8_t itemType) {
+JsonValue loadArray(Common::IInputStream& stream, uint8_t itemType) {
   JsonValue arr(JsonValue::ARRAY);
   size_t count = readVarint(stream);
 
@@ -162,7 +164,7 @@ JsonValue loadArray(std::istream& stream, uint8_t itemType) {
 }
 
 
-JsonValue parseBinary(std::istream& stream) {
+JsonValue parseBinary(Common::IInputStream& stream) {
   auto hdr = readPod<KVBinaryStorageBlockHeader>(stream);
 
   if (
@@ -180,10 +182,10 @@ JsonValue parseBinary(std::istream& stream) {
 
 }
 
-KVBinaryInputStreamSerializer::KVBinaryInputStreamSerializer(std::istream& strm) : value(parseBinary(strm)), JsonInputValueSerializer(value) {
+KVBinaryInputStreamSerializer::KVBinaryInputStreamSerializer(Common::IInputStream& strm) : JsonInputValueSerializer(parseBinary(strm)) {
 }
 
-bool KVBinaryInputStreamSerializer::binary(void* value, std::size_t size, Common::StringView name) {
+bool KVBinaryInputStreamSerializer::binary(void* value, size_t size, Common::StringView name) {
   std::string str;
 
   if (!(*this)(str, name)) {

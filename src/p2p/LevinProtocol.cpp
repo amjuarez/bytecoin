@@ -44,10 +44,14 @@ struct bucket_head2
 
 }
 
+bool LevinProtocol::Command::needReply() const {
+  return !(isNotify || isResponse);
+}
+
 LevinProtocol::LevinProtocol(System::TcpConnection& connection) 
   : m_conn(connection) {}
 
-std::string LevinProtocol::sendBuf(uint32_t command, const std::string& out, bool needResponse, bool readResponse) {
+void LevinProtocol::sendMessage(uint32_t command, const BinaryArray& out, bool needResponse) {
   bucket_head2 head = { 0 };
   head.m_signature = LEVIN_SIGNATURE;
   head.m_cb = out.size();
@@ -57,37 +61,14 @@ std::string LevinProtocol::sendBuf(uint32_t command, const std::string& out, boo
   head.m_flags = LEVIN_PACKET_REQUEST;
 
   // write header and body in one operation
-  std::string writeBuffer;
+  BinaryArray writeBuffer;
   writeBuffer.reserve(sizeof(head) + out.size());
-  writeBuffer.append(reinterpret_cast<const char*>(&head), sizeof(head));
-  writeBuffer.append(out);
-  m_conn.write(reinterpret_cast<const uint8_t*>(writeBuffer.data()), writeBuffer.size());
 
-  std::string response;
+  Common::VectorOutputStream stream(writeBuffer);
+  stream.writeSome(&head, sizeof(head));
+  stream.writeSome(out.data(), out.size());
 
-  if (readResponse) {
-    if (!readStrict(reinterpret_cast<uint8_t*>(&head), sizeof(head))) {
-      throw std::runtime_error("Levin::sendBuf, failed to read header, peer closed connection");
-    }
-
-    if (head.m_signature != LEVIN_SIGNATURE) {
-      throw std::runtime_error("Levin signature mismatch");
-    }
-
-    if (head.m_cb > LEVIN_DEFAULT_MAX_PACKET_SIZE) {
-      throw std::runtime_error("Levin packet size is too big");
-    }
-
-    response.resize(head.m_cb);
-
-    if (response.size()) {
-      if (!readStrict(&response[0], head.m_cb)) {
-        throw std::runtime_error("Levin::sendBuf, failed to read body, peer closed connection");
-      }
-    }
-  }
-
-  return response;
+  m_conn.write(writeBuffer.data(), writeBuffer.size());
 }
 
 bool LevinProtocol::readCommand(Command& cmd) {
@@ -105,10 +86,10 @@ bool LevinProtocol::readCommand(Command& cmd) {
     throw std::runtime_error("Levin packet size is too big");
   }
 
-  std::string buf;
-  buf.resize(head.m_cb);
+  BinaryArray buf;
 
-  if (!buf.empty()) {
+  if (head.m_cb != 0) {
+    buf.resize(head.m_cb);
     if (!readStrict(&buf[0], head.m_cb)) {
       return false;
     }
@@ -122,7 +103,7 @@ bool LevinProtocol::readCommand(Command& cmd) {
   return true;
 }
 
-void LevinProtocol::sendReply(uint32_t command, const std::string& out, int32_t returnCode) {
+void LevinProtocol::sendReply(uint32_t command, const BinaryArray& out, int32_t returnCode) {
   bucket_head2 head = { 0 };
   head.m_signature = LEVIN_SIGNATURE;
   head.m_cb = out.size();
@@ -147,6 +128,7 @@ bool LevinProtocol::readStrict(void* ptr, size_t size) {
     if (read == 0) {
       return false;
     }
+
     offset += read;
   }
 

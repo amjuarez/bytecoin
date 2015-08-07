@@ -22,6 +22,7 @@
 #include <HTTP/HttpRequest.h>
 #include <HTTP/HttpResponse.h>
 
+#include <System/ContextGroup.h>
 #include <System/Dispatcher.h>
 #include <System/TcpListener.h>
 #include <System/TcpConnection.h>
@@ -51,10 +52,9 @@ private:
   void acceptLoop();
   void connectionHandler(System::TcpConnection&& conn);
 
+  System::ContextGroup workingContextGroup;
   Logging::LoggerRef logger;
   System::TcpListener m_listener;
-  System::Event m_shutdownCompleteEvent;
-  size_t m_spawnCount = 0;
   std::unordered_set<System::TcpConnection*> m_connections;
 };
 

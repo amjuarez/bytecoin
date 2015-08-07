@@ -19,19 +19,21 @@
 #include "CommonTypes.h"
 
 #include "Common/BlockingQueue.h"
-#include "cryptonote_core/cryptonote_format_utils.h"
-#include "cryptonote_core/TransactionApi.h"
+#include "CryptoNoteCore/CryptoNoteFormatUtils.h"
+#include "CryptoNoteCore/TransactionApi.h"
 
-#include "IWallet.h"
+#include "IWalletLegacy.h"
 #include "INode.h"
 #include <future>
+
+using namespace Crypto;
 
 namespace {
 
 using namespace CryptoNote;
 
 void checkOutputKey(
-  const crypto::key_derivation& derivation,
+  const KeyDerivation& derivation,
   const PublicKey& key,
   size_t keyIndex,
   size_t outputIndex,
@@ -39,9 +41,7 @@ void checkOutputKey(
   std::unordered_map<PublicKey, std::vector<uint32_t>>& outputs) {
 
   PublicKey spendKey;
-  crypto::underive_public_key(derivation, keyIndex,
-    reinterpret_cast<const crypto::public_key&>(key),
-    reinterpret_cast<crypto::public_key&>(spendKey));
+  underive_public_key(derivation, keyIndex, key, spendKey);
 
   if (spendKeys.find(spendKey) != spendKeys.end()) {
     outputs[spendKey].push_back(static_cast<uint32_t>(outputIndex));
@@ -56,12 +56,9 @@ void findMyOutputs(
   std::unordered_map<PublicKey, std::vector<uint32_t>>& outputs) {
 
   auto txPublicKey = tx.getTransactionPublicKey();
-  crypto::key_derivation derivation;
+  KeyDerivation derivation;
 
-  if (!crypto::generate_key_derivation(
-    reinterpret_cast<const crypto::public_key&>(txPublicKey),
-    reinterpret_cast<const crypto::secret_key&>(viewSecretKey), 
-    derivation)) {
+  if (!generate_key_derivation( txPublicKey, viewSecretKey, derivation)) {
     return;
   }
 
@@ -74,15 +71,17 @@ void findMyOutputs(
 
     if (outType == TransactionTypes::OutputType::Key) {
 
-      TransactionTypes::OutputKey out;
-      tx.getOutput(idx, out);
+      uint64_t amount;
+      KeyOutput out;
+      tx.getOutput(idx, out, amount);
       checkOutputKey(derivation, out.key, keyIndex, idx, spendKeys, outputs);
       ++keyIndex;
 
     } else if (outType == TransactionTypes::OutputType::Multisignature) {
 
-      TransactionTypes::OutputMultisignature out;
-      tx.getOutput(idx, out);
+      uint64_t amount;
+      MultisignatureOutput out;
+      tx.getOutput(idx, out, amount);
       for (const auto& key : out.keys) {
         checkOutputKey(derivation, key, idx, idx, spendKeys, outputs);
         ++keyIndex;
@@ -116,19 +115,19 @@ ITransfersSubscription& TransfersConsumer::addSubscription(const AccountSubscrip
   return *res;
 }
 
-bool TransfersConsumer::removeSubscription(const AccountAddress& address) {
+bool TransfersConsumer::removeSubscription(const AccountPublicAddress& address) {
   m_subscriptions.erase(address.spendPublicKey);
   m_spendKeys.erase(address.spendPublicKey);
   updateSyncStart();
   return m_subscriptions.empty();
 }
 
-ITransfersSubscription* TransfersConsumer::getSubscription(const AccountAddress& acc) {
+ITransfersSubscription* TransfersConsumer::getSubscription(const AccountPublicAddress& acc) {
   auto it = m_subscriptions.find(acc.spendPublicKey);
   return it == m_subscriptions.end() ? nullptr : it->second.get();
 }
 
-void TransfersConsumer::getSubscriptions(std::vector<AccountAddress>& subscriptions) {
+void TransfersConsumer::getSubscriptions(std::vector<AccountPublicAddress>& subscriptions) {
   for (const auto& kv : m_subscriptions) {
     subscriptions.push_back(kv.second->getAddress());
   }
@@ -137,7 +136,7 @@ void TransfersConsumer::getSubscriptions(std::vector<AccountAddress>& subscripti
 void TransfersConsumer::updateSyncStart() {
   SynchronizationStart start;
 
-  start.height = std::numeric_limits<uint64_t>::max();
+  start.height =   std::numeric_limits<uint64_t>::max();
   start.timestamp = std::numeric_limits<uint64_t>::max();
 
   for (const auto& kv : m_subscriptions) {
@@ -153,13 +152,13 @@ SynchronizationStart TransfersConsumer::getSyncStart() {
   return m_syncStart;
 }
 
-void TransfersConsumer::onBlockchainDetach(uint64_t height) {
+void TransfersConsumer::onBlockchainDetach(uint32_t height) {
   for (const auto& kv : m_subscriptions) {
     kv.second->onBlockchainDetach(height);
   }
 }
 
-bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint64_t startHeight, size_t count) {
+bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startHeight, uint32_t count) {
   assert(blocks);
 
   struct Tx {
@@ -182,7 +181,7 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint64_t startH
   std::atomic<bool> stopProcessing(false);
 
   auto pushingThread = std::async(std::launch::async, [&] {
-    for (size_t i = 0; i < count && !stopProcessing; ++i) {
+    for( uint32_t i = 0; i < count && !stopProcessing; ++i) {
       const auto& block = blocks[i].block;
 
       if (!block.is_initialized()) {
@@ -201,7 +200,7 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint64_t startH
 
       for (const auto& tx : blocks[i].transactions) {
         auto pubKey = tx->getTransactionPublicKey();
-        if (*reinterpret_cast<crypto::public_key*>(&pubKey) == CryptoNote::null_pkey) {
+        if (pubKey == NULL_PUBLIC_KEY) {
           ++blockInfo.transactionIndex;
           continue;
         }
@@ -282,14 +281,13 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint64_t startH
   return true;
 }
 
-std::error_code TransfersConsumer::onPoolUpdated(const std::vector<Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) {
+std::error_code TransfersConsumer::onPoolUpdated(const std::vector<std::unique_ptr<ITransactionReader>>& addedTransactions, const std::vector<Hash>& deletedTransactions) {
   BlockInfo unconfirmedBlockInfo;
   unconfirmedBlockInfo.timestamp = 0; 
-  unconfirmedBlockInfo.height = UNCONFIRMED_TRANSACTION_HEIGHT;
+  unconfirmedBlockInfo.height = WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT;
   std::error_code processingError;
   for (auto& cryptonoteTransaction : addedTransactions) {
-    auto transaction = CryptoNote::createTransaction(cryptonoteTransaction);
-    processingError = processTransaction(unconfirmedBlockInfo, *transaction.get());
+    processingError = processTransaction(unconfirmedBlockInfo, *cryptonoteTransaction.get());
     if (processingError) {
       break;
     }
@@ -297,7 +295,7 @@ std::error_code TransfersConsumer::onPoolUpdated(const std::vector<Transaction>&
 
   if (processingError) {
     for (auto& sub : m_subscriptions) {
-      sub.second->onError(processingError, UNCONFIRMED_TRANSACTION_HEIGHT);
+      sub.second->onError(processingError, WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT);
     }
 
     return processingError;
@@ -312,11 +310,11 @@ std::error_code TransfersConsumer::onPoolUpdated(const std::vector<Transaction>&
   return std::error_code();
 }
 
-void TransfersConsumer::getKnownPoolTxIds(std::vector<crypto::hash>& ids) {
+void TransfersConsumer::getKnownPoolTxIds(std::vector<Hash>& ids) {
   ids.clear();
-  std::unordered_set<crypto::hash> knownIds;
+  std::unordered_set<Hash> knownIds;
   for (auto& sub : m_subscriptions) {
-    std::vector<crypto::hash> subscriptionUnconfirmedTxIds;
+    std::vector<Hash> subscriptionUnconfirmedTxIds;
     sub.second->getContainer().getUnconfirmedTransactions(subscriptionUnconfirmedTxIds);
     knownIds.insert(subscriptionUnconfirmedTxIds.begin(), subscriptionUnconfirmedTxIds.end());
   }
@@ -330,7 +328,7 @@ std::error_code createTransfers(
   const BlockInfo& blockInfo,
   const ITransactionReader& tx,
   const std::vector<uint32_t>& outputs,
-  const std::vector<uint64_t>& globalIdxs,
+  const std::vector<uint32_t>& globalIdxs,
   std::vector<TransactionOutputInformationIn>& transfers) {
 
   auto txPubKey = tx.getTransactionPublicKey();
@@ -354,32 +352,34 @@ std::error_code createTransfers(
     info.type = outType;
     info.transactionPublicKey = txPubKey;
     info.outputInTransaction = idx;
-    info.globalOutputIndex = (blockInfo.height == UNCONFIRMED_TRANSACTION_HEIGHT) ?
+    info.globalOutputIndex = (blockInfo.height == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) ?
       UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX : globalIdxs[idx];
 
     if (outType == TransactionTypes::OutputType::Key) {
-      TransactionTypes::OutputKey out;
-      tx.getOutput(idx, out);
+      uint64_t amount;
+      KeyOutput out;
+      tx.getOutput(idx, out, amount);
 
       CryptoNote::KeyPair in_ephemeral;
       CryptoNote::generate_key_image_helper(
-        reinterpret_cast<const CryptoNote::account_keys&>(account),
-        reinterpret_cast<const crypto::public_key&>(txPubKey),
+        account,
+        txPubKey,
         idx,
         in_ephemeral,
-        reinterpret_cast<crypto::key_image&>(info.keyImage));
+        info.keyImage);
 
-      assert(out.key == reinterpret_cast<const PublicKey&>(in_ephemeral.pub));
+      assert(out.key == reinterpret_cast<const PublicKey&>(in_ephemeral.publicKey));
 
-      info.amount = out.amount;
+      info.amount = amount;
       info.outputKey = out.key;
 
     } else if (outType == TransactionTypes::OutputType::Multisignature) {
-      TransactionTypes::OutputMultisignature out;
-      tx.getOutput(idx, out);
+      uint64_t amount;
+      MultisignatureOutput out;
+      tx.getOutput(idx, out, amount);
 
-      info.amount = out.amount;
-      info.requiredSignatures = out.requiredSignatures;
+      info.amount = amount;
+      info.requiredSignatures = out.requiredSignatureCount;
     }
 
     transfers.push_back(info);
@@ -398,8 +398,8 @@ std::error_code TransfersConsumer::preprocessOutputs(const BlockInfo& blockInfo,
 
   std::error_code errorCode;
   auto txHash = tx.getTransactionHash();
-  if (blockInfo.height != UNCONFIRMED_TRANSACTION_HEIGHT) {
-    errorCode = getGlobalIndices(reinterpret_cast<const crypto::hash&>(txHash), info.globalIdxs);
+  if (blockInfo.height != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
+    errorCode = getGlobalIndices(reinterpret_cast<const Hash&>(txHash), info.globalIdxs);
     if (errorCode) {
       return errorCode;
     }
@@ -448,13 +448,13 @@ std::error_code TransfersConsumer::processTransaction(const BlockInfo& blockInfo
 
 
 std::error_code TransfersConsumer::processOutputs(const BlockInfo& blockInfo, TransfersSubscription& sub, 
-  const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers, const std::vector<uint64_t>& globalIdxs) {
+  const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers, const std::vector<uint32_t>& globalIdxs) {
 
-  if (blockInfo.height != UNCONFIRMED_TRANSACTION_HEIGHT) {
+  if (blockInfo.height != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
     TransactionInformation subscribtionTxInfo;
     int64_t txBalance;
     if (sub.getContainer().getTransactionInformation(tx.getTransactionHash(), subscribtionTxInfo, txBalance)) {
-      if (subscribtionTxInfo.blockHeight == UNCONFIRMED_TRANSACTION_HEIGHT) {
+      if (subscribtionTxInfo.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
         // pool->blockchain
         sub.markTransactionConfirmed(blockInfo, tx.getTransactionHash(), globalIdxs);
         return std::error_code();
@@ -471,7 +471,7 @@ std::error_code TransfersConsumer::processOutputs(const BlockInfo& blockInfo, Tr
 }
 
 
-std::error_code TransfersConsumer::getGlobalIndices(const crypto::hash& transactionHash, std::vector<uint64_t>& outsGlobalIndices) {  
+std::error_code TransfersConsumer::getGlobalIndices(const Hash& transactionHash, std::vector<uint32_t>& outsGlobalIndices) {  
   std::promise<std::error_code> prom;
   std::future<std::error_code> f = prom.get_future();
 

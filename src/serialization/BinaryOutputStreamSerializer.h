@@ -17,16 +17,15 @@
 
 #pragma once
 
+#include "Common/IOutputStream.h"
 #include "ISerializer.h"
 #include "SerializationOverloads.h"
-
-#include <ostream>
 
 namespace CryptoNote {
 
 class BinaryOutputStreamSerializer : public ISerializer {
 public:
-  BinaryOutputStreamSerializer(std::ostream& strm) : stream(strm) {}
+  BinaryOutputStreamSerializer(Common::IOutputStream& strm) : stream(strm) {}
   virtual ~BinaryOutputStreamSerializer() {}
 
   virtual ISerializer::SerializerType type() const;
@@ -34,10 +33,12 @@ public:
   virtual bool beginObject(Common::StringView name) override;
   virtual void endObject() override;
 
-  virtual bool beginArray(std::size_t& size, Common::StringView name) override;
+  virtual bool beginArray(size_t& size, Common::StringView name) override;
   virtual void endArray() override;
 
   virtual bool operator()(uint8_t& value, Common::StringView name) override;
+  virtual bool operator()(int16_t& value, Common::StringView name) override;
+  virtual bool operator()(uint16_t& value, Common::StringView name) override;
   virtual bool operator()(int32_t& value, Common::StringView name) override;
   virtual bool operator()(uint32_t& value, Common::StringView name) override;
   virtual bool operator()(int64_t& value, Common::StringView name) override;
@@ -45,7 +46,7 @@ public:
   virtual bool operator()(double& value, Common::StringView name) override;
   virtual bool operator()(bool& value, Common::StringView name) override;
   virtual bool operator()(std::string& value, Common::StringView name) override;
-  virtual bool binary(void* value, std::size_t size, Common::StringView name) override;
+  virtual bool binary(void* value, size_t size, Common::StringView name) override;
   virtual bool binary(std::string& value, Common::StringView name) override;
 
   template<typename T>
@@ -55,7 +56,7 @@ public:
 
 private:
   void checkedWrite(const char* buf, size_t size);
-  std::ostream& stream;
+  Common::IOutputStream& stream;
 };
 
 }

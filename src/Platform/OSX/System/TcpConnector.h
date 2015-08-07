@@ -35,14 +35,11 @@ public:
   ~TcpConnector();
   TcpConnector& operator=(const TcpConnector&) = delete;
   TcpConnector& operator=(TcpConnector&& other);
-  void start();
-  void stop();
   TcpConnection connect(const Ipv4Address& address, uint16_t port);
 
 private:
   void* context;
   Dispatcher* dispatcher;
-  bool stopped;
 };
 
 }

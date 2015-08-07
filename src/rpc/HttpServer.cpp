@@ -28,30 +28,22 @@ using namespace Logging;
 namespace CryptoNote {
 
 HttpServer::HttpServer(System::Dispatcher& dispatcher, Logging::ILogger& log)
-  : m_dispatcher(dispatcher), logger(log, "HttpServer"), m_shutdownCompleteEvent(dispatcher) {
+  : m_dispatcher(dispatcher), workingContextGroup(dispatcher), logger(log, "HttpServer") {
 
 }
 
 void HttpServer::start(const std::string& address, uint16_t port) {
   m_listener = System::TcpListener(m_dispatcher, System::Ipv4Address(address), port);
-  ++m_spawnCount;
-  m_dispatcher.spawn(std::bind(&HttpServer::acceptLoop, this));
+  workingContextGroup.spawn(std::bind(&HttpServer::acceptLoop, this));
 }
 
 void HttpServer::stop() {
-  m_listener.stop();
-  for (auto connPtr : m_connections) {
-    connPtr->stop();
-  }
-
-  if (m_spawnCount) {
-    m_shutdownCompleteEvent.wait();
-  }
+  workingContextGroup.interrupt();
+  workingContextGroup.wait();
 }
 
 void HttpServer::acceptLoop() {
   try {
-
     System::TcpConnection connection;
     bool accepted = false;
 
@@ -74,8 +66,7 @@ void HttpServer::acceptLoop() {
 
     logger(DEBUGGING) << "Incoming connection from " << addr.first.toDottedDecimal() << ":" << addr.second;
 
-    ++m_spawnCount;
-    m_dispatcher.spawn(std::bind(&HttpServer::acceptLoop, this));
+    workingContextGroup.spawn(std::bind(&HttpServer::acceptLoop, this));
 
     System::TcpStreambuf streambuf(connection);
     std::iostream stream(&streambuf);
@@ -90,6 +81,10 @@ void HttpServer::acceptLoop() {
 
       stream << resp;
       stream.flush();
+
+      if (stream.peek() == std::iostream::traits_type::eof()) {
+        break;
+      }
     }
 
     logger(DEBUGGING) << "Closing connection from " << addr.first.toDottedDecimal() << ":" << addr.second << " total=" << m_connections.size();
@@ -97,10 +92,6 @@ void HttpServer::acceptLoop() {
   } catch (System::InterruptedException&) {
   } catch (std::exception& e) {
     logger(WARNING) << "Connection error: " << e.what();
-  }
-
-  if (--m_spawnCount == 0) {
-    m_shutdownCompleteEvent.set();
   }
 }
 

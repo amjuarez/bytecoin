@@ -28,9 +28,9 @@ void setup_random(void);
 #if defined(__cplusplus)
 }
 
-bool check_scalar(const crypto::ec_scalar &scalar);
-void random_scalar(crypto::ec_scalar &res);
-void hash_to_scalar(const void *data, std::size_t length, crypto::ec_scalar &res);
-void hash_to_point(const crypto::hash &h, crypto::ec_point &res);
-void hash_to_ec(const crypto::public_key &key, crypto::ec_point &res);
+bool check_scalar(const Crypto::EllipticCurveScalar &scalar);
+void random_scalar(Crypto::EllipticCurveScalar &res);
+void hash_to_scalar(const void *data, size_t length, Crypto::EllipticCurveScalar &res);
+void hash_to_point(const Crypto::Hash &h, Crypto::EllipticCurvePoint &res);
+void hash_to_ec(const Crypto::PublicKey &key, Crypto::EllipticCurvePoint &res);
 #endif

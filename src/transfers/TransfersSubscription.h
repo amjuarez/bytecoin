@@ -28,23 +28,23 @@ public:
   TransfersSubscription(const CryptoNote::Currency& currency, const AccountSubscription& sub);
 
   SynchronizationStart getSyncStart();
-  void onBlockchainDetach(uint64_t height);
-  void onError(const std::error_code& ec, uint64_t height);
-  bool advanceHeight(uint64_t height);
+  void onBlockchainDetach(uint32_t height);
+  void onError(const std::error_code& ec, uint32_t height);
+  bool advanceHeight(uint32_t height);
   const AccountKeys& getKeys() const;
   void addTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx,
                       const std::vector<TransactionOutputInformationIn>& transfers);
 
-  void deleteUnconfirmedTransaction(const Hash& transactionHash);
-  void markTransactionConfirmed(const BlockInfo& block, const Hash& transactionHash, const std::vector<uint64_t>& globalIndices);
+  void deleteUnconfirmedTransaction(const Crypto::Hash& transactionHash);
+  void markTransactionConfirmed(const BlockInfo& block, const Crypto::Hash& transactionHash, const std::vector<uint32_t>& globalIndices);
 
   // ITransfersSubscription
-  virtual AccountAddress getAddress() override;
+  virtual AccountPublicAddress getAddress() override;
   virtual ITransfersContainer& getContainer() override;
 
 private:
-  TransfersContainer m_transfers;
-  AccountSubscription m_subscription;
+  TransfersContainer transfers;
+  AccountSubscription subscription;
 };
 
 }

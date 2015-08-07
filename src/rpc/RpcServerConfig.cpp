@@ -16,8 +16,8 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "RpcServerConfig.h"
-#include "Common/command_line.h"
-#include "cryptonote_config.h"
+#include "Common/CommandLine.h"
+#include "CryptoNoteConfig.h"
 
 namespace CryptoNote {
 

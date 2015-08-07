@@ -25,15 +25,18 @@
 #define NOMINMAX
 #endif
 #include <winsock2.h>
+#include "ErrorMessage.h"
 
 namespace System {
 
 namespace {
 
 struct DispatcherContext : public OVERLAPPED {
-  void* context;
+  NativeContext* context;
 };
 
+const size_t STACK_SIZE = 16384;
+const size_t RESERVE_STACK_SIZE = 2097152;
 }
 
 Dispatcher::Dispatcher() {
@@ -42,37 +45,42 @@ Dispatcher::Dispatcher() {
   assert(result != FALSE);
   std::string message;
   if (ConvertThreadToFiberEx(NULL, 0) == NULL) {
-    message = "ConvertThreadToFiberEx failed, result=" + std::to_string(GetLastError());
+    message = "ConvertThreadToFiberEx failed, " + lastErrorMessage();
   } else {
-    threadHandle = OpenThread(THREAD_SET_CONTEXT, FALSE, GetCurrentThreadId());
-    if (threadHandle == NULL) {
-      message = "OpenThread failed, result=" + std::to_string(GetLastError());
+    completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+    if (completionPort == NULL) {
+      message = "CreateIoCompletionPort failed, " + lastErrorMessage();
     } else {
-      completionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
-      if (completionPort == NULL) {
-        message = "CreateIoCompletionPort failed, result=" + std::to_string(GetLastError());
+      WSADATA wsaData;
+      int wsaResult = WSAStartup(0x0202, &wsaData);
+      if (wsaResult != 0) {
+        message = "WSAStartup failed, " + errorMessage(wsaResult);
       } else {
-        WSADATA wsaData;
-        int wsaResult = WSAStartup(0x0202, &wsaData);
-        if (wsaResult != 0) {
-          message = "WSAStartup failed, result=" + std::to_string(wsaResult);
-        } else {
-          contextCount = 0;
-          remoteNotificationSent = false;
-          reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)->hEvent = NULL;
-          threadId = GetCurrentThreadId();
-          return;
-        }
+        remoteNotificationSent = false;
+        reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)->hEvent = NULL;
+        threadId = GetCurrentThreadId();
 
-        BOOL result = CloseHandle(completionPort);
-        assert(result == TRUE);
+        mainContext.fiber = GetCurrentFiber();
+        mainContext.interrupted = false;
+        mainContext.group = &contextGroup;
+        mainContext.groupPrev = nullptr;
+        mainContext.groupNext = nullptr;
+        contextGroup.firstContext = nullptr;
+        contextGroup.lastContext = nullptr;
+        contextGroup.firstWaiter = nullptr;
+        contextGroup.lastWaiter = nullptr;
+        currentContext = &mainContext;
+        firstResumingContext = nullptr;
+        firstReusableContext = nullptr;
+        runningContextCount = 0;
+        return;
       }
 
-      BOOL result = CloseHandle(threadHandle);
-      assert(result == TRUE);
+      BOOL result2 = CloseHandle(completionPort);
+      assert(result2 == TRUE);
     }
 
-    BOOL result = ConvertFiberToThread();
+    BOOL result2 = ConvertFiberToThread();
     assert(result == TRUE);
   }
   
@@ -81,20 +89,26 @@ Dispatcher::Dispatcher() {
 }
 
 Dispatcher::~Dispatcher() {
-  assert(resumingContexts.empty());
-  assert(reusableContexts.size() == contextCount);
-  assert(spawningProcedures.empty());
   assert(GetCurrentThreadId() == threadId);
-  while (!reusableContexts.empty()) {
-    DeleteFiber(reusableContexts.top());
-    reusableContexts.pop();
+  for (NativeContext* context = contextGroup.firstContext; context != nullptr; context = context->groupNext) {
+    interrupt(context);
+  }
+
+  yield();
+  assert(timers.empty());
+  assert(contextGroup.firstContext == nullptr);
+  assert(contextGroup.firstWaiter == nullptr);
+  assert(firstResumingContext == nullptr);
+  assert(runningContextCount == 0);
+  while (firstReusableContext != nullptr) {
+    void* fiber = firstReusableContext->fiber;
+    firstReusableContext = firstReusableContext->next;
+    DeleteFiber(fiber);
   }
 
   int wsaResult = WSACleanup();
   assert(wsaResult == 0);
   BOOL result = CloseHandle(completionPort);
-  assert(result == TRUE);
-  result = CloseHandle(threadHandle);
   assert(result == TRUE);
   result = ConvertFiberToThread();
   assert(result == TRUE);
@@ -103,20 +117,20 @@ Dispatcher::~Dispatcher() {
 
 void Dispatcher::clear() {
   assert(GetCurrentThreadId() == threadId);
-  while (!reusableContexts.empty()) {
-    DeleteFiber(reusableContexts.top());
-    --contextCount;
-    reusableContexts.pop();
+  while (firstReusableContext != nullptr) {
+    void* fiber = firstReusableContext->fiber;
+    firstReusableContext = firstReusableContext->next;
+    DeleteFiber(fiber);
   }
 }
 
 void Dispatcher::dispatch() {
   assert(GetCurrentThreadId() == threadId);
-  void* context;
+  NativeContext* context;
   for (;;) {
-    if (!resumingContexts.empty()) {
-      context = resumingContexts.front();
-      resumingContexts.pop();
+    if (firstResumingContext != nullptr) {
+      context = firstResumingContext;
+      firstResumingContext = context->next;
       break;
     }
 
@@ -128,16 +142,16 @@ void Dispatcher::dispatch() {
     auto timerContextPair = timers.begin();
     auto end = timers.end();
     while (timerContextPair != end && timerContextPair->first <= currentTime) {
-      resumingContexts.push(timerContextPair->second);
+      pushContext(timerContextPair->second);
       timerContextPair = timers.erase(timerContextPair);
     }
 
-    if (!resumingContexts.empty()) {
-      context = resumingContexts.front();
-      resumingContexts.pop();
+    if (firstResumingContext != nullptr) {
+      context = firstResumingContext;
+      firstResumingContext = context->next;
       break;
     }
-    
+
     DWORD timeout = timers.empty() ? INFINITE : static_cast<DWORD>(std::min(timers.begin()->first - currentTime, static_cast<uint64_t>(INFINITE - 1)));
     OVERLAPPED_ENTRY entry;
     ULONG actual = 0;
@@ -166,23 +180,59 @@ void Dispatcher::dispatch() {
     }
 
     if (lastError != WAIT_IO_COMPLETION) {
-      throw std::runtime_error("Dispatcher::dispatch, GetQueuedCompletionStatusEx failed, result=" + std::to_string(lastError));
+      throw std::runtime_error("Dispatcher::dispatch, GetQueuedCompletionStatusEx failed, " + errorMessage(lastError));
     }
   }
 
-  if (context != GetCurrentFiber()) {
-    SwitchToFiber(context);
+  if (context != currentContext) {
+    currentContext = context;
+    SwitchToFiber(context->fiber);
   }
 }
 
-void* Dispatcher::getCurrentContext() const {
+NativeContext* Dispatcher::getCurrentContext() const {
   assert(GetCurrentThreadId() == threadId);
-  return GetCurrentFiber();
+  return currentContext;
 }
 
-void Dispatcher::pushContext(void* context) {
+void Dispatcher::interrupt() {
+  interrupt(currentContext);
+}
+
+void Dispatcher::interrupt(NativeContext* context) {
   assert(GetCurrentThreadId() == threadId);
-  resumingContexts.push(context);
+  assert(context != nullptr);
+  if (!context->interrupted) {
+    if (context->interruptProcedure != nullptr) {
+      context->interruptProcedure();
+      context->interruptProcedure = nullptr;
+    } else {
+      context->interrupted = true;
+    }
+  }
+}
+
+bool Dispatcher::interrupted() {
+  if (currentContext->interrupted) {
+    currentContext->interrupted = false;
+    return true;
+  }
+
+  return false;
+}
+
+void Dispatcher::pushContext(NativeContext* context) {
+  assert(GetCurrentThreadId() == threadId);
+  assert(context != nullptr);
+  context->next = nullptr;
+  if (firstResumingContext != nullptr) {
+    assert(lastResumingContext->next == nullptr);
+    lastResumingContext->next = context;
+  } else {
+    firstResumingContext = context;
+  }
+
+  lastResumingContext = context;
 }
 
 void Dispatcher::remoteSpawn(std::function<void()>&& procedure) {
@@ -192,7 +242,7 @@ void Dispatcher::remoteSpawn(std::function<void()>&& procedure) {
     remoteNotificationSent = true;
     if (PostQueuedCompletionStatus(completionPort, 0, 0, reinterpret_cast<LPOVERLAPPED>(remoteSpawnOverlapped)) == NULL) {
       LeaveCriticalSection(reinterpret_cast<LPCRITICAL_SECTION>(criticalSection));
-      throw std::runtime_error("Dispatcher::remoteSpawn, PostQueuedCompletionStatus failed, result=" + std::to_string(GetLastError()));
+      throw std::runtime_error("Dispatcher::remoteSpawn, PostQueuedCompletionStatus failed, " + lastErrorMessage());
     };
   }
 
@@ -201,21 +251,23 @@ void Dispatcher::remoteSpawn(std::function<void()>&& procedure) {
 
 void Dispatcher::spawn(std::function<void()>&& procedure) {
   assert(GetCurrentThreadId() == threadId);
-  void* context;
-  if (reusableContexts.empty()) {
-    context = CreateFiberEx(16384, 131072, 0, contextProcedureStatic, this);
-    if (context == NULL) {
-      throw std::runtime_error("Dispatcher::spawn, CreateFiberEx failed, result=" + std::to_string(GetLastError()));
-    }
-
-    ++contextCount;
+  NativeContext* context = &getReusableContext();
+  if (contextGroup.firstContext != nullptr) {
+    context->groupPrev = contextGroup.lastContext;
+    assert(contextGroup.lastContext->groupNext == nullptr);
+    contextGroup.lastContext->groupNext = context;
   } else {
-    context = reusableContexts.top();
-    reusableContexts.pop();
+    context->groupPrev = nullptr;
+    contextGroup.firstContext = context;
+    contextGroup.firstWaiter = nullptr;
   }
 
-  resumingContexts.push(context);
-  spawningProcedures.emplace(std::move(procedure));
+  context->interrupted = false;
+  context->group = &contextGroup;
+  context->groupNext = nullptr;
+  context->procedure = std::move(procedure);
+  contextGroup.lastContext = context;
+  pushContext(context);
 }
 
 void Dispatcher::yield() {
@@ -229,7 +281,8 @@ void Dispatcher::yield() {
     auto timerContextPair = timers.begin();
     auto end = timers.end();
     while (timerContextPair != end && timerContextPair->first <= currentTime) {
-      resumingContexts.push(timerContextPair->second);
+      timerContextPair->second->interruptProcedure = nullptr;
+      pushContext(timerContextPair->second);
       timerContextPair = timers.erase(timerContextPair);
     }
 
@@ -252,26 +305,27 @@ void Dispatcher::yield() {
           continue;
         }
 
-        void* context = reinterpret_cast<DispatcherContext*>(entries[i].lpOverlapped)->context;
-        resumingContexts.push(context);
+        NativeContext* context = reinterpret_cast<DispatcherContext*>(entries[i].lpOverlapped)->context;
+        context->interruptProcedure = nullptr;
+        pushContext(context);
       }
     } else {
       DWORD lastError = GetLastError();
       if (lastError == WAIT_TIMEOUT) {
         break;
       } else if (lastError != WAIT_IO_COMPLETION) {
-        throw std::runtime_error("Dispatcher::dispatch, GetQueuedCompletionStatusEx failed, result=" + std::to_string(lastError));
+        throw std::runtime_error("Dispatcher::yield, GetQueuedCompletionStatusEx failed, " + errorMessage(lastError));
       }
     }
   }
 
-  if (!resumingContexts.empty()) {
-    resumingContexts.push(GetCurrentFiber());
+  if (firstResumingContext != nullptr) {
+    pushContext(currentContext);
     dispatch();
   }
 }
 
-void Dispatcher::addTimer(uint64_t time, void* context) {
+void Dispatcher::addTimer(uint64_t time, NativeContext* context) {
   assert(GetCurrentThreadId() == threadId);
   timers.insert(std::make_pair(time, context));
 }
@@ -280,12 +334,36 @@ void* Dispatcher::getCompletionPort() const {
   return completionPort;
 }
 
-void Dispatcher::interruptTimer(uint64_t time, void* context) {
+NativeContext& Dispatcher::getReusableContext() {
+  if (firstReusableContext == nullptr) {
+    void* fiber = CreateFiberEx(STACK_SIZE, RESERVE_STACK_SIZE, 0, contextProcedureStatic, this);
+    if (fiber == NULL) {
+      throw std::runtime_error("Dispatcher::getReusableContext, CreateFiberEx failed, " + lastErrorMessage());
+    }
+
+    SwitchToFiber(fiber);
+    assert(firstReusableContext != nullptr);
+    firstReusableContext->fiber = fiber;
+  }
+
+  NativeContext* context = firstReusableContext;
+  firstReusableContext = context->next;
+  return *context;
+}
+
+void Dispatcher::pushReusableContext(NativeContext& context) {
+  context.next = firstReusableContext;
+  firstReusableContext = &context;
+  --runningContextCount;
+}
+
+void Dispatcher::interruptTimer(uint64_t time, NativeContext* context) {
   assert(GetCurrentThreadId() == threadId);
   auto range = timers.equal_range(time);
-  for (auto it = range.first; it != range.second; ++it) {
+  for (auto it = range.first; ; ++it) {
+    assert(it != range.second);
     if (it->second == context) {
-      resumingContexts.push(context);
+      pushContext(context);
       timers.erase(it);
       break;
     }
@@ -294,12 +372,55 @@ void Dispatcher::interruptTimer(uint64_t time, void* context) {
 
 void Dispatcher::contextProcedure() {
   assert(GetCurrentThreadId() == threadId);
+  assert(firstReusableContext == nullptr);
+  NativeContext context;
+  context.interrupted = false;
+  context.next = nullptr;
+  firstReusableContext = &context;
+  SwitchToFiber(currentContext->fiber);
   for (;;) {
-    assert(!spawningProcedures.empty());
-    std::function<void()> procedure = std::move(spawningProcedures.front());
-    spawningProcedures.pop();
-    procedure();
-    reusableContexts.push(GetCurrentFiber());
+    ++runningContextCount;
+    try {
+      context.procedure();
+    } catch (std::exception&) {
+    }
+
+    if (context.group != nullptr) {
+      if (context.groupPrev != nullptr) {
+        assert(context.groupPrev->groupNext == &context);
+        context.groupPrev->groupNext = context.groupNext;
+        if (context.groupNext != nullptr) {
+          assert(context.groupNext->groupPrev == &context);
+          context.groupNext->groupPrev = context.groupPrev;
+        } else {
+          assert(context.group->lastContext == &context);
+          context.group->lastContext = context.groupPrev;
+        }
+      } else {
+        assert(context.group->firstContext == &context);
+        context.group->firstContext = context.groupNext;
+        if (context.groupNext != nullptr) {
+          assert(context.groupNext->groupPrev == &context);
+          context.groupNext->groupPrev = nullptr;
+        } else {
+          assert(context.group->lastContext == &context);
+          if (context.group->firstWaiter != nullptr) {
+            if (firstResumingContext != nullptr) {
+              assert(lastResumingContext->next == nullptr);
+              lastResumingContext->next = context.group->firstWaiter;
+            } else {
+              firstResumingContext = context.group->firstWaiter;
+            }
+
+            lastResumingContext = context.group->lastWaiter;
+            context.group->firstWaiter = nullptr;
+          }
+        }
+      }
+
+      pushReusableContext(context);
+    }
+
     dispatch();
   }
 }

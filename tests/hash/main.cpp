@@ -22,13 +22,12 @@
 #include <string>
 
 #include "crypto/hash.h"
-#include "../io.h"
+#include "../Io.h"
 
 using namespace std;
-using namespace crypto;
-typedef crypto::hash chash;
+typedef Crypto::Hash chash;
 
-cn_context *context;
+Crypto::cn_context *context;
 
 extern "C" {
 #ifdef _MSC_VER
@@ -39,7 +38,7 @@ extern "C" {
     if ((length & 31) != 0) {
       throw ios_base::failure("Invalid input length for tree_hash");
     }
-    tree_hash((const char (*)[32]) data, length >> 5, hash);
+    Crypto::tree_hash((const char (*)[32]) data, length >> 5, hash);
   }
 
   static void slow_hash(const void *data, size_t length, char *hash) {
@@ -51,9 +50,9 @@ extern "C" typedef void hash_f(const void *, size_t, char *);
 struct hash_func {
   const string name;
   hash_f &f;
-} hashes[] = {{"fast", cn_fast_hash}, {"slow", slow_hash}, {"tree", hash_tree},
-  {"extra-blake", hash_extra_blake}, {"extra-groestl", hash_extra_groestl},
-  {"extra-jh", hash_extra_jh}, {"extra-skein", hash_extra_skein}};
+} hashes[] = {{"fast", Crypto::cn_fast_hash}, {"slow", slow_hash}, {"tree", hash_tree},
+  {"extra-blake", Crypto::hash_extra_blake}, {"extra-groestl", Crypto::hash_extra_groestl},
+  {"extra-jh", Crypto::hash_extra_jh}, {"extra-skein", Crypto::hash_extra_skein}};
 
 int main(int argc, char *argv[]) {
   hash_f *f;
@@ -78,7 +77,7 @@ int main(int argc, char *argv[]) {
     }
   }
   if (f == slow_hash) {
-    context = new cn_context();
+    context = new Crypto::cn_context();
   }
   input.open(argv[2], ios_base::in);
   for (;;) {

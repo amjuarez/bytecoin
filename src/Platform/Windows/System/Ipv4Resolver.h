@@ -33,13 +33,10 @@ public:
   ~Ipv4Resolver();
   Ipv4Resolver& operator=(const Ipv4Resolver&) = delete;
   Ipv4Resolver& operator=(Ipv4Resolver&& other);
-  void start();
-  void stop();
-  Ipv4Address resolve(const std::string& host);
+      Ipv4Address resolve(const std::string& host);
 
 private:
   Dispatcher* dispatcher;
-  bool stopped;
 };
 
 }

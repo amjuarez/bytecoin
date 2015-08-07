@@ -34,7 +34,7 @@ public:
   }
 
 protected:
-  tools::ObserverManager<Observer> m_observerManager;
+  Tools::ObserverManager<Observer> m_observerManager;
 };
 
 }

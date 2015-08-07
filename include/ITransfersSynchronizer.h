@@ -42,22 +42,23 @@ class ITransfersSubscription;
 class ITransfersObserver {
 public:
   virtual void onError(ITransfersSubscription* object,
-    uint64_t height, std::error_code ec) {}
+    uint32_t height, std::error_code ec) {
+  }
 
-  virtual void onTransactionUpdated(ITransfersSubscription* object, const Hash& transactionHash) {}
+  virtual void onTransactionUpdated(ITransfersSubscription* object, const Crypto::Hash& transactionHash) {}
 
   /**
    * \note The sender must guarantee that onTransactionDeleted() is called only after onTransactionUpdated() is called
    * for the same \a transactionHash.
    */
-  virtual void onTransactionDeleted(ITransfersSubscription* object, const Hash& transactionHash) { }
+  virtual void onTransactionDeleted(ITransfersSubscription* object, const Crypto::Hash& transactionHash) {}
 };
 
 class ITransfersSubscription : public IObservable < ITransfersObserver > {
 public:
   virtual ~ITransfersSubscription() {}
 
-  virtual AccountAddress getAddress() = 0;
+  virtual AccountPublicAddress getAddress() = 0;
   virtual ITransfersContainer& getContainer() = 0;
 };
 
@@ -66,10 +67,10 @@ public:
   virtual ~ITransfersSynchronizer() {}
 
   virtual ITransfersSubscription& addSubscription(const AccountSubscription& acc) = 0;
-  virtual bool removeSubscription(const AccountAddress& acc) = 0;
-  virtual void getSubscriptions(std::vector<AccountAddress>& subscriptions) = 0;
+  virtual bool removeSubscription(const AccountPublicAddress& acc) = 0;
+  virtual void getSubscriptions(std::vector<AccountPublicAddress>& subscriptions) = 0;
   // returns nullptr if address is not found
-  virtual ITransfersSubscription* getSubscription(const AccountAddress& acc) = 0;
+  virtual ITransfersSubscription* getSubscription(const AccountPublicAddress& acc) = 0;
 };
 
 }

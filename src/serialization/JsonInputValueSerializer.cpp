@@ -16,15 +16,29 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "JsonInputValueSerializer.h"
+
 #include <cassert>
 #include <stdexcept>
-#include <Common/StringTools.h>
+
+#include "Common/StringTools.h"
 
 using Common::JsonValue;
 using namespace CryptoNote;
 
-JsonInputValueSerializer::JsonInputValueSerializer(const Common::JsonValue& value) : root(value) {
-  chain.push_back(&root);
+JsonInputValueSerializer::JsonInputValueSerializer(const Common::JsonValue& value) {
+  if (!value.isObject()) {
+    throw std::runtime_error("Serializer doesn't support this type of serialization: Object expected.");
+  }
+
+  chain.push_back(&value);
+}
+
+JsonInputValueSerializer::JsonInputValueSerializer(Common::JsonValue&& value) : value(std::move(value)) {
+  if (!this->value.isObject()) {
+    throw std::runtime_error("Serializer doesn't support this type of serialization: Object expected.");
+  }
+
+  chain.push_back(&this->value);
 }
 
 JsonInputValueSerializer::~JsonInputValueSerializer() {
@@ -50,14 +64,6 @@ bool JsonInputValueSerializer::beginObject(Common::StringView name) {
   }
 
   return false;
-
-  //if (parent->isArray()) {
-  //  const JsonValue& v = (*parent)[idxs.back()++];
-  //  chain.push_back(&v);
-  //} else {
-  //  const JsonValue& v = (*parent)(name);
-  //  chain.push_back(&v);
-  //}
 }
 
 void JsonInputValueSerializer::endObject() {
@@ -65,7 +71,7 @@ void JsonInputValueSerializer::endObject() {
   chain.pop_back();
 }
 
-bool JsonInputValueSerializer::beginArray(std::size_t& size, Common::StringView name) {
+bool JsonInputValueSerializer::beginArray(size_t& size, Common::StringView name) {
   const JsonValue* parent = chain.back();
   std::string strName(name);
 
@@ -87,6 +93,14 @@ void JsonInputValueSerializer::endArray() {
 
   chain.pop_back();
   idxs.pop_back();
+}
+
+bool JsonInputValueSerializer::operator()(uint16_t& value, Common::StringView name) {
+  return getNumber(name, value);
+}
+
+bool JsonInputValueSerializer::operator()(int16_t& value, Common::StringView name) {
+  return getNumber(name, value);
 }
 
 bool JsonInputValueSerializer::operator()(uint32_t& value, Common::StringView name) {
@@ -115,7 +129,7 @@ bool JsonInputValueSerializer::operator()(uint8_t& value, Common::StringView nam
 
 bool JsonInputValueSerializer::operator()(std::string& value, Common::StringView name) {
   auto ptr = getValue(name);
-  if (!ptr) {
+  if (ptr == nullptr) {
     return false;
   }
   value = ptr->getString();
@@ -124,14 +138,14 @@ bool JsonInputValueSerializer::operator()(std::string& value, Common::StringView
 
 bool JsonInputValueSerializer::operator()(bool& value, Common::StringView name) {
   auto ptr = getValue(name);
-  if (!ptr) {
+  if (ptr == nullptr) {
     return false;
   }
   value = ptr->getBool();
   return true;
 }
 
-bool JsonInputValueSerializer::binary(void* value, std::size_t size, Common::StringView name) {
+bool JsonInputValueSerializer::binary(void* value, size_t size, Common::StringView name) {
   auto ptr = getValue(name);
   if (ptr == nullptr) {
     return false;

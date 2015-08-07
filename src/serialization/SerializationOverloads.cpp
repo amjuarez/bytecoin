@@ -15,67 +15,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "SerializationOverloads.h"
+#include "Serialization/SerializationOverloads.h"
 
 #include <limits>
 
 namespace CryptoNote {
 
-//void readVarint(uint64_t& value, CryptoNote::ISerializer& serializer) {
-//  const int bits = std::numeric_limits<uint64_t>::digits;
-//
-//  uint64_t v = 0;
-//  for (int shift = 0;; shift += 7) {
-//    uint8_t b;
-//    serializer.untagged(b);
-//
-//    if (shift + 7 >= bits && b >= 1 << (bits - shift)) {
-//      throw std::runtime_error("Varint overflow");
-//    }
-//
-//    if (b == 0 && shift != 0) {
-//      throw std::runtime_error("Non-canonical varint representation");
-//    }
-//
-//    v |= static_cast<uint64_t>(b & 0x7f) << shift;
-//    if ((b & 0x80) == 0) {
-//      break;
-//    }
-//  }
-//
-//  value = v;
-//}
-//
-//void writeVarint(uint64_t& value, CryptoNote::ISerializer& serializer) {
-//  uint64_t v = value;
-//
-//  while (v >= 0x80) {
-//    uint8_t b = (static_cast<uint8_t>(v) & 0x7f) | 0x80;
-//    serializer.untagged(b);
-//    v >>= 7;
-//  }
-//
-//  uint8_t b = static_cast<uint8_t>(v);
-//  serializer.untagged(b);
-//}
-//
-//
-//void serializeVarint(uint64_t& value, const std::string& name, CryptoNote::ISerializer& serializer) {
-//  serializer.tag(name);
-//
-//  if (serializer.type() == CryptoNote::ISerializer::INPUT) {
-//    readVarint(value, serializer);
-//  } else {
-//    writeVarint(value, serializer);
-//  }
-//
-//  serializer.endTag();
-//}
-//
-//void serializeVarint(uint32_t& value, const std::string& name, CryptoNote::ISerializer& serializer) {
-//  uint64_t v = value;
-//  serializeVarint(v, name, serializer);
-//  value = static_cast<uint32_t>(v);
-//}
+void serializeBlockHeight(ISerializer& s, uint32_t& blockHeight, Common::StringView name) {
+  if (s.type() == ISerializer::INPUT) {
+    uint64_t height;
+    s(height, name);
 
+    if (height == std::numeric_limits<uint64_t>::max()) {
+      blockHeight = std::numeric_limits<uint32_t>::max();
+    } else if (height > std::numeric_limits<uint32_t>::max() && height < std::numeric_limits<uint64_t>::max()) {
+      throw std::runtime_error("Deserialization error: wrong value");
+    } else {
+      blockHeight = static_cast<uint32_t>(height);
+    }
+  } else {
+    s(blockHeight, name);
+  }
 }
+
+void serializeGlobalOutputIndex(ISerializer& s, uint32_t& globalOutputIndex, Common::StringView name) {
+  serializeBlockHeight(s, globalOutputIndex, name);
+}
+
+} //namespace CryptoNote

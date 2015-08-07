@@ -16,6 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <System/Dispatcher.h>
+#include <System/ContextGroup.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
 #include <System/Ipv4Resolver.h>
@@ -23,24 +24,52 @@
 
 using namespace System;
 
-TEST(Ipv4ResolverTest, start) {
+class Ipv4ResolverTests : public testing::Test {
+public:
+  Ipv4ResolverTests() : contextGroup(dispatcher), resolver(dispatcher) {
+  }
+
   Dispatcher dispatcher;
-  Ipv4Resolver resolver(dispatcher);
-  resolver.stop();
-  resolver.start();
-  ASSERT_NO_THROW(resolver.resolve("localhost"));
+  ContextGroup contextGroup;
+  Ipv4Resolver resolver;
+};
+
+TEST_F(Ipv4ResolverTests, start) {
+  contextGroup.spawn([&] { 
+    ASSERT_NO_THROW(Ipv4Resolver(dispatcher).resolve("localhost")); 
+  });
+  contextGroup.wait();
 }
 
-TEST(Ipv4ResolverTest, stop) {
-  Dispatcher dispatcher;
-  Ipv4Resolver resolver(dispatcher);
-  resolver.stop();
-  ASSERT_THROW(resolver.resolve("localhost"), InterruptedException);
+TEST_F(Ipv4ResolverTests, stop) {
+  contextGroup.spawn([&] {
+    contextGroup.interrupt();
+    ASSERT_THROW(resolver.resolve("localhost"), InterruptedException);
+  });
+  contextGroup.wait();
 }
 
-TEST(Ipv4ResolverTest, resolve) {
-  Dispatcher dispatcher;
-  Ipv4Resolver resolver(dispatcher);
+TEST_F(Ipv4ResolverTests, interruptWhileResolving) {
+  contextGroup.spawn([&] {
+    ASSERT_THROW(resolver.resolve("localhost"), InterruptedException);
+  });
+  contextGroup.interrupt();
+  contextGroup.wait();
+}
+
+TEST_F(Ipv4ResolverTests, reuseAfterInterrupt) {
+  contextGroup.spawn([&] {
+    ASSERT_THROW(resolver.resolve("localhost"), InterruptedException);
+  });
+  contextGroup.interrupt();
+  contextGroup.wait();
+  contextGroup.spawn([&] {
+    ASSERT_NO_THROW(resolver.resolve("localhost"));
+  });
+  contextGroup.wait();
+}
+
+TEST_F(Ipv4ResolverTests, resolve) {
   ASSERT_EQ(Ipv4Address("0.0.0.0"), resolver.resolve("0.0.0.0"));
   ASSERT_EQ(Ipv4Address("1.2.3.4"), resolver.resolve("1.2.3.4"));
   ASSERT_EQ(Ipv4Address("127.0.0.1"), resolver.resolve("127.0.0.1"));

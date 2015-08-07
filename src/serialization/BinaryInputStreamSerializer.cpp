@@ -16,53 +16,25 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "BinaryInputStreamSerializer.h"
-#include "SerializationOverloads.h"
 
 #include <algorithm>
 #include <cassert>
 #include <stdexcept>
+#include <Common/StreamTools.h>
+#include "SerializationOverloads.h"
+
+using namespace Common;
+
+namespace CryptoNote {
 
 namespace {
 
-template<typename T, int bits = std::numeric_limits<T>::digits>
-typename std::enable_if<std::is_integral<T>::value && std::is_unsigned<T>::value, size_t>::type
-readVarint(std::istream& s, T &i) {
-  size_t read = 0;
-  i = 0;
-  for (int shift = 0;; shift += 7) {
-    if (s.eof()) {
-      return read;
-    }
-    uint8_t byte = s.get();
-    if (!s) {
-      throw std::runtime_error("Stream read error");
-    }
-    ++read;
-    if (shift + 7 >= bits && byte >= 1 << (bits - shift)) {
-      throw std::runtime_error("Varint overflow");
-    }
-    if (byte == 0 && shift != 0) {
-      throw std::runtime_error("Non-canonical varint representation");
-    }
-    i |= static_cast<T>(byte & 0x7f) << shift;
-    if ((byte & 0x80) == 0) {
-      break;
-    }
-  }
-  return read;
-}
-
 template<typename StorageType, typename T>
-void readVarintAs(std::istream& s, T &i) {
-  StorageType v;
-  readVarint(s, v);
-  i = static_cast<T>(v);
+void readVarintAs(IInputStream& s, T &i) {
+  i = static_cast<T>(readVarint<StorageType>(s));
 }
 
-
 }
-
-namespace CryptoNote {
 
 ISerializer::SerializerType BinaryInputStreamSerializer::type() const {
   return ISerializer::INPUT;
@@ -75,7 +47,7 @@ bool BinaryInputStreamSerializer::beginObject(Common::StringView name) {
 void BinaryInputStreamSerializer::endObject() {
 }
 
-bool BinaryInputStreamSerializer::beginArray(std::size_t& size, Common::StringView name) {
+bool BinaryInputStreamSerializer::beginArray(size_t& size, Common::StringView name) {
   readVarintAs<uint64_t>(stream, size);
   return true;
 }
@@ -85,6 +57,16 @@ void BinaryInputStreamSerializer::endArray() {
 
 bool BinaryInputStreamSerializer::operator()(uint8_t& value, Common::StringView name) {
   readVarint(stream, value);
+  return true;
+}
+
+bool BinaryInputStreamSerializer::operator()(uint16_t& value, Common::StringView name) {
+  readVarint(stream, value);
+  return true;
+}
+
+bool BinaryInputStreamSerializer::operator()(int16_t& value, Common::StringView name) {
+  readVarintAs<uint16_t>(stream, value);
   return true;
 }
 
@@ -109,7 +91,7 @@ bool BinaryInputStreamSerializer::operator()(uint64_t& value, Common::StringView
 }
 
 bool BinaryInputStreamSerializer::operator()(bool& value, Common::StringView name) {
-  value = stream.get() != 0;
+  value = read<uint8_t>(stream) != 0;
   return true;
 }
 
@@ -130,7 +112,7 @@ bool BinaryInputStreamSerializer::operator()(std::string& value, Common::StringV
   return true;
 }
 
-bool BinaryInputStreamSerializer::binary(void* value, std::size_t size, Common::StringView name) {
+bool BinaryInputStreamSerializer::binary(void* value, size_t size, Common::StringView name) {
   checkedRead(static_cast<char*>(value), size);
   return true;
 }
@@ -146,9 +128,7 @@ bool BinaryInputStreamSerializer::operator()(double& value, Common::StringView n
 }
 
 void BinaryInputStreamSerializer::checkedRead(char* buf, size_t size) {
-  if (stream.read(buf, size).gcount() != size) {
-    throw std::runtime_error("Stream read error");
-  }
+  read(stream, buf, size);
 }
 
 }

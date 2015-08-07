@@ -19,24 +19,9 @@
 
 #include <cassert>
 #include <stdexcept>
+#include "Common/StreamTools.h"
 
-namespace {
-
-template<typename T>
-typename std::enable_if<std::is_integral<T>::value && std::is_unsigned<T>::value, void>::type
-writeVarint(std::ostream& s, T i) {
-  while (i >= 0x80) {
-    s.put((static_cast<char>(i)& 0x7f) | 0x80);
-    i >>= 7;
-  }
-  s.put(static_cast<char>(i));
-
-  if (!s) {
-    throw std::runtime_error("Stream write error");
-  }
-}
-
-}
+using namespace Common;
 
 namespace CryptoNote {
 
@@ -51,7 +36,7 @@ bool BinaryOutputStreamSerializer::beginObject(Common::StringView name) {
 void BinaryOutputStreamSerializer::endObject() {
 }
 
-bool BinaryOutputStreamSerializer::beginArray(std::size_t& size, Common::StringView name) {
+bool BinaryOutputStreamSerializer::beginArray(size_t& size, Common::StringView name) {
   writeVarint(stream, size);
   return true;
 }
@@ -61,6 +46,16 @@ void BinaryOutputStreamSerializer::endArray() {
 
 bool BinaryOutputStreamSerializer::operator()(uint8_t& value, Common::StringView name) {
   writeVarint(stream, value);
+  return true;
+}
+
+bool BinaryOutputStreamSerializer::operator()(uint16_t& value, Common::StringView name) {
+  writeVarint(stream, value);
+  return true;
+}
+
+bool BinaryOutputStreamSerializer::operator()(int16_t& value, Common::StringView name) {
+  writeVarint(stream, static_cast<uint16_t>(value));
   return true;
 }
 
@@ -96,7 +91,7 @@ bool BinaryOutputStreamSerializer::operator()(std::string& value, Common::String
   return true;
 }
 
-bool BinaryOutputStreamSerializer::binary(void* value, std::size_t size, Common::StringView name) {
+bool BinaryOutputStreamSerializer::binary(void* value, size_t size, Common::StringView name) {
   checkedWrite(static_cast<const char*>(value), size);
   return true;
 }
@@ -113,10 +108,7 @@ bool BinaryOutputStreamSerializer::operator()(double& value, Common::StringView 
 }
 
 void BinaryOutputStreamSerializer::checkedWrite(const char* buf, size_t size) {
-  stream.write(buf, size);
-  if (!stream) {
-    throw std::runtime_error("Stream write error");
-  }
+  write(stream, buf, size);
 }
 
 }

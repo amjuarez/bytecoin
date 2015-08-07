@@ -22,35 +22,37 @@
 
 #include "Common/StringTools.h"
 
-#include "cryptonote_core/Currency.h"
-#include "cryptonote_core/account.h"
+#include "CryptoNoteCore/Currency.h"
+#include "CryptoNoteCore/Account.h"
+#include "CryptoNoteCore/CryptoNoteTools.h"
 
-#include "serialization/binary_utils.h"
-#include "serialization/SerializationTools.h"
+#include "Serialization/SerializationTools.h"
 
-#include "wallet/WalletSerializer.h"
-#include "wallet/WalletUserTransactionsCache.h"
-#include "wallet/WalletErrors.h"
+#include "WalletLegacy/WalletLegacySerializer.h"
+#include "WalletLegacy/WalletUserTransactionsCache.h"
+#include "Wallet/WalletErrors.h"
+
+using namespace Crypto;
 
 namespace {
 
 struct keys_file_data {
-  crypto::chacha8_iv iv;
+  chacha8_iv iv;
   std::string account_data;
 
-  BEGIN_SERIALIZE_OBJECT()
-    FIELD(iv)
-    FIELD(account_data)
-  END_SERIALIZE()
+  void serialize(CryptoNote::ISerializer& s) {
+    s(iv, "iv");
+    s(account_data, "account_data");
+  }
 };
 
-bool verify_keys(const crypto::secret_key& sec, const crypto::public_key& expected_pub) {
-  crypto::public_key pub;
-  bool r = crypto::secret_key_to_public_key(sec, pub);
+bool verify_keys(const SecretKey& sec, const PublicKey& expected_pub) {
+  PublicKey pub;
+  bool r = secret_key_to_public_key(sec, pub);
   return r && expected_pub == pub;
 }
 
-void loadKeysFromFile(const std::string& filename, const std::string& password, CryptoNote::account_base& account) {
+void loadKeysFromFile(const std::string& filename, const std::string& password, CryptoNote::AccountBase& account) {
   keys_file_data keys_file_data;
   std::string buf;
 
@@ -58,22 +60,22 @@ void loadKeysFromFile(const std::string& filename, const std::string& password, 
     throw std::system_error(make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR), "failed to load \"" + filename + '\"');
   }
 
-  if (!::serialization::parse_binary(buf, keys_file_data)) {
+  if (!CryptoNote::fromBinaryArray(keys_file_data, Common::asBinaryArray(buf))) {
     throw std::system_error(make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR), "failed to deserialize \"" + filename + '\"');
   }
 
-  crypto::chacha8_key key;
-  crypto::cn_context cn_context;
-  crypto::generate_chacha8_key(cn_context, password, key);
+  chacha8_key key;
+  cn_context cn_context;
+  generate_chacha8_key(cn_context, password, key);
   std::string account_data;
   account_data.resize(keys_file_data.account_data.size());
-  crypto::chacha8(keys_file_data.account_data.data(), keys_file_data.account_data.size(), key, keys_file_data.iv, &account_data[0]);
+  chacha8(keys_file_data.account_data.data(), keys_file_data.account_data.size(), key, keys_file_data.iv, &account_data[0]);
 
-  const CryptoNote::account_keys& keys = account.get_keys();
+  const CryptoNote::AccountKeys& keys = account.getAccountKeys();
 
   if (CryptoNote::loadFromBinaryKeyValue(account, account_data) &&
-      verify_keys(keys.m_view_secret_key, keys.m_account_address.m_viewPublicKey) &&
-      verify_keys(keys.m_spend_secret_key, keys.m_account_address.m_spendPublicKey)) {
+      verify_keys(keys.viewSecretKey, keys.address.viewPublicKey) &&
+      verify_keys(keys.spendSecretKey, keys.address.spendPublicKey)) {
     return;
   }
 
@@ -85,13 +87,13 @@ void loadKeysFromFile(const std::string& filename, const std::string& password, 
 namespace CryptoNote {
 
 void importLegacyKeys(const std::string& legacyKeysFilename, const std::string& password, std::ostream& destination) {
-  CryptoNote::account_base account;
+  CryptoNote::AccountBase account;
 
   loadKeysFromFile(legacyKeysFilename, password, account);
 
   CryptoNote::WalletUserTransactionsCache transactionsCache;
   std::string cache;
-  CryptoNote::WalletSerializer importer(account, transactionsCache);
+  CryptoNote::WalletLegacySerializer importer(account, transactionsCache);
   importer.serialize(destination, password, false, cache);
 }
 

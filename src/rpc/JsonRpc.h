@@ -21,8 +21,8 @@
 #include <boost/foreach.hpp>
 #include <functional>
 
-#include "serialization/ISerializer.h"
-#include "serialization/SerializationTools.h"
+#include "Serialization/ISerializer.h"
+#include "Serialization/SerializationTools.h"
 #include <Common/JsonValue.h>
 
 namespace CryptoNote {

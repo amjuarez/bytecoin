@@ -30,9 +30,6 @@ class JsonInputStreamSerializer : public JsonInputValueSerializer {
 public:
   JsonInputStreamSerializer(std::istream& stream);
   virtual ~JsonInputStreamSerializer();
-
-private:
-  Common::JsonValue root;
 };
 
 }

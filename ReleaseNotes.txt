@@ -1,3 +1,9 @@
+Release notes 1.0.6
+
+- High-level API update
+- Aggregate multi-addresses for Bytecoin RPC Wallet
+- Wallet synchronization speed increase
+
 Release notes 1.0.5
 
 - High-level API for blockchain explorer

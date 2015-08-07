@@ -28,6 +28,12 @@ HttpClient::HttpClient(System::Dispatcher& dispatcher, const std::string& addres
   m_dispatcher(dispatcher), m_address(address), m_port(port) {
 }
 
+HttpClient::~HttpClient() {
+  if (m_connected) {
+    disconnect();
+  }
+}
+
 void HttpClient::request(const HttpRequest &req, HttpResponse &res) {
   if (!m_connected) {
     connect();
@@ -54,7 +60,18 @@ void HttpClient::connect() {
 
 void HttpClient::disconnect() {
   m_streamBuf.reset();
-  m_connection = System::TcpConnection();
+  try {
+    m_connection.write(nullptr, 0); //Socket shutdown.
+  } catch (std::exception&) {
+    //Ignoring possible exception.
+  }
+
+  try {
+    m_connection = System::TcpConnection();
+  } catch (std::exception&) {
+    //Ignoring possible exception.
+  }
+
   m_connected = false;
 }
 

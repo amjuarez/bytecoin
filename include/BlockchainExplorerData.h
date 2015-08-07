@@ -21,6 +21,8 @@
 #include <string>
 #include <vector>
 
+#include "CryptoTypes.h"
+
 #include <boost/variant.hpp>
 
 namespace CryptoNote {
@@ -32,17 +34,17 @@ enum class TransactionRemoveReason : uint8_t
 };
 
 struct TransactionOutputToKeyDetails {
-  std::array<uint8_t, 16> txOutKey;
+  Crypto::PublicKey txOutKey;
 };
 
 struct TransactionOutputMultisignatureDetails {
-  std::vector<std::array<uint8_t, 16>> keys;
+  std::vector<Crypto::PublicKey> keys;
   uint32_t requiredSignatures;
 };
 
 struct TransactionOutputDetails {
   uint64_t amount;
-  uint64_t globalIndex;
+  uint32_t globalIndex;
 
   boost::variant<
     TransactionOutputToKeyDetails,
@@ -50,17 +52,17 @@ struct TransactionOutputDetails {
 };
 
 struct TransactionOutputReferenceDetails {
-  std::array<uint8_t, 32> transactionHash;
+  Crypto::Hash transactionHash;
   size_t number;
 };
 
 struct TransactionInputGenerateDetails {
-  uint64_t height;
+  uint32_t height;
 };
 
 struct TransactionInputToKeyDetails {
-  std::vector<uint64_t> keyOffsets;
-  std::array<uint8_t, 16> keyImage;
+  std::vector<uint32_t> outputIndexes;
+  Crypto::KeyImage keyImage;
   uint64_t mixin;
   TransactionOutputReferenceDetails output;
 };
@@ -81,13 +83,13 @@ struct TransactionInputDetails {
 
 struct TransactionExtraDetails {
   std::vector<size_t> padding;
-  std::vector<std::array<uint8_t, 16>> publicKey;
+  std::vector<Crypto::PublicKey> publicKey; 
   std::vector<std::string> nonce;
   std::vector<uint8_t> raw;
 };
 
 struct TransactionDetails {
-  std::array<uint8_t, 32> hash;
+  Crypto::Hash hash;
   uint64_t size;
   uint64_t fee;
   uint64_t totalInputsAmount;
@@ -95,12 +97,12 @@ struct TransactionDetails {
   uint64_t mixin;
   uint64_t unlockTime;
   uint64_t timestamp;
-  std::array<uint8_t, 32> paymentId;
+  Crypto::Hash paymentId;
   bool inBlockchain;
-  std::array<uint8_t, 32> blockHash;
-  uint64_t blockHeight;
+  Crypto::Hash blockHash;
+  uint32_t blockHeight;
   TransactionExtraDetails extra;
-  std::vector<std::vector<std::array<uint8_t, 32>>> signatures;
+  std::vector<std::vector<Crypto::Signature>> signatures;
   std::vector<TransactionInputDetails> inputs;
   std::vector<TransactionOutputDetails> outputs;
 };
@@ -109,11 +111,11 @@ struct BlockDetails {
   uint8_t majorVersion;
   uint8_t minorVersion;
   uint64_t timestamp;
-  std::array<uint8_t, 32> prevBlockHash;
+  Crypto::Hash prevBlockHash;
   uint32_t nonce;
   bool isOrphaned;
-  uint64_t height;
-  std::array<uint8_t, 32> hash;
+  uint32_t height;
+  Crypto::Hash hash;
   uint64_t difficulty;
   uint64_t reward;
   uint64_t baseReward;

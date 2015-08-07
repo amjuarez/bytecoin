@@ -35,14 +35,11 @@ public:
   ~TcpListener();
   TcpListener& operator=(const TcpListener&) = delete;
   TcpListener& operator=(TcpListener&& other);
-  void start();
-  void stop();
   TcpConnection accept();
 
 private:
   Dispatcher* dispatcher;
-  std::size_t listener;
-  bool stopped;
+  size_t listener;
   void* context;
 };
 

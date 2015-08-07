@@ -24,7 +24,7 @@ namespace Common {
 class IOutputStream {
 public:
   virtual ~IOutputStream() { }
-  virtual std::size_t writeSome(const void* data, std::size_t size) = 0;
+  virtual size_t writeSome(const void* data, size_t size) = 0;
 };
 
 }

@@ -24,71 +24,75 @@
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/member.hpp>
 
-#include "p2p_protocol_types.h"
-#include "cryptonote_config.h"
+#include "P2pProtocolTypes.h"
+#include "CryptoNoteConfig.h"
 
 namespace CryptoNote {
 
+class ISerializer;
 /************************************************************************/
 /*                                                                      */
 /************************************************************************/
-class peerlist_manager
-{
-public:
-  bool init(bool allow_local_ip);
-  size_t get_white_peers_count(){ return m_peers_white.size(); }
-  size_t get_gray_peers_count(){ return m_peers_gray.size(); }
-  bool merge_peerlist(const std::list<peerlist_entry>& outer_bs);
-  bool get_peerlist_head(std::list<peerlist_entry>& bs_head, uint32_t depth = CryptoNote::P2P_DEFAULT_PEERS_IN_HANDSHAKE);
-  bool get_peerlist_full(std::list<peerlist_entry>& pl_gray, std::list<peerlist_entry>& pl_white);
-  bool get_white_peer_by_index(peerlist_entry& p, size_t i);
-  bool get_gray_peer_by_index(peerlist_entry& p, size_t i);
-  bool append_with_peer_white(const peerlist_entry& pr);
-  bool append_with_peer_gray(const peerlist_entry& pr);
-  bool set_peer_just_seen(peerid_type peer, uint32_t ip, uint32_t port);
-  bool set_peer_just_seen(peerid_type peer, const net_address& addr);
-  bool set_peer_unreachable(const peerlist_entry& pr);
-  bool is_ip_allowed(uint32_t ip);
-  void trim_white_peerlist();
-  void trim_gray_peerlist();
-
-private:
-
+class PeerlistManager {
   struct by_time{};
   struct by_id{};
   struct by_addr{};
 
   typedef boost::multi_index_container<
-    peerlist_entry,
+    PeerlistEntry,
     boost::multi_index::indexed_by<
     // access by peerlist_entry::net_adress
-    boost::multi_index::ordered_unique<boost::multi_index::tag<by_addr>, boost::multi_index::member<peerlist_entry, net_address, &peerlist_entry::adr> >,
+    boost::multi_index::ordered_unique<boost::multi_index::tag<by_addr>, boost::multi_index::member<PeerlistEntry, NetworkAddress, &PeerlistEntry::adr> >,
     // sort by peerlist_entry::last_seen<
-    boost::multi_index::ordered_non_unique<boost::multi_index::tag<by_time>, boost::multi_index::member<peerlist_entry, time_t, &peerlist_entry::last_seen> >
+    boost::multi_index::ordered_non_unique<boost::multi_index::tag<by_time>, boost::multi_index::member<PeerlistEntry, uint64_t, &PeerlistEntry::last_seen> >
     >
   > peers_indexed;
 
 public:
 
-  template <class Archive, class t_version_type>
-  void serialize(Archive &a, const t_version_type ver)
-  {
-    if (ver < 4)
-      return;
+  class Peerlist {
+  public:
+    Peerlist(peers_indexed& peers, size_t maxSize);
+    size_t count() const;
+    bool get(PeerlistEntry& entry, size_t index) const;
+    void trim();
 
-    a & m_peers_white;
-    a & m_peers_gray;
-  }
+  private:
+    peers_indexed& m_peers;
+    const size_t m_maxSize;
+  };
+
+  PeerlistManager();
+
+  bool init(bool allow_local_ip);
+  size_t get_white_peers_count() const { return m_peers_white.size(); }
+  size_t get_gray_peers_count() const { return m_peers_gray.size(); }
+  bool merge_peerlist(const std::list<PeerlistEntry>& outer_bs);
+  bool get_peerlist_head(std::list<PeerlistEntry>& bs_head, uint32_t depth = CryptoNote::P2P_DEFAULT_PEERS_IN_HANDSHAKE) const;
+  bool get_peerlist_full(std::list<PeerlistEntry>& pl_gray, std::list<PeerlistEntry>& pl_white) const;
+  bool get_white_peer_by_index(PeerlistEntry& p, size_t i) const;
+  bool get_gray_peer_by_index(PeerlistEntry& p, size_t i) const;
+  bool append_with_peer_white(const PeerlistEntry& pr);
+  bool append_with_peer_gray(const PeerlistEntry& pr);
+  bool set_peer_just_seen(PeerIdType peer, uint32_t ip, uint32_t port);
+  bool set_peer_just_seen(PeerIdType peer, const NetworkAddress& addr);
+  bool set_peer_unreachable(const PeerlistEntry& pr);
+  bool is_ip_allowed(uint32_t ip) const;
+  void trim_white_peerlist();
+  void trim_gray_peerlist();
+
+  void serialize(ISerializer& s);
+
+  Peerlist& getWhite();
+  Peerlist& getGray();
 
 private:
-
-  friend class boost::serialization::access;
   std::string m_config_folder;
   bool m_allow_local_ip;
   peers_indexed m_peers_gray;
   peers_indexed m_peers_white;
+  Peerlist m_whitePeerlist;
+  Peerlist m_grayPeerlist;
 };
 
 }
-
-BOOST_CLASS_VERSION(CryptoNote::peerlist_manager, 4)

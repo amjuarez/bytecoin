@@ -26,15 +26,16 @@
 #include "Common/SignalHandler.h"
 #include "Common/PathTools.h"
 #include "crypto/hash.h"
-#include "cryptonote_core/cryptonote_core.h"
-#include "cryptonote_core/CoreConfig.h"
-#include "cryptonote_core/Currency.h"
-#include "cryptonote_core/MinerConfig.h"
-#include "cryptonote_protocol/cryptonote_protocol_handler.h"
-#include "p2p/net_node.h"
-#include "p2p/NetNodeConfig.h"
-#include "rpc/RpcServer.h"
-#include "rpc/RpcServerConfig.h"
+#include "CryptoNoteCore/CryptoNoteTools.h"
+#include "CryptoNoteCore/Core.h"
+#include "CryptoNoteCore/CoreConfig.h"
+#include "CryptoNoteCore/Currency.h"
+#include "CryptoNoteCore/MinerConfig.h"
+#include "CryptoNoteProtocol/CryptoNoteProtocolHandler.h"
+#include "P2p/NetNode.h"
+#include "P2p/NetNodeConfig.h"
+#include "Rpc/RpcServer.h"
+#include "Rpc/RpcServerConfig.h"
 #include "version.h"
 
 #include <Logging/LoggerManager.h>
@@ -114,7 +115,6 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
     }
     currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
     currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-    currencyBuilder.genesisBlockReward((command_line::get_arg(vm, arg_MONEY_SUPPLY) / 100) * command_line::get_arg(vm, arg_PREMINED_PERCENT));
   CryptoNote::Currency currency = currencyBuilder.currency();
   for (const auto& address_string : genesis_block_reward_addresses) {
      CryptoNote::AccountPublicAddress address;
@@ -158,8 +158,7 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction();
-  CryptoNote::blobdata txb = tx_to_blob(tx);
-  std::string tx_hex = blobToHex(txb);
+  std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
   std::cout << "Modify this line into your coin configuration file as is: " << std::endl;
   std::cout << "GENESIS_COINBASE_TX_HEX=" << tx_hex << std::endl;
     }
@@ -195,8 +194,7 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   currencyBuilder.genesisBlockReward((command_line::get_arg(vm, arg_MONEY_SUPPLY) / 100) * command_line::get_arg(vm, arg_PREMINED_PERCENT));
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction(targets);
-      CryptoNote::blobdata txb = tx_to_blob(tx);
-      std::string tx_hex = blobToHex(txb);
+      std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
       std::cout << "Modify this line into your coin configuration file as is: " << std::endl;
   std::cout << "GENESIS_COINBASE_TX_HEX=" << tx_hex << std::endl;
   }
@@ -242,7 +240,7 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_only, command_line::arg_version);
     command_line::add_arg(desc_cmd_only, arg_os_version);
     // tools::get_default_data_dir() can't be called during static initialization
-    command_line::add_arg(desc_cmd_only, command_line::arg_data_dir, tools::get_default_data_dir());
+    command_line::add_arg(desc_cmd_only, command_line::arg_data_dir, Tools::getDefaultDataDirectory());
     command_line::add_arg(desc_cmd_only, arg_config_file);
 
     command_line::add_arg(desc_cmd_sett, arg_log_file);
@@ -391,7 +389,7 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
     CryptoNote::Currency currency = currencyBuilder.currency();
     CryptoNote::core ccore(currency, nullptr, logManager);
 
-    CryptoNote::checkpoints checkpoints(logManager);
+    CryptoNote::Checkpoints checkpoints(logManager);
 std::vector<CryptoNote::CheckpointData> checkpoint_input;
 std::vector<std::string> checkpoint_args = command_line::get_arg(vm, arg_CHECKPOINT);
 std::vector<std::string> checkpoint_blockIds;
@@ -401,7 +399,7 @@ if (command_line::has_arg(vm, arg_CHECKPOINT) && checkpoint_args.size() != 0)
     std::string::size_type p = str.find(':');
     if(p != std::string::npos)
     {
-      uint64_t checkpoint_height = std::stoull(str.substr(0, p));
+      uint32_t checkpoint_height = std::stoull(str.substr(0, p));
       checkpoint_blockIds.push_back(str.substr(p+1, str.size()));
       checkpoint_input.push_back({ checkpoint_height, checkpoint_blockIds.back().c_str() });
     }
@@ -425,21 +423,22 @@ for (const auto& cp : checkpoint_input) {
     coreConfig.init(vm);
     NetNodeConfig netNodeConfig;
     netNodeConfig.init(vm);
+    netNodeConfig.setTestnet(testnet_mode);
     MinerConfig minerConfig;
     minerConfig.init(vm);
-    std::string default_data_dir = tools::get_default_data_dir();
+    std::string default_data_dir = Tools::getDefaultDataDirectory();
     if (command_line::has_arg(vm, arg_CRYPTONOTE_NAME) && !command_line::get_arg(vm, arg_CRYPTONOTE_NAME).empty()) {
       boost::replace_all(default_data_dir, CryptoNote::CRYPTONOTE_NAME, command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
     }
     coreConfig.configFolder = default_data_dir;
-    netNodeConfig.configFolder = default_data_dir;
+    netNodeConfig.setConfigFolder(default_data_dir);
     RpcServerConfig rpcConfig;
     rpcConfig.init(vm);
 
     System::Dispatcher dispatcher;
 
-    CryptoNote::cryptonote_protocol_handler cprotocol(currency, dispatcher, ccore, nullptr, logManager);
-    CryptoNote::node_server p2psrv(dispatcher, cprotocol, logManager);
+    CryptoNote::CryptoNoteProtocolHandler cprotocol(currency, dispatcher, ccore, nullptr, logManager);
+    CryptoNote::NodeServer p2psrv(dispatcher, cprotocol, logManager);
     CryptoNote::RpcServer rpcServer(dispatcher, logManager, ccore, p2psrv);
 
     cprotocol.set_p2p_endpoint(&p2psrv);
@@ -448,7 +447,7 @@ for (const auto& cp : checkpoint_input) {
 
     // initialize objects
     logger(INFO) << "Initializing p2p server...";
-    if (!p2psrv.init(netNodeConfig, testnet_mode)) {
+    if (!p2psrv.init(netNodeConfig)) {
       logger(ERROR, BRIGHT_RED) << "Failed to initialize p2p server.";
       return 1;
     }
@@ -478,9 +477,9 @@ for (const auto& cp : checkpoint_input) {
     rpcServer.start(rpcConfig.bindIp, rpcConfig.bindPort);
     logger(INFO) << "Core rpc server started ok";
 
-    tools::SignalHandler::install([&dch, &p2psrv] {
+    Tools::SignalHandler::install([&dch, &p2psrv] {
       dch.stop_handling();
-      p2psrv.send_stop_signal();
+      p2psrv.sendStopSignal();
     });
 
     logger(INFO) << "Starting p2p net loop...";
@@ -519,7 +518,7 @@ bool command_line_preprocessor(const boost::program_options::variables_map &vm, 
     exit = true;
   }
   if (command_line::get_arg(vm, arg_os_version)) {
-    std::cout << "OS: " << tools::get_os_version_string() << ENDL;
+    std::cout << "OS: " << Tools::get_os_version_string() << ENDL;
     exit = true;
   }
 

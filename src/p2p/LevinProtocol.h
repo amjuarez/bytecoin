@@ -17,8 +17,11 @@
 
 #pragma once
 
-#include "serialization/KVBinaryInputStreamSerializer.h"
-#include "serialization/KVBinaryOutputStreamSerializer.h"
+#include "CryptoNote.h"
+#include <Common/MemoryInputStream.h>
+#include <Common/VectorOutputStream.h>
+#include "Serialization/KVBinaryInputStreamSerializer.h"
+#include "Serialization/KVBinaryOutputStreamSerializer.h"
 
 namespace System {
 class TcpConnection;
@@ -37,41 +40,50 @@ enum class LevinError: int32_t {
   ERROR_FORMAT = -7,
 };
 
+const int32_t LEVIN_PROTOCOL_RETCODE_SUCCESS = 1;
+
 class LevinProtocol {
 public:
 
   LevinProtocol(System::TcpConnection& connection);
 
-  template <typename Req, typename Resp>
-  void invoke(uint32_t command, const Req& req, Resp& resp, bool readResponse = true) {
-    decode(sendBuf(command, encode(req), true, readResponse), resp);
+  template <typename Request, typename Response>
+  bool invoke(uint32_t command, const Request& request, Response& response) {
+    sendMessage(command, encode(request), true);
+
+    Command cmd;
+    readCommand(cmd);
+
+    if (!cmd.isResponse) {
+      return false;
+    }
+
+    return decode(cmd.buf, response); 
   }
 
-  template <typename Req>
-  void notify(uint32_t command, const Req& req, int) {
-    sendBuf(command, encode(req), false, false);
+  template <typename Request>
+  void notify(uint32_t command, const Request& request, int) {
+    sendMessage(command, encode(request), false);
   }
 
   struct Command {
     uint32_t command;
     bool isNotify;
     bool isResponse;
-    std::string buf;
+    BinaryArray buf;
 
-    bool needReply() const {
-      return !(isNotify || isResponse);
-    }
+    bool needReply() const;
   };
 
   bool readCommand(Command& cmd);
 
-  std::string sendBuf(uint32_t command, const std::string& out, bool needResponse, bool readResponse = false);
-  void sendReply(uint32_t command, const std::string& out, int32_t returnCode);
+  void sendMessage(uint32_t command, const BinaryArray& out, bool needResponse);
+  void sendReply(uint32_t command, const BinaryArray& out, int32_t returnCode);
 
   template <typename T>
-  static bool decode(const std::string& buf, T& value) {
+  static bool decode(const BinaryArray& buf, T& value) {
     try {
-      std::stringstream stream(buf);
+      Common::MemoryInputStream stream(buf.data(), buf.size());
       KVBinaryInputStreamSerializer serializer(stream);
       serialize(value, serializer);
     } catch (std::exception&) {
@@ -82,12 +94,13 @@ public:
   }
 
   template <typename T>
-  static std::string encode(const T& value) {
+  static BinaryArray encode(const T& value) {
+    BinaryArray result;
     KVBinaryOutputStreamSerializer serializer;
     serialize(const_cast<T&>(value), serializer);
-    std::stringstream stream;
-    serializer.write(stream);
-    return stream.str();
+    Common::VectorOutputStream stream(result);
+    serializer.dump(stream);
+    return result;
   }
 
 private:

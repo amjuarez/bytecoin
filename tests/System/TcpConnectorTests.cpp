@@ -16,6 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <System/Dispatcher.h>
+#include <System/ContextGroup.h>
 #include <System/Event.h>
 #include <System/InterruptedException.h>
 #include <System/Ipv4Address.h>
@@ -27,50 +28,70 @@
 
 using namespace System;
 
-TEST(TcpConnectorTest, tcpConnector1) {
+class TcpConnectorTests : public testing::Test {
+public:
+  TcpConnectorTests() : event(dispatcher), listener(dispatcher, Ipv4Address("127.0.0.1"), 6666), contextGroup(dispatcher) {
+  }
+  
   Dispatcher dispatcher;
-  Event event(dispatcher);
-  TcpListener listener(dispatcher, Ipv4Address("127.0.0.1"), 6666);
-  dispatcher.spawn([&]() {
+  Event event;
+  TcpListener listener;
+  ContextGroup contextGroup;
+};
+
+TEST_F(TcpConnectorTests, tcpConnector1) {
+  contextGroup.spawn([&]() {
     listener.accept();
     event.set();
   });
 
   TcpConnector connector(dispatcher);
-  connector.stop();
-  connector.start();
-  connector.connect(Ipv4Address("127.0.0.1"), 6666);
-  connector.stop();
-  connector.start();
+  contextGroup.spawn([&] { 
+    connector.connect(Ipv4Address("127.0.0.1"), 6666); 
+  });
   event.wait();
   dispatcher.yield();
 }
 
-TEST(TcpConnectorTest, tcpConnector2) {
-  Dispatcher dispatcher;
-  TcpConnector connector(dispatcher);
-  connector.stop();
-  connector.start();
-  connector.stop();
-  ASSERT_THROW(connector.connect(Ipv4Address("127.0.0.1"), 6666), InterruptedException);
+TEST_F(TcpConnectorTests, tcpConnectorInterruptAfterStart) {
+  contextGroup.spawn([&] { 
+    ASSERT_THROW(TcpConnector(dispatcher).connect(Ipv4Address("127.0.0.1"), 6666), InterruptedException); 
+  });
+  contextGroup.interrupt();
 }
 
-TEST(TcpConnectorTest, tcpConnector3) {
-  Dispatcher dispatcher;
+TEST_F(TcpConnectorTests, tcpConnectorInterrupt) {
   TcpConnector connector(dispatcher);
-  Event event(dispatcher);
-  dispatcher.spawn([&]() {
+  contextGroup.spawn([&]() {
     Timer(dispatcher).sleep(std::chrono::milliseconds(10));
-    connector.stop();
+    contextGroup.interrupt();
     event.set();
   });
 
-  ASSERT_THROW(connector.connect(Ipv4Address("10.255.255.1"), 6666), InterruptedException);
-  event.wait();
+  contextGroup.spawn([&] { 
+    ASSERT_THROW(connector.connect(Ipv4Address("10.255.255.1"), 6666), InterruptedException); 
+  });
+  contextGroup.wait();
 }
 
-TEST(TcpConnectorTest, bindToTheSameAddressFails) {
-  Dispatcher dispatcher;
-  TcpListener listener1(dispatcher, Ipv4Address("127.0.0.1"), 6666);
+TEST_F(TcpConnectorTests, tcpConnectorUseAfterInterrupt) {
+  TcpConnector connector(dispatcher);
+  contextGroup.spawn([&]() {
+    Timer(dispatcher).sleep(std::chrono::milliseconds(10));
+    contextGroup.interrupt();
+    event.set();
+  });
+
+  contextGroup.spawn([&] { 
+    ASSERT_THROW(connector.connect(Ipv4Address("10.255.255.1"), 6666), InterruptedException); 
+  });
+  contextGroup.wait();
+  contextGroup.spawn([&] { 
+    ASSERT_NO_THROW(connector.connect(Ipv4Address("127.0.0.1"), 6666)); 
+  });
+  contextGroup.wait();
+}
+
+TEST_F(TcpConnectorTests, bindToTheSameAddressFails) {
   ASSERT_THROW(TcpListener listener2(dispatcher, Ipv4Address("127.0.0.1"), 6666), std::runtime_error);
 }

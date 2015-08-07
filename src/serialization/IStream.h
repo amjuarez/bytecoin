@@ -24,12 +24,12 @@ namespace CryptoNote {
 
 class IInputStream {
 public:
-  virtual std::size_t read(char* data, std::size_t size) = 0;
+  virtual size_t read(char* data, size_t size) = 0;
 };
 
 class IOutputStream {
 public:
-  virtual void write(const char* data, std::size_t size) = 0;
+  virtual void write(const char* data, size_t size) = 0;
 };
 
 }

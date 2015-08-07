@@ -21,7 +21,7 @@
 #include <system_error>
 
 #include "crypto/crypto.h"
-#include "cryptonote_core/cryptonote_basic.h"
+#include "CryptoNoteCore/CryptoNoteBasic.h"
 
 #include "IObservable.h"
 #include "IStreamSerializable.h"
@@ -33,18 +33,18 @@ struct CompleteBlock;
 
 class IBlockchainSynchronizerObserver {
 public:
-  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total) {}
+  virtual void synchronizationProgressUpdated(uint32_t current, uint32_t total) {}
   virtual void synchronizationCompleted(std::error_code result) {}
 };
 
 class IBlockchainConsumer {
 public:
-
+  virtual ~IBlockchainConsumer() {}
   virtual SynchronizationStart getSyncStart() = 0;
-  virtual void getKnownPoolTxIds(std::vector<crypto::hash>& ids) = 0;
-  virtual void onBlockchainDetach(uint64_t height) = 0;
-  virtual bool onNewBlocks(const CompleteBlock* blocks, uint64_t startHeight, size_t count) = 0;
-  virtual std::error_code onPoolUpdated(const std::vector<Transaction>& addedTransactions, const std::vector<crypto::hash>& deletedTransactions) = 0;
+  virtual void getKnownPoolTxIds(std::vector<Crypto::Hash>& ids) = 0;
+  virtual void onBlockchainDetach(uint32_t height) = 0;
+  virtual bool onNewBlocks(const CompleteBlock* blocks, uint32_t startHeight, uint32_t count) = 0;
+  virtual std::error_code onPoolUpdated(const std::vector<std::unique_ptr<ITransactionReader>>& addedTransactions, const std::vector<Crypto::Hash>& deletedTransactions) = 0;
 };
 
 

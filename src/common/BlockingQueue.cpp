@@ -16,3 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "BlockingQueue.h"
+
+namespace {
+char suppressMSVCWarningLNK4221;
+}

@@ -42,9 +42,9 @@ public:
 
   // ITransfersSynchronizer
   virtual ITransfersSubscription& addSubscription(const AccountSubscription& acc) override;
-  virtual bool removeSubscription(const AccountAddress& acc) override;
-  virtual void getSubscriptions(std::vector<AccountAddress>& subscriptions) override;
-  virtual ITransfersSubscription* getSubscription(const AccountAddress& acc) override;
+  virtual bool removeSubscription(const AccountPublicAddress& acc) override;
+  virtual void getSubscriptions(std::vector<AccountPublicAddress>& subscriptions) override;
+  virtual ITransfersSubscription* getSubscription(const AccountPublicAddress& acc) override;
 
   // IStreamSerializable
   virtual void save(std::ostream& os) override;
@@ -53,7 +53,7 @@ public:
 private:
 
   // map { view public key -> consumer }
-  std::unordered_map<PublicKey, std::unique_ptr<TransfersConsumer>> m_consumers;
+  std::unordered_map<Crypto::PublicKey, std::unique_ptr<TransfersConsumer>> m_consumers;
 
   // std::unordered_map<AccountAddress, std::unique_ptr<TransfersConsumer>> m_subscriptions;
   IBlockchainSynchronizer& m_sync;

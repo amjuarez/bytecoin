@@ -15,12 +15,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "util.h"
+#include "Util.h"
 #include <cstdio>
 
 #include <boost/filesystem.hpp>
 
-#include "cryptonote_config.h"
+#include "CryptoNoteConfig.h"
 
 #ifdef WIN32
 #include <windows.h>
@@ -31,7 +31,7 @@
 #endif
 
 
-namespace tools
+namespace Tools
 {
 #ifdef WIN32
   std::string get_windows_version_display_string()
@@ -296,7 +296,7 @@ std::string get_nix_version_display_string()
   }
 #endif
 
-  std::string get_default_data_dir()
+  std::string getDefaultDataDirectory()
   {
     //namespace fs = boost::filesystem;
     // Windows < Vista: C:\Documents and Settings\Username\Application Data\CRYPTONOTE_NAME

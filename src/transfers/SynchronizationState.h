@@ -19,7 +19,7 @@
 
 #include "CommonTypes.h"
 #include "IStreamSerializable.h"
-#include "serialization/ISerializer.h"
+#include "Serialization/ISerializer.h"
 #include <vector>
 #include <map>
 
@@ -30,23 +30,23 @@ public:
 
   struct CheckResult {
     bool detachRequired;
-    uint64_t detachHeight;
+    uint32_t detachHeight;
     bool hasNewBlocks;
-    uint64_t newBlockHeight;
+    uint32_t newBlockHeight;
   };
 
-  typedef std::list<crypto::hash> ShortHistory;
+  typedef std::vector<Crypto::Hash> ShortHistory;
 
-  explicit SynchronizationState(const crypto::hash& genesisBlockHash) {
+  explicit SynchronizationState(const Crypto::Hash& genesisBlockHash) {
     m_blockchain.push_back(genesisBlockHash);
   }
 
-  ShortHistory getShortHistory(size_t localHeight) const;
+  ShortHistory getShortHistory(uint32_t localHeight) const;
   CheckResult checkInterval(const BlockchainInterval& interval) const;
 
-  void detach(uint64_t height);
-  void addBlocks(const crypto::hash* blockHashes, uint64_t height, size_t count);
-  uint64_t getHeight() const;
+  void detach(uint32_t height);
+  void addBlocks(const Crypto::Hash* blockHashes, uint32_t height, uint32_t count);
+  uint32_t getHeight() const;
 
   // IStreamSerializable
   virtual void save(std::ostream& os) override;
@@ -57,7 +57,7 @@ public:
 
 private:
 
-  std::vector<crypto::hash> m_blockchain;
+  std::vector<Crypto::Hash> m_blockchain;
 };
 
 }

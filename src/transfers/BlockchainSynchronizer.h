@@ -35,7 +35,7 @@ class BlockchainSynchronizer :
   public INodeObserver {
 public:
 
-  BlockchainSynchronizer(INode& node, const crypto::hash& genesisBlockHash);
+  BlockchainSynchronizer(INode& node, const Crypto::Hash& genesisBlockHash);
   ~BlockchainSynchronizer();
 
   // IBlockchainSynchronizer
@@ -51,14 +51,14 @@ public:
   virtual void load(std::istream& in) override;
 
   // INodeObserver
-  virtual void lastKnownBlockHeightUpdated(uint64_t height) override;
+  virtual void lastKnownBlockHeightUpdated(uint32_t height) override;
   virtual void poolChanged() override;
 
 private:
 
   struct GetBlocksResponse {
-    uint64_t startHeight;
-    std::list<BlockCompleteEntry> newBlocks;
+    uint32_t startHeight;
+    std::vector<BlockShortEntry> newBlocks;
   };
 
   struct GetBlocksRequest {
@@ -67,18 +67,18 @@ private:
       syncStart.height = 0;
     }
     SynchronizationStart syncStart;
-    std::list<crypto::hash> knownBlocks;
+    std::vector<Crypto::Hash> knownBlocks;
   };
 
   struct GetPoolResponse {
     bool isLastKnownBlockActual;
-    std::vector<Transaction> newTxs;
-    std::vector<crypto::hash> deletedTxIds;
+    std::vector<std::unique_ptr<ITransactionReader>> newTxs;
+    std::vector<Crypto::Hash> deletedTxIds;
   };
 
   struct GetPoolRequest {
-    std::vector<crypto::hash> knownTxIds;
-    crypto::hash lastKnownBlock;
+    std::vector<Crypto::Hash> knownTxIds;
+    Crypto::Hash lastKnownBlock;
   };
 
 
@@ -123,9 +123,9 @@ private:
 
   ConsumersMap m_consumers;
   INode& m_node;
-  const crypto::hash m_genesisBlockHash;
+  const Crypto::Hash m_genesisBlockHash;
 
-  crypto::hash lastBlockId;
+  Crypto::Hash lastBlockId;
 
   State m_currentState;
   State m_futureState;
