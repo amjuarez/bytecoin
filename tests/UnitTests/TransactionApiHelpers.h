@@ -116,58 +116,92 @@ namespace {
 
 namespace CryptoNote {
 
-  class TestTransactionBuilder {
-  public:
+class TestTransactionBuilder {
+public:
 
-    TestTransactionBuilder();
-    TestTransactionBuilder(const BinaryArray& txTemplate, const Crypto::SecretKey& secretKey);
+  TestTransactionBuilder();
+  TestTransactionBuilder(const BinaryArray& txTemplate, const Crypto::SecretKey& secretKey);
 
-    PublicKey getTransactionPublicKey() const;
-    void setUnlockTime(uint64_t time);
+  PublicKey getTransactionPublicKey() const;
+  void appendExtra(const BinaryArray& extraData);
+  void setUnlockTime(uint64_t time);
 
-    // inputs
-    size_t addTestInput(uint64_t amount, const AccountKeys& senderKeys = generateAccountKeys());
-    size_t addTestInput(uint64_t amount, std::vector<uint32_t> gouts, const AccountKeys& senderKeys = generateAccountKeys());
-    void addTestMultisignatureInput(uint64_t amount, const TransactionOutputInformation& t);
-    size_t addFakeMultisignatureInput(uint64_t amount, uint32_t globalOutputIndex, size_t signatureCount);
-    void addInput(const AccountKeys& senderKeys, const TransactionOutputInformation& t);
+  // inputs
+  size_t addTestInput(uint64_t amount, const AccountKeys& senderKeys = generateAccountKeys());
+  size_t addTestInput(uint64_t amount, std::vector<uint32_t> gouts, const AccountKeys& senderKeys = generateAccountKeys());
+  void addTestMultisignatureInput(uint64_t amount, const TransactionOutputInformation& t);
+  size_t addFakeMultisignatureInput(uint64_t amount, uint32_t globalOutputIndex, size_t signatureCount);
+  void addInput(const AccountKeys& senderKeys, const TransactionOutputInformation& t);
 
-    // outputs
-    TransactionOutputInformationIn addTestKeyOutput(uint64_t amount, uint32_t globalOutputIndex, const AccountKeys& senderKeys = generateAccountKeys());
-    TransactionOutputInformationIn addTestMultisignatureOutput(uint64_t amount, uint32_t globalOutputIndex);
-    TransactionOutputInformationIn addTestMultisignatureOutput(uint64_t amount, std::vector<AccountPublicAddress>& addresses, uint32_t globalOutputIndex);
-    size_t addOutput(uint64_t amount, const AccountPublicAddress& to);
-    size_t addOutput(uint64_t amount, const KeyOutput& out);
-    size_t addOutput(uint64_t amount, const MultisignatureOutput& out);
+  // outputs
+  TransactionOutputInformationIn addTestKeyOutput(uint64_t amount, uint32_t globalOutputIndex, const AccountKeys& senderKeys = generateAccountKeys());
+  TransactionOutputInformationIn addTestMultisignatureOutput(uint64_t amount, uint32_t globalOutputIndex);
+  TransactionOutputInformationIn addTestMultisignatureOutput(uint64_t amount, std::vector<AccountPublicAddress>& addresses, uint32_t globalOutputIndex);
+  size_t addOutput(uint64_t amount, const AccountPublicAddress& to);
+  size_t addOutput(uint64_t amount, const KeyOutput& out);
+  size_t addOutput(uint64_t amount, const MultisignatureOutput& out);
 
-    // final step
-    std::unique_ptr<ITransactionReader> build();
+  // final step
+  std::unique_ptr<ITransactionReader> build();
 
-    // get built transaction hash (call only after build)
-    Crypto::Hash getTransactionHash() const;
+  // get built transaction hash (call only after build)
+  Crypto::Hash getTransactionHash() const;
 
-  private:
+private:
 
-    void derivePublicKey(const AccountKeys& reciever, const Crypto::PublicKey& srcTxKey, size_t outputIndex, PublicKey& ephemeralKey) {
-      Crypto::KeyDerivation derivation;
-      Crypto::generate_key_derivation(srcTxKey, reinterpret_cast<const Crypto::SecretKey&>(reciever.viewSecretKey), derivation);
-      Crypto::derive_public_key(derivation, outputIndex,
-        reinterpret_cast<const Crypto::PublicKey&>(reciever.address.spendPublicKey),
-        reinterpret_cast<Crypto::PublicKey&>(ephemeralKey));
-    }
+  void derivePublicKey(const AccountKeys& reciever, const Crypto::PublicKey& srcTxKey, size_t outputIndex, PublicKey& ephemeralKey) {
+    Crypto::KeyDerivation derivation;
+    Crypto::generate_key_derivation(srcTxKey, reinterpret_cast<const Crypto::SecretKey&>(reciever.viewSecretKey), derivation);
+    Crypto::derive_public_key(derivation, outputIndex,
+      reinterpret_cast<const Crypto::PublicKey&>(reciever.address.spendPublicKey),
+      reinterpret_cast<Crypto::PublicKey&>(ephemeralKey));
+  }
 
-    struct MsigInfo {
-      PublicKey transactionKey;
-      size_t outputIndex;
-      std::vector<AccountBase> accounts;
-    };
-
-    std::unordered_map<size_t, std::pair<TransactionTypes::InputKeyInfo, KeyPair>> keys;
-    std::unordered_map<size_t, MsigInfo> msigInputs;
-
-    std::unique_ptr<ITransaction> tx;
-    Crypto::Hash transactionHash;
+  struct MsigInfo {
+    PublicKey transactionKey;
+    size_t outputIndex;
+    std::vector<AccountBase> accounts;
   };
+
+  std::unordered_map<size_t, std::pair<TransactionTypes::InputKeyInfo, KeyPair>> keys;
+  std::unordered_map<size_t, MsigInfo> msigInputs;
+
+  std::unique_ptr<ITransaction> tx;
+  Crypto::Hash transactionHash;
+};
+
+class FusionTransactionBuilder {
+public:
+  FusionTransactionBuilder(const Currency& currency, uint64_t amount);
+
+  uint64_t getAmount() const;
+  void setAmount(uint64_t val);
+
+  uint64_t getFirstOutput() const;
+  void setFirstOutput(uint64_t val);
+
+  uint64_t getFee() const;
+  void setFee(uint64_t val);
+
+  size_t getExtraSize() const;
+  void setExtraSize(size_t val);
+
+  size_t getInputCount() const;
+  void setInputCount(size_t val);
+
+  std::unique_ptr<ITransactionReader> buildReader() const;
+  Transaction buildTx() const;
+
+  Transaction createFusionTransactionBySize(size_t targetSize);
+
+private:
+  const Currency& m_currency;
+  uint64_t m_amount;
+  uint64_t m_firstOutput;
+  uint64_t m_fee;
+  size_t m_extraSize;
+  size_t m_inputCount;
+};
 
 }
 

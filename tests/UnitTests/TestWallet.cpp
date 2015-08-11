@@ -107,7 +107,8 @@ public:
     currency(CryptoNote::CurrencyBuilder(logger).currency()),
     generator(currency),
     node(generator),
-    alice(dispatcher, currency, node)
+    alice(dispatcher, currency, node),
+    FEE(currency.minimumFee())
   { }
 
   virtual void SetUp() override;
@@ -161,7 +162,7 @@ protected:
   std::string aliceAddress;
 
   const uint64_t SENT = 1122334455;
-  const uint64_t FEE = 10000;
+  const uint64_t FEE;
   const std::string RANDOM_ADDRESS = "2634US2FAz86jZT73YmM8u5GPCknT2Wxj8bUCKivYKpThFhF2xsjygMGxbxZzM42zXhKUhym6Yy6qHHgkuWtruqiGkDpX6m";
 };
 
@@ -391,14 +392,13 @@ TEST_F(WalletApi, transferFromTwoAddresses) {
   bob.initialize("pass2");
   std::string bobAddress = bob.createAddress();
 
-  const uint64_t fee = 10000;
-  const uint64_t sent = 2 * TEST_BLOCK_REWARD - 10 * fee;
+  const uint64_t sent = 2 * TEST_BLOCK_REWARD - 10 * FEE;
 
   auto bobPrev = bob.getPendingBalance();
   auto alicePendingPrev = alice.getPendingBalance();
   auto aliceActualPrev = alice.getActualBalance();
 
-  sendMoney(bobAddress, sent, fee);
+  sendMoney(bobAddress, sent, FEE);
 
   node.updateObservers();
 
@@ -409,7 +409,7 @@ TEST_F(WalletApi, transferFromTwoAddresses) {
   ASSERT_EQ(0, bob.getActualBalance());
   ASSERT_EQ(sent, bob.getPendingBalance());
 
-  ASSERT_EQ(2 * TEST_BLOCK_REWARD - sent - fee, alice.getActualBalance() + alice.getPendingBalance());
+  ASSERT_EQ(2 * TEST_BLOCK_REWARD - sent - FEE, alice.getActualBalance() + alice.getPendingBalance());
 
   bob.shutdown();
   wait(100);
@@ -1039,11 +1039,11 @@ TEST_F(WalletApi, hybridTxTransfer) {
 }
 
 TEST_F(WalletApi, doubleSpendJustSentOut) {
-  generator.getSingleOutputTransaction(parseAddress(aliceAddress), 1000000);
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE);
   unlockMoney();
 
-  sendMoney(RANDOM_ADDRESS, 1000, 100);
-  ASSERT_ANY_THROW(sendMoney(RANDOM_ADDRESS, 1000, 100));
+  sendMoney(RANDOM_ADDRESS, SENT, FEE);
+  ASSERT_ANY_THROW(sendMoney(RANDOM_ADDRESS, SENT, FEE));
 }
 
 TEST_F(WalletApi, syncAfterLoad) {
@@ -1138,4 +1138,10 @@ TEST_F(WalletApi, DISABLED_loadTest) {
 
   wallet.shutdown();
   wait(100);
+}
+
+TEST_F(WalletApi, transferSmallFeeTransactionThrows) {
+  generateAndUnlockMoney();
+
+  ASSERT_ANY_THROW(sendMoneyToRandomAddressFrom(alice.getAddress(0), SENT, currency.minimumFee() - 1));
 }

@@ -1818,3 +1818,26 @@ TEST_F(WalletLegacyApi, outdatedUnconfirmedTransactionDeletedOnLoad) {
   wallet.removeObserver(&walletObserver);
   wallet.shutdown();
 }
+
+TEST_F(WalletLegacyApi, walletLoadsNullSpendSecretKey) {
+  CryptoNote::AccountKeys accountKeys;
+
+  Crypto::generate_keys(accountKeys.address.spendPublicKey, accountKeys.spendSecretKey);
+  Crypto::generate_keys(accountKeys.address.viewPublicKey, accountKeys.viewSecretKey);
+  accountKeys.spendSecretKey = CryptoNote::NULL_SECRET_KEY;
+
+  alice->initWithKeys(accountKeys, "pass");
+  WaitWalletSync(aliceWalletObserver.get());
+
+  std::stringstream data;
+  alice->save(data);
+  WaitWalletSave(aliceWalletObserver.get());
+
+  alice->shutdown();
+
+  alice->initAndLoad(data, "pass");
+  WaitWalletSync(aliceWalletObserver.get());
+
+  ASSERT_EQ(std::error_code(), aliceWalletObserver->loadResult);
+  alice->shutdown();
+}

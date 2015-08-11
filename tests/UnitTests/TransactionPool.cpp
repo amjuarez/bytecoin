@@ -31,6 +31,8 @@
 #include <Logging/ConsoleLogger.h>
 #include <Logging/LoggerGroup.h>
 
+#include "TransactionApiHelpers.h"
+
 using namespace CryptoNote;
 using namespace CryptoNote;
 
@@ -655,4 +657,162 @@ TEST_F(tx_pool, RecentlyDeletedTxInfoIsSerializedAndDeserialized) {
   ASSERT_FALSE(tvc.m_verifivation_impossible);
 
   ASSERT_EQ(1, pool->get_transactions_count());
+}
+
+TEST_F(tx_pool, TxPoolAcceptsValidFusionTransaction) {
+  TransactionValidator validator;
+  FakeTimeProvider timeProvider;
+  std::unique_ptr<tx_memory_pool> pool(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+
+  FusionTransactionBuilder builder(currency, 10 * currency.defaultDustThreshold());
+  auto tx = builder.buildTx();
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+
+  ASSERT_TRUE(pool->add_tx(tx, tvc, false));
+  ASSERT_TRUE(tvc.m_added_to_pool);
+  ASSERT_TRUE(tvc.m_should_be_relayed);
+  ASSERT_FALSE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+}
+
+TEST_F(tx_pool, TxPoolDoesNotAcceptInvalidFusionTransaction) {
+  TransactionValidator validator;
+  FakeTimeProvider timeProvider;
+  std::unique_ptr<tx_memory_pool> pool(new tx_memory_pool(currency, validator, timeProvider, logger));
+  ASSERT_TRUE(pool->init(m_configDir.string()));
+
+  FusionTransactionBuilder builder(currency, 10 * currency.defaultDustThreshold());
+  builder.setInputCount(currency.fusionTxMinInputCount() - 1);
+  auto tx = builder.buildTx();
+  tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+
+  ASSERT_FALSE(pool->add_tx(tx, tvc, false));
+  ASSERT_FALSE(tvc.m_added_to_pool);
+  ASSERT_FALSE(tvc.m_should_be_relayed);
+  ASSERT_TRUE(tvc.m_verifivation_failed);
+  ASSERT_FALSE(tvc.m_verifivation_impossible);
+}
+
+namespace {
+
+const size_t TEST_FUSION_TX_COUNT_PER_BLOCK = 3;
+const size_t TEST_TX_COUNT_UP_TO_MEDIAN = 10;
+const size_t TEST_MAX_TX_COUNT_PER_BLOCK = TEST_TX_COUNT_UP_TO_MEDIAN * 125 / 100;
+const size_t TEST_TRANSACTION_SIZE = 2000;
+const size_t TEST_FUSION_TX_MAX_SIZE = TEST_FUSION_TX_COUNT_PER_BLOCK * TEST_TRANSACTION_SIZE;
+const size_t TEST_MEDIAN_SIZE = TEST_TX_COUNT_UP_TO_MEDIAN * TEST_TRANSACTION_SIZE;
+
+Transaction createTestFusionTransaction(const Currency& currency) {
+  FusionTransactionBuilder builder(currency, 30 * currency.defaultDustThreshold());
+  return builder.createFusionTransactionBySize(TEST_TRANSACTION_SIZE);
+}
+
+Transaction createTestOrdinaryTransactionWithExtra(const Currency& currency, size_t extraSize) {
+  TestTransactionBuilder builder;
+  if (extraSize != 0) {
+    builder.appendExtra(BinaryArray(extraSize, 0));
+  }
+
+  builder.addTestInput(100 * currency.minimumFee());
+  builder.addTestKeyOutput(99 * currency.minimumFee(), 0);
+  return convertTx(*builder.build());
+}
+
+Transaction createTestOrdinaryTransaction(const Currency& currency) {
+  auto tx = createTestOrdinaryTransactionWithExtra(currency, 0);
+  size_t realSize = getObjectBinarySize(tx);
+  if (realSize < TEST_TRANSACTION_SIZE) {
+    size_t extraSize = TEST_TRANSACTION_SIZE - realSize;
+    tx = createTestOrdinaryTransactionWithExtra(currency, extraSize);
+
+    realSize = getObjectBinarySize(tx);
+    if (realSize > TEST_TRANSACTION_SIZE) {
+      extraSize -= realSize - TEST_TRANSACTION_SIZE;
+      tx = createTestOrdinaryTransactionWithExtra(currency, extraSize);
+    }
+  }
+
+  return tx;
+}
+
+class TxPool_FillBlockTemplate : public tx_pool {
+public:
+  TxPool_FillBlockTemplate() :
+    tx_pool() {
+    currency = CryptoNote::CurrencyBuilder(logger).fusionTxMaxSize(TEST_FUSION_TX_MAX_SIZE).blockGrantedFullRewardZone(TEST_MEDIAN_SIZE).currency();
+  }
+
+  void doTest(size_t poolOrdinaryTxCount, size_t poolFusionTxCount, size_t expectedBlockOrdinaryTxCount, size_t expectedBlockFusionTxCount) {
+    TransactionValidator validator;
+    FakeTimeProvider timeProvider;
+    std::unique_ptr<tx_memory_pool> pool(new tx_memory_pool(currency, validator, timeProvider, logger));
+    ASSERT_TRUE(pool->init(m_configDir.string()));
+
+    std::unordered_map<Crypto::Hash, Transaction> ordinaryTxs;
+    for (size_t i = 0; i < poolOrdinaryTxCount; ++i) {
+      auto tx = createTestOrdinaryTransaction(currency);
+      ordinaryTxs.emplace(getObjectHash(tx), std::move(tx));
+    }
+
+    std::unordered_map<Crypto::Hash, Transaction> fusionTxs;
+    for (size_t i = 0; i < poolFusionTxCount; ++i) {
+      auto tx = createTestFusionTransaction(currency);
+      fusionTxs.emplace(getObjectHash(tx), std::move(tx));
+    }
+
+    for (auto pair : ordinaryTxs) {
+      tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+      ASSERT_TRUE(pool->add_tx(pair.second, tvc, false));
+    }
+
+    for (auto pair : fusionTxs) {
+      tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+      ASSERT_TRUE(pool->add_tx(pair.second, tvc, false));
+    }
+
+    Block block;
+    size_t totalSize;
+    uint64_t totalFee;
+    ASSERT_TRUE(pool->fill_block_template(block, currency.blockGrantedFullRewardZone(), std::numeric_limits<size_t>::max(), 0, totalSize, totalFee));
+
+    size_t fusionTxCount = 0;
+    size_t ordinaryTxCount = 0;
+    for (auto txHash : block.transactionHashes) {
+      if (fusionTxs.count(txHash) > 0) {
+        ++fusionTxCount;
+      } else {
+        ++ordinaryTxCount;
+      }
+    }
+
+    ASSERT_EQ(expectedBlockOrdinaryTxCount, ordinaryTxCount);
+    ASSERT_EQ(expectedBlockFusionTxCount, fusionTxCount);
+  }
+};
+
+}
+
+TEST_F(TxPool_FillBlockTemplate, TxPoolAddsFusionTransactionsToBlockTemplateNoMoreThanLimit) {
+  ASSERT_NO_FATAL_FAILURE(doTest(TEST_MAX_TX_COUNT_PER_BLOCK,
+    TEST_MAX_TX_COUNT_PER_BLOCK,
+    TEST_MAX_TX_COUNT_PER_BLOCK - TEST_FUSION_TX_COUNT_PER_BLOCK,
+    TEST_FUSION_TX_COUNT_PER_BLOCK));
+}
+
+TEST_F(TxPool_FillBlockTemplate, TxPoolAddsFusionTransactionsUpToMedianAfterOrdinaryTransactions) {
+  static_assert(TEST_MAX_TX_COUNT_PER_BLOCK > 2, "TEST_MAX_TX_COUNT_PER_BLOCK > 2");
+  ASSERT_NO_FATAL_FAILURE(doTest(2, TEST_MAX_TX_COUNT_PER_BLOCK, 2, TEST_TX_COUNT_UP_TO_MEDIAN - 2));
+}
+
+TEST_F(TxPool_FillBlockTemplate, TxPoolAddsFusionTransactionsUpToMedianIfThereAreNoOrdinaryTransactions) {
+  ASSERT_NO_FATAL_FAILURE(doTest(0, TEST_MAX_TX_COUNT_PER_BLOCK, 0, TEST_TX_COUNT_UP_TO_MEDIAN));
+}
+
+TEST_F(TxPool_FillBlockTemplate, TxPoolContinuesToAddOrdinaryTransactionsUpTo125PerCentOfMedianAfterAddingFusionTransactions) {
+  size_t fusionTxCount = TEST_FUSION_TX_COUNT_PER_BLOCK - 1;
+  ASSERT_NO_FATAL_FAILURE(doTest(TEST_MAX_TX_COUNT_PER_BLOCK,
+    fusionTxCount,
+    TEST_MAX_TX_COUNT_PER_BLOCK - fusionTxCount,
+    fusionTxCount));
 }

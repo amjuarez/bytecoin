@@ -107,7 +107,7 @@ struct TransactionOutputInformationEx : public TransactionOutputInformationIn {
 
 };
 
-struct BlockInfo {
+struct TransactionBlockInfo {
   uint32_t height;
   uint64_t timestamp;
   uint32_t transactionIndex;
@@ -120,7 +120,7 @@ struct BlockInfo {
 };
 
 struct SpentTransactionOutput : TransactionOutputInformationEx {
-  BlockInfo spendingBlock;
+  TransactionBlockInfo spendingBlock;
   Crypto::Hash spendingTransactionHash;
   uint32_t inputInTransaction;
 
@@ -153,9 +153,9 @@ public:
 
   TransfersContainer(const CryptoNote::Currency& currency, size_t transactionSpendableAge);
 
-  bool addTransaction(const BlockInfo& block, const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers);
+  bool addTransaction(const TransactionBlockInfo& block, const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers);
   bool deleteUnconfirmedTransaction(const Crypto::Hash& transactionHash);
-  bool markTransactionConfirmed(const BlockInfo& block, const Crypto::Hash& transactionHash, const std::vector<uint32_t>& globalIndices);
+  bool markTransactionConfirmed(const TransactionBlockInfo& block, const Crypto::Hash& transactionHash, const std::vector<uint32_t>& globalIndices);
 
   std::vector<Crypto::Hash> detach(uint32_t height);
   bool advanceHeight(uint32_t height);
@@ -258,17 +258,17 @@ private:
   > SpentTransfersMultiIndex;
 
 private:
-  void addTransaction(const BlockInfo& block, const ITransactionReader& tx);
-  bool addTransactionOutputs(const BlockInfo& block, const ITransactionReader& tx,
+  void addTransaction(const TransactionBlockInfo& block, const ITransactionReader& tx);
+  bool addTransactionOutputs(const TransactionBlockInfo& block, const ITransactionReader& tx,
                              const std::vector<TransactionOutputInformationIn>& transfers);
-  bool addTransactionInputs(const BlockInfo& block, const ITransactionReader& tx);
+  bool addTransactionInputs(const TransactionBlockInfo& block, const ITransactionReader& tx);
   void deleteTransactionTransfers(const Crypto::Hash& transactionHash);
   bool isSpendTimeUnlocked(uint64_t unlockTime) const;
   bool isIncluded(const TransactionOutputInformationEx& info, uint32_t flags) const;
   static bool isIncluded(TransactionTypes::OutputType type, uint32_t state, uint32_t flags);
   void updateTransfersVisibility(const Crypto::KeyImage& keyImage);
 
-  void copyToSpent(const BlockInfo& block, const ITransactionReader& tx, size_t inputIndex, const TransactionOutputInformationEx& output);
+  void copyToSpent(const TransactionBlockInfo& block, const ITransactionReader& tx, size_t inputIndex, const TransactionOutputInformationEx& output);
 
 private:
   TransactionMultiIndex m_transactions;

@@ -58,7 +58,7 @@ public:
     auto tx = std::shared_ptr<ITransactionReader>(b1.build().release());
 
     std::vector<TransactionOutputInformationIn> outputs = { outInfo };
-    sub.addTransaction(BlockInfo{ height, 100000 }, *tx, outputs);
+    sub.addTransaction(TransactionBlockInfo{ height, 100000 }, *tx, outputs);
     return tx;
   }
 
@@ -87,7 +87,7 @@ TEST_F(TransfersSubscriptionTest, addTransaction) {
   // this transaction should not be added, so no notification
   auto tx = createTransaction();
   addTestInput(*tx, 20000);
-  sub.addTransaction(BlockInfo{ 2, 100000 }, *tx, {});
+  sub.addTransaction(TransactionBlockInfo{ 2, 100000 }, *tx, {});
 
   ASSERT_EQ(2, sub.getContainer().transactionsCount());
   ASSERT_EQ(2, observer.updated.size());
@@ -142,7 +142,7 @@ TEST_F(TransfersSubscriptionTest, markTransactionConfirmed) {
   ASSERT_EQ(1, sub.getContainer().transactionsCount());
   ASSERT_EQ(1, observer.updated.size()); // added
 
-  sub.markTransactionConfirmed(BlockInfo{ 10, 100000 }, txHash, { 1 });
+  sub.markTransactionConfirmed(TransactionBlockInfo{ 10, 100000 }, txHash, { 1 });
 
   ASSERT_EQ(2, observer.updated.size()); // added + updated
   ASSERT_EQ(txHash, observer.updated[0]);

@@ -65,10 +65,10 @@ private:
     std::vector<uint32_t> globalIdxs;
   };
 
-  std::error_code preprocessOutputs(const BlockInfo& blockInfo, const ITransactionReader& tx, PreprocessInfo& info);
-  std::error_code processTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx);
-  std::error_code processTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info);
-  std::error_code processOutputs(const BlockInfo& blockInfo, TransfersSubscription& sub, const ITransactionReader& tx,
+  std::error_code preprocessOutputs(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx, PreprocessInfo& info);
+  std::error_code processTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx);
+  std::error_code processTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info);
+  std::error_code processOutputs(const TransactionBlockInfo& blockInfo, TransfersSubscription& sub, const ITransactionReader& tx,
     const std::vector<TransactionOutputInformationIn>& outputs, const std::vector<uint32_t>& globalIdxs);
 
   std::error_code getGlobalIndices(const Crypto::Hash& transactionHash, std::vector<uint32_t>& outsGlobalIndices);

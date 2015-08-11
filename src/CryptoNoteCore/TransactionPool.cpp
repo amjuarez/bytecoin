@@ -110,7 +110,6 @@ namespace CryptoNote {
     m_fee_index(boost::get<1>(m_transactions)),
     logger(log, "txpool") {
   }
-
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::add_tx(const Transaction &tx, /*const Crypto::Hash& tx_prefix_hash,*/ const Crypto::Hash &id, size_t blobSize, tx_verification_context& tvc, bool keptByBlock) {
     if (!check_inputs_types_supported(tx)) {
@@ -134,7 +133,8 @@ namespace CryptoNote {
     }
 
     const uint64_t fee = inputs_amount - outputs_amount;
-    if (!keptByBlock && fee < m_currency.minimumFee()) {
+    bool isFusionTransaction = fee == 0 && m_currency.isFusionTransaction(tx, inputs_amount, blobSize);
+    if (!keptByBlock && !isFusionTransaction && fee < m_currency.minimumFee()) {
       logger(INFO) << "transaction fee is not enough: " << m_currency.formatAmount(fee) <<
         ", minimum fee: " << m_currency.formatAmount(m_currency.minimumFee());
       tvc.m_verifivation_failed = true;
@@ -212,10 +212,7 @@ namespace CryptoNote {
     }
 
     tvc.m_added_to_pool = true;
-
-    if (inputsValid && fee > 0)
-      tvc.m_should_be_relayed = true;
-
+    tvc.m_should_be_relayed = inputsValid && (fee > 0 || isFusionTransaction);
     tvc.m_verifivation_failed = true;
 
     if (!addTransactionInputs(id, tx, keptByBlock))
@@ -360,10 +357,24 @@ namespace CryptoNote {
 
     BlockTemplate blockTemplate;
 
+    for (auto it = m_fee_index.rbegin(); it != m_fee_index.rend() && it->fee == 0; ++it) {
+      const auto& txd = *it;
+
+      if (m_currency.fusionTxMaxSize() < total_size + txd.blobSize) {
+        continue;
+      }
+
+      TransactionCheckInfo checkInfo(txd);
+      if (is_transaction_ready_to_go(txd.tx, checkInfo) && blockTemplate.addTransaction(txd.id, txd.tx)) {
+        total_size += txd.blobSize;
+      }
+    }
+
     for (auto i = m_fee_index.begin(); i != m_fee_index.end(); ++i) {
       const auto& txd = *i;
 
-      if (max_total_size < total_size + txd.blobSize) {
+      size_t blockSizeLimit = (txd.fee == 0) ? median_size : max_total_size;
+      if (blockSizeLimit < total_size + txd.blobSize) {
         continue;
       }
 
@@ -374,7 +385,7 @@ namespace CryptoNote {
       m_fee_index.modify(i, [&checkInfo](TransactionCheckInfo& item) {
         item = checkInfo;
       });
-      
+
       if (ready && blockTemplate.addTransaction(txd.id, txd.tx)) {
         total_size += txd.blobSize;
         fee += txd.fee;

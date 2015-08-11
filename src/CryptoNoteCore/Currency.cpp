@@ -209,6 +209,52 @@ bool Currency::constructMinerTx(uint32_t height, size_t medianSize, uint64_t alr
   return true;
 }
 
+bool Currency::isFusionTransaction(const Transaction& transaction, uint64_t inputAmount, size_t size) const {
+  assert(getInputAmount(transaction) == inputAmount);
+  assert(getObjectBinarySize(transaction) == size);
+
+  if (size > fusionTxMaxSize()) {
+    return false;
+  }
+
+  if (transaction.inputs.size() < fusionTxMinInputCount()) {
+    return false;
+  }
+
+  if (transaction.inputs.size() < transaction.outputs.size() * fusionTxMinInOutCountRatio()) {
+    return false;
+  }
+
+  std::vector<uint64_t> expectedOutputsAmounts;
+  expectedOutputsAmounts.reserve(transaction.outputs.size());
+  decomposeAmount(inputAmount, defaultDustThreshold(), expectedOutputsAmounts);
+  assert(!expectedOutputsAmounts.empty());
+
+  if (expectedOutputsAmounts.size() != transaction.outputs.size()) {
+    return false;
+  }
+
+  std::sort(expectedOutputsAmounts.begin(), expectedOutputsAmounts.end());
+
+  if (expectedOutputsAmounts.front() <= defaultDustThreshold()) {
+    return false;
+  }
+
+  auto it1 = expectedOutputsAmounts.begin();
+  auto it2 = transaction.outputs.begin();
+  for (; it1 != expectedOutputsAmounts.end(); ++it1, ++it2) {
+    if (*it1 != it2->amount) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool Currency::isFusionTransaction(const Transaction& transaction) const {
+  return isFusionTransaction(transaction, getInputAmount(transaction), getObjectBinarySize(transaction));
+}
+
 std::string Currency::accountAddressAsString(const AccountBase& account) const {
   return getAccountAddressAsStr(m_publicAddressBase58Prefix, account.getAccountKeys().address);
 }
@@ -237,6 +283,16 @@ std::string Currency::formatAmount(uint64_t amount) const {
     s.insert(0, m_numberOfDecimalPlaces + 1 - s.size(), '0');
   }
   s.insert(s.size() - m_numberOfDecimalPlaces, ".");
+  return s;
+}
+
+std::string Currency::formatAmount(int64_t amount) const {
+  std::string s = formatAmount(static_cast<uint64_t>(std::abs(amount)));
+
+  if (amount < 0) {
+    s.insert(0, "-");
+  }
+
   return s;
 }
 
@@ -421,6 +477,10 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
   mempoolTxLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_LIVETIME);
   mempoolTxFromAltBlockLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME);
   numberOfPeriodsToForgetTxDeletedFromPool(parameters::CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL);
+
+  fusionTxMaxSize(parameters::FUSION_TX_MAX_SIZE);
+  fusionTxMinInputCount(parameters::FUSION_TX_MIN_INPUT_COUNT);
+  fusionTxMinInOutCountRatio(parameters::FUSION_TX_MIN_IN_OUT_COUNT_RATIO);
 
   upgradeHeight(parameters::UPGRADE_HEIGHT);
   upgradeVotingThreshold(parameters::UPGRADE_VOTING_THRESHOLD);

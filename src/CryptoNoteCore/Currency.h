@@ -72,6 +72,10 @@ public:
   uint64_t mempoolTxFromAltBlockLiveTime() const { return m_mempoolTxFromAltBlockLiveTime; }
   uint64_t numberOfPeriodsToForgetTxDeletedFromPool() const { return m_numberOfPeriodsToForgetTxDeletedFromPool; }
 
+  size_t fusionTxMaxSize() const { return m_fusionTxMaxSize; }
+  size_t fusionTxMinInputCount() const { return m_fusionTxMinInputCount; }
+  size_t fusionTxMinInOutCountRatio() const { return m_fusionTxMinInOutCountRatio; }
+
   uint64_t upgradeHeight() const { return m_upgradeHeight; }
   unsigned int upgradeVotingThreshold() const { return m_upgradeVotingThreshold; }
   size_t upgradeVotingWindow() const { return m_upgradeVotingWindow; }
@@ -99,11 +103,15 @@ public:
     uint64_t fee, const AccountPublicAddress& minerAddress, Transaction& tx,
     const BinaryArray& extraNonce = BinaryArray(), size_t maxOuts = 1, bool penalizeFee = false) const;
 
+  bool isFusionTransaction(const Transaction& transaction) const;
+  bool isFusionTransaction(const Transaction& transaction, uint64_t inputAmount, size_t size) const;
+
   std::string accountAddressAsString(const AccountBase& account) const;
   std::string accountAddressAsString(const AccountPublicAddress& accountPublicAddress) const;
   bool parseAccountAddressString(const std::string& str, AccountPublicAddress& addr) const;
 
   std::string formatAmount(uint64_t amount) const;
+  std::string formatAmount(int64_t amount) const;
   bool parseAmount(const std::string& str, uint64_t& amount) const;
 
   difficulty_type nextDifficulty(std::vector<uint64_t> timestamps, std::vector<difficulty_type> cumulativeDifficulties) const;
@@ -158,6 +166,10 @@ private:
   uint64_t m_mempoolTxLiveTime;
   uint64_t m_mempoolTxFromAltBlockLiveTime;
   uint64_t m_numberOfPeriodsToForgetTxDeletedFromPool;
+
+  size_t m_fusionTxMaxSize;
+  size_t m_fusionTxMinInputCount;
+  size_t m_fusionTxMinInOutCountRatio;
 
   uint64_t m_upgradeHeight;
   unsigned int m_upgradeVotingThreshold;
@@ -227,6 +239,10 @@ public:
   CurrencyBuilder& mempoolTxLiveTime(uint64_t val) { m_currency.m_mempoolTxLiveTime = val; return *this; }
   CurrencyBuilder& mempoolTxFromAltBlockLiveTime(uint64_t val) { m_currency.m_mempoolTxFromAltBlockLiveTime = val; return *this; }
   CurrencyBuilder& numberOfPeriodsToForgetTxDeletedFromPool(uint64_t val) { m_currency.m_numberOfPeriodsToForgetTxDeletedFromPool = val; return *this; }
+
+  CurrencyBuilder& fusionTxMaxSize(size_t val) { m_currency.m_fusionTxMaxSize = val; return *this; }
+  CurrencyBuilder& fusionTxMinInputCount(size_t val) { m_currency.m_fusionTxMinInputCount = val; return *this; }
+  CurrencyBuilder& fusionTxMinInOutCountRatio(size_t val) { m_currency.m_fusionTxMinInOutCountRatio = val; return *this; }
 
   CurrencyBuilder& upgradeHeight(uint64_t val) { m_currency.m_upgradeHeight = val; return *this; }
   CurrencyBuilder& upgradeVotingThreshold(unsigned int val);

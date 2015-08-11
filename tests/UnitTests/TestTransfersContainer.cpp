@@ -50,8 +50,8 @@ namespace {
 
   protected:
 
-    BlockInfo blockInfo(uint32_t height) const {
-      return BlockInfo{ height, 1000000 };
+    TransactionBlockInfo blockInfo(uint32_t height) const {
+      return TransactionBlockInfo{ height, 1000000 };
     }
 
     std::unique_ptr<ITransactionReader> addTransaction(uint32_t height = WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT,
@@ -155,7 +155,7 @@ TEST_F(TransfersContainer_addTransaction, addingTransactionTwiceCausesException)
 
 TEST_F(TransfersContainer_addTransaction, addingTwoIdenticalUnconfirmedMultisignatureOutputsDoesNotCauseException) {
 
-  CryptoNote::BlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
 
   TestTransactionBuilder tx1;
   tx1.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
@@ -182,7 +182,7 @@ TEST_F(TransfersContainer_addTransaction, addingTwoIdenticalUnconfirmedMultisign
 }
 
 TEST_F(TransfersContainer_addTransaction, addingConfirmedMultisignatureOutputIdenticalAnotherUnspentOuputCausesException) {
-  CryptoNote::BlockInfo blockInfo{ TEST_BLOCK_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo{ TEST_BLOCK_HEIGHT, 1000000 };
 
   TestTransactionBuilder tx1;
   tx1.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
@@ -209,7 +209,7 @@ TEST_F(TransfersContainer_addTransaction, addingConfirmedMultisignatureOutputIde
 }
 
 TEST_F(TransfersContainer_addTransaction, addingConfirmedMultisignatureOutputIdenticalAnotherSpentOuputCausesException) {
-  CryptoNote::BlockInfo blockInfo1{ TEST_BLOCK_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo1{ TEST_BLOCK_HEIGHT, 1000000 };
   TestTransactionBuilder tx1;
   tx1.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
   auto outInfo1 = tx1.addTestMultisignatureOutput(TEST_OUTPUT_AMOUNT, TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX);
@@ -217,14 +217,14 @@ TEST_F(TransfersContainer_addTransaction, addingConfirmedMultisignatureOutputIde
 
   // Spend output
   {
-    CryptoNote::BlockInfo blockInfo2{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+    CryptoNote::TransactionBlockInfo blockInfo2{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
     TestTransactionBuilder tx2;
     tx2.addTestMultisignatureInput(TEST_OUTPUT_AMOUNT, outInfo1);
     ASSERT_TRUE(container.addTransaction(blockInfo2, *tx2.build(), std::vector<TransactionOutputInformationIn>()));
   }
 
   {
-    CryptoNote::BlockInfo blockInfo3{ TEST_BLOCK_HEIGHT + 3, 1000000 };
+    CryptoNote::TransactionBlockInfo blockInfo3{ TEST_BLOCK_HEIGHT + 3, 1000000 };
     TestTransactionBuilder tx3;
     tx3.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
     auto outInfo3 = tx3.addTestMultisignatureOutput(TEST_OUTPUT_AMOUNT, TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX);
@@ -240,7 +240,7 @@ TEST_F(TransfersContainer_addTransaction, addingConfirmedMultisignatureOutputIde
 }
 
 TEST_F(TransfersContainer_addTransaction, addingConfirmedBlockAndUnconfirmedOutputCausesException) {
-  CryptoNote::BlockInfo blockInfo{ TEST_BLOCK_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo{ TEST_BLOCK_HEIGHT, 1000000 };
 
   TestTransactionBuilder tx;
   tx.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
@@ -252,7 +252,7 @@ TEST_F(TransfersContainer_addTransaction, addingConfirmedBlockAndUnconfirmedOutp
 }
 
 TEST_F(TransfersContainer_addTransaction, addingUnconfirmedBlockAndConfirmedOutputCausesException) {
-  CryptoNote::BlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
 
   TestTransactionBuilder tx;
   tx.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
@@ -264,7 +264,7 @@ TEST_F(TransfersContainer_addTransaction, addingUnconfirmedBlockAndConfirmedOutp
 }
 
 TEST_F(TransfersContainer_addTransaction, handlesAddingUnconfirmedOutputToKey) {
-  CryptoNote::BlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
 
   TestTransactionBuilder txbuilder;
   txbuilder.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
@@ -306,7 +306,7 @@ TEST_F(TransfersContainer_addTransaction, handlesAddingUnconfirmedOutputToKey) {
 }
 
 TEST_F(TransfersContainer_addTransaction, handlesAddingConfirmedOutputToKey) {
-  CryptoNote::BlockInfo blockInfo{ TEST_BLOCK_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo{ TEST_BLOCK_HEIGHT, 1000000 };
 
   TestTransactionBuilder txbuilder;
   txbuilder.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
@@ -350,7 +350,7 @@ TEST_F(TransfersContainer_addTransaction, handlesAddingConfirmedOutputToKey) {
 }
 
 TEST_F(TransfersContainer_addTransaction, addingEmptyTransactionOuptutsDoesNotChaingeContainer) {
-  CryptoNote::BlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
 
   TestTransactionBuilder builder;
   builder.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
@@ -559,7 +559,7 @@ TEST_F(TransfersContainer_deleteUnconfirmedTransaction, deleteUnconfirmedSpendin
   auto tx = spendingTx.build();
 
   {
-    CryptoNote::BlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+    CryptoNote::TransactionBlockInfo blockInfo{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
     ASSERT_TRUE(container.addTransaction(blockInfo, *tx, {}));
   }
 
@@ -669,20 +669,20 @@ TEST_F(TransfersContainer_markTransactionConfirmed, confirmationTxWithNoOutputs)
 
 TEST_F(TransfersContainer_markTransactionConfirmed, confirmingMultisignatureOutputIdenticalAnotherUnspentOuputCausesException) {
   // Add tx1
-  CryptoNote::BlockInfo blockInfo1{ TEST_BLOCK_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo1{ TEST_BLOCK_HEIGHT, 1000000 };
   TestTransactionBuilder tx1;
   tx1.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
   auto outInfo1 = tx1.addTestMultisignatureOutput(TEST_OUTPUT_AMOUNT, TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX);
   ASSERT_TRUE(container.addTransaction(blockInfo1, *tx1.build(), {outInfo1}));
 
   // Spend output, add tx2
-  CryptoNote::BlockInfo blockInfo2{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo2{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
   TestTransactionBuilder tx2;
   tx2.addTestMultisignatureInput(TEST_OUTPUT_AMOUNT, outInfo1);
   ASSERT_TRUE(container.addTransaction(blockInfo2, *tx2.build(), {}));
 
   // Add tx3
-  CryptoNote::BlockInfo blockInfo3{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo3{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
   TestTransactionBuilder tx3;
   tx3.addTestInput(TEST_OUTPUT_AMOUNT + 1, account);
   auto outInfo3 = tx3.addTestMultisignatureOutput(TEST_OUTPUT_AMOUNT, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX);
@@ -703,7 +703,7 @@ TEST_F(TransfersContainer_markTransactionConfirmed, confirmingMultisignatureOutp
 }
 
 TEST_F(TransfersContainer_markTransactionConfirmed, confirmingMultisignatureOutputIdenticalAnotherSpentOuputCausesException) {
-  CryptoNote::BlockInfo blockInfo1{ TEST_BLOCK_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo1{ TEST_BLOCK_HEIGHT, 1000000 };
   TestTransactionBuilder tx1;
   tx1.addTestInput(TEST_OUTPUT_AMOUNT + 1);
   auto outInfo1 = tx1.addTestMultisignatureOutput(TEST_OUTPUT_AMOUNT, TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX);
@@ -711,7 +711,7 @@ TEST_F(TransfersContainer_markTransactionConfirmed, confirmingMultisignatureOutp
 
   container.advanceHeight(TEST_BLOCK_HEIGHT + TEST_TRANSACTION_SPENDABLE_AGE);
 
-  CryptoNote::BlockInfo blockInfo2{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
+  CryptoNote::TransactionBlockInfo blockInfo2{ WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT, 1000000 };
   TestTransactionBuilder tx2;
   tx2.addTestInput(TEST_OUTPUT_AMOUNT + 1);
   auto outInfo2 = tx2.addTestMultisignatureOutput(TEST_OUTPUT_AMOUNT, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX);
