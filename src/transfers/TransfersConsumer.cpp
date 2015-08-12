@@ -162,7 +162,7 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startH
   assert(blocks);
 
   struct Tx {
-    BlockInfo blockInfo;
+    TransactionBlockInfo blockInfo;
     const ITransactionReader* tx;
   };
 
@@ -193,7 +193,7 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startH
         continue;
       }
 
-      BlockInfo blockInfo;
+      TransactionBlockInfo blockInfo;
       blockInfo.height = startHeight + i;
       blockInfo.timestamp = block->timestamp;
       blockInfo.transactionIndex = 0; // position in block
@@ -282,7 +282,7 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startH
 }
 
 std::error_code TransfersConsumer::onPoolUpdated(const std::vector<std::unique_ptr<ITransactionReader>>& addedTransactions, const std::vector<Hash>& deletedTransactions) {
-  BlockInfo unconfirmedBlockInfo;
+  TransactionBlockInfo unconfirmedBlockInfo;
   unconfirmedBlockInfo.timestamp = 0; 
   unconfirmedBlockInfo.height = WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT;
   std::error_code processingError;
@@ -325,7 +325,7 @@ void TransfersConsumer::getKnownPoolTxIds(std::vector<Hash>& ids) {
 
 std::error_code createTransfers(
   const AccountKeys& account,
-  const BlockInfo& blockInfo,
+  const TransactionBlockInfo& blockInfo,
   const ITransactionReader& tx,
   const std::vector<uint32_t>& outputs,
   const std::vector<uint32_t>& globalIdxs,
@@ -388,7 +388,7 @@ std::error_code createTransfers(
   return std::error_code();
 }
 
-std::error_code TransfersConsumer::preprocessOutputs(const BlockInfo& blockInfo, const ITransactionReader& tx, PreprocessInfo& info) {
+std::error_code TransfersConsumer::preprocessOutputs(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx, PreprocessInfo& info) {
   std::unordered_map<PublicKey, std::vector<uint32_t>> outputs;
   findMyOutputs(tx, m_viewSecret, m_spendKeys, outputs);
 
@@ -419,7 +419,7 @@ std::error_code TransfersConsumer::preprocessOutputs(const BlockInfo& blockInfo,
   return std::error_code();
 }
 
-std::error_code TransfersConsumer::processTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx) {
+std::error_code TransfersConsumer::processTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx) {
   PreprocessInfo info;
   auto ec = preprocessOutputs(blockInfo, tx, info);
   if (ec) {
@@ -430,7 +430,7 @@ std::error_code TransfersConsumer::processTransaction(const BlockInfo& blockInfo
 }
 
 
-std::error_code TransfersConsumer::processTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info) {
+std::error_code TransfersConsumer::processTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info) {
   std::error_code errorCode;
   std::vector<TransactionOutputInformationIn> emptyOutputs;
   for (auto& kv : m_subscriptions) {
@@ -447,7 +447,7 @@ std::error_code TransfersConsumer::processTransaction(const BlockInfo& blockInfo
 
 
 
-std::error_code TransfersConsumer::processOutputs(const BlockInfo& blockInfo, TransfersSubscription& sub, 
+std::error_code TransfersConsumer::processOutputs(const TransactionBlockInfo& blockInfo, TransfersSubscription& sub,
   const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers, const std::vector<uint32_t>& globalIdxs) {
 
   if (blockInfo.height != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {

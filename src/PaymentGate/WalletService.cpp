@@ -428,7 +428,7 @@ std::error_code WalletService::getTransactionByTransferId(size_t transferId, siz
     return std::make_error_code(std::errc::argument_out_of_domain);
   }
 
-  auto nextTxId = std::lower_bound(transfersIndices.begin(), transfersIndices.end(), transferId);
+  auto nextTxId = std::upper_bound(transfersIndices.begin(), transfersIndices.end(), transferId);
   transactionId = (nextTxId - transfersIndices.begin()) - 1;
 
   return std::error_code();
@@ -454,12 +454,14 @@ std::error_code WalletService::getTransaction(size_t txId, bool& found, Transact
   logger(Logging::DEBUGGING) << "getTransaction request came";
 
   found = false;
+
   try {
-    auto tx = wallet->getTransaction(txId);
     if (txId + 1 >= transfersIndices.size()) {
       logger(Logging::WARNING) << "Unable to get transaction " << txId << ": argument out of domain.";
       return std::make_error_code(std::errc::argument_out_of_domain);
     }
+
+    auto tx = wallet->getTransaction(txId);
 
     fillTransactionRpcInfo(txId, tx, rpcInfo);
 

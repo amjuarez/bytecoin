@@ -172,7 +172,7 @@ TransfersContainer::TransfersContainer(const Currency& currency, size_t transact
   m_transactionSpendableAge(transactionSpendableAge) {
 }
 
-bool TransfersContainer::addTransaction(const BlockInfo& block, const ITransactionReader& tx,
+bool TransfersContainer::addTransaction(const TransactionBlockInfo& block, const ITransactionReader& tx,
   const std::vector<TransactionOutputInformationIn>& transfers) {
   std::unique_lock<std::mutex> lock(m_mutex);
 
@@ -201,7 +201,7 @@ bool TransfersContainer::addTransaction(const BlockInfo& block, const ITransacti
 /**
  * \pre m_mutex is locked.
  */
-void TransfersContainer::addTransaction(const BlockInfo& block, const ITransactionReader& tx) {
+void TransfersContainer::addTransaction(const TransactionBlockInfo& block, const ITransactionReader& tx) {
   auto txHash = tx.getTransactionHash();
 
   TransactionInformation txInfo;
@@ -226,7 +226,7 @@ void TransfersContainer::addTransaction(const BlockInfo& block, const ITransacti
 /**
  * \pre m_mutex is locked.
  */
-bool TransfersContainer::addTransactionOutputs(const BlockInfo& block, const ITransactionReader& tx,
+bool TransfersContainer::addTransactionOutputs(const TransactionBlockInfo& block, const ITransactionReader& tx,
                                                const std::vector<TransactionOutputInformationIn>& transfers) {
   bool outputsAdded = false;
 
@@ -281,7 +281,7 @@ bool TransfersContainer::addTransactionOutputs(const BlockInfo& block, const ITr
 /**
  * \pre m_mutex is locked.
  */
-bool TransfersContainer::addTransactionInputs(const BlockInfo& block, const ITransactionReader& tx) {
+bool TransfersContainer::addTransactionInputs(const TransactionBlockInfo& block, const ITransactionReader& tx) {
   bool inputsAdded = false;
 
   for (size_t i = 0; i < tx.getInputCount(); ++i) {
@@ -365,7 +365,7 @@ bool TransfersContainer::deleteUnconfirmedTransaction(const Hash& transactionHas
   }
 }
 
-bool TransfersContainer::markTransactionConfirmed(const BlockInfo& block, const Hash& transactionHash,
+bool TransfersContainer::markTransactionConfirmed(const TransactionBlockInfo& block, const Hash& transactionHash,
                                                   const std::vector<uint32_t>& globalIndices) {
   if (block.height == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
     throw std::invalid_argument("Block height equals WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT");
@@ -479,7 +479,7 @@ void TransfersContainer::deleteTransactionTransfers(const Hash& transactionHash)
 /**
  * \pre m_mutex is locked.
  */
-void TransfersContainer::copyToSpent(const BlockInfo& block, const ITransactionReader& tx, size_t inputIndex,
+void TransfersContainer::copyToSpent(const TransactionBlockInfo& block, const ITransactionReader& tx, size_t inputIndex,
                                      const TransactionOutputInformationEx& output) {
   assert(output.blockHeight != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT);
   assert(output.globalOutputIndex != UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX);

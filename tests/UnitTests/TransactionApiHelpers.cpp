@@ -43,6 +43,10 @@ PublicKey TestTransactionBuilder::getTransactionPublicKey() const {
   return tx->getTransactionPublicKey();
 }
 
+void TestTransactionBuilder::appendExtra(const BinaryArray& extraData) {
+  tx->appendExtra(extraData);
+}
+
 void TestTransactionBuilder::setUnlockTime(uint64_t time) {
   tx->setUnlockTime(time);
 }
@@ -133,7 +137,7 @@ size_t TestTransactionBuilder::addFakeMultisignatureInput(uint64_t amount, uint3
   MultisignatureInput input;
   input.amount = amount;
   input.outputIndex = globalOutputIndex;
-  input.signatureCount = signatureCount;
+  input.signatureCount = static_cast<uint8_t>(signatureCount);
   size_t idx = tx->addInput(input);
 
   std::vector<AccountBase> accs;
@@ -221,7 +225,108 @@ std::unique_ptr<ITransactionReader> TestTransactionBuilder::build() {
   return std::move(tx);
 }
 
-
 Crypto::Hash TestTransactionBuilder::getTransactionHash() const {
   return transactionHash;
+}
+
+FusionTransactionBuilder::FusionTransactionBuilder(const Currency& currency, uint64_t amount) :
+  m_currency(currency),
+  m_amount(amount),
+  m_firstOutput(0),
+  m_fee(0),
+  m_extraSize(0),
+  m_inputCount(currency.fusionTxMinInputCount()) {
+}
+
+uint64_t FusionTransactionBuilder::getAmount() const {
+  return m_amount;
+}
+
+void FusionTransactionBuilder::setAmount(uint64_t val) {
+  m_amount = val;
+}
+
+uint64_t FusionTransactionBuilder::getFirstOutput() const {
+  return m_firstOutput;
+}
+
+void FusionTransactionBuilder::setFirstOutput(uint64_t val) {
+  m_firstOutput = val;
+}
+
+uint64_t FusionTransactionBuilder::getFee() const {
+  return m_fee;
+}
+
+void FusionTransactionBuilder::setFee(uint64_t val) {
+  m_fee = val;
+}
+
+size_t FusionTransactionBuilder::getExtraSize() const {
+  return m_extraSize;
+}
+
+void FusionTransactionBuilder::setExtraSize(size_t val) {
+  m_extraSize = val;
+}
+
+size_t FusionTransactionBuilder::getInputCount() const {
+  return m_inputCount;
+}
+
+void FusionTransactionBuilder::setInputCount(size_t val) {
+  m_inputCount = val;
+}
+
+std::unique_ptr<ITransactionReader> FusionTransactionBuilder::buildReader() const {
+  assert(m_inputCount > 0);
+
+  TestTransactionBuilder builder;
+
+  if (m_extraSize != 0) {
+    builder.appendExtra(BinaryArray(m_extraSize, 0));
+  }
+
+  builder.addTestInput(m_amount - (m_inputCount - 1) * m_currency.defaultDustThreshold());
+  for (size_t i = 0; i < m_inputCount - 1; ++i) {
+    builder.addTestInput(m_currency.defaultDustThreshold());
+  }
+
+  AccountPublicAddress address = generateAddress();
+  std::vector<uint64_t> outputAmounts;
+  assert(m_amount >= m_firstOutput + m_fee);
+  decomposeAmount(m_amount - m_firstOutput - m_fee, m_currency.defaultDustThreshold(), outputAmounts);
+  std::sort(outputAmounts.begin(), outputAmounts.end());
+
+  if (m_firstOutput != 0) {
+    builder.addOutput(m_firstOutput, address);
+  }
+
+  for (auto outAmount : outputAmounts) {
+    builder.addOutput(outAmount, address);
+  }
+
+  return builder.build();
+}
+
+Transaction FusionTransactionBuilder::buildTx() const {
+  return convertTx(*buildReader());
+}
+
+Transaction FusionTransactionBuilder::createFusionTransactionBySize(size_t targetSize) {
+  auto tx = buildReader();
+
+  size_t realSize = tx->getTransactionData().size();
+  if (realSize < targetSize) {
+    setExtraSize(targetSize - realSize);
+    tx = buildReader();
+
+    realSize = tx->getTransactionData().size();
+    if (realSize > targetSize) {
+      setExtraSize(getExtraSize() - 1);
+      tx = buildReader();
+    }
+  }
+
+  return convertTx(*tx);
 }

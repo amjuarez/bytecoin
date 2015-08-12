@@ -52,7 +52,7 @@ const AccountKeys& TransfersSubscription::getKeys() const {
   return subscription.keys;
 }
 
-void TransfersSubscription::addTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx,
+void TransfersSubscription::addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
                                            const std::vector<TransactionOutputInformationIn>& transfersList) {
   bool added = transfers.addTransaction(blockInfo, tx, transfersList);
   if (added) {
@@ -73,7 +73,7 @@ void TransfersSubscription::deleteUnconfirmedTransaction(const Hash& transaction
   m_observerManager.notify(&ITransfersObserver::onTransactionDeleted, this, transactionHash);
 }
 
-void TransfersSubscription::markTransactionConfirmed(const BlockInfo& block, const Hash& transactionHash,
+void TransfersSubscription::markTransactionConfirmed(const TransactionBlockInfo& block, const Hash& transactionHash,
                                                      const std::vector<uint32_t>& globalIndices) {
   transfers.markTransactionConfirmed(block, transactionHash, globalIndices);
   m_observerManager.notify(&ITransfersObserver::onTransactionUpdated, this, transactionHash);

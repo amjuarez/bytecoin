@@ -9,6 +9,8 @@ set(CMAKE_SKIP_INSTALL_RULES ON)
 set(CMAKE_SKIP_PACKAGE_ALL_DEPENDENCY ON)
 set(CMAKE_SUPPRESS_REGENERATION ON)
 enable_testing()
+# copy CTestCustom.cmake to build dir to disable long running tests in 'make test'
+configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
 
 project(Bytecoin)
 

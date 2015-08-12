@@ -539,6 +539,10 @@ size_t WalletGreen::doTransfer(std::vector<WalletOuts>&& wallets,
     throw std::system_error(make_error_code(error::ZERO_DESTINATION));
   }
 
+  if (fee < m_currency.minimumFee()) {
+    throw std::system_error(make_error_code(error::FEE_TOO_SMALL));
+  }
+
   validateAddresses(destinations, m_currency);
 
   uint64_t neededMoney = countNeededMoney(destinations, fee);

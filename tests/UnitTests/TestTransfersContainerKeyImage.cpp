@@ -62,8 +62,8 @@ namespace {
       return getOutputs(flags).size();
     }
 
-    BlockInfo blockInfo(uint32_t height) const {
-      return BlockInfo{ height, 1000000 };
+    TransactionBlockInfo blockInfo(uint32_t height) const {
+      return TransactionBlockInfo{ height, 1000000 };
     }
 
     TestTransactionBuilder createTransactionWithFixedKey() {
@@ -82,7 +82,7 @@ namespace {
       auto outInfo = tx.addTestKeyOutput(amount, outputIndex, account);
 
       auto finalTx = tx.build();
-      EXPECT_TRUE(container.addTransaction(BlockInfo{ height, 1000000, txIndex }, *finalTx, { outInfo }));
+      EXPECT_TRUE(container.addTransaction(TransactionBlockInfo{ height, 1000000, txIndex }, *finalTx, { outInfo }));
       return finalTx;
     }
 

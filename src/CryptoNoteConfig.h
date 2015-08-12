@@ -66,6 +66,10 @@ const uint64_t CRYPTONOTE_MEMPOOL_TX_LIVETIME                = 60 * 60 * 24;    
 const uint64_t CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME = 60 * 60 * 24 * 7; //seconds, one week
 const uint64_t CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL = 7;  // CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL * CRYPTONOTE_MEMPOOL_TX_LIVETIME = time to forget tx
 
+const size_t   FUSION_TX_MAX_SIZE                            = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE * 30 / 100;
+const size_t   FUSION_TX_MIN_INPUT_COUNT                     = 6;
+const size_t   FUSION_TX_MIN_IN_OUT_COUNT_RATIO              = 3;
+
 const uint64_t UPGRADE_HEIGHT                                = 546602;
 const unsigned UPGRADE_VOTING_THRESHOLD                      = 90;               // percent
 const size_t   UPGRADE_VOTING_WINDOW                         = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
@@ -151,7 +155,8 @@ const std::initializer_list<CheckpointData> CHECKPOINTS = {
   {785500, "de1a487d70964d25ed6f7de196866f357a293e867ee81313e7fd0352d0126bdd"},
   {789000, "acef490bbccce3b7b7ae8554a414f55413fbf4ca1472c6359b126a4439bd9f01"},
   {796000, "04e387a00d35db21d4d93d04040b31f22573972a7e61d72cc07d0ab69bcb9c44"},
-  {800000, "d7fa4eea02e5ce60b949136569c0ea7ac71ea46e0065311054072ac415560b86"}
+  {800000, "d7fa4eea02e5ce60b949136569c0ea7ac71ea46e0065311054072ac415560b86"},
+  {804000, "bcc8b3782499aae508c40d5587d1cc5d68281435ea9bfc6804a262047f7b934d"}
 };
 } // CryptoNote
 

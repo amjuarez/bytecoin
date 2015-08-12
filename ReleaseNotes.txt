@@ -1,3 +1,8 @@
+Release notes 1.0.7
+
+- Fusion transactions support
+- Various simplewallet improvements
+
 Release notes 1.0.6
 
 - High-level API update

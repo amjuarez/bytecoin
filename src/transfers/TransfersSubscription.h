@@ -32,11 +32,11 @@ public:
   void onError(const std::error_code& ec, uint32_t height);
   bool advanceHeight(uint32_t height);
   const AccountKeys& getKeys() const;
-  void addTransaction(const BlockInfo& blockInfo, const ITransactionReader& tx,
+  void addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
                       const std::vector<TransactionOutputInformationIn>& transfers);
 
   void deleteUnconfirmedTransaction(const Crypto::Hash& transactionHash);
-  void markTransactionConfirmed(const BlockInfo& block, const Crypto::Hash& transactionHash, const std::vector<uint32_t>& globalIndices);
+  void markTransactionConfirmed(const TransactionBlockInfo& block, const Crypto::Hash& transactionHash, const std::vector<uint32_t>& globalIndices);
 
   // ITransfersSubscription
   virtual AccountPublicAddress getAddress() override;

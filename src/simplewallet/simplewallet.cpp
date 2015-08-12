@@ -17,8 +17,10 @@
 
 #include "SimpleWallet.h"
 
+#include <ctime>
 #include <fstream>
 #include <future>
+#include <iomanip>
 #include <thread>
 #include <set>
 #include <sstream>
@@ -31,6 +33,7 @@
 
 #include "Common/CommandLine.h"
 #include "Common/SignalHandler.h"
+#include "Common/StringTools.h"
 #include "Common/PathTools.h"
 #include "Common/Util.h"
 #include "CryptoNoteCore/CryptoNoteFormatUtils.h"
@@ -371,9 +374,74 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(LoggerRef& logger, std::unique_ptr<
   }
 }
 
+std::string makeCenteredString(size_t width, const std::string& text) {
+  if (text.size() >= width) {
+    return text;
+  }
 
+  size_t offset = (width - text.size() + 1) / 2;
+  return std::string(offset, ' ') + text + std::string(width - text.size() - offset, ' ');
 }
 
+const size_t TIMESTAMP_MAX_WIDTH = 19;
+const size_t HASH_MAX_WIDTH = 64;
+const size_t TOTAL_AMOUNT_MAX_WIDTH = 20;
+const size_t FEE_MAX_WIDTH = 14;
+const size_t BLOCK_MAX_WIDTH = 7;
+const size_t UNLOCK_TIME_MAX_WIDTH = 11;
+
+void printListTransfersHeader(LoggerRef& logger) {
+  std::string header = makeCenteredString(TIMESTAMP_MAX_WIDTH, "timestamp (UTC)") + "  ";
+  header += makeCenteredString(HASH_MAX_WIDTH, "hash") + "  ";
+  header += makeCenteredString(TOTAL_AMOUNT_MAX_WIDTH, "total amount") + "  ";
+  header += makeCenteredString(FEE_MAX_WIDTH, "fee") + "  ";
+  header += makeCenteredString(BLOCK_MAX_WIDTH, "block") + "  ";
+  header += makeCenteredString(UNLOCK_TIME_MAX_WIDTH, "unlock time");
+
+  logger(INFO) << header;
+  logger(INFO) << std::string(header.size(), '-');
+}
+
+void printListTransfersItem(LoggerRef& logger, const WalletLegacyTransaction& txInfo, IWalletLegacy& wallet, const Currency& currency) {
+  std::vector<uint8_t> extraVec = Common::asBinaryArray(txInfo.extra);
+
+  Crypto::Hash paymentId;
+  std::string paymentIdStr = (getPaymentIdFromTxExtra(extraVec, paymentId) && paymentId != NULL_HASH ? Common::podToHex(paymentId) : "");
+
+  char timeString[TIMESTAMP_MAX_WIDTH + 1];
+  time_t timestamp = static_cast<time_t>(txInfo.timestamp);
+  if (std::strftime(timeString, sizeof(timeString), "%Y-%m-%d %H:%M:%S", std::gmtime(&timestamp)) == 0) {
+    throw std::runtime_error("time buffer is too small");
+  }
+
+  std::string rowColor = txInfo.totalAmount < 0 ? MAGENTA : GREEN;
+  logger(INFO, rowColor)
+    << std::setw(TIMESTAMP_MAX_WIDTH) << timeString
+    << "  " << std::setw(HASH_MAX_WIDTH) << Common::podToHex(txInfo.hash)
+    << "  " << std::setw(TOTAL_AMOUNT_MAX_WIDTH) << currency.formatAmount(txInfo.totalAmount)
+    << "  " << std::setw(FEE_MAX_WIDTH) << currency.formatAmount(txInfo.fee)
+    << "  " << std::setw(BLOCK_MAX_WIDTH) << txInfo.blockHeight
+    << "  " << std::setw(UNLOCK_TIME_MAX_WIDTH) << txInfo.unlockTime;
+
+  if (!paymentIdStr.empty()) {
+    logger(INFO, rowColor) << "payment ID: " << paymentIdStr;
+  }
+
+  if (txInfo.totalAmount < 0) {
+    if (txInfo.transferCount > 0) {
+      logger(INFO, rowColor) << "transfers:";
+      for (TransferId id = txInfo.firstTransferId; id < txInfo.firstTransferId + txInfo.transferCount; ++id) {
+        WalletLegacyTransfer tr;
+        wallet.getTransfer(id, tr);
+        logger(INFO, rowColor) << tr.address << "  " << std::setw(TOTAL_AMOUNT_MAX_WIDTH) << currency.formatAmount(tr.amount);
+      }
+    }
+  }
+
+  logger(INFO, rowColor) << " "; //just to make logger print one endline
+}
+
+}
 
 std::string simple_wallet::get_commands_str()
 {
@@ -824,6 +892,8 @@ bool simple_wallet::show_incoming_transfers(const std::vector<std::string>& args
 }
 
 bool simple_wallet::listTransfers(const std::vector<std::string>& args) {
+  bool haveTransfers = false;
+
   size_t transactionsCount = m_wallet->getTransactionCount();
   for (size_t trantransactionNumber = 0; trantransactionNumber < transactionsCount; ++trantransactionNumber) {
     WalletLegacyTransaction txInfo;
@@ -832,37 +902,18 @@ bool simple_wallet::listTransfers(const std::vector<std::string>& args) {
       continue;
     }
 
-    std::string paymentIdStr = "";    
-    std::vector<uint8_t> extraVec;
-    extraVec.reserve(txInfo.extra.size());
-    std::for_each(txInfo.extra.begin(), txInfo.extra.end(), [&extraVec](const char el) { extraVec.push_back(el); });
-
-    Crypto::Hash paymentId;
-    paymentIdStr = (getPaymentIdFromTxExtra(extraVec, paymentId) && paymentId != NULL_HASH ? Common::podToHex(paymentId) : "");
-    
-    std::string address = "-";
-    if (txInfo.totalAmount < 0) {
-      if (txInfo.transferCount > 0)
-      {
-        WalletLegacyTransfer tr;
-        m_wallet->getTransfer(txInfo.firstTransferId, tr);
-        address = tr.address;
-      }
+    if (!haveTransfers) {
+      printListTransfersHeader(logger);
+      haveTransfers = true;
     }
 
-    logger(INFO, txInfo.totalAmount < 0 ? MAGENTA : GREEN)
-      << txInfo.timestamp
-      << ", " << (txInfo.totalAmount < 0 ? "OUTPUT" : "INPUT")
-      << ", " << Common::podToHex(txInfo.hash)
-      << ", " << (txInfo.totalAmount < 0 ? "-" : "") << m_currency.formatAmount(std::abs(txInfo.totalAmount))
-      << ", " << m_currency.formatAmount(txInfo.fee)
-      << ", " << (paymentIdStr.empty() ? std::string("-") : paymentIdStr)
-      << ", " << address
-      << ", " << txInfo.blockHeight
-      << ", " << txInfo.unlockTime; 
+    printListTransfersItem(logger, txInfo, *m_wallet, m_currency);
   }
 
-  if (transactionsCount == 0) success_msg_writer() << "No transfers";
+  if (!haveTransfers) {
+    success_msg_writer() << "No transfers";
+  }
+
   return true;
 }
 
