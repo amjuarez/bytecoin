@@ -25,6 +25,7 @@
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "p2p/net_node.h"
 #include "rpc/core_rpc_server_commands_defs.h"
+#include "serialization/JsonValue.h"
 #include "simplewallet.h"
 #include "transfers/TypeHelpers.h"
 #include "wallet/wallet_rpc_server.h"
@@ -178,6 +179,7 @@ struct TransferCommand {
   vector<CryptoNote::Transfer> dsts;
   std::vector<uint8_t> extra;
   uint64_t fee;
+  std::map<std::string, std::vector<Transfer>> aliases;
 
   TransferCommand(const cryptonote::Currency& currency) :
     m_currency(currency), fake_outs_count(0), fee(currency.minimumFee()) {
@@ -224,16 +226,10 @@ struct TransferCommand {
         } else {
           Transfer destination;
           cryptonote::tx_destination_entry de;
+          std::string aliasUrl;
 
           if (!m_currency.parseAccountAddressString(arg, de.addr)) {
-            crypto::hash paymentId;
-            if (cryptonote::parsePaymentId(arg, paymentId)) {
-              fail_msg_writer() << "Invalid payment ID usage. Please, use -p <payment_id>. See help for details.";
-            } else {
-              fail_msg_writer() << "Wrong address: " << arg;
-            }
-
-            return false;
+            aliasUrl = arg;
           }
 
           auto value = ar.next();
@@ -243,14 +239,18 @@ struct TransferCommand {
               ", expected number from 0 to " << m_currency.formatAmount(std::numeric_limits<uint64_t>::max());
             return false;
           }
-          destination.address = arg;
-          destination.amount = de.amount;
 
-          dsts.push_back(destination);
+          if (aliasUrl.empty()) {
+            destination.address = arg;
+            destination.amount = de.amount;
+            dsts.push_back(destination);
+          } else {
+            aliases[aliasUrl].emplace_back(Transfer{"", static_cast<int64_t>(de.amount)});
+          }
         }
       }
 
-      if (dsts.empty()) {
+      if (dsts.empty() && aliases.empty()) {
         fail_msg_writer() << "At least one destination address is required";
         return false;
       }
@@ -349,6 +349,108 @@ std::string tryToOpenWalletOrLoadKeysOrThrow(std::unique_ptr<IWallet>& wallet, c
   } else { //no wallet no keys
     throw std::runtime_error("wallet file '" + walletFileName + "' is not found");
   }
+}
+
+bool processServerAliasResponse(const std::string& response, std::string& address) {
+  try {
+    std::stringstream stream(response);
+    JsonValue json;
+    stream >> json;
+
+    auto rootIt = json.getObject().find("digitalname1");
+    if (rootIt == json.getObject().end()) {
+      return false;
+    }
+
+    if (!rootIt->second.isArray()) {
+      return false;
+    }
+
+    if (rootIt->second.size() == 0) {
+      return false;
+    }
+
+    if (!rootIt->second[0].isObject()) {
+      return false;
+    }
+
+    auto xdnIt = rootIt->second[0].getObject().find("xdn");
+    if (xdnIt == rootIt->second[0].getObject().end()) {
+      return false;
+    }
+
+    address = xdnIt->second.getString();
+  } catch (std::exception&) {
+    return false;
+  }
+
+  return true;
+}
+
+bool splitUrlToHostAndUri(const std::string& aliasUrl, std::string& host, std::string& uri) {
+  size_t protoBegin = aliasUrl.find("http://");
+  if (protoBegin != 0 && protoBegin != std::string::npos) {
+    return false;
+  }
+
+  size_t hostBegin = protoBegin == std::string::npos ? 0 : 7; //strlen("http://")
+  size_t hostEnd = aliasUrl.find('/', hostBegin);
+
+  if (hostEnd == std::string::npos) {
+    uri = "/";
+    host = aliasUrl.substr(hostBegin);
+  } else {
+    uri = aliasUrl.substr(hostEnd);
+    host = aliasUrl.substr(hostBegin, hostEnd - hostBegin);
+  }
+
+  return true;
+}
+
+void resolveAlias(const std::string& aliasUrl, std::string& address) {
+  epee::net_utils::http::http_simple_client http_client;
+
+  std::string host;
+  std::string uri;
+
+  if (!splitUrlToHostAndUri(aliasUrl, host, uri)) {
+    throw std::runtime_error("Invalid url");
+  }
+
+  if (!http_client.connect(host, 80, 5 * 1000)) {
+    throw std::runtime_error("Couldn't connect to " + host);
+  }
+
+  const epee::net_utils::http::http_response_info* response;
+  if (!http_client.invoke_get(uri, std::string(), &response)) {
+    throw std::runtime_error("Failed to make GET request");
+  }
+
+  if (response->m_response_code != 200) {
+    throw std::runtime_error("Remote server returned code " + std::to_string(response->m_response_code));
+  }
+
+  if (!processServerAliasResponse(response->m_body, address)) {
+    throw std::runtime_error("Failed to parse server response");
+  }
+}
+
+bool askAliasesTransfersConfirmation(const std::map<std::string, std::vector<Transfer>>& aliases, const Currency& currency) {
+  std::cout << "Would you like to send money to the following addresses?" << std::endl;
+
+  for (const auto& kv: aliases) {
+    for (const auto& transfer: kv.second) {
+      std::cout << transfer.address << " " << std::setw(21) << currency.formatAmount(transfer.amount) << "  " << kv.first << std::endl;
+    }
+  }
+
+  std::string answer;
+  do {
+    std::cout << "y/n: ";
+    std::getline(std::cin, answer);
+  } while (answer != "y" && answer != "Y" && answer != "n" && answer != "N");
+
+  return answer == "y" || answer == "Y";
 }
 
 }
@@ -901,7 +1003,40 @@ bool simple_wallet::transfer(const std::vector<std::string> &args)
     TransferCommand cmd(m_currency);
 
     if (!cmd.parseArguments(args))
-      return false;
+      return true;
+
+    for (auto& kv: cmd.aliases) {
+      std::string address;
+
+      try {
+        resolveAlias(kv.first, address);
+
+        AccountPublicAddress ignore;
+        if (!m_currency.parseAccountAddressString(address, ignore)) {
+          throw std::runtime_error("Address \"" + address + "\" is invalid");
+        }
+      } catch (std::exception& e) {
+        fail_msg_writer() << "Couldn't resolve alias: " << e.what() << ", alias: " << kv.first;
+        return true;
+      }
+
+      for (auto& transfer: kv.second) {
+        transfer.address = address;
+      }
+    }
+
+    if (!cmd.aliases.empty()) {
+      if (!askAliasesTransfersConfirmation(cmd.aliases, m_currency)) {
+        return true;
+      }
+
+      for (auto& kv: cmd.aliases) {
+        std::copy(std::move_iterator<std::vector<Transfer>::iterator>(kv.second.begin()),
+                  std::move_iterator<std::vector<Transfer>::iterator>(kv.second.end()),
+                  std::back_inserter(cmd.dsts));
+      }
+    }
+
     cryptonote::WalletHelper::SendCompleteResultObserver sent;
 
     std::string extraString;
