@@ -731,7 +731,8 @@ namespace CryptoNote
         });
 
         System::Context<> timeoutContext(m_dispatcher, [&] {
-          System::Timer(m_dispatcher).sleep(std::chrono::milliseconds(m_config.m_net_config.connection_timeout));
+          // Here we use connection_timeout * 3, one for this handshake, and two for back ping from peer.
+          System::Timer(m_dispatcher).sleep(std::chrono::milliseconds(m_config.m_net_config.connection_timeout * 3));
           handshakeContext.interrupt();
           logger(DEBUGGING) << "Handshake with " << na << " timed out, interrupt it";
         });
@@ -1049,7 +1050,9 @@ namespace CryptoNote
     net_connection_id excludeId = excludeConnection ? *excludeConnection : boost::value_initialized<net_connection_id>();
 
     forEachConnection([&](P2pConnectionContext& conn) {
-      if (conn.peerId && conn.m_connection_id != excludeId) {
+      if (conn.peerId && conn.m_connection_id != excludeId &&
+          (conn.m_state == CryptoNoteConnectionContext::state_normal ||
+           conn.m_state == CryptoNoteConnectionContext::state_synchronizing)) {
         conn.pushMessage(P2pMessage(P2pMessage::NOTIFY, command, data_buff));
       }
     });
@@ -1068,41 +1071,48 @@ namespace CryptoNote
   }
 
   //-----------------------------------------------------------------------------------
-  bool NodeServer::try_ping(basic_node_data& node_data, P2pConnectionContext& context)
-  {
-    if(!node_data.my_port)
+  bool NodeServer::try_ping(basic_node_data& node_data, P2pConnectionContext& context) {
+    if(!node_data.my_port) {
       return false;
-
-    uint32_t actual_ip =  context.m_remote_ip;
-    if(!m_peerlist.is_ip_allowed(actual_ip))
-      return false;
-
-    std::string ip = Common::ipAddressToString(actual_ip);
-    auto port = node_data.my_port;
-    PeerIdType pr = node_data.peer_id;
-
-    try {
-      System::TcpConnector connector(m_dispatcher);
-      System::TcpConnection conn = connector.connect(System::Ipv4Address(ip), static_cast<uint16_t>(port));
-
-      LevinProtocol proto(conn);
-
-      COMMAND_PING::request req;
-      COMMAND_PING::response rsp;
-      proto.invoke(COMMAND_PING::ID, req, rsp);
-
-      if (rsp.status != PING_OK_RESPONSE_STATUS_TEXT || pr != rsp.peer_id) {
-        logger(Logging::DEBUGGING) << context << "back ping invoke wrong response \"" << rsp.status << "\" from" << ip << ":" << port << ", hsh_peer_id=" << pr << ", rsp.peer_id=" << rsp.peer_id;
-        return false;
-      }
-
-      return true;
-
-    } catch (std::exception& e) {
-      logger(Logging::DEBUGGING) << context << "back ping to " << ip << ":" << port << " failed: " << e.what();
     }
 
-    return false;
+    uint32_t actual_ip =  context.m_remote_ip;
+    if(!m_peerlist.is_ip_allowed(actual_ip)) {
+      return false;
+    }
+
+    auto ip = Common::ipAddressToString(actual_ip);
+    auto port = node_data.my_port;
+    auto peerId = node_data.peer_id;
+
+    try {
+      COMMAND_PING::request req;
+      COMMAND_PING::response rsp;
+      System::Context<> pingContext(m_dispatcher, [&] {
+        System::TcpConnector connector(m_dispatcher);
+        auto connection = connector.connect(System::Ipv4Address(ip), static_cast<uint16_t>(port));
+        LevinProtocol(connection).invoke(COMMAND_PING::ID, req, rsp);
+      });
+
+      System::Context<> timeoutContext(m_dispatcher, [&] {
+        System::Timer(m_dispatcher).sleep(std::chrono::milliseconds(m_config.m_net_config.connection_timeout * 2));
+        logger(DEBUGGING) << context << "Back ping timed out" << ip << ":" << port;
+        pingContext.interrupt();
+      });
+
+      pingContext.get();
+
+      if (rsp.status != PING_OK_RESPONSE_STATUS_TEXT || peerId != rsp.peer_id) {
+        logger(DEBUGGING) << context << "Back ping invoke wrong response \"" << rsp.status << "\" from" << ip
+                                   << ":" << port << ", hsh_peer_id=" << peerId << ", rsp.peer_id=" << rsp.peer_id;
+        return false;
+      }
+    } catch (std::exception& e) {
+      logger(DEBUGGING) << context << "Back ping connection to " << ip << ":" << port << " failed: " << e.what();
+      return false;
+    }
+
+    return true;
   }
 
   //----------------------------------------------------------------------------------- 
@@ -1166,7 +1176,7 @@ namespace CryptoNote
           pe.id = peer_id_l;
           m_peerlist.append_with_peer_white(pe);
 
-          logger(Logging::TRACE) << context << "PING SUCCESS " << Common::ipAddressToString(context.m_remote_ip) << ":" << port_l;
+          logger(Logging::TRACE) << context << "BACK PING SUCCESS, " << Common::ipAddressToString(context.m_remote_ip) << ":" << port_l << " added to whitelist";
       }
     }
 

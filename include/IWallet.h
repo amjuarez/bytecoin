@@ -37,7 +37,9 @@ enum class WalletTransactionState : uint8_t {
 enum WalletEventType {
   TRANSACTION_CREATED,
   TRANSACTION_UPDATED,
-  BALANCE_UNLOCKED
+  BALANCE_UNLOCKED,
+  SYNC_PROGRESS_UPDATED,
+  SYNC_COMPLETED
 };
 
 struct WalletTransactionCreatedData {
@@ -48,11 +50,17 @@ struct WalletTransactionUpdatedData {
   size_t transactionIndex;
 };
 
+struct WalletSynchronizationProgressUpdated {
+  uint32_t processedBlockCount;
+  uint32_t totalBlockCount;
+};
+
 struct WalletEvent {
   WalletEventType type;
   union {
     WalletTransactionCreatedData transactionCreated;
     WalletTransactionUpdatedData transactionUpdated;
+    WalletSynchronizationProgressUpdated synchronizationProgressUpdated;
   };
 };
 
@@ -78,6 +86,7 @@ public:
   virtual ~IWallet() {}
 
   virtual void initialize(const std::string& password) = 0;
+  virtual void initializeWithViewKey(const Crypto::SecretKey& viewSecretKey, const std::string& password) = 0;
   virtual void load(std::istream& source, const std::string& password) = 0;
   virtual void shutdown() = 0;
 
@@ -86,8 +95,10 @@ public:
 
   virtual size_t getAddressCount() const = 0;
   virtual std::string getAddress(size_t index) const = 0;
+  virtual KeyPair getAddressSpendKey(size_t index) const = 0;
+  virtual KeyPair getViewKey() const = 0;
   virtual std::string createAddress() = 0;
-  virtual std::string createAddress(const KeyPair& spendKey) = 0;
+  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) = 0;
   virtual void deleteAddress(const std::string& address) = 0;
 
   virtual uint64_t getActualBalance() const = 0;

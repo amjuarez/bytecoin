@@ -21,6 +21,7 @@
 
 #include <queue>
 
+#include "IFusionManager.h"
 #include "WalletIndices.h"
 
 #include <System/Dispatcher.h>
@@ -32,12 +33,14 @@ namespace CryptoNote {
 
 class WalletGreen : public IWallet,
                     ITransfersObserver,
-                    IBlockchainSynchronizerObserver  {
+                    IBlockchainSynchronizerObserver,
+                    IFusionManager {
 public:
   WalletGreen(System::Dispatcher& dispatcher, const Currency& currency, INode& node);
   virtual ~WalletGreen();
 
   virtual void initialize(const std::string& password) override;
+  virtual void initializeWithViewKey(const Crypto::SecretKey& viewSecretKey, const std::string& password) override;
   virtual void load(std::istream& source, const std::string& password) override;
   virtual void shutdown() override;
 
@@ -46,8 +49,10 @@ public:
 
   virtual size_t getAddressCount() const override;
   virtual std::string getAddress(size_t index) const override;
+  virtual KeyPair getAddressSpendKey(size_t index) const override;
+  virtual KeyPair getViewKey() const override;
   virtual std::string createAddress() override;
-  virtual std::string createAddress(const KeyPair& spendKey) override;
+  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) override;
   virtual void deleteAddress(const std::string& address) override;
 
   virtual uint64_t getActualBalance() const override;
@@ -69,11 +74,17 @@ public:
   virtual void stop() override;
   virtual WalletEvent getEvent() override;
 
+  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin) override;
+  virtual bool isFusionTransaction(size_t transactionId) const override;
+  virtual IFusionManager::EstimateResult estimate(uint64_t threshold) const override;
+
 protected:
   void throwIfNotInitialized() const;
   void throwIfStopped() const;
   void doShutdown();
   void clearCaches();
+  void initWithKeys(const Crypto::PublicKey& viewPublicKey, const Crypto::SecretKey& viewSecretKey, const std::string& password);
+  std::string doCreateAddress(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey);
 
   struct InputInfo {
     TransactionTypes::InputKeyInfo keyInfo;
@@ -100,10 +111,12 @@ protected:
   virtual void onTransactionUpdated(ITransfersSubscription* object, const Crypto::Hash& transactionHash) override;
   virtual void onTransactionDeleted(ITransfersSubscription* object, const Crypto::Hash& transactionHash) override;
   virtual void synchronizationProgressUpdated(uint32_t current, uint32_t total) override;
+  virtual void synchronizationCompleted(std::error_code result) override;
 
   void transactionUpdated(ITransfersSubscription* object, const Crypto::Hash& transactionHash);
   void transactionDeleted(ITransfersSubscription* object, const Crypto::Hash& transactionHash);
-  void onSynchronizationProgressUpdated(uint32_t current);
+  void onSynchronizationProgressUpdated(uint32_t current, uint32_t total);
+  void onSynchronizationCompleted();
 
   std::vector<WalletOuts> pickWalletsWithMoney();
   WalletOuts pickWallet(const std::string& address);
@@ -116,7 +129,7 @@ protected:
   const WalletRecord& getWalletRecord(CryptoNote::ITransfersContainer* container) const;
 
   CryptoNote::AccountPublicAddress parseAddress(const std::string& address) const;
-  void addWallet(const KeyPair& spendKey);
+  void addWallet(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey);
   bool isOutputUsed(const TransactionOutputInformation& out) const;
   void markOutputsSpent(const Crypto::Hash& transactionHash, const std::vector<OutputToTransfer>& selectedTransfers);
   void deleteSpentOutputs(const Crypto::Hash& transactionHash);

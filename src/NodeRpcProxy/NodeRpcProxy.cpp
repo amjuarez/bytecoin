@@ -66,7 +66,8 @@ NodeRpcProxy::NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort)
     m_pullInterval(5000),
     m_nodeHost(nodeHost),
     m_nodePort(nodePort),
-    m_lastLocalBlockTimestamp(0) {
+    m_lastLocalBlockTimestamp(0),
+    m_connected(true) {
   resetInternalState();
 }
 
@@ -170,6 +171,8 @@ void NodeRpcProxy::workerThread(const INode::Callback& initialized_callback) {
   m_context_group = nullptr;
   m_httpClient = nullptr;
   m_httpEvent = nullptr;
+  m_connected = false;
+  m_rpcProxyObserverManager.notify(&INodeRpcProxyObserver::connectionStatusUpdated, m_connected);
 }
 
 void NodeRpcProxy::updateNodeStatus() {
@@ -200,6 +203,10 @@ void NodeRpcProxy::updateNodeStatus() {
   }
 
   updatePeerCount();
+  if (m_connected != m_httpClient->isConnected()) {
+    m_connected = m_httpClient->isConnected();
+    m_rpcProxyObserverManager.notify(&INodeRpcProxyObserver::connectionStatusUpdated, m_connected);
+  }
 }
 
 void NodeRpcProxy::updatePeerCount() {
@@ -223,6 +230,14 @@ bool NodeRpcProxy::addObserver(INodeObserver* observer) {
 
 bool NodeRpcProxy::removeObserver(INodeObserver* observer) {
   return m_observerManager.remove(observer);
+}
+
+bool NodeRpcProxy::addObserver(CryptoNote::INodeRpcProxyObserver* observer) {
+  return m_rpcProxyObserverManager.add(observer);
+}
+
+bool NodeRpcProxy::removeObserver(CryptoNote::INodeRpcProxyObserver* observer) {
+  return m_rpcProxyObserverManager.remove(observer);
 }
 
 size_t NodeRpcProxy::getPeerCount() const {
@@ -563,6 +578,10 @@ void NodeRpcProxy::scheduleRequest(std::function<std::error_code()>&& procedure,
           callback(std::make_error_code(std::errc::operation_canceled));
         } else {
           std::error_code ec = procedure();
+          if (m_connected != m_httpClient->isConnected()) {
+            m_connected = m_httpClient->isConnected();
+            m_rpcProxyObserverManager.notify(&INodeRpcProxyObserver::connectionStatusUpdated, m_connected);
+          }
           callback(m_stop ? std::make_error_code(std::errc::operation_canceled) : ec);
         }
       }, std::move(procedure), std::move(callback)));
@@ -577,6 +596,8 @@ std::error_code NodeRpcProxy::binaryCommand(const std::string& url, const Reques
     EventLock eventLock(*m_httpEvent);
     invokeBinaryCommand(*m_httpClient, url, req, res);
     ec = interpretResponseStatus(res.status);
+  } catch (const ConnectException&) {
+    ec = make_error_code(error::CONNECT_ERROR);
   } catch (const std::exception&) {
     ec = make_error_code(error::NETWORK_ERROR);
   }
@@ -592,6 +613,8 @@ std::error_code NodeRpcProxy::jsonCommand(const std::string& url, const Request&
     EventLock eventLock(*m_httpEvent);
     invokeJsonCommand(*m_httpClient, url, req, res);
     ec = interpretResponseStatus(res.status);
+  } catch (const ConnectException&) {
+    ec = make_error_code(error::CONNECT_ERROR);
   } catch (const std::exception&) {
     ec = make_error_code(error::NETWORK_ERROR);
   }
@@ -627,6 +650,8 @@ std::error_code NodeRpcProxy::jsonRpcCommand(const std::string& method, const Re
         ec = interpretResponseStatus(res.status);
       }
     }
+  } catch (const ConnectException&) {
+    ec = make_error_code(error::CONNECT_ERROR);
   } catch (const std::exception&) {
     ec = make_error_code(error::NETWORK_ERROR);
   }

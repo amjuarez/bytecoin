@@ -68,13 +68,13 @@ void LevinProtocol::sendMessage(uint32_t command, const BinaryArray& out, bool n
   stream.writeSome(&head, sizeof(head));
   stream.writeSome(out.data(), out.size());
 
-  m_conn.write(writeBuffer.data(), writeBuffer.size());
+  writeStrict(writeBuffer.data(), writeBuffer.size());
 }
 
 bool LevinProtocol::readCommand(Command& cmd) {
   bucket_head2 head = { 0 };
 
-  if (!readStrict(&head, sizeof(head))) {
+  if (!readStrict(reinterpret_cast<uint8_t*>(&head), sizeof(head))) {
     return false;
   }
 
@@ -113,18 +113,27 @@ void LevinProtocol::sendReply(uint32_t command, const BinaryArray& out, int32_t 
   head.m_flags = LEVIN_PACKET_RESPONSE;
   head.m_return_code = returnCode;
 
-  m_conn.write(reinterpret_cast<const uint8_t*>(&head), sizeof(head));
-  if (out.size() > 0) {
-    m_conn.write(reinterpret_cast<const uint8_t*>(out.data()), out.size());
+  BinaryArray writeBuffer;
+  writeBuffer.reserve(sizeof(head) + out.size());
+
+  Common::VectorOutputStream stream(writeBuffer);
+  stream.writeSome(&head, sizeof(head));
+  stream.writeSome(out.data(), out.size());
+
+  writeStrict(writeBuffer.data(), writeBuffer.size());
+}
+
+void LevinProtocol::writeStrict(const uint8_t* ptr, size_t size) {
+  size_t offset = 0;
+  while (offset < size) {
+    offset += m_conn.write(ptr + offset, size - offset);
   }
 }
 
-bool LevinProtocol::readStrict(void* ptr, size_t size) {
-  char* pos = reinterpret_cast<char*>(ptr);
+bool LevinProtocol::readStrict(uint8_t* ptr, size_t size) {
   size_t offset = 0;
-
   while (offset < size) {
-    size_t read = m_conn.read(reinterpret_cast<uint8_t*>(pos + offset), size - offset);
+    size_t read = m_conn.read(ptr + offset, size - offset);
     if (read == 0) {
       return false;
     }

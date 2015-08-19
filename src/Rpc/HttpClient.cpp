@@ -52,10 +52,18 @@ void HttpClient::request(const HttpRequest &req, HttpResponse &res) {
 }
 
 void HttpClient::connect() {
-  auto ipAddr = System::Ipv4Resolver(m_dispatcher).resolve(m_address);
-  m_connection = System::TcpConnector(m_dispatcher).connect(ipAddr, m_port);
-  m_streamBuf.reset(new System::TcpStreambuf(m_connection));
-  m_connected = true;
+  try {
+    auto ipAddr = System::Ipv4Resolver(m_dispatcher).resolve(m_address);
+    m_connection = System::TcpConnector(m_dispatcher).connect(ipAddr, m_port);
+    m_streamBuf.reset(new System::TcpStreambuf(m_connection));
+    m_connected = true;
+  } catch (const std::exception& e) {
+    throw ConnectException(e.what());
+  }
+}
+
+bool HttpClient::isConnected() const {
+  return m_connected;
 }
 
 void HttpClient::disconnect() {
@@ -73,6 +81,9 @@ void HttpClient::disconnect() {
   }
 
   m_connected = false;
+}
+
+ConnectException::ConnectException(const std::string& whatArg) : std::runtime_error(whatArg.c_str()) {
 }
 
 }

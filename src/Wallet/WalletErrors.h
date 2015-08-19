@@ -41,7 +41,8 @@ enum WalletErrorCodes {
   OPERATION_CANCELLED,
   TX_TRANSFER_IMPOSSIBLE,
   WRONG_VERSION,
-  FEE_TOO_SMALL
+  FEE_TOO_SMALL,
+  KEY_GENERATION_ERROR
 };
 
 // custom category:
@@ -75,6 +76,7 @@ public:
     case TX_TRANSFER_IMPOSSIBLE: return "Transaction transfer impossible";
     case WRONG_VERSION:       return "Wrong version";
     case FEE_TOO_SMALL:       return "Transaction fee is too small";
+    case KEY_GENERATION_ERROR:  return "Cannot generate new key";
     default:                  return "Unknown error";
     }
   }

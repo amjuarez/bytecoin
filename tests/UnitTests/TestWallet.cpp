@@ -34,6 +34,7 @@
 #include "WalletLegacy/WalletLegacySerializer.h"
 #include <System/Dispatcher.h>
 #include <System/Timer.h>
+#include <System/Context.h>
 
 using namespace Crypto;
 using namespace Common;
@@ -129,6 +130,8 @@ protected:
   template<typename T>
   void waitForValue(CryptoNote::WalletGreen& wallet, T value, std::function<T ()>&& f);
 
+  bool waitForWalletEvent(CryptoNote::WalletGreen& wallet, CryptoNote::WalletEventType eventType, std::chrono::nanoseconds timeout);
+
   void waitActualBalanceUpdated();
   void waitActualBalanceUpdated(uint64_t prev);
   void waitActualBalanceUpdated(CryptoNote::WalletGreen& wallet, uint64_t prev);
@@ -220,6 +223,28 @@ template<typename T>
 void WalletApi::waitForValue(CryptoNote::WalletGreen& wallet, T value, std::function<T ()>&& f) {
   while (value != f()) {
     wallet.getEvent();
+  }
+}
+
+bool WalletApi::waitForWalletEvent(CryptoNote::WalletGreen& wallet, CryptoNote::WalletEventType eventType, std::chrono::nanoseconds timeout) {
+  System::Context<> eventContext(dispatcher, [&wallet, eventType] () {
+    CryptoNote::WalletEvent event;
+
+    do {
+      event = wallet.getEvent();
+    } while(event.type != eventType);
+  });
+
+  System::Context<> timeoutContext(dispatcher, [timeout, &eventContext, this] {
+    System::Timer(dispatcher).sleep(timeout);
+    eventContext.interrupt();
+  });
+
+  try {
+    eventContext.get();
+    return true;
+  } catch (System::InterruptedException&) {
+    return false;
   }
 }
 
@@ -1144,4 +1169,94 @@ TEST_F(WalletApi, transferSmallFeeTransactionThrows) {
   generateAndUnlockMoney();
 
   ASSERT_ANY_THROW(sendMoneyToRandomAddressFrom(alice.getAddress(0), SENT, currency.minimumFee() - 1));
+}
+
+TEST_F(WalletApi, initializeWithKeysSucceded) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+
+  CryptoNote::KeyPair viewKeys;
+  Crypto::generate_keys(viewKeys.publicKey, viewKeys.secretKey);
+  ASSERT_NO_THROW(wallet.initializeWithViewKey(viewKeys.secretKey, "pass"));
+
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, initializeWithKeysThrowsIfAlreadInitialized) {
+  CryptoNote::KeyPair viewKeys;
+  Crypto::generate_keys(viewKeys.publicKey, viewKeys.secretKey);
+
+  ASSERT_ANY_THROW(alice.initializeWithViewKey(viewKeys.secretKey, "pass"));
+}
+
+TEST_F(WalletApi, initializeWithKeysThrowsIfStopped) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.stop();
+
+  CryptoNote::KeyPair viewKeys;
+  Crypto::generate_keys(viewKeys.publicKey, viewKeys.secretKey);
+  ASSERT_ANY_THROW(wallet.initializeWithViewKey(viewKeys.secretKey, "pass"));
+}
+
+TEST_F(WalletApi, getViewKeyReturnsProperKey) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+
+  CryptoNote::KeyPair viewKeys;
+  Crypto::generate_keys(viewKeys.publicKey, viewKeys.secretKey);
+  wallet.initializeWithViewKey(viewKeys.secretKey, "pass");
+
+  CryptoNote::KeyPair retrievedKeys = wallet.getViewKey();
+  ASSERT_EQ(viewKeys.publicKey, retrievedKeys.publicKey);
+  ASSERT_EQ(viewKeys.secretKey, retrievedKeys.secretKey);
+
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, getViewKeyThrowsIfNotInitialized) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  ASSERT_ANY_THROW(wallet.getViewKey());
+}
+
+TEST_F(WalletApi, getViewKeyThrowsIfStopped) {
+  alice.stop();
+
+  ASSERT_ANY_THROW(alice.getViewKey());
+}
+
+TEST_F(WalletApi, getAddressSpendKeyReturnsProperKey) {
+  CryptoNote::KeyPair spendKeys;
+  Crypto::generate_keys(spendKeys.publicKey, spendKeys.secretKey);
+
+  alice.createAddress(spendKeys.secretKey);
+
+  CryptoNote::KeyPair retrievedKeys = alice.getAddressSpendKey(1);
+  ASSERT_EQ(spendKeys.publicKey, retrievedKeys.publicKey);
+  ASSERT_EQ(spendKeys.secretKey, retrievedKeys.secretKey);
+}
+
+TEST_F(WalletApi, getAddressSpendKeyThrowsForWrongAddressIndex) {
+  ASSERT_ANY_THROW(alice.getAddressSpendKey(1));
+}
+
+TEST_F(WalletApi, getAddressSpendKeyThrowsIfNotInitialized) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  ASSERT_ANY_THROW(wallet.getAddressSpendKey(0));
+}
+
+TEST_F(WalletApi, getAddressSpendKeyThrowsIfStopped) {
+  alice.stop();
+  ASSERT_ANY_THROW(alice.getAddressSpendKey(0));
+}
+
+TEST_F(WalletApi, walletGetsSyncCompletedEvent) {
+  generator.generateEmptyBlocks(1);
+  node.updateObservers();
+
+  ASSERT_TRUE(waitForWalletEvent(alice, CryptoNote::SYNC_COMPLETED, std::chrono::seconds(5)));
+}
+
+TEST_F(WalletApi, walletGetsSyncProgressUpdatedEvent) {
+  generator.generateEmptyBlocks(1);
+  node.updateObservers();
+
+  ASSERT_TRUE(waitForWalletEvent(alice, CryptoNote::SYNC_PROGRESS_UPDATED, std::chrono::seconds(5)));
 }

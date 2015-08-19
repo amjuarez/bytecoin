@@ -30,7 +30,8 @@ enum NodeErrorCodes {
   NETWORK_ERROR,
   NODE_BUSY,
   INTERNAL_NODE_ERROR,
-  REQUEST_ERROR
+  REQUEST_ERROR,
+  CONNECT_ERROR
 };
 
 // custom category:
@@ -54,6 +55,7 @@ public:
     case NODE_BUSY:           return "Node is busy";
     case INTERNAL_NODE_ERROR: return "Internal node error";
     case REQUEST_ERROR:       return "Error in request parameters";
+    case CONNECT_ERROR:       return "Can't connect to daemon";
     default:                  return "Unknown error";
     }
   }

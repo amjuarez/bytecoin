@@ -22,8 +22,8 @@ namespace PaymentService {
 namespace po = boost::program_options;
 
 RpcNodeConfiguration::RpcNodeConfiguration() {
-  daemonHost = "127.0.0.1";
-  daemonPort = 8081;
+  daemonHost = "";
+  daemonPort = 0;
 }
 
 void RpcNodeConfiguration::initOptions(boost::program_options::options_description& desc) {
@@ -33,11 +33,11 @@ void RpcNodeConfiguration::initOptions(boost::program_options::options_descripti
 }
 
 void RpcNodeConfiguration::init(const boost::program_options::variables_map& options) {
-  if (options.count("daemon-address")) {
+  if (options.count("daemon-address") != 0 && (!options["daemon-address"].defaulted() || daemonHost.empty())) {
     daemonHost = options["daemon-address"].as<std::string>();
   }
 
-  if (options.count("daemon-port")) {
+  if (options.count("daemon-port") != 0 && (!options["daemon-port"].defaulted() || daemonPort == 0)) {
     daemonPort = options["daemon-port"].as<uint16_t>();
   }
 }

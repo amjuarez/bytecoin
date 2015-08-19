@@ -64,6 +64,8 @@ inline std::string get_protocol_state_string(CryptoNoteConnectionContext::state 
     return "state_normal";
   case CryptoNoteConnectionContext::state_sync_required:
     return "state_sync_required";
+  case CryptoNoteConnectionContext::state_pool_sync_required:
+    return "state_pool_sync_required";
   case CryptoNoteConnectionContext::state_shutdown:
     return "state_shutdown";
   default:

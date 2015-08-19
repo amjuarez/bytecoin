@@ -23,12 +23,12 @@
 #include <boost/program_options/variables_map.hpp>
 
 #include "IWalletLegacy.h"
-#include "INode.h"
 #include "PasswordContainer.h"
 
 #include "Common/ConsoleHandler.h"
 #include "CryptoNoteCore/CryptoNoteBasicImpl.h"
 #include "CryptoNoteCore/Currency.h"
+#include "NodeRpcProxy/NodeRpcProxy.h"
 #include "WalletLegacy/WalletHelper.h"
 
 #include <Logging/LoggerRef.h>
@@ -42,8 +42,7 @@ namespace CryptoNote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  class simple_wallet : public CryptoNote::INodeObserver, public CryptoNote::IWalletLegacyObserver
-  {
+  class simple_wallet : public CryptoNote::INodeObserver, public CryptoNote::IWalletLegacyObserver, public CryptoNote::INodeRpcProxyObserver {
   public:
     simple_wallet(System::Dispatcher& dispatcher, const CryptoNote::Currency& currency, Logging::LoggerManager& log);
 
@@ -63,7 +62,7 @@ namespace CryptoNote
       return logger(Logging::INFO, color ? Logging::GREEN : Logging::DEFAULT);
     }
 
-    Logging::LoggerMessage fail_msg_writer() {
+    Logging::LoggerMessage fail_msg_writer() const {
       auto msg = logger(Logging::ERROR, Logging::BRIGHT_RED);
       msg << "Error: ";
       return msg;
@@ -94,6 +93,8 @@ namespace CryptoNote
 
     bool ask_wallet_create_if_needed();
 
+    void printConnectionError() const;
+
     //---------------- IWalletObserver -------------------------
     virtual void initCompleted(std::error_code result) override;
     virtual void externalTransactionCreated(CryptoNote::TransactionId transactionId) override;
@@ -101,6 +102,10 @@ namespace CryptoNote
 
     //----------------- INodeObserver --------------------------
     virtual void localBlockchainUpdated(uint32_t height) override;
+    //----------------------------------------------------------
+
+    //----------------- INodeRpcProxyObserver --------------------------
+    virtual void connectionStatusUpdated(bool connected) override;
     //----------------------------------------------------------
 
     friend class refresh_progress_reporter_t;
@@ -174,7 +179,7 @@ namespace CryptoNote
     System::Dispatcher& m_dispatcher;
     Logging::LoggerRef logger;
 
-    std::unique_ptr<CryptoNote::INode> m_node;
+    std::unique_ptr<CryptoNote::NodeRpcProxy> m_node;
     std::unique_ptr<CryptoNote::IWalletLegacy> m_wallet;
     refresh_progress_reporter_t m_refresh_progress_reporter;
   };

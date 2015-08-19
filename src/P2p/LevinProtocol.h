@@ -105,7 +105,8 @@ public:
 
 private:
 
-  bool readStrict(void* ptr, size_t size);
+  bool readStrict(uint8_t* ptr, size_t size);
+  void writeStrict(const uint8_t* ptr, size_t size);
   System::TcpConnection& m_conn;
 };
 

@@ -36,6 +36,8 @@ Configuration::Configuration() {
   testnet = false;
   printAddresses = false;
   logLevel = Logging::INFO;
+  bindAddress = "";
+  bindPort = 0;
 }
 
 void Configuration::initOptions(boost::program_options::options_description& desc) {
@@ -57,15 +59,15 @@ void Configuration::initOptions(boost::program_options::options_description& des
 }
 
 void Configuration::init(const boost::program_options::variables_map& options) {
-  if (options.count("daemon")) {
+  if (options.count("daemon") != 0) {
     daemonize = true;
   }
 
-  if (options.count("register-service")) {
+  if (options.count("register-service") != 0) {
     registerService = true;
   }
 
-  if (options.count("unregister-service")) {
+  if (options.count("unregister-service") != 0) {
     unregisterService = true;
   }
 
@@ -73,15 +75,15 @@ void Configuration::init(const boost::program_options::variables_map& options) {
     throw ConfigurationError("It's impossible to use both \"register-service\" and \"unregister-service\" at the same time");
   }
 
-  if (options.count("testnet")) {
+  if (options.count("testnet") != 0) {
     testnet = true;
   }
 
-  if (options.count("log-file")) {
+  if (options.count("log-file") != 0) {
     logFile = options["log-file"].as<std::string>();
   }
 
-  if (options.count("log-level")) {
+  if (options.count("log-level") != 0) {
     logLevel = options["log-level"].as<size_t>();
     if (logLevel > Logging::TRACE) {
       std::string error = "log-level option must be in " + std::to_string(Logging::FATAL) +  ".." + std::to_string(Logging::TRACE) + " interval";
@@ -89,31 +91,31 @@ void Configuration::init(const boost::program_options::variables_map& options) {
     }
   }
 
-  if (options.count("server-root")) {
+  if (options.count("server-root") != 0) {
     serverRoot = options["server-root"].as<std::string>();
   }
 
-  if (options.count("bind-address")) {
+  if (options.count("bind-address") != 0 && (!options["bind-address"].defaulted() || bindAddress.empty())) {
     bindAddress = options["bind-address"].as<std::string>();
   }
 
-  if (options.count("bind-port")) {
+  if (options.count("bind-port") != 0 && (!options["bind-port"].defaulted() || bindPort == 0)) {
     bindPort = options["bind-port"].as<uint16_t>();
   }
 
-  if (options.count("wallet-file")) {
+  if (options.count("wallet-file") != 0) {
     walletFile = options["wallet-file"].as<std::string>();
   }
 
-  if (options.count("wallet-password")) {
+  if (options.count("wallet-password") != 0) {
     walletPassword = options["wallet-password"].as<std::string>();
   }
 
-  if (options.count("generate-wallet")) {
+  if (options.count("generate-wallet") != 0) {
     generateNewWallet = true;
   }
 
-  if (options.count("address")) {
+  if (options.count("address") != 0) {
     printAddresses = true;
   }
 
