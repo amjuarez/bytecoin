@@ -79,8 +79,11 @@ public:
 
   void setGetNewBlocksLimit(size_t maxBlocks) { m_getMaxBlocks = maxBlocks; }
 
-  virtual uint32_t getLastLocalBlockHeight() const { return static_cast<uint32_t>(m_blockchainGenerator.getBlockchain().size() - 1); };
-  virtual uint32_t getLastKnownBlockHeight() const { return static_cast<uint32_t>(m_blockchainGenerator.getBlockchain().size() - 1); };
+  virtual uint32_t getLastLocalBlockHeight() const { return static_cast<uint32_t>(m_blockchainGenerator.getBlockchain().size() - 1); }
+  virtual uint32_t getLastKnownBlockHeight() const { return static_cast<uint32_t>(m_blockchainGenerator.getBlockchain().size() - 1); }
+
+  virtual uint32_t getLocalBlockCount() const override { return static_cast<uint32_t>(m_blockchainGenerator.getBlockchain().size()); }
+  virtual uint32_t getKnownBlockCount() const override { return static_cast<uint32_t>(m_blockchainGenerator.getBlockchain().size()); }
 
   virtual void getNewBlocks(std::vector<Crypto::Hash>&& knownBlockIds, std::vector<CryptoNote::block_complete_entry>& newBlocks, uint32_t& startHeight, const Callback& callback);
 

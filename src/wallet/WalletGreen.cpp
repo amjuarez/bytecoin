@@ -136,6 +136,22 @@ CryptoNote::WalletEvent makeMoneyUnlockedEvent() {
   return event;
 }
 
+CryptoNote::WalletEvent makeSyncProgressUpdatedEvent(uint32_t current, uint32_t total) {
+  CryptoNote::WalletEvent event;
+  event.type = CryptoNote::WalletEventType::SYNC_PROGRESS_UPDATED;
+  event.synchronizationProgressUpdated.processedBlockCount = current;
+  event.synchronizationProgressUpdated.totalBlockCount = total;
+
+  return event;
+}
+
+CryptoNote::WalletEvent makeSyncCompletedEvent() {
+  CryptoNote::WalletEvent event;
+  event.type = CryptoNote::WalletEventType::SYNC_COMPLETED;
+
+  return event;
+}
+
 }
 
 namespace CryptoNote {
@@ -162,18 +178,20 @@ WalletGreen::~WalletGreen() {
 }
 
 void WalletGreen::initialize(const std::string& password) {
-  if (m_state != WalletState::NOT_INITIALIZED) {
-    throw std::system_error(make_error_code(CryptoNote::error::ALREADY_INITIALIZED));
+  Crypto::PublicKey viewPublicKey;
+  Crypto::SecretKey viewSecretKey;
+  Crypto::generate_keys(viewPublicKey, viewSecretKey);
+
+  initWithKeys(viewPublicKey, viewSecretKey, password);
+}
+
+void WalletGreen::initializeWithViewKey(const Crypto::SecretKey& viewSecretKey, const std::string& password) {
+  Crypto::PublicKey viewPublicKey;
+  if (!Crypto::secret_key_to_public_key(viewSecretKey, viewPublicKey)) {
+    throw std::system_error(make_error_code(CryptoNote::error::KEY_GENERATION_ERROR));
   }
 
-  throwIfStopped();
-
-  Crypto::generate_keys(m_viewPublicKey, m_viewSecretKey);
-  m_password = password;
-
-  m_blockchainSynchronizer.addObserver(this);
-
-  m_state = WalletState::INITIALIZED;
+  initWithKeys(viewPublicKey, viewSecretKey, password);
 }
 
 void WalletGreen::shutdown() {
@@ -208,6 +226,22 @@ void WalletGreen::clearCaches() {
   m_change.clear();
   m_actualBalance = 0;
   m_pendingBalance = 0;
+}
+
+void WalletGreen::initWithKeys(const Crypto::PublicKey& viewPublicKey, const Crypto::SecretKey& viewSecretKey, const std::string& password) {
+  if (m_state != WalletState::NOT_INITIALIZED) {
+    throw std::system_error(make_error_code(CryptoNote::error::ALREADY_INITIALIZED));
+  }
+
+  throwIfStopped();
+
+  m_viewPublicKey = viewPublicKey;
+  m_viewSecretKey = viewSecretKey;
+  m_password = password;
+
+  m_blockchainSynchronizer.addObserver(this);
+
+  m_state = WalletState::INITIALIZED;
 }
 
 void WalletGreen::save(std::ostream& destination, bool saveDetails, bool saveCache) {
@@ -318,14 +352,42 @@ std::string WalletGreen::getAddress(size_t index) const {
   return m_currency.accountAddressAsString({ wallet.spendPublicKey, m_viewPublicKey });
 }
 
-std::string WalletGreen::createAddress() {
-  KeyPair spendKey;
+KeyPair WalletGreen::getAddressSpendKey(size_t index) const {
+  throwIfNotInitialized();
+  throwIfStopped();
 
-  Crypto::generate_keys(spendKey.publicKey, spendKey.secretKey);
-  return createAddress(spendKey);
+  if (index >= m_walletsContainer.get<RandomAccessIndex>().size()) {
+    throw std::system_error(std::make_error_code(std::errc::invalid_argument));
+  }
+
+  const WalletRecord& wallet = m_walletsContainer.get<RandomAccessIndex>()[index];
+  return {wallet.spendPublicKey, wallet.spendSecretKey};
 }
 
-std::string WalletGreen::createAddress(const KeyPair& spendKey) {
+KeyPair WalletGreen::getViewKey() const {
+  throwIfNotInitialized();
+  throwIfStopped();
+
+  return {m_viewPublicKey, m_viewSecretKey};
+}
+
+std::string WalletGreen::createAddress() {
+  KeyPair spendKey;
+  Crypto::generate_keys(spendKey.publicKey, spendKey.secretKey);
+
+  return doCreateAddress(spendKey.publicKey, spendKey.secretKey);
+}
+
+std::string WalletGreen::createAddress(const Crypto::SecretKey& spendSecretKey) {
+  Crypto::PublicKey spendPublicKey;
+  if (!Crypto::secret_key_to_public_key(spendSecretKey, spendPublicKey) ) {
+    throw std::system_error(make_error_code(CryptoNote::error::KEY_GENERATION_ERROR));
+  }
+
+  return doCreateAddress(spendPublicKey, spendSecretKey);
+}
+
+std::string WalletGreen::doCreateAddress(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey) {
   throwIfNotInitialized();
   throwIfStopped();
 
@@ -333,22 +395,22 @@ std::string WalletGreen::createAddress(const KeyPair& spendKey) {
     m_blockchainSynchronizer.stop();
   }
 
-  addWallet(spendKey);
-  std::string address = m_currency.accountAddressAsString({ spendKey.publicKey, m_viewPublicKey });
+  addWallet(spendPublicKey, spendSecretKey);
+  std::string address = m_currency.accountAddressAsString({ spendPublicKey, m_viewPublicKey });
 
   m_blockchainSynchronizer.start();
 
   return address;
 }
 
-void WalletGreen::addWallet(const KeyPair& spendKey) {
+void WalletGreen::addWallet(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey) {
   time_t creationTimestamp = time(nullptr);
 
   AccountSubscription sub;
   sub.keys.address.viewPublicKey = m_viewPublicKey;
-  sub.keys.address.spendPublicKey = spendKey.publicKey;
+  sub.keys.address.spendPublicKey = spendPublicKey;
   sub.keys.viewSecretKey = m_viewSecretKey;
-  sub.keys.spendSecretKey = spendKey.secretKey;
+  sub.keys.spendSecretKey = spendSecretKey;
   sub.transactionSpendableAge = 10;
   sub.syncStart.height = 0;
   sub.syncStart.timestamp = static_cast<uint64_t>(creationTimestamp) - (60 * 60 * 24);
@@ -357,8 +419,8 @@ void WalletGreen::addWallet(const KeyPair& spendKey) {
   ITransfersContainer* container = &trSubscription.getContainer();
 
   WalletRecord wallet;
-  wallet.spendPublicKey = spendKey.publicKey;
-  wallet.spendSecretKey = spendKey.secretKey;
+  wallet.spendPublicKey = spendPublicKey;
+  wallet.spendSecretKey = spendSecretKey;
   wallet.container = container;
   wallet.creationTimestamp = creationTimestamp;
   trSubscription.addObserver(this);
@@ -967,17 +1029,32 @@ void WalletGreen::onError(ITransfersSubscription* object, uint32_t height, std::
 }
 
 void WalletGreen::synchronizationProgressUpdated(uint32_t current, uint32_t total) {
-  m_dispatcher.remoteSpawn( [current, this] () { this->onSynchronizationProgressUpdated(current); } );
+  m_dispatcher.remoteSpawn( [current, total, this] () { onSynchronizationProgressUpdated(current, total); } );
 }
 
-void WalletGreen::onSynchronizationProgressUpdated(uint32_t current) {
+void WalletGreen::synchronizationCompleted(std::error_code result) {
+  m_dispatcher.remoteSpawn([this] () { onSynchronizationCompleted(); } );
+}
+
+void WalletGreen::onSynchronizationProgressUpdated(uint32_t current, uint32_t total) {
   System::EventLock lk(m_readyEvent);
 
   if (m_state == WalletState::NOT_INITIALIZED) {
     return;
   }
 
+  pushEvent(makeSyncProgressUpdatedEvent(current, total));
   unlockBalances(current);
+}
+
+void WalletGreen::onSynchronizationCompleted() {
+  System::EventLock lk(m_readyEvent);
+
+  if (m_state == WalletState::NOT_INITIALIZED) {
+    return;
+  }
+
+  pushEvent(makeSyncCompletedEvent());
 }
 
 void WalletGreen::unlockBalances(uint32_t height) {
@@ -1217,6 +1294,21 @@ void WalletGreen::throwIfStopped() const {
   if (m_stopped) {
     throw std::system_error(make_error_code(error::OPERATION_CANCELLED));
   }
+}
+
+size_t WalletGreen::createFusionTransaction(uint64_t threshold, uint64_t mixin) {
+  // TODO NOT IMPLEMENTED
+  throw std::runtime_error("WalletGreen::createFusionTransaction not implemented.");
+}
+
+bool WalletGreen::isFusionTransaction(size_t transactionId) const {
+  // TODO NOT IMPLEMENTED
+  throw std::runtime_error("WalletGreen::isFusionTransaction not implemented.");
+}
+
+IFusionManager::EstimateResult WalletGreen::estimate(uint64_t threshold) const {
+  // TODO NOT IMPLEMENTED
+  throw std::runtime_error("WalletGreen::estimate not implemented.");
 }
 
 } //namespace CryptoNote

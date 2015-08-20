@@ -36,6 +36,12 @@ namespace CryptoNote {
 
 class HttpClient;
 
+class INodeRpcProxyObserver {
+public:
+  virtual ~INodeRpcProxyObserver() {}
+  virtual void connectionStatusUpdated(bool connected) {}
+};
+
 class NodeRpcProxy : public CryptoNote::INode {
 public:
   NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort);
@@ -43,6 +49,9 @@ public:
 
   virtual bool addObserver(CryptoNote::INodeObserver* observer);
   virtual bool removeObserver(CryptoNote::INodeObserver* observer);
+
+  virtual bool addObserver(CryptoNote::INodeRpcProxyObserver* observer);
+  virtual bool removeObserver(CryptoNote::INodeRpcProxyObserver* observer);
 
   virtual void init(const Callback& callback);
   virtual bool shutdown();
@@ -116,6 +125,7 @@ private:
   System::Dispatcher* m_dispatcher = nullptr;
   System::ContextGroup* m_context_group = nullptr;
   Tools::ObserverManager<CryptoNote::INodeObserver> m_observerManager;
+  Tools::ObserverManager<CryptoNote::INodeRpcProxyObserver> m_rpcProxyObserverManager;
 
   const std::string m_nodeHost;
   const unsigned short m_nodePort;
@@ -134,6 +144,8 @@ private:
   //protect it with mutex if decided to add worker threads
   Crypto::Hash m_lastKnowHash;
   std::atomic<uint64_t> m_lastLocalBlockTimestamp;
+
+  bool m_connected;
 };
 
 }

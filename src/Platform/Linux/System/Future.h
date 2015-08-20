@@ -15,23 +15,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "CoreConfig.h"
+#pragma once
 
-#include "Common/Util.h"
-#include "Common/CommandLine.h"
+#include <future>
 
-namespace CryptoNote {
+namespace System {
 
-CoreConfig::CoreConfig() {
-  configFolder = Tools::getDefaultDataDirectory();
+namespace Detail {
+
+template<class T> using Future = std::future<T>;
+
+template<class T> Future<T> async(std::function<T()>&& operation) {
+  return std::async(std::launch::async, std::move(operation));
 }
 
-void CoreConfig::init(const boost::program_options::variables_map& options) {
-  if (options.count(command_line::arg_data_dir.name) != 0 && (!options[command_line::arg_data_dir.name].defaulted() || configFolder == Tools::getDefaultDataDirectory())) {
-    configFolder = command_line::get_arg(options, command_line::arg_data_dir);
-  }
 }
 
-void CoreConfig::initOptions(boost::program_options::options_description& desc) {
 }
-} //namespace CryptoNote

@@ -15,23 +15,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "CoreConfig.h"
+#pragma once
 
-#include "Common/Util.h"
-#include "Common/CommandLine.h"
+#include <cstdint>
+#include <utility>
 
 namespace CryptoNote {
 
-CoreConfig::CoreConfig() {
-  configFolder = Tools::getDefaultDataDirectory();
-}
+class IFusionManager {
+public:
+  struct EstimateResult {
+    size_t belowThresholdCount;
+    size_t totalOutputCount;
+  };
 
-void CoreConfig::init(const boost::program_options::variables_map& options) {
-  if (options.count(command_line::arg_data_dir.name) != 0 && (!options[command_line::arg_data_dir.name].defaulted() || configFolder == Tools::getDefaultDataDirectory())) {
-    configFolder = command_line::get_arg(options, command_line::arg_data_dir);
-  }
-}
+  virtual ~IFusionManager() {}
 
-void CoreConfig::initOptions(boost::program_options::options_description& desc) {
+  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin) = 0;
+  virtual bool isFusionTransaction(size_t transactionId) const = 0;
+  virtual EstimateResult estimate(uint64_t threshold) const = 0;
+};
+
 }
-} //namespace CryptoNote

@@ -78,8 +78,8 @@ void NetNodeConfig::initOptions(boost::program_options::options_description& des
 }
 
 NetNodeConfig::NetNodeConfig() {
-  bindIp = "0.0.0.0";
-  bindPort = P2P_DEFAULT_PORT;
+  bindIp = "";
+  bindPort = 0;
   externalPort = 0;
   allowLocalIp = false;
   hideMyPort = false;
@@ -89,25 +89,39 @@ NetNodeConfig::NetNodeConfig() {
 
 bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
 {
-  bindIp = command_line::get_arg(vm, arg_p2p_bind_ip);
-  bindPort = command_line::get_arg(vm, arg_p2p_bind_port);
-  externalPort = command_line::get_arg(vm, arg_p2p_external_port);
-  allowLocalIp = command_line::get_arg(vm, arg_p2p_allow_local_ip);
+  if (vm.count(arg_p2p_bind_ip.name) != 0 && (!vm[arg_p2p_bind_ip.name].defaulted() || bindIp.empty())) {
+    bindIp = command_line::get_arg(vm, arg_p2p_bind_ip);
+  }
+
+  if (vm.count(arg_p2p_bind_port.name) != 0 && (!vm[arg_p2p_bind_port.name].defaulted() || bindPort == 0)) {
+    bindPort = command_line::get_arg(vm, arg_p2p_bind_port);
+  }
+
+  if (vm.count(arg_p2p_external_port.name) != 0 && (!vm[arg_p2p_external_port.name].defaulted() || externalPort == 0)) {
+    externalPort = command_line::get_arg(vm, arg_p2p_external_port);
+  }
+
+  if (vm.count(arg_p2p_allow_local_ip.name) != 0 && (!vm[arg_p2p_allow_local_ip.name].defaulted() || !allowLocalIp)) {
+    allowLocalIp = command_line::get_arg(vm, arg_p2p_allow_local_ip);
   p2pStatTrustedPubKey = command_line::get_arg(vm, arg_P2P_STAT_TRUSTED_PUB_KEY);
   networkId = boost::lexical_cast<boost::uuids::uuid>(command_line::get_arg(vm, arg_network_id));
-  configFolder = command_line::get_arg(vm, command_line::arg_data_dir);
+  }
+
+  if (vm.count(command_line::arg_data_dir.name) != 0 && (!vm[command_line::arg_data_dir.name].defaulted() || configFolder == Tools::getDefaultDataDirectory())) {
+    configFolder = command_line::get_arg(vm, command_line::arg_data_dir);
+  }
+
   p2pStateFilename = CryptoNote::parameters::P2P_NET_DATA_FILENAME;
 
-  if (command_line::has_arg(vm, arg_p2p_add_peer))
-  {
+  if (command_line::has_arg(vm, arg_p2p_add_peer)) {
     std::vector<std::string> perrs = command_line::get_arg(vm, arg_p2p_add_peer);
-    for(const std::string& pr_str: perrs)
-    {
+    for(const std::string& pr_str: perrs) {
       PeerlistEntry pe = boost::value_initialized<PeerlistEntry>();
       pe.id = Crypto::rand<uint64_t>();
       if (!parsePeerFromString(pe.adr, pr_str)) {
         return false;
       }
+
       peers.push_back(pe);
     }
   }
@@ -127,8 +141,9 @@ bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
       return false;
   }
 
-  if(command_line::has_arg(vm, arg_p2p_hide_my_port))
+  if (command_line::has_arg(vm, arg_p2p_hide_my_port)) {
     hideMyPort = true;
+  }
 
   return true;
 }
