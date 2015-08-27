@@ -433,6 +433,9 @@ TEST_F(DetachTest, testDetachWithWallet) {
   Alice.addObserver(&AliceCompleted);
   Bob.addObserver(&BobCompleted);
 
+  auto expectedTransactionBlockHeight = m_node.getLastLocalBlockHeight();
+  generator.generateEmptyBlocks(1); //unlock bob's pending money
+
   m_node.updateObservers();
 
   AliceCompleted.syncCompletedFuture.get();
@@ -447,14 +450,13 @@ TEST_F(DetachTest, testDetachWithWallet) {
 
   Bob.getTransaction(txId, txInfo);
 
-
-  ASSERT_EQ(txInfo.blockHeight, m_node.getLastLocalBlockHeight());
+  ASSERT_EQ(txInfo.blockHeight, expectedTransactionBlockHeight);
   ASSERT_EQ(txInfo.totalAmount, tr.amount);
 
   ASSERT_EQ(Bob.pendingBalance(), 0);
   ASSERT_EQ(Bob.actualBalance(), tr.amount);
 
-  m_node.startAlternativeChain(m_node.getLastLocalBlockHeight() - 1);
+  m_node.startAlternativeChain(txInfo.blockHeight - 1);
   generator.generateEmptyBlocks(2);
 
   //sync Bob

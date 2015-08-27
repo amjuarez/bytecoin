@@ -104,7 +104,10 @@ public:
     const BinaryArray& extraNonce = BinaryArray(), size_t maxOuts = 1, bool penalizeFee = false) const;
 
   bool isFusionTransaction(const Transaction& transaction) const;
-  bool isFusionTransaction(const Transaction& transaction, uint64_t inputAmount, size_t size) const;
+  bool isFusionTransaction(const Transaction& transaction, size_t size) const;
+  bool isFusionTransaction(const std::vector<uint64_t>& inputsAmounts, const std::vector<uint64_t>& outputsAmounts, size_t size) const;
+  bool isAmountApplicableInFusionTransactionInput(uint64_t amount, uint64_t threshold) const;
+  bool isAmountApplicableInFusionTransactionInput(uint64_t amount, uint64_t threshold, uint8_t& amountPowerOfTen) const;
 
   std::string accountAddressAsString(const AccountBase& account) const;
   std::string accountAddressAsString(const AccountPublicAddress& accountPublicAddress) const;
@@ -119,6 +122,8 @@ public:
   bool checkProofOfWorkV1(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic, Crypto::Hash& proofOfWork) const;
   bool checkProofOfWorkV2(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic, Crypto::Hash& proofOfWork) const;
   bool checkProofOfWork(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic, Crypto::Hash& proofOfWork) const;
+
+  size_t getApproximateMaximumInputCount(size_t transactionSize, size_t outputCount, size_t mixinCount) const;
 
 private:
   Currency(Logging::ILogger& log) : logger(log, "currency") {
@@ -181,6 +186,8 @@ private:
   std::string m_blockIndexesFileName;
   std::string m_txPoolFileName;
   std::string m_blockchinIndicesFileName;
+
+  static const std::vector<uint64_t> PRETTY_AMOUNTS;
 
   bool m_testnet;
 

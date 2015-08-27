@@ -16,6 +16,9 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "HttpParser.h"
+
+#include <algorithm>
+
 #include "HttpParserErrorCodes.h"
 
 namespace {
@@ -98,7 +101,7 @@ void HttpParser::receiveResponse(std::istream& stream, HttpResponse& response) {
   response.addHeader(name, value);
   auto headers = response.getHeaders();
   size_t length = 0;
-  auto it = headers.find("Content-Length");
+  auto it = headers.find("content-length");
   if (it != headers.end()) {
     length = std::stoul(it->second);
   }
@@ -182,6 +185,8 @@ bool HttpParser::readHeader(std::istream& stream, std::string& name, std::string
     throw std::system_error(make_error_code(CryptoNote::error::HttpParserErrorCodes::UNEXPECTED_SYMBOL));
   }
 
+  std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
   c = stream.peek();
   if (c == '\r') {
     stream.get(c).get(c);
@@ -196,7 +201,7 @@ bool HttpParser::readHeader(std::istream& stream, std::string& name, std::string
 }
 
 size_t HttpParser::getBodyLen(const HttpRequest::Headers& headers) {
-  auto it = headers.find("Content-Length");
+  auto it = headers.find("content-length");
   if (it != headers.end()) {
     size_t bytes = std::stoul(it->second);
     return bytes;

@@ -36,11 +36,36 @@
 #include <System/Timer.h>
 #include <System/Context.h>
 
+#include "TransactionApiHelpers.h"
+
 using namespace Crypto;
 using namespace Common;
 using namespace CryptoNote;
 
 namespace CryptoNote {
+    std::ostream& operator<<(std::ostream& o, const WalletTransactionState& st) {
+      switch (st) {
+        case WalletTransactionState::FAILED:
+          o << "FAILED";
+          break;
+        case WalletTransactionState::CANCELLED:
+          o << "CANCELLED";
+          break;
+        case WalletTransactionState::SUCCEEDED:
+          o << "SUCCEEDED";
+          break;
+      }
+      return o;
+    }
+    std::ostream& operator<<(std::ostream& o, const WalletTransaction& tx) {
+      o << "WalletTransaction{state=" << tx.state << ", timestamp=" << tx.timestamp
+        << ", blockHeight=" << tx.blockHeight << ", hash=" << tx.hash
+        << ", totalAmount=" << tx.totalAmount << ", fee=" << tx.fee
+        << ", creationTime=" << tx.creationTime << ", unlockTime=" << tx.unlockTime
+        << ", extra=" << tx.extra  << ", isBase=" << tx.isBase << "}";
+      return o;
+    }
+
     bool operator==(const WalletTransaction& lhs, const WalletTransaction& rhs) {
       if (lhs.state != rhs.state) {
         return false;
@@ -78,6 +103,10 @@ namespace CryptoNote {
         return false;
       }
 
+      if (lhs.isBase != rhs.isBase) {
+        return false;
+      }
+
       return true;
     }
 
@@ -100,16 +129,22 @@ namespace CryptoNote {
     bool operator!=(const WalletTransfer& lhs, const WalletTransfer& rhs) {
       return !(lhs == rhs);
     }
+
+    bool operator==(const IFusionManager::EstimateResult& lhs, const IFusionManager::EstimateResult& rhs) {
+      return lhs.fusionReadyCount == rhs.fusionReadyCount && lhs.totalOutputCount == rhs.totalOutputCount;
+    }
 }
 
 class WalletApi: public ::testing::Test {
 public:
   WalletApi() :
+    TRANSACTION_SOFTLOCK_TIME(10),
     currency(CryptoNote::CurrencyBuilder(logger).currency()),
     generator(currency),
     node(generator),
     alice(dispatcher, currency, node),
-    FEE(currency.minimumFee())
+    FEE(currency.minimumFee()),
+    FUSION_THRESHOLD(currency.defaultDustThreshold() * 10)
   { }
 
   virtual void SetUp() override;
@@ -121,8 +156,10 @@ protected:
   void generateBlockReward(const std::string& address);
   void generateAndUnlockMoney();
   void generateAddressesWithPendingMoney(size_t count);
+  void generateFusionOutputsAndUnlock(WalletGreen& wallet, INodeTrivialRefreshStub& node, const CryptoNote::Currency& walletCurrency, uint64_t threshold);
   void unlockMoney();
   void unlockMoney(CryptoNote::WalletGreen& wallet, INodeTrivialRefreshStub& inode);
+  void setMinerTo(CryptoNote::WalletGreen& wallet);
 
   template<typename T>
   void waitValueChanged(CryptoNote::WalletGreen& wallet, T prev, std::function<T ()>&& f);
@@ -141,11 +178,14 @@ protected:
   void waitPendingBalanceUpdated(CryptoNote::WalletGreen& wallet, uint64_t prev);
 
   void waitForTransactionCount(CryptoNote::WalletGreen& wallet, uint64_t expected);
+  void waitForTransactionUpdated(CryptoNote::WalletGreen& wallet, size_t expectedTransactionId);
   void waitForActualBalance(uint64_t expected);
+  void waitForActualBalance(CryptoNote::WalletGreen& wallet, uint64_t expected);
 
   size_t sendMoneyToRandomAddressFrom(const std::string& address, uint64_t amount, uint64_t fee);
   size_t sendMoneyToRandomAddressFrom(const std::string& address);
 
+  size_t sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
   size_t sendMoney(const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
 
   void fillWalletWithDetailsCache();
@@ -155,6 +195,8 @@ protected:
           const std::vector<WalletLegacyTransaction>& txs = std::vector<WalletLegacyTransaction>(),
           const std::vector<WalletLegacyTransfer>& trs = std::vector<WalletLegacyTransfer>(),
           const std::vector<std::pair<TransactionInformation, int64_t>>& externalTxs = std::vector<std::pair<TransactionInformation, int64_t>>());
+
+  uint32_t TRANSACTION_SOFTLOCK_TIME;
 
   System::Dispatcher dispatcher;
   Logging::ConsoleLogger logger;
@@ -167,11 +209,26 @@ protected:
   const uint64_t SENT = 1122334455;
   const uint64_t FEE;
   const std::string RANDOM_ADDRESS = "2634US2FAz86jZT73YmM8u5GPCknT2Wxj8bUCKivYKpThFhF2xsjygMGxbxZzM42zXhKUhym6Yy6qHHgkuWtruqiGkDpX6m";
+  const uint64_t FUSION_THRESHOLD;
 };
 
 void WalletApi::SetUp() {
   alice.initialize("pass");
   aliceAddress = alice.createAddress();
+}
+
+void WalletApi::setMinerTo(CryptoNote::WalletGreen& wallet) {
+  AccountBase base;
+  AccountKeys keys;
+  auto viewKey = wallet.getViewKey();
+  auto spendKey = wallet.getAddressSpendKey(0);
+  keys.address.spendPublicKey = spendKey.publicKey;
+  keys.address.viewPublicKey = viewKey.publicKey;
+  keys.viewSecretKey = viewKey.secretKey;
+  keys.spendSecretKey = spendKey.secretKey;
+  base.setAccountKeys(keys);
+  // mine to alice's address to make it recieve block base transaction
+  generator.setMinerAccount(base);
 }
 
 void WalletApi::TearDown() {
@@ -196,13 +253,56 @@ void WalletApi::generateBlockReward(const std::string& address) {
   generator.getBlockRewardForAddress(parseAddress(address));
 }
 
+void WalletApi::generateFusionOutputsAndUnlock(WalletGreen& wallet, INodeTrivialRefreshStub& node, const CryptoNote::Currency& walletCurrency, uint64_t threshold) {
+  uint64_t digit = walletCurrency.defaultDustThreshold();
+  uint64_t mul = 1;
+
+  while (digit > 9) {
+    digit /= 10;
+    mul *= 10;
+  }
+
+  auto initialAmount = wallet.getActualBalance();
+
+  CryptoNote::AccountPublicAddress publicAddress = parseAddress(wallet.getAddress(0));
+  const size_t POWERS_COUNT = 3;
+
+  uint64_t addedAmount = 0;
+  for (size_t power = 0; power < POWERS_COUNT; ++power) {
+    int start = power == 0 ? digit: 1;
+    if (start * mul > threshold) {
+      break;
+    }
+
+    for (int count = 0, d = start; count < walletCurrency.fusionTxMinInputCount() && start * mul < threshold; ++count) {
+      //TODO: make it possible to put several outputs to one transaction
+      auto amount = d * mul;
+      generator.getSingleOutputTransaction(publicAddress, amount);
+      addedAmount += amount;
+
+      if (++d > 9 || amount >= threshold) {
+        d = start;
+      }
+    }
+
+    mul *= 10;
+  }
+
+  assert(addedAmount > 0);
+
+  generator.generateEmptyBlocks(11);
+  node.updateObservers();
+
+  waitForActualBalance(wallet, initialAmount + addedAmount);
+}
+
 void WalletApi::unlockMoney() {
   unlockMoney(alice, node);
 }
 
 void WalletApi::unlockMoney(CryptoNote::WalletGreen& wallet, INodeTrivialRefreshStub& inode) {
   auto prev = wallet.getActualBalance();
-  generator.generateEmptyBlocks(11); //coinbase money should become available after 10 blocks
+  generator.generateEmptyBlocks(currency.minedMoneyUnlockWindow()); //coinbase money should become available after 10 blocks
   inode.updateObservers();
   waitActualBalanceUpdated(wallet, prev);
 }
@@ -260,6 +360,10 @@ void WalletApi::waitForActualBalance(uint64_t expected) {
   waitForValue<uint64_t>(alice, expected, [this] () { return this->alice.getActualBalance(); });
 }
 
+void WalletApi::waitForActualBalance(CryptoNote::WalletGreen& wallet, uint64_t expected) {
+  waitForValue<uint64_t>(wallet, expected, [&wallet] () { return wallet.getActualBalance(); });
+}
+
 void WalletApi::waitActualBalanceUpdated(CryptoNote::WalletGreen& wallet, uint64_t prev) {
   waitValueChanged<uint64_t>(wallet, prev, [&wallet] () { return wallet.getActualBalance(); });
 }
@@ -278,6 +382,16 @@ void WalletApi::waitPendingBalanceUpdated(CryptoNote::WalletGreen& wallet, uint6
 
 void WalletApi::waitForTransactionCount(CryptoNote::WalletGreen& wallet, uint64_t expected) {
   waitForValue<size_t>(wallet, expected, [&wallet] () { return wallet.getTransactionCount(); });
+}
+
+void WalletApi::waitForTransactionUpdated(CryptoNote::WalletGreen& wallet, size_t expectedTransactionId) {
+  WalletEvent event;
+  for (;;) {
+    event = wallet.getEvent();
+    if (event.type == WalletEventType::TRANSACTION_UPDATED && event.transactionUpdated.transactionIndex == expectedTransactionId) {
+      break;
+    }
+  }
 }
 
 void WalletApi::generateAddressesWithPendingMoney(size_t count) {
@@ -315,12 +429,16 @@ void WalletApi::fillWalletWithDetailsCache() {
   }
 }
 
-size_t WalletApi::sendMoney(const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+size_t WalletApi::sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
   CryptoNote::WalletTransfer transfer;
   transfer.address = to;
   transfer.amount = amount;
 
-  return alice.transfer(transfer, fee, mixIn, extra, unlockTimestamp);
+  return wallet.transfer(transfer, fee, mixIn, extra, unlockTimestamp);
+}
+
+size_t WalletApi::sendMoney(const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+  return sendMoney(alice, to, amount, fee, mixIn, extra, unlockTimestamp);
 }
 
 void WalletApi::wait(uint64_t milliseconds) {
@@ -357,7 +475,7 @@ TEST_F(WalletApi, unlockMoney) {
 }
 
 TEST_F(WalletApi, transferFromOneAddress) {
-  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.initialize("pass2");
   std::string bobAddress = bob.createAddress();
 
@@ -366,6 +484,7 @@ TEST_F(WalletApi, transferFromOneAddress) {
   auto alicePrev = alice.getActualBalance();
   sendMoney(bobAddress, SENT, FEE);
   node.updateObservers();
+
   waitActualBalanceUpdated(alicePrev);
   waitPendingBalanceUpdated(bob, 0);
 
@@ -374,6 +493,44 @@ TEST_F(WalletApi, transferFromOneAddress) {
 
   ASSERT_EQ(TEST_BLOCK_REWARD - SENT - FEE, alice.getActualBalance() + alice.getPendingBalance());
   ASSERT_EQ(TEST_BLOCK_REWARD - SENT - FEE, alice.getActualBalance(aliceAddress) + alice.getPendingBalance(aliceAddress));
+
+  bob.shutdown();
+  wait(100);
+}
+
+TEST_F(WalletApi, pendingBalanceUpdatedAfterTransactionGotInBlock) {
+  generateAndUnlockMoney();
+
+  auto initialActual = alice.getActualBalance();
+
+  sendMoney(RANDOM_ADDRESS, SENT, FEE);
+  node.updateObservers();
+  waitActualBalanceUpdated(initialActual);
+  waitPendingBalanceUpdated(0);
+
+  auto prevPending = alice.getPendingBalance();
+
+  generator.generateEmptyBlocks(TRANSACTION_SOFTLOCK_TIME);
+  node.updateObservers();
+
+  waitPendingBalanceUpdated(prevPending);
+  ASSERT_EQ(0, alice.getPendingBalance());
+}
+
+TEST_F(WalletApi, moneyLockedIfTransactionIsSoftLocked) {
+  generateAndUnlockMoney();
+
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
+  bob.initialize("pass2");
+
+  sendMoney(bob.createAddress(), SENT, FEE);
+  generator.generateEmptyBlocks(TRANSACTION_SOFTLOCK_TIME - 1);
+  node.updateObservers();
+
+  waitPendingBalanceUpdated(bob, 0);
+
+  ASSERT_EQ(SENT, bob.getPendingBalance());
+  ASSERT_EQ(0, bob.getActualBalance());
 
   bob.shutdown();
   wait(100);
@@ -408,12 +565,12 @@ TEST_F(WalletApi, transferNegativeAmount) {
 TEST_F(WalletApi, transferFromTwoAddresses) {
   generateBlockReward();
   generateBlockReward(alice.createAddress());
-  generator.generateEmptyBlocks(11);
+  generator.generateEmptyBlocks(currency.minedMoneyUnlockWindow());
   node.updateObservers();
 
   waitForActualBalance(2 * TEST_BLOCK_REWARD);
 
-  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.initialize("pass2");
   std::string bobAddress = bob.createAddress();
 
@@ -445,14 +602,14 @@ TEST_F(WalletApi, transferTooBigTransaction) {
   TestBlockchainGenerator gen(cur);
   INodeTrivialRefreshStub n(gen);
 
-  CryptoNote::WalletGreen wallet(dispatcher, cur, n);
+  CryptoNote::WalletGreen wallet(dispatcher, cur, n, TRANSACTION_SOFTLOCK_TIME);
   wallet.initialize("pass");
   wallet.createAddress();
 
   gen.getBlockRewardForAddress(parseAddress(wallet.getAddress(0)));
 
   auto prev = wallet.getActualBalance();
-  gen.generateEmptyBlocks(11);
+  gen.generateEmptyBlocks(currency.minedMoneyUnlockWindow());
   n.updateObservers();
   waitActualBalanceUpdated(wallet, prev);
 
@@ -494,7 +651,7 @@ TEST_F(WalletApi, transferFromSpecificAddress) {
   auto secondAddress = alice.createAddress();
   generateBlockReward(secondAddress);
 
-  generator.generateEmptyBlocks(11);
+  generator.generateEmptyBlocks(currency.minedMoneyUnlockWindow());
   node.updateObservers();
   waitActualBalanceUpdated();
 
@@ -520,7 +677,7 @@ TEST_F(WalletApi, loadEmptyWallet) {
   std::stringstream data;
   alice.save(data, true, true);
 
-  WalletGreen bob(dispatcher, currency, node);
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.load(data, "pass");
 
   ASSERT_EQ(alice.getAddressCount(), bob.getAddressCount());
@@ -532,15 +689,77 @@ TEST_F(WalletApi, loadEmptyWallet) {
   wait(100);
 }
 
-TEST_F(WalletApi, loadWalletWithoutAddresses) {
+TEST_F(WalletApi, walletGetsBaseTransaction) {
+  // mine to alice's address to make it recieve block base transaction
+  setMinerTo(alice);
+  generateAndUnlockMoney();
+  ASSERT_TRUE(alice.getTransaction(0).isBase);
+}
+
+TEST_F(WalletApi, walletGetsNonBaseTransaction) {
+  generateAndUnlockMoney();
+  ASSERT_FALSE(alice.getTransaction(0).isBase);
+}
+
+TEST_F(WalletApi, loadWalletWithBaseTransaction) {
+  // mine to alice's address to make it recieve block base transaction
+  setMinerTo(alice);
+  generateAndUnlockMoney();
+
+  std::stringstream data;
+  alice.save(data, true, true);
+
   WalletGreen bob(dispatcher, currency, node);
+  bob.load(data, "pass");
+
+  ASSERT_TRUE(bob.getTransaction(0).isBase);
+  bob.shutdown();
+  wait(100);
+}
+
+TEST_F(WalletApi, updateBaseTransactionAfterLoad) {
+  // mine to alice's address to make it recieve block base transaction
+  setMinerTo(alice);
+  generateAndUnlockMoney();
+
+  std::stringstream data;
+  alice.save(data, true, false);
+
+  WalletGreen bob(dispatcher, currency, node);
+  bob.load(data, "pass");
+  waitForWalletEvent(bob, CryptoNote::SYNC_COMPLETED, std::chrono::seconds(5));
+
+  ASSERT_TRUE(bob.getTransaction(0).isBase);
+  bob.shutdown();
+  wait(100);
+}
+
+TEST_F(WalletApi, setBaseTransactionAfterInSynchronization) {
+  // mine to alice's address to make it recieve block base transaction
+  setMinerTo(alice);
+  generateAndUnlockMoney();
+
+  std::stringstream data;
+  alice.save(data, false, false);
+
+  WalletGreen bob(dispatcher, currency, node);
+  bob.load(data, "pass");
+  waitForWalletEvent(bob, CryptoNote::SYNC_COMPLETED, std::chrono::seconds(5));
+
+  ASSERT_TRUE(bob.getTransaction(0).isBase);
+  bob.shutdown();
+  wait(100);
+}
+
+TEST_F(WalletApi, loadWalletWithoutAddresses) {
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.initialize("pass");
 
   std::stringstream data;
   bob.save(data, false, false);
   bob.shutdown();
 
-  WalletGreen carol(dispatcher, currency, node);
+  WalletGreen carol(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   carol.load(data, "pass");
 
   ASSERT_EQ(0, carol.getAddressCount());
@@ -587,11 +806,12 @@ void compareWalletsTransactionTransfers(const CryptoNote::WalletGreen& alice, co
 
 TEST_F(WalletApi, loadCacheDetails) {
   fillWalletWithDetailsCache();
-
+  node.waitForAsyncContexts();
+  waitForWalletEvent(alice, CryptoNote::SYNC_COMPLETED, std::chrono::seconds(5));
   std::stringstream data;
   alice.save(data, true, true);
 
-  WalletGreen bob(dispatcher, currency, node);
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.load(data, "pass");
 
   compareWalletsAddresses(alice, bob);
@@ -609,7 +829,7 @@ TEST_F(WalletApi, loadNoCacheNoDetails) {
   std::stringstream data;
   alice.save(data, false, false);
 
-  WalletGreen bob(dispatcher, currency, node);
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.load(data, "pass");
 
   compareWalletsAddresses(alice, bob);
@@ -628,7 +848,7 @@ TEST_F(WalletApi, loadNoCacheDetails) {
   std::stringstream data;
   alice.save(data, true, false);
 
-  WalletGreen bob(dispatcher, currency, node);
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.load(data, "pass");
 
   compareWalletsAddresses(alice, bob);
@@ -648,7 +868,7 @@ TEST_F(WalletApi, loadCacheNoDetails) {
   std::stringstream data;
   alice.save(data, false, true);
 
-  WalletGreen bob(dispatcher, currency, node);
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.load(data, "pass");
 
   compareWalletsAddresses(alice, bob);
@@ -665,7 +885,7 @@ TEST_F(WalletApi, loadWithWrongPassword) {
   std::stringstream data;
   alice.save(data, false, false);
 
-  WalletGreen bob(dispatcher, currency, node);
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   ASSERT_ANY_THROW(bob.load(data, "pass2"));
 }
 
@@ -695,7 +915,7 @@ void WalletApi::testIWalletDataCompatibility(bool details, const std::string& ca
   std::stringstream stream;
   walletSerializer.serialize(stream, "pass", details, std::string());
 
-  WalletGreen wallet(dispatcher, currency, node);
+  WalletGreen wallet(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   wallet.load(stream, "pass");
 
   EXPECT_EQ(1, wallet.getAddressCount());
@@ -842,7 +1062,7 @@ TEST_F(WalletApi, stopStart) {
 }
 
 TEST_F(WalletApi, uninitializedObject) {
-  WalletGreen bob(dispatcher, currency, node);
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
 
   ASSERT_ANY_THROW(bob.changePassword("s", "p"));
   std::stringstream stream;
@@ -877,6 +1097,7 @@ TEST_F(WalletApi, checkSentTransaction) {
   ASSERT_EQ(-static_cast<int64_t>(SENT + FEE), tx.totalAmount);
   ASSERT_EQ(FEE, tx.fee);
   ASSERT_EQ(0, tx.unlockTime);
+  ASSERT_FALSE(tx.isBase);
   ASSERT_EQ(TX_PUB_KEY_EXTRA_SIZE, tx.extra.size()); //Transaction public key only
 }
 
@@ -910,6 +1131,7 @@ TEST_F(WalletApi, checkSentTransactionWithExtra) {
   ASSERT_EQ(-static_cast<int64_t>(SENT + FEE), tx.totalAmount);
   ASSERT_EQ(FEE, tx.fee);
   ASSERT_EQ(0, tx.unlockTime);
+  ASSERT_FALSE(tx.isBase);
   ASSERT_EQ(extra, removeTxPublicKey(tx.extra));
 }
 
@@ -923,12 +1145,21 @@ TEST_F(WalletApi, checkFailedTransaction) {
   ASSERT_EQ(CryptoNote::WalletTransactionState::FAILED, tx.state);
 }
 
+TEST_F(WalletApi, transactionSendsAfterFailedTransaction) {
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE);
+  unlockMoney();
+
+  node.setNextTransactionError();
+  ASSERT_ANY_THROW(sendMoney(RANDOM_ADDRESS, SENT, FEE));
+  ASSERT_NO_THROW(sendMoney(RANDOM_ADDRESS, SENT, FEE));
+}
+
 TEST_F(WalletApi, checkIncomingTransaction) {
   const std::string extra = createExtraNonce("\x01\x23\x45\x67\x89\xab\xcd\xef");
 
   generateAndUnlockMoney();
 
-  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.initialize("pass2");
   std::string bobAddress = bob.createAddress();
 
@@ -963,7 +1194,7 @@ TEST_F(WalletApi, changePassword) {
   std::stringstream data;
   alice.save(data, false, false);
 
-  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   ASSERT_NO_THROW(bob.load(data, "pass2"));
 
   bob.shutdown();
@@ -993,7 +1224,7 @@ TEST_F(WalletApi, detachBlockchain) {
   auto alicePrev = alice.getActualBalance();
 
   node.startAlternativeChain(1);
-  generator.generateEmptyBlocks(11);
+  generator.generateEmptyBlocks(currency.minedMoneyUnlockWindow());
   node.updateObservers();
   waitActualBalanceUpdated(alicePrev);
 
@@ -1016,7 +1247,7 @@ TEST_F(WalletApi, deleteAddresses) {
 TEST_F(WalletApi, incomingTxTransfer) {
   generateAndUnlockMoney();
 
-  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
   bob.initialize("pass2");
   bob.createAddress();
   bob.createAddress();
@@ -1077,7 +1308,7 @@ TEST_F(WalletApi, syncAfterLoad) {
   alice.shutdown();
 
   generateBlockReward();
-  generator.generateEmptyBlocks(11);
+  generator.generateEmptyBlocks(currency.minedMoneyUnlockWindow());
 
   alice.load(data, "pass");
 
@@ -1107,7 +1338,7 @@ TEST_F(WalletApi, DISABLED_loadTest) {
   using namespace std::chrono;
 
   INodeNoRelay noRelayNode(generator);
-  CryptoNote::WalletGreen wallet(dispatcher, currency, noRelayNode);
+  CryptoNote::WalletGreen wallet(dispatcher, currency, noRelayNode, TRANSACTION_SOFTLOCK_TIME);
   wallet.initialize("pass");
 
   const size_t ADDRESSES_COUNT = 1000;
@@ -1247,6 +1478,134 @@ TEST_F(WalletApi, getAddressSpendKeyThrowsIfStopped) {
   ASSERT_ANY_THROW(alice.getAddressSpendKey(0));
 }
 
+Crypto::PublicKey generatePublicKey() {
+  CryptoNote::KeyPair spendKeys;
+  Crypto::generate_keys(spendKeys.publicKey, spendKeys.secretKey);
+
+  return spendKeys.publicKey;
+}
+
+TEST_F(WalletApi, createTrackingKeyAddressSucceeded) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.initialize("pass");
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+
+  ASSERT_NO_THROW(wallet.createAddress(publicKey));
+  ASSERT_EQ(1, wallet.getAddressCount());
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, createTrackingKeyThrowsIfNotInitialized) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+  ASSERT_ANY_THROW(wallet.createAddress(publicKey));
+}
+
+TEST_F(WalletApi, createTrackingKeyThrowsIfStopped) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.initialize("pass");
+  wallet.stop();
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+  ASSERT_ANY_THROW(wallet.createAddress(publicKey));
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, createTrackingKeyThrowsIfKeyExists) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.initialize("pass");
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+  wallet.createAddress(publicKey);
+  ASSERT_ANY_THROW(wallet.createAddress(publicKey));
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, createTrackingKeyThrowsIfWalletHasNotTrackingKeys) {
+  Crypto::PublicKey publicKey = generatePublicKey();
+  ASSERT_ANY_THROW(alice.createAddress(publicKey));
+}
+
+TEST_F(WalletApi, getAddressSpendKeyForTrackingKeyReturnsNullSecretKey) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.initialize("pass");
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+  wallet.createAddress(publicKey);
+
+  KeyPair spendKeys = wallet.getAddressSpendKey(0);
+  ASSERT_EQ(NULL_SECRET_KEY, spendKeys.secretKey);
+
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, trackingAddressReceivesMoney) {
+  generateAndUnlockMoney();
+
+  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  bob.initialize("pass2");
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+  bob.createAddress(publicKey);
+
+  sendMoney(bob.getAddress(0), SENT, FEE);
+  node.updateObservers();
+
+  auto expectedTransactionHeight = node.getLastKnownBlockHeight();
+  waitPendingBalanceUpdated(bob, 0);
+
+  ASSERT_EQ(SENT, bob.getPendingBalance());
+  ASSERT_EQ(0, bob.getActualBalance());
+  ASSERT_EQ(1, bob.getTransactionCount());
+
+  CryptoNote::WalletTransaction transaction = bob.getTransaction(0);
+  ASSERT_EQ(CryptoNote::WalletTransactionState::SUCCEEDED, transaction.state);
+  ASSERT_EQ(expectedTransactionHeight, transaction.blockHeight);
+  ASSERT_EQ(SENT, transaction.totalAmount);
+  ASSERT_EQ(FEE, transaction.fee);
+  ASSERT_EQ(0, transaction.unlockTime);
+
+  bob.shutdown();
+}
+
+TEST_F(WalletApi, trackingAddressUnlocksMoney) {
+  generateAndUnlockMoney();
+
+  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  bob.initialize("pass2");
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+  bob.createAddress(publicKey);
+
+  sendMoney(bob.getAddress(0), SENT, FEE);
+  generator.generateEmptyBlocks(currency.minedMoneyUnlockWindow());
+  node.updateObservers();
+  waitActualBalanceUpdated(bob, 0);
+
+  ASSERT_EQ(0, bob.getPendingBalance());
+  ASSERT_EQ(SENT, bob.getActualBalance());
+}
+
+TEST_F(WalletApi, transferFromTrackingKeyThrows) {
+  generateAndUnlockMoney();
+
+  CryptoNote::WalletGreen bob(dispatcher, currency, node);
+  bob.initialize("pass2");
+
+  Crypto::PublicKey publicKey = generatePublicKey();
+  bob.createAddress(publicKey);
+
+  sendMoney(bob.getAddress(0), SENT, FEE);
+  generator.generateEmptyBlocks(currency.minedMoneyUnlockWindow());
+  node.updateObservers();
+  waitActualBalanceUpdated(bob, 0);
+
+  ASSERT_ANY_THROW(sendMoney(bob, RANDOM_ADDRESS, SENT, FEE));
+  bob.shutdown();
+}
+
 TEST_F(WalletApi, walletGetsSyncCompletedEvent) {
   generator.generateEmptyBlocks(1);
   node.updateObservers();
@@ -1260,3 +1619,235 @@ TEST_F(WalletApi, walletGetsSyncProgressUpdatedEvent) {
 
   ASSERT_TRUE(waitForWalletEvent(alice, CryptoNote::SYNC_PROGRESS_UPDATED, std::chrono::seconds(5)));
 }
+
+struct CatchTransactionNodeStub : public INodeTrivialRefreshStub {
+  CatchTransactionNodeStub(TestBlockchainGenerator& generator): INodeTrivialRefreshStub(generator), caught(false) {}
+
+  virtual void relayTransaction(const CryptoNote::Transaction& incomingTransaction, const Callback& callback) override {
+    transaction = incomingTransaction;
+    caught = true;
+    INodeTrivialRefreshStub::relayTransaction(incomingTransaction, callback);
+  }
+
+  bool caught;
+  CryptoNote::Transaction transaction;
+};
+
+TEST_F(WalletApi, createFusionTransactionCreatesValidFusionTransactionWithoutMixin) {
+  CatchTransactionNodeStub catchNode(generator);
+  CryptoNote::WalletGreen wallet(dispatcher, currency, catchNode);
+  wallet.initialize("pass");
+  wallet.createAddress();
+
+  generateFusionOutputsAndUnlock(wallet, node, currency, FUSION_THRESHOLD);
+
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, wallet.createFusionTransaction(FUSION_THRESHOLD, 0));
+  ASSERT_TRUE(catchNode.caught);
+  ASSERT_TRUE(currency.isFusionTransaction(catchNode.transaction));
+
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, createFusionTransactionCreatesValidFusionTransactionWithMixin) {
+  CatchTransactionNodeStub catchNode(generator);
+  CryptoNote::WalletGreen wallet(dispatcher, currency, catchNode);
+  wallet.initialize("pass");
+  wallet.createAddress();
+
+  generateFusionOutputsAndUnlock(wallet, node, currency, FUSION_THRESHOLD);
+
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, wallet.createFusionTransaction(FUSION_THRESHOLD, 2));
+  ASSERT_TRUE(catchNode.caught);
+  ASSERT_TRUE(currency.isFusionTransaction(catchNode.transaction));
+
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, createFusionTransactionDoesnotAffectTotalBalance) {
+  generateFusionOutputsAndUnlock(alice, node, currency, FUSION_THRESHOLD);
+
+  auto totalBalance = alice.getActualBalance() + alice.getPendingBalance();
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, alice.createFusionTransaction(FUSION_THRESHOLD, 2));
+  ASSERT_EQ(totalBalance, alice.getActualBalance() + alice.getPendingBalance());
+}
+
+TEST_F(WalletApi, createFusionTransactionFailsIfMixinToobig) {
+  generateFusionOutputsAndUnlock(alice, node, currency, FUSION_THRESHOLD);
+  ASSERT_ANY_THROW(alice.createFusionTransaction(FUSION_THRESHOLD, 10000000));
+}
+
+TEST_F(WalletApi, createFusionTransactionFailsIfNoTransfers) {
+  ASSERT_EQ(WALLET_INVALID_TRANSACTION_ID, alice.createFusionTransaction(FUSION_THRESHOLD, 0));
+}
+
+TEST_F(WalletApi, createFusionTransactionThrowsIfNotInitialized) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  ASSERT_ANY_THROW(wallet.createFusionTransaction(FUSION_THRESHOLD, 0));
+}
+
+TEST_F(WalletApi, createFusionTransactionThrowsIfStopped) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.initialize("pass");
+  wallet.stop();
+  ASSERT_ANY_THROW(wallet.createFusionTransaction(FUSION_THRESHOLD, 0));
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, createFusionTransactionThrowsIfThresholdTooSmall) {
+  ASSERT_ANY_THROW(alice.createFusionTransaction(currency.defaultDustThreshold() - 1, 0));
+}
+
+TEST_F(WalletApi, createFusionTransactionThrowsIfNoAddresses) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.initialize("pass");
+  ASSERT_ANY_THROW(wallet.createFusionTransaction(FUSION_THRESHOLD, 0));
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, createFusionTransactionThrowsIfTransactionSendError) {
+  CatchTransactionNodeStub catchNode(generator);
+  CryptoNote::WalletGreen wallet(dispatcher, currency, catchNode);
+  wallet.initialize("pass");
+  wallet.createAddress();
+
+  generateFusionOutputsAndUnlock(wallet, node, currency, FUSION_THRESHOLD);
+
+  catchNode.setNextTransactionError();
+  ASSERT_ANY_THROW(wallet.createFusionTransaction(FUSION_THRESHOLD, 0));
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, fusionManagerEstimateThrowsIfNotInitialized) {
+  const uint64_t THRESHOLD = 100;
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  ASSERT_ANY_THROW(wallet.estimate(THRESHOLD));
+}
+
+TEST_F(WalletApi, fusionManagerEstimateThrowsIfStopped) {
+  const uint64_t THRESHOLD = 100;
+  alice.stop();
+  ASSERT_ANY_THROW(alice.estimate(THRESHOLD));
+}
+
+TEST_F(WalletApi, fusionManagerEstimateEmpty) {
+  const uint64_t THRESHOLD = 100;
+  IFusionManager::EstimateResult emptyResult = {0, 0};
+  ASSERT_EQ(emptyResult, alice.estimate(THRESHOLD));
+}
+
+TEST_F(WalletApi, fusionManagerEstimateLocked) {
+  auto pending = alice.getPendingBalance();
+  generateBlockReward();
+  node.updateObservers();
+  waitPendingBalanceUpdated(alice, pending);
+
+  IFusionManager::EstimateResult expectedResult =  {0, 0};
+  ASSERT_EQ(expectedResult, alice.estimate(0));
+}
+
+TEST_F(WalletApi, fusionManagerEstimateNullThreshold) {
+  generateAndUnlockMoney();
+
+  ASSERT_EQ(1, alice.getTransactionCount());
+  CryptoNote::Transaction tx = boost::value_initialized<CryptoNote::Transaction>();
+  ASSERT_TRUE(generator.getTransactionByHash(alice.getTransaction(0).hash, tx, false));
+  ASSERT_FALSE(tx.outputs.empty());
+
+  IFusionManager::EstimateResult expectedResult = {0, tx.outputs.size()};
+  ASSERT_EQ(expectedResult, alice.estimate(0));
+}
+
+TEST_F(WalletApi, DISABLED_fusionManagerEstimate) {
+  generateAndUnlockMoney();
+
+  ASSERT_EQ(1, alice.getTransactionCount());
+  CryptoNote::Transaction tx = boost::value_initialized<CryptoNote::Transaction>();
+  ASSERT_TRUE(generator.getTransactionByHash(alice.getTransaction(0).hash, tx, false));
+  ASSERT_FALSE(tx.outputs.empty());
+
+  IFusionManager::EstimateResult expectedResult = {0, tx.outputs.size()};
+  size_t maxOutputIndex = 0;
+  uint64_t maxOutputAmount = 0;
+  for (size_t i = 0; i < tx.outputs.size(); ++i) {
+    if (tx.outputs[i].amount > maxOutputAmount) {
+      maxOutputAmount = tx.outputs[i].amount;
+      maxOutputIndex = i;
+    }
+
+    if (currency.isAmountApplicableInFusionTransactionInput(tx.outputs[i].amount, tx.outputs[i].amount + 1)) {
+      ++expectedResult.fusionReadyCount;
+    }
+  }
+
+  ASSERT_EQ(expectedResult, alice.estimate(tx.outputs[maxOutputIndex].amount + 1));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransactionThrowsIfNotInitialized) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  ASSERT_ANY_THROW(wallet.isFusionTransaction(0));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransactionThrowsIfStopped) {
+  alice.stop();
+  ASSERT_ANY_THROW(alice.isFusionTransaction(0));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransactionEmpty) {
+  ASSERT_ANY_THROW(alice.isFusionTransaction(0));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransactionNotFusion) {
+  generateAndUnlockMoney();
+
+  ASSERT_EQ(1, alice.getTransactionCount());
+  ASSERT_FALSE(alice.isFusionTransaction(0));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransaction) {
+  generateFusionOutputsAndUnlock(alice, node, currency, FUSION_THRESHOLD);
+
+  auto id = alice.createFusionTransaction(FUSION_THRESHOLD, 0);
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, id);
+
+  node.updateObservers();
+  waitForTransactionUpdated(alice, id);
+
+  ASSERT_TRUE(alice.isFusionTransaction(id));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransactionNotInTransfersContainer) {
+  generateFusionOutputsAndUnlock(alice, node, currency, FUSION_THRESHOLD);
+
+  auto id = alice.createFusionTransaction(FUSION_THRESHOLD, 0);
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, id);
+
+  ASSERT_TRUE(alice.isFusionTransaction(id));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransactionThrowsIfOutOfRange) {
+  ASSERT_ANY_THROW(alice.isFusionTransaction(1));
+}
+
+TEST_F(WalletApi, fusionManagerIsFusionTransactionSpent) {
+  CryptoNote::WalletGreen wallet(dispatcher, currency, node);
+  wallet.initialize("pass");
+  wallet.createAddress();
+
+  generateFusionOutputsAndUnlock(alice, node, currency, FUSION_THRESHOLD);
+
+  auto id = alice.createFusionTransaction(FUSION_THRESHOLD, 0);
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, id);
+
+  unlockMoney();
+  CryptoNote::WalletTransfer transfer;
+  transfer.address = wallet.getAddress(0);
+  transfer.amount = alice.getActualBalance() - currency.minimumFee();
+  alice.transfer(aliceAddress, transfer, currency.minimumFee(), 0);
+
+  auto pending = wallet.getPendingBalance();
+  node.updateObservers();
+  waitPendingBalanceUpdated(wallet, pending);
+
+  ASSERT_TRUE(alice.isFusionTransaction(id));
+}
+

@@ -39,7 +39,7 @@ public:
     return base_class::init();
   }
 
-  void generate(const AccountPublicAddress& address, Transaction& tx)
+  void generate(const AccountPublicAddress& address, Transaction& tx, uint64_t unlockTime = 0)
   {
     std::vector<CryptoNote::TransactionDestinationEntry> destinations;
 
@@ -47,7 +47,7 @@ public:
       [&](uint64_t chunk) { destinations.push_back(CryptoNote::TransactionDestinationEntry(chunk, address)); },
       [&](uint64_t a_dust) { destinations.push_back(CryptoNote::TransactionDestinationEntry(a_dust, address)); });
 
-    CryptoNote::constructTransaction(this->m_miners[this->real_source_idx].getAccountKeys(), this->m_sources, destinations, std::vector<uint8_t>(), tx, 0, m_logger);
+    CryptoNote::constructTransaction(this->m_miners[this->real_source_idx].getAccountKeys(), this->m_sources, destinations, std::vector<uint8_t>(), tx, unlockTime, m_logger);
   }
 
   void generateSingleOutputTx(const AccountPublicAddress& address, uint64_t amount, Transaction& tx) {
@@ -56,7 +56,6 @@ public:
     constructTransaction(this->m_miners[this->real_source_idx].getAccountKeys(), this->m_sources, destinations, std::vector<uint8_t>(), tx, 0, m_logger);
   }
 };
-
 
 TestBlockchainGenerator::TestBlockchainGenerator(const CryptoNote::Currency& currency) :
   m_currency(currency),
@@ -182,8 +181,7 @@ bool TestBlockchainGenerator::doGenerateTransactionsInOneBlock(const AccountPubl
   std::vector<Transaction> txs;
   for (size_t i = 0; i < n; ++i) {
     Transaction tx;
-    creator.generate(address, tx);
-    tx.unlockTime = 10; //default unlock time for coinbase transactions
+    creator.generate(address, tx, m_blockchain.size() + 10);
     txs.push_back(tx);
   }
 
@@ -308,6 +306,10 @@ bool TestBlockchainGenerator::addOrphan(const Crypto::Hash& hash, uint32_t heigh
   uint64_t timestamp = time(NULL);
   generator.constructBlock(block, miner_acc, timestamp);
   return m_orthanBlocksIndex.add(block);
+}
+
+void TestBlockchainGenerator::setMinerAccount(const CryptoNote::AccountBase& account) {
+  miner_acc = account;
 }
 
 bool TestBlockchainGenerator::getGeneratedTransactionsNumber(uint32_t height, uint64_t& generatedTransactions) {

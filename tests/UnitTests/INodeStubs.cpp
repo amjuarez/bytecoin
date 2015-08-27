@@ -75,6 +75,10 @@ void INodeTrivialRefreshStub::getNewBlocks(std::vector<Crypto::Hash>&& knownBloc
   task.detach();
 }
 
+void INodeTrivialRefreshStub::waitForAsyncContexts() {
+  m_asyncCounter.waitAsyncContextsFinish();
+}
+
 void INodeTrivialRefreshStub::doGetNewBlocks(std::vector<Crypto::Hash> knownBlockIds, std::vector<block_complete_entry>& newBlocks,
         uint32_t& startHeight, std::vector<Block> blockchain, const Callback& callback)
 {

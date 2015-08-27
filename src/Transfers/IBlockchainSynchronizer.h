@@ -33,7 +33,7 @@ struct CompleteBlock;
 
 class IBlockchainSynchronizerObserver {
 public:
-  virtual void synchronizationProgressUpdated(uint32_t current, uint32_t total) {}
+  virtual void synchronizationProgressUpdated(uint32_t processedBlockCount, uint32_t totalBlockCount) {}
   virtual void synchronizationCompleted(std::error_code result) {}
 };
 

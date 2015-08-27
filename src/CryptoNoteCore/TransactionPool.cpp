@@ -133,7 +133,7 @@ namespace CryptoNote {
     }
 
     const uint64_t fee = inputs_amount - outputs_amount;
-    bool isFusionTransaction = fee == 0 && m_currency.isFusionTransaction(tx, inputs_amount, blobSize);
+    bool isFusionTransaction = fee == 0 && m_currency.isFusionTransaction(tx, blobSize);
     if (!keptByBlock && !isFusionTransaction && fee < m_currency.minimumFee()) {
       logger(INFO) << "transaction fee is not enough: " << m_currency.formatAmount(fee) <<
         ", minimum fee: " << m_currency.formatAmount(m_currency.minimumFee());
@@ -222,6 +222,7 @@ namespace CryptoNote {
     //succeed
     return true;
   }
+
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::add_tx(const Transaction &tx, tx_verification_context& tvc, bool keeped_by_block) {
     Crypto::Hash h = NULL_HASH;
@@ -308,6 +309,11 @@ namespace CryptoNote {
   void tx_memory_pool::unlock() const {
     m_transactions_lock.unlock();
   }
+
+  std::unique_lock<std::recursive_mutex> tx_memory_pool::obtainGuard() const {
+    return std::unique_lock<std::recursive_mutex>(m_transactions_lock);
+  }
+
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::is_transaction_ready_to_go(const Transaction& tx, TransactionCheckInfo& txd) const {
 

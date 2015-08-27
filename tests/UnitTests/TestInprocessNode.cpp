@@ -29,6 +29,7 @@
 #include "Logging/FileLogger.h"
 #include "CryptoNoteCore/TransactionApi.h"
 #include "CryptoNoteCore/CryptoNoteTools.h"
+#include "CryptoNoteCore/VerificationContext.h"
 #include "Common/StringTools.h"
 
 using namespace Crypto;
@@ -527,7 +528,7 @@ TEST_F(InProcessNodeTests, getTxMany) {
 }
 
 TEST_F(InProcessNodeTests, getTxFail) {
-size_t POOL_TX_NUMBER = 10;
+  size_t POOL_TX_NUMBER = 10;
   size_t BLOCKCHAIN_TX_NUMBER = 10;
 
   std::vector<Crypto::Hash> transactionHashes;
@@ -667,6 +668,99 @@ TEST_F(InProcessNodeTests, getLastLocalBlockTimestampError) {
   ASSERT_TRUE(initStatus.wait());
 
   ASSERT_THROW(newNode.getLastLocalBlockTimestamp(), std::exception);
+}
+
+TEST_F(InProcessNodeTests, getPoolDiffereceNotInited) {
+  CryptoNote::InProcessNode newNode(coreStub, protocolQueryStub);
+
+  std::vector<Crypto::Hash> knownPoolTxIds; 
+  Crypto::Hash knownBlockId = boost::value_initialized<Crypto::Hash>();
+  bool isBcActual = false;
+  std::vector<std::unique_ptr<ITransactionReader>> newTxs;
+  std::vector<Crypto::Hash> deletedTxIds;
+
+  CallbackStatus status;
+  newNode.getPoolSymmetricDifference(std::move(knownPoolTxIds), knownBlockId, isBcActual, newTxs, deletedTxIds, [&status](std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_NE(std::error_code(), status.getStatus());
+}
+
+TEST_F(InProcessNodeTests, getPoolDiffereceActualBC) {
+  size_t POOL_TX_NUMBER = 10;
+
+  std::unordered_set<Crypto::Hash> transactionHashes;
+
+  coreStub.setPoolChangesResult(true);
+
+  for (size_t i = 0; i < POOL_TX_NUMBER; ++i) {
+    auto txptr = CryptoNote::createTransaction();
+    auto tx = ::createTx(*txptr.get());
+    transactionHashes.insert(CryptoNote::getObjectHash(tx));
+    CryptoNote::tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+    bool keptByBlock = false;
+    coreStub.handleIncomingTransaction(tx, CryptoNote::getObjectHash(tx), CryptoNote::getObjectBinarySize(tx), tvc, keptByBlock);
+    ASSERT_TRUE(tvc.m_added_to_pool);
+    ASSERT_FALSE(tvc.m_verifivation_failed);
+  }
+
+  ASSERT_EQ(transactionHashes.size(), POOL_TX_NUMBER);
+
+  std::vector<Crypto::Hash> knownPoolTxIds;
+  Crypto::Hash knownBlockId = CryptoNote::getObjectHash(generator.getBlockchain().back());
+  bool isBcActual = false;
+  std::vector<std::unique_ptr<ITransactionReader>> newTxs;
+  std::vector<Crypto::Hash> deletedTxIds;
+
+  CallbackStatus status;
+  node.getPoolSymmetricDifference(std::move(knownPoolTxIds), knownBlockId, isBcActual, newTxs, deletedTxIds, [&status](std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+  ASSERT_TRUE(isBcActual);
+  ASSERT_EQ(newTxs.size(), transactionHashes.size());
+  ASSERT_TRUE(deletedTxIds.empty());
+
+  for (const auto& tx : newTxs) {
+    ASSERT_NE(transactionHashes.find(tx->getTransactionHash()), transactionHashes.end());
+  }
+}
+
+TEST_F(InProcessNodeTests, getPoolDiffereceNotActualBC) {
+  size_t POOL_TX_NUMBER = 10;
+
+  std::unordered_set<Crypto::Hash> transactionHashes;
+
+  coreStub.setPoolChangesResult(false);
+
+  for (size_t i = 0; i < POOL_TX_NUMBER; ++i) {
+    auto txptr = CryptoNote::createTransaction();
+    auto tx = ::createTx(*txptr.get());
+    transactionHashes.insert(CryptoNote::getObjectHash(tx));
+    CryptoNote::tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
+    bool keptByBlock = false;
+    coreStub.handleIncomingTransaction(tx, CryptoNote::getObjectHash(tx), CryptoNote::getObjectBinarySize(tx), tvc, keptByBlock);
+    ASSERT_TRUE(tvc.m_added_to_pool);
+    ASSERT_FALSE(tvc.m_verifivation_failed);
+  }
+
+  ASSERT_EQ(transactionHashes.size(), POOL_TX_NUMBER);
+
+  std::vector<Crypto::Hash> knownPoolTxIds;
+  Crypto::Hash knownBlockId = CryptoNote::getObjectHash(generator.getBlockchain().back());
+  bool isBcActual = false;
+  std::vector<std::unique_ptr<ITransactionReader>> newTxs;
+  std::vector<Crypto::Hash> deletedTxIds;
+
+  CallbackStatus status;
+  node.getPoolSymmetricDifference(std::move(knownPoolTxIds), knownBlockId, isBcActual, newTxs, deletedTxIds, [&status](std::error_code ec) { status.setStatus(ec); });
+  ASSERT_TRUE(status.wait());
+  ASSERT_EQ(std::error_code(), status.getStatus());
+  ASSERT_FALSE(isBcActual);
+  ASSERT_EQ(newTxs.size(), transactionHashes.size());
+  ASSERT_TRUE(deletedTxIds.empty());
+
+  for (const auto& tx : newTxs) {
+    ASSERT_NE(transactionHashes.find(tx->getTransactionHash()), transactionHashes.end());
+  }
 }
 
 //TODO: make relayTransaction unit test

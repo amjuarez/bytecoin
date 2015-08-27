@@ -306,18 +306,15 @@ bool RpcServer::onGetPoolChanges(const COMMAND_RPC_GET_POOL_CHANGES::request& re
   rsp.status = CORE_RPC_STATUS_OK;
   std::vector<CryptoNote::Transaction> addedTransactions;
   rsp.isTailBlockActual = m_core.getPoolChanges(req.tailBlockId, req.knownTxsIds, addedTransactions, rsp.deletedTxsIds);
-  if (rsp.isTailBlockActual) {
-    for (auto& tx : addedTransactions) {
-      BinaryArray txBlob;
-      if (!toBinaryArray(tx, txBlob)) {
-        rsp.status = "Internal error";
-        break;;
-      }
-
-      rsp.addedTxs.emplace_back(std::move(txBlob));
+  for (auto& tx : addedTransactions) {
+    BinaryArray txBlob;
+    if (!toBinaryArray(tx, txBlob)) {
+      rsp.status = "Internal error";
+      break;;
     }
-  }
 
+    rsp.addedTxs.emplace_back(std::move(txBlob));
+  }
   return true;
 }
 

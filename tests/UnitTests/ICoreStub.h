@@ -29,7 +29,8 @@
 class ICoreStub: public CryptoNote::ICore {
 public:
   ICoreStub() : topHeight(0), globalIndicesResult(false), randomOutsResult(false), poolTxVerificationResult(true) {};
-  ICoreStub(const CryptoNote::Block& genesisBlock) : topHeight(0), globalIndicesResult(false), randomOutsResult(false), poolTxVerificationResult(true) {
+  ICoreStub(const CryptoNote::Block& genesisBlock) : topHeight(0), globalIndicesResult(false), randomOutsResult(false), poolTxVerificationResult(true),
+    poolChangesResult(true) {
     addBlock(genesisBlock);
   };
 
@@ -104,6 +105,7 @@ public:
   void addTransaction(const CryptoNote::Transaction& tx);
 
   void setPoolTxVerificationResult(bool result);
+  void setPoolChangesResult(bool result);
 
 private:
   uint32_t topHeight;
@@ -122,4 +124,6 @@ private:
   std::unordered_map<Crypto::Hash, CryptoNote::Transaction> transactions;
   std::unordered_map<Crypto::Hash, CryptoNote::Transaction> transactionPool;
   bool poolTxVerificationResult;
+  
+  bool poolChangesResult;
 };

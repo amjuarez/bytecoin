@@ -75,6 +75,7 @@ public:
     IncludeStateUnlocked = 0x01,
     IncludeStateLocked = 0x02,
     IncludeStateSoftLocked = 0x04,
+    IncludeStateSpent = 0x08,
     // output type
     IncludeTypeKey = 0x100,
     IncludeTypeMultisignature = 0x200,
@@ -92,14 +93,16 @@ public:
     IncludeDefault = IncludeKeyUnlocked
   };
 
-  virtual size_t transfersCount() = 0;
-  virtual size_t transactionsCount() = 0;
-  virtual uint64_t balance(uint32_t flags = IncludeDefault) = 0;
-  virtual void getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags = IncludeDefault) = 0;
-  virtual bool getTransactionInformation(const Crypto::Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) = 0;
-  virtual std::vector<TransactionOutputInformation> getTransactionOutputs(const Crypto::Hash& transactionHash, uint32_t flags = IncludeDefault) = 0;
-  virtual void getUnconfirmedTransactions(std::vector<Crypto::Hash>& transactions) = 0;
-  virtual std::vector<TransactionSpentOutputInformation> getSpentOutputs() = 0;
+  virtual size_t transfersCount() const = 0;
+  virtual size_t transactionsCount() const = 0;
+  virtual uint64_t balance(uint32_t flags = IncludeDefault) const = 0;
+  virtual void getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags = IncludeDefault) const = 0;
+  virtual bool getTransactionInformation(const Crypto::Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) const = 0;
+  virtual std::vector<TransactionOutputInformation> getTransactionOutputs(const Crypto::Hash& transactionHash, uint32_t flags = IncludeDefault) const = 0;
+  //only type flags are feasible for this function
+  virtual std::vector<TransactionOutputInformation> getTransactionInputs(const Crypto::Hash& transactionHash, uint32_t flags) const = 0;
+  virtual void getUnconfirmedTransactions(std::vector<Crypto::Hash>& transactions) const = 0;
+  virtual std::vector<TransactionSpentOutputInformation> getSpentOutputs() const = 0;
 };
 
 }

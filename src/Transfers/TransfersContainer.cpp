@@ -588,24 +588,24 @@ bool TransfersContainer::advanceHeight(uint32_t height) {
   std::lock_guard<std::mutex> lk(m_mutex);
 
   if (m_currentHeight <= height) {
-  m_currentHeight = height;
+    m_currentHeight = height;
     return true;
   }
 
   return false;
 }
 
-size_t TransfersContainer::transfersCount() {
+size_t TransfersContainer::transfersCount() const {
   std::lock_guard<std::mutex> lk(m_mutex);
   return m_unconfirmedTransfers.size() + m_availableTransfers.size() + m_spentTransfers.size();
 }
 
-size_t TransfersContainer::transactionsCount() {
+size_t TransfersContainer::transactionsCount() const {
   std::lock_guard<std::mutex> lk(m_mutex);
   return m_transactions.size();
 }
 
-uint64_t TransfersContainer::balance(uint32_t flags) {
+uint64_t TransfersContainer::balance(uint32_t flags) const {
   std::lock_guard<std::mutex> lk(m_mutex);
   uint64_t amount = 0;
 
@@ -626,7 +626,7 @@ uint64_t TransfersContainer::balance(uint32_t flags) {
   return amount;
 }
 
-void TransfersContainer::getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags) {
+void TransfersContainer::getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags) const {
   std::lock_guard<std::mutex> lk(m_mutex);
   for (const auto& t : m_availableTransfers) {
     if (t.visible && isIncluded(t, flags)) {
@@ -643,7 +643,7 @@ void TransfersContainer::getOutputs(std::vector<TransactionOutputInformation>& t
   }
 }
 
-bool TransfersContainer::getTransactionInformation(const Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) {
+bool TransfersContainer::getTransactionInformation(const Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) const {
   std::lock_guard<std::mutex> lk(m_mutex);
   auto it = m_transactions.find(transactionHash);
   if (it == m_transactions.end()) {
@@ -682,7 +682,7 @@ bool TransfersContainer::getTransactionInformation(const Hash& transactionHash, 
 }
 
 std::vector<TransactionOutputInformation> TransfersContainer::getTransactionOutputs(const Hash& transactionHash,
-                                                                                    uint32_t flags) {
+                                                                                    uint32_t flags) const {
   std::lock_guard<std::mutex> lk(m_mutex);
 
   std::vector<TransactionOutputInformation> result;
@@ -704,10 +704,37 @@ std::vector<TransactionOutputInformation> TransfersContainer::getTransactionOutp
     }
   }
 
+  if ((flags & IncludeStateSpent) != 0) {
+    auto spentRange = m_spentTransfers.get<ContainingTransactionIndex>().equal_range(transactionHash);
+    for (auto i = spentRange.first; i != spentRange.second; ++i) {
+      if (isIncluded(i->type, IncludeStateAll, flags)) {
+        result.push_back(*i);
+      }
+    }
+  }
+
   return result;
 }
 
-void TransfersContainer::getUnconfirmedTransactions(std::vector<Crypto::Hash>& transactions) {
+std::vector<TransactionOutputInformation> TransfersContainer::getTransactionInputs(const Hash& transactionHash, uint32_t flags) const {
+  //only type flags are feasible
+  assert((flags & IncludeStateAll) == 0);
+  flags |= IncludeStateUnlocked;
+
+  std::lock_guard<std::mutex> lk(m_mutex);
+
+  std::vector<TransactionOutputInformation> result;
+  auto transactionInputsRange = m_spentTransfers.get<SpendingTransactionIndex>().equal_range(transactionHash);
+  for (auto it = transactionInputsRange.first; it != transactionInputsRange.second; ++it) {
+    if (isIncluded(it->type, IncludeStateUnlocked, flags)) {
+      result.push_back(*it);
+    }
+  }
+
+  return result;
+}
+
+void TransfersContainer::getUnconfirmedTransactions(std::vector<Crypto::Hash>& transactions) const {
   std::lock_guard<std::mutex> lk(m_mutex);
   transactions.clear();
   for (auto& element : m_transactions) {
@@ -717,7 +744,7 @@ void TransfersContainer::getUnconfirmedTransactions(std::vector<Crypto::Hash>& t
   }
 }
 
-std::vector<TransactionSpentOutputInformation> TransfersContainer::getSpentOutputs() {
+std::vector<TransactionSpentOutputInformation> TransfersContainer::getSpentOutputs() const {
   std::lock_guard<std::mutex> lk(m_mutex);
 
   std::vector<TransactionSpentOutputInformation> spentOutputs;
@@ -788,7 +815,7 @@ void TransfersContainer::load(std::istream& in) {
 bool TransfersContainer::isSpendTimeUnlocked(uint64_t unlockTime) const {
   if (unlockTime < m_currency.maxBlockHeight()) {
     // interpret as block index
-    return m_currentHeight - 1 + m_currency.lockedTxAllowedDeltaBlocks() >= unlockTime;
+    return m_currentHeight + m_currency.lockedTxAllowedDeltaBlocks() >= unlockTime;
   } else {
     //interpret as time
     uint64_t current_time = static_cast<uint64_t>(time(NULL));

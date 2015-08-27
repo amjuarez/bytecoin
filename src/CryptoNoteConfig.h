@@ -63,8 +63,8 @@ const uint64_t CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME = 60 * 60 * 24 * 7;
 const uint64_t CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL = 7;  // CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL * CRYPTONOTE_MEMPOOL_TX_LIVETIME = time to forget tx
 
 const size_t   FUSION_TX_MAX_SIZE                            = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE * 30 / 100;
-const size_t   FUSION_TX_MIN_INPUT_COUNT                     = 6;
-const size_t   FUSION_TX_MIN_IN_OUT_COUNT_RATIO              = 3;
+const size_t   FUSION_TX_MIN_INPUT_COUNT                     = 12;
+const size_t   FUSION_TX_MIN_IN_OUT_COUNT_RATIO              = 4;
 
 const uint64_t UPGRADE_HEIGHT                                = 546602;
 const unsigned UPGRADE_VOTING_THRESHOLD                      = 90;               // percent
@@ -162,7 +162,8 @@ const CheckpointData CHECKPOINTS[] = {
   {796000, "04e387a00d35db21d4d93d04040b31f22573972a7e61d72cc07d0ab69bcb9c44"},
   {800000, "d7fa4eea02e5ce60b949136569c0ea7ac71ea46e0065311054072ac415560b86"},
   {804000, "bcc8b3782499aae508c40d5587d1cc5d68281435ea9bfc6804a262047f7b934d"},
-  {810500, "302b2349f221232820adc3dadafd8a61b035491e33af669c78a687949eb0a381"}
+  {810500, "302b2349f221232820adc3dadafd8a61b035491e33af669c78a687949eb0a381"},
+  {816000, "32b7fdd4e4d715db81f8f09f4ba5e5c78e8113f2804d61a57378baee479ce745"}
 };
 } // CryptoNote
 

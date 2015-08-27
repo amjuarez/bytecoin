@@ -74,6 +74,7 @@ struct WalletTransaction {
   uint64_t creationTime;
   uint64_t unlockTime;
   std::string extra;
+  bool isBase;
 };
 
 struct WalletTransfer {
@@ -99,6 +100,7 @@ public:
   virtual KeyPair getViewKey() const = 0;
   virtual std::string createAddress() = 0;
   virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) = 0;
+  virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) = 0;
   virtual void deleteAddress(const std::string& address) = 0;
 
   virtual uint64_t getActualBalance() const = 0;

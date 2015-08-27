@@ -327,7 +327,6 @@ void BlockchainSynchronizer::onGetBlocksCompleted(std::error_code ec) {
 }
 
 void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
-  uint32_t newHeight = response.startHeight + static_cast<uint32_t>(response.newBlocks.size());
   BlockchainInterval interval;
   interval.startHeight = response.startHeight;
   std::vector<CompleteBlock> blocks;
@@ -365,6 +364,7 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
     blocks.push_back(std::move(completeBlock));
   }
 
+  uint32_t processedBlockCount = response.startHeight + static_cast<uint32_t>(response.newBlocks.size());
   if (!checkIfShouldStop()) {
     response.newBlocks.clear();
     std::unique_lock<std::mutex> lk(m_consumersMutex);
@@ -393,7 +393,7 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
       setFutureState(State::blockchainSync);
       m_observerManager.notify(
         &IBlockchainSynchronizerObserver::synchronizationProgressUpdated,
-        newHeight,
+        processedBlockCount,
         std::max(m_node.getKnownBlockCount(), m_node.getLocalBlockCount()));
       break;
     }

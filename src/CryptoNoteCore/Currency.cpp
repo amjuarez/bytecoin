@@ -37,6 +37,29 @@ using namespace Common;
 
 namespace CryptoNote {
 
+const std::vector<uint64_t> Currency::PRETTY_AMOUNTS = {
+  1, 2, 3, 4, 5, 6, 7, 8, 9,
+  10, 20, 30, 40, 50, 60, 70, 80, 90,
+  100, 200, 300, 400, 500, 600, 700, 800, 900,
+  1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000,
+  10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000,
+  100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000,
+  1000000, 2000000, 3000000, 4000000, 5000000, 6000000, 7000000, 8000000, 9000000,
+  10000000, 20000000, 30000000, 40000000, 50000000, 60000000, 70000000, 80000000, 90000000,
+  100000000, 200000000, 300000000, 400000000, 500000000, 600000000, 700000000, 800000000, 900000000,
+  1000000000, 2000000000, 3000000000, 4000000000, 5000000000, 6000000000, 7000000000, 8000000000, 9000000000,
+  10000000000, 20000000000, 30000000000, 40000000000, 50000000000, 60000000000, 70000000000, 80000000000, 90000000000,
+  100000000000, 200000000000, 300000000000, 400000000000, 500000000000, 600000000000, 700000000000, 800000000000, 900000000000,
+  1000000000000, 2000000000000, 3000000000000, 4000000000000, 5000000000000, 6000000000000, 7000000000000, 8000000000000, 9000000000000,
+  10000000000000, 20000000000000, 30000000000000, 40000000000000, 50000000000000, 60000000000000, 70000000000000, 80000000000000, 90000000000000,
+  100000000000000, 200000000000000, 300000000000000, 400000000000000, 500000000000000, 600000000000000, 700000000000000, 800000000000000, 900000000000000,
+  1000000000000000, 2000000000000000, 3000000000000000, 4000000000000000, 5000000000000000, 6000000000000000, 7000000000000000, 8000000000000000, 9000000000000000,
+  10000000000000000, 20000000000000000, 30000000000000000, 40000000000000000, 50000000000000000, 60000000000000000, 70000000000000000, 80000000000000000, 90000000000000000,
+  100000000000000000, 200000000000000000, 300000000000000000, 400000000000000000, 500000000000000000, 600000000000000000, 700000000000000000, 800000000000000000, 900000000000000000,
+  1000000000000000000, 2000000000000000000, 3000000000000000000, 4000000000000000000, 5000000000000000000, 6000000000000000000, 7000000000000000000, 8000000000000000000, 9000000000000000000,
+  10000000000000000000ull
+};
+
 bool Currency::init() {
   if (!generateGenesisBlock()) {
     logger(ERROR, BRIGHT_RED) << "Failed to generate genesis block";
@@ -209,50 +232,73 @@ bool Currency::constructMinerTx(uint32_t height, size_t medianSize, uint64_t alr
   return true;
 }
 
-bool Currency::isFusionTransaction(const Transaction& transaction, uint64_t inputAmount, size_t size) const {
-  assert(getInputAmount(transaction) == inputAmount);
-  assert(getObjectBinarySize(transaction) == size);
-
+bool Currency::isFusionTransaction(const std::vector<uint64_t>& inputsAmounts, const std::vector<uint64_t>& outputsAmounts, size_t size) const {
   if (size > fusionTxMaxSize()) {
     return false;
   }
 
-  if (transaction.inputs.size() < fusionTxMinInputCount()) {
+  if (inputsAmounts.size() < fusionTxMinInputCount()) {
     return false;
   }
 
-  if (transaction.inputs.size() < transaction.outputs.size() * fusionTxMinInOutCountRatio()) {
+  if (inputsAmounts.size() < outputsAmounts.size() * fusionTxMinInOutCountRatio()) {
     return false;
+  }
+
+  uint64_t inputAmount = 0;
+  for (auto amount: inputsAmounts) {
+    if (amount < defaultDustThreshold()) {
+      return false;
+    }
+
+    inputAmount += amount;
   }
 
   std::vector<uint64_t> expectedOutputsAmounts;
-  expectedOutputsAmounts.reserve(transaction.outputs.size());
+  expectedOutputsAmounts.reserve(outputsAmounts.size());
   decomposeAmount(inputAmount, defaultDustThreshold(), expectedOutputsAmounts);
-  assert(!expectedOutputsAmounts.empty());
-
-  if (expectedOutputsAmounts.size() != transaction.outputs.size()) {
-    return false;
-  }
-
   std::sort(expectedOutputsAmounts.begin(), expectedOutputsAmounts.end());
 
-  if (expectedOutputsAmounts.front() <= defaultDustThreshold()) {
-    return false;
+  return expectedOutputsAmounts == outputsAmounts;
+}
+
+bool Currency::isFusionTransaction(const Transaction& transaction, size_t size) const {
+  assert(getObjectBinarySize(transaction) == size);
+
+  std::vector<uint64_t> outputsAmounts;
+  outputsAmounts.reserve(transaction.outputs.size());
+  for (const TransactionOutput& output : transaction.outputs) {
+    outputsAmounts.push_back(output.amount);
   }
 
-  auto it1 = expectedOutputsAmounts.begin();
-  auto it2 = transaction.outputs.begin();
-  for (; it1 != expectedOutputsAmounts.end(); ++it1, ++it2) {
-    if (*it1 != it2->amount) {
-      return false;
-    }
-  }
-
-  return true;
+  return isFusionTransaction(getInputsAmounts(transaction), outputsAmounts, size);
 }
 
 bool Currency::isFusionTransaction(const Transaction& transaction) const {
-  return isFusionTransaction(transaction, getInputAmount(transaction), getObjectBinarySize(transaction));
+  return isFusionTransaction(transaction, getObjectBinarySize(transaction));
+}
+
+bool Currency::isAmountApplicableInFusionTransactionInput(uint64_t amount, uint64_t threshold) const {
+  uint8_t ignore;
+  return isAmountApplicableInFusionTransactionInput(amount, threshold, ignore);
+}
+
+bool Currency::isAmountApplicableInFusionTransactionInput(uint64_t amount, uint64_t threshold, uint8_t& amountPowerOfTen) const {
+  if (amount >= threshold) {
+    return false;
+  }
+
+  if (amount < defaultDustThreshold()) {
+    return false;
+  }
+
+  auto it = std::lower_bound(PRETTY_AMOUNTS.begin(), PRETTY_AMOUNTS.end(), amount);
+  if (it == PRETTY_AMOUNTS.end() || amount != *it) {
+    return false;
+  } 
+
+  amountPowerOfTen = static_cast<uint8_t>(std::distance(PRETTY_AMOUNTS.begin(), it) / 9);
+  return true;
 }
 
 std::string Currency::accountAddressAsString(const AccountBase& account) const {
@@ -438,6 +484,29 @@ bool Currency::checkProofOfWork(Crypto::cn_context& context, const Block& block,
 
   logger(ERROR, BRIGHT_RED) << "Unknown block major version: " << block.majorVersion << "." << block.minorVersion;
   return false;
+}
+
+size_t Currency::getApproximateMaximumInputCount(size_t transactionSize, size_t outputCount, size_t mixinCount) const {
+  const size_t KEY_IMAGE_SIZE = sizeof(Crypto::KeyImage);
+  const size_t OUTPUT_KEY_SIZE = sizeof(decltype(KeyOutput::key));
+  const size_t AMOUNT_SIZE = sizeof(uint64_t) + 2; //varint
+  const size_t GLOBAL_INDEXES_VECTOR_SIZE_SIZE = sizeof(uint8_t);//varint
+  const size_t GLOBAL_INDEXES_INITIAL_VALUE_SIZE = sizeof(uint32_t);//varint
+  const size_t GLOBAL_INDEXES_DIFFERENCE_SIZE = sizeof(uint32_t);//varint
+  const size_t SIGNATURE_SIZE = sizeof(Crypto::Signature);
+  const size_t EXTRA_TAG_SIZE = sizeof(uint8_t);
+  const size_t INPUT_TAG_SIZE = sizeof(uint8_t);
+  const size_t OUTPUT_TAG_SIZE = sizeof(uint8_t);
+  const size_t PUBLIC_KEY_SIZE = sizeof(Crypto::PublicKey);
+  const size_t TRANSACTION_VERSION_SIZE = sizeof(uint8_t);
+  const size_t TRANSACTION_UNLOCK_TIME_SIZE = sizeof(uint64_t);
+
+  const size_t outputsSize = outputCount * (OUTPUT_TAG_SIZE + OUTPUT_KEY_SIZE + AMOUNT_SIZE);
+  const size_t headerSize = TRANSACTION_VERSION_SIZE + TRANSACTION_UNLOCK_TIME_SIZE + EXTRA_TAG_SIZE + PUBLIC_KEY_SIZE;
+  const size_t inputSize = INPUT_TAG_SIZE + AMOUNT_SIZE + KEY_IMAGE_SIZE + SIGNATURE_SIZE + GLOBAL_INDEXES_VECTOR_SIZE_SIZE + GLOBAL_INDEXES_INITIAL_VALUE_SIZE +
+                            mixinCount * (GLOBAL_INDEXES_DIFFERENCE_SIZE + SIGNATURE_SIZE);
+
+  return (transactionSize - headerSize - outputsSize) / inputSize;
 }
 
 CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {

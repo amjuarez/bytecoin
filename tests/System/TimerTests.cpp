@@ -85,7 +85,7 @@ TEST_F(TimerTests, doubleTimerTest) {
   first.wait();
   second.wait();
   ASSERT_GE(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin).count(), 150);
-  ASSERT_TRUE((std::chrono::high_resolution_clock::now() - begin) < std::chrono::milliseconds(250));
+  ASSERT_TRUE((std::chrono::high_resolution_clock::now() - begin) < std::chrono::milliseconds(275));
 }
 
 TEST_F(TimerTests, doubleTimerTestGroup) {
@@ -136,7 +136,7 @@ TEST_F(TimerTests, doubleTimerTestTwoGroupsWait) {
 
   contextGroup.wait();
   ASSERT_GE(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - begin).count(), 150);
-  ASSERT_TRUE((std::chrono::high_resolution_clock::now() - begin) < std::chrono::milliseconds(250));
+  ASSERT_TRUE((std::chrono::high_resolution_clock::now() - begin) < std::chrono::milliseconds(275));
 }
 
 TEST_F(TimerTests, movedTimerIsWorking2) {

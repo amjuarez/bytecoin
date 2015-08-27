@@ -461,10 +461,6 @@ void BlockchainExplorer::poolChanged() {
         return;
       }
 
-      if (!*isBlockchainActualPtr) {
-        logger(WARNING) << "Blockchain not actual.";
-      }
-
       std::unique_lock<std::mutex> lock(mutex);
 
       std::shared_ptr<std::vector<Hash>> newTransactionsHashesPtr = std::make_shared<std::vector<Hash>>();

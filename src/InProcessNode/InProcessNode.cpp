@@ -540,15 +540,10 @@ void InProcessNode::getPoolSymmetricDifferenceAsync(std::vector<Crypto::Hash>&& 
 
   std::vector<TransactionPrefixInfo> added;
   isBcActual = core.getPoolChangesLite(knownBlockId, knownPoolTxIds, added, deletedTxIds);
-  if (!isBcActual) {
-    ec = make_error_code(CryptoNote::error::INTERNAL_NODE_ERROR);
-    callback(ec);
-    return;
-  }
 
   try {
     for (const auto& tx: added) {
-      newTxs.push_back(createTransactionPrefix(tx.txPrefix, reinterpret_cast<const Hash&>(tx.txHash)));
+      newTxs.push_back(createTransactionPrefix(tx.txPrefix, tx.txHash));
     }
   } catch (std::system_error& ex) {
     ec = ex.code();

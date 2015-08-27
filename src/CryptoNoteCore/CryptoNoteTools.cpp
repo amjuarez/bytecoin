@@ -56,6 +56,21 @@ uint64_t getInputAmount(const Transaction& transaction) {
   return amount;
 }
 
+std::vector<uint64_t> getInputsAmounts(const Transaction& transaction) {
+  std::vector<uint64_t> inputsAmounts;
+  inputsAmounts.reserve(transaction.inputs.size());
+
+  for (auto& input: transaction.inputs) {
+    if (input.type() == typeid(KeyInput)) {
+      inputsAmounts.push_back(boost::get<KeyInput>(input).amount);
+    } else if (input.type() == typeid(MultisignatureInput)) {
+      inputsAmounts.push_back(boost::get<MultisignatureInput>(input).amount);
+    }
+  }
+
+  return inputsAmounts;
+}
+
 uint64_t getOutputAmount(const Transaction& transaction) {
   uint64_t amount = 0;
   for (auto& output : transaction.outputs) {

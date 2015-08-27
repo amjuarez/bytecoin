@@ -248,6 +248,7 @@ CryptoNote::WalletTransaction convert(const CryptoNote::WalletLegacyTransaction&
   mtx.creationTime = tx.sentTime;
   mtx.unlockTime = tx.unlockTime;
   mtx.extra = tx.extra;
+  mtx.isBase = tx.isCoinbase;
 
   return mtx;
 }
@@ -284,7 +285,8 @@ WalletSerializer::WalletSerializer(
   UnlockTransactionJobs& unlockTransactions,
   TransactionChanges& change,
   WalletTransactions& transactions,
-  WalletTransfers& transfers
+  WalletTransfers& transfers,
+  uint32_t transactionSoftLockTime
 ) :
   m_transfersObserver(transfersObserver),
   m_viewPublicKey(viewPublicKey),
@@ -297,7 +299,8 @@ WalletSerializer::WalletSerializer(
   m_unlockTransactions(unlockTransactions),
   m_change(change),
   m_transactions(transactions),
-  m_transfers(transfers)
+  m_transfers(transfers),
+  m_transactionSoftLockTime(transactionSoftLockTime)
 { }
 
 void WalletSerializer::save(const std::string& password, Common::IOutputStream& destination, bool saveDetails, bool saveCache) {
@@ -556,6 +559,10 @@ void WalletSerializer::loadCurrentVersion(Common::IInputStream& source, const st
     loadUnlockTransactionsJobs(source, cryptoContext);
     loadChange(source, cryptoContext);
   }
+
+  if (details && cache) {
+    updateTransactionsBaseStatus();
+  }
 }
 
 void WalletSerializer::loadWalletV1(Common::IInputStream& source, const std::string& password) {
@@ -668,10 +675,31 @@ void WalletSerializer::loadWallets(Common::IInputStream& source, CryptoContext& 
   deserializeEncrypted(count, "wallets_count", cryptoContext, source);
   cryptoContext.incIv();
 
+  bool isTrackingMode;
+
   for (uint64_t i = 0; i < count; ++i) {
     WalletRecordDto dto;
     deserializeEncrypted(dto, "", cryptoContext, source);
     cryptoContext.incIv();
+
+    if (i == 0) {
+      isTrackingMode = dto.spendSecretKey == NULL_SECRET_KEY;
+    } else if ((isTrackingMode && dto.spendSecretKey != NULL_SECRET_KEY) || (!isTrackingMode && dto.spendSecretKey == NULL_SECRET_KEY)) {
+      throw std::system_error(make_error_code(error::BAD_ADDRESS), "All addresses must be whether tracking or not");
+    }
+
+    if (dto.spendSecretKey != NULL_SECRET_KEY) {
+      Crypto::PublicKey restoredPublicKey;
+      bool r = Crypto::secret_key_to_public_key(dto.spendSecretKey, restoredPublicKey);
+
+      if (!r || dto.spendPublicKey != restoredPublicKey) {
+        throw std::system_error(make_error_code(error::WRONG_PASSWORD), "Restored spend public key doesn't correspond to secret key");
+      }
+    } else {
+      if (!Crypto::check_key(dto.spendPublicKey)) {
+        throw std::system_error(make_error_code(error::WRONG_PASSWORD), "Public spend key is incorrect");
+      }
+    }
 
     WalletRecord wallet;
     wallet.spendPublicKey = dto.spendPublicKey;
@@ -696,7 +724,7 @@ void WalletSerializer::subscribeWallets() {
     sub.keys.address.spendPublicKey = wallet.spendPublicKey;
     sub.keys.viewSecretKey = m_viewSecretKey;
     sub.keys.spendSecretKey = wallet.spendSecretKey;
-    sub.transactionSpendableAge = 10;
+    sub.transactionSpendableAge = m_transactionSoftLockTime;
     sub.syncStart.height = 0;
     sub.syncStart.timestamp = static_cast<uint64_t>(wallet.creationTimestamp) - (60 * 60 * 24);
 
@@ -793,6 +821,26 @@ void WalletSerializer::loadChange(Common::IInputStream& source, CryptoContext& c
   }
 }
 
+// can't do it in loadTransactions, TransfersContainer is not yet loaded
+void WalletSerializer::updateTransactionsBaseStatus() {
+  auto& transactions = m_transactions.get<RandomAccessIndex>();
+  auto begin = std::begin(transactions);
+  auto end = std::end(transactions);
+  for (; begin != end; ++begin) {
+    transactions.modify(begin, [this](WalletTransaction& tx) {
+      auto& wallets = m_walletsContainer.get<RandomAccessIndex>();
+      TransactionInformation txInfo;
+      auto it = std::find_if(std::begin(wallets), std::end(wallets), [&](const WalletRecord& rec) {
+        int64_t id = 0;
+        assert(rec.container != nullptr);
+        return rec.container->getTransactionInformation(tx.hash, txInfo, id);
+      });
+
+      tx.isBase = it != std::end(wallets) && txInfo.totalAmountIn == 0;
+    });
+  }
+}
+
 void WalletSerializer::loadTransactions(Common::IInputStream& source, CryptoContext& cryptoContext) {
   uint64_t count = 0;
   deserializeEncrypted(count, "transactions_count", cryptoContext, source);
@@ -815,6 +863,7 @@ void WalletSerializer::loadTransactions(Common::IInputStream& source, CryptoCont
     tx.creationTime = dto.creationTime;
     tx.unlockTime = dto.unlockTime;
     tx.extra = dto.extra;
+    tx.isBase = false;
 
     m_transactions.get<RandomAccessIndex>().push_back(std::move(tx));
   }

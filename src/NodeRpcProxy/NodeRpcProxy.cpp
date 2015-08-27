@@ -536,9 +536,6 @@ std::error_code NodeRpcProxy::doGetPoolSymmetricDifference(std::vector<Crypto::H
   }
 
   isBcActual = rsp.isTailBlockActual;
-  if (!isBcActual) {
-    return ec;
-  }
 
   deletedTxIds = std::move(rsp.deletedTxsIds);
 

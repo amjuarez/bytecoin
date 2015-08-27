@@ -232,6 +232,7 @@ Crypto::Hash TestTransactionBuilder::getTransactionHash() const {
 FusionTransactionBuilder::FusionTransactionBuilder(const Currency& currency, uint64_t amount) :
   m_currency(currency),
   m_amount(amount),
+  m_firstInput(0),
   m_firstOutput(0),
   m_fee(0),
   m_extraSize(0),
@@ -244,6 +245,14 @@ uint64_t FusionTransactionBuilder::getAmount() const {
 
 void FusionTransactionBuilder::setAmount(uint64_t val) {
   m_amount = val;
+}
+
+uint64_t FusionTransactionBuilder::getFirstInput() const {
+  return m_firstInput;
+}
+
+void FusionTransactionBuilder::setFirstInput(uint64_t val) {
+  m_firstInput = val;
 }
 
 uint64_t FusionTransactionBuilder::getFirstOutput() const {
@@ -280,6 +289,8 @@ void FusionTransactionBuilder::setInputCount(size_t val) {
 
 std::unique_ptr<ITransactionReader> FusionTransactionBuilder::buildReader() const {
   assert(m_inputCount > 0);
+  assert(m_firstInput <= m_amount);
+  assert(m_amount > m_currency.defaultDustThreshold());
 
   TestTransactionBuilder builder;
 
@@ -287,9 +298,15 @@ std::unique_ptr<ITransactionReader> FusionTransactionBuilder::buildReader() cons
     builder.appendExtra(BinaryArray(m_extraSize, 0));
   }
 
-  builder.addTestInput(m_amount - (m_inputCount - 1) * m_currency.defaultDustThreshold());
-  for (size_t i = 0; i < m_inputCount - 1; ++i) {
-    builder.addTestInput(m_currency.defaultDustThreshold());
+  if (m_firstInput != 0) {
+    builder.addTestInput(m_firstInput);
+  }
+
+  if (m_amount > m_firstInput) {
+    builder.addTestInput(m_amount - m_firstInput - (m_inputCount - 1) * m_currency.defaultDustThreshold());
+    for (size_t i = 0; i < m_inputCount - 1; ++i) {
+      builder.addTestInput(m_currency.defaultDustThreshold());
+    }
   }
 
   AccountPublicAddress address = generateAddress();
