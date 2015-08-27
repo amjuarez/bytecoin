@@ -160,6 +160,7 @@ void TransfersConsumer::onBlockchainDetach(uint32_t height) {
 
 bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startHeight, uint32_t count) {
   assert(blocks);
+  assert(count > 0);
 
   struct Tx {
     TransactionBlockInfo blockInfo;
@@ -273,7 +274,7 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startH
     return false;
   }
 
-  auto newHeight = startHeight + count;
+  auto newHeight = startHeight + count - 1;
   forEachSubscription([newHeight](TransfersSubscription& sub) {
     sub.advanceHeight(newHeight);
   });

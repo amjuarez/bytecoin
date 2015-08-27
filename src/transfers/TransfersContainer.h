@@ -161,14 +161,16 @@ public:
   bool advanceHeight(uint32_t height);
 
   // ITransfersContainer
-  virtual size_t transfersCount() override;
-  virtual size_t transactionsCount() override;
-  virtual uint64_t balance(uint32_t flags) override;
-  virtual void getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags) override;
-  virtual bool getTransactionInformation(const Crypto::Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) override;
-  virtual std::vector<TransactionOutputInformation> getTransactionOutputs(const Crypto::Hash& transactionHash, uint32_t flags) override;
-  virtual void getUnconfirmedTransactions(std::vector<Crypto::Hash>& transactions) override;
-  virtual std::vector<TransactionSpentOutputInformation> getSpentOutputs() override;
+  virtual size_t transfersCount() const override;
+  virtual size_t transactionsCount() const override;
+  virtual uint64_t balance(uint32_t flags) const override;
+  virtual void getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags) const override;
+  virtual bool getTransactionInformation(const Crypto::Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) const override;
+  virtual std::vector<TransactionOutputInformation> getTransactionOutputs(const Crypto::Hash& transactionHash, uint32_t flags) const override;
+  //only type flags are feasible for this function
+  virtual std::vector<TransactionOutputInformation> getTransactionInputs(const Crypto::Hash& transactionHash, uint32_t flags) const override;
+  virtual void getUnconfirmedTransactions(std::vector<Crypto::Hash>& transactions) const override;
+  virtual std::vector<TransactionSpentOutputInformation> getSpentOutputs() const override;
 
   // IStreamSerializable
   virtual void save(std::ostream& os) override;
@@ -280,7 +282,7 @@ private:
   uint32_t m_currentHeight; // current height is needed to check if a transfer is unlocked
   size_t m_transactionSpendableAge;
   const CryptoNote::Currency& m_currency;
-  std::mutex m_mutex;
+  mutable std::mutex m_mutex;
 };
 
 }

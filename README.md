@@ -49,7 +49,7 @@ P2P_STAT_TRUSTED_PUB_KEY=4d26c4df7f4ca7037950ad026f9ab36dd05d881952662992f2e4dcf
 CHECKPOINT=10000:70d2531151529ac00bf875281e15f51324934bc85e5733dcd92e1ccb1a665ff8   // format: HEIGHT:BLOCK_ID
 CHECKPOINT=20000:80d2dd05d8819526629235722e15f5f9ab36dd05d881952662992f2e4dcfcafb
 
-// Wallet parameters
+// simplewallet parameters
 wallet-rpc-bind-ip=127.0.0.1        // instead rpc-bind-ip
 wallet-rpc-bind-port=33671          // instead rpc-bind-port
 SYNC_FROM_ZERO=1                    // to sync the wallet from block 0. Used for premine coins or brain wallets

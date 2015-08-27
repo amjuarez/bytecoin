@@ -25,7 +25,7 @@ namespace CryptoNote {
 class IFusionManager {
 public:
   struct EstimateResult {
-    size_t belowThresholdCount;
+    size_t fusionReadyCount;
     size_t totalOutputCount;
   };
 

@@ -162,6 +162,10 @@ void Dispatcher::dispatch() {
     struct kevent event;
     int count = kevent(kqueue, NULL, 0, &event, 1, NULL);
     if (count == 1) {
+      if (event.flags & EV_ERROR) {
+        continue;
+      }
+
       if (event.filter == EVFILT_USER && event.ident == 0) {
         struct kevent event;
         EV_SET(&event, 0, EVFILT_USER, EV_ADD | EV_DISABLE, NOTE_FFNOP, 0, NULL);
@@ -170,6 +174,11 @@ void Dispatcher::dispatch() {
         }
 
         continue;
+      }
+
+      if (event.filter == EVFILT_WRITE) {
+        event.flags = EV_DELETE | EV_DISABLE;
+        kevent(kqueue, &event, 1, NULL, 0, NULL); // ignore error here
       }
 
       context = static_cast<OperationContext*>(event.udata)->context;
@@ -274,21 +283,24 @@ void Dispatcher::spawn(std::function<void()>&& procedure) {
 
 void Dispatcher::yield() {
   struct timespec zeroTimeout = { 0, 0 };
+  int updatesCounter = 0;
   for (;;) {
     struct kevent events[16];
-    int count = kevent(kqueue, NULL, 0, events, 16, &zeroTimeout);
+    struct kevent updates[16];
+    int count = kevent(kqueue, updates, updatesCounter, events, 16, &zeroTimeout);
     if (count == 0) {
       break;
     }
 
+    updatesCounter = 0;
     if (count > 0) {
       for (int i = 0; i < count; ++i) {
+        if (events[i].flags & EV_ERROR) {
+          continue;
+        }
+
         if (events[i].filter == EVFILT_USER && events[i].ident == 0) {
-          struct kevent event;
-          EV_SET(&event, 0, EVFILT_USER, EV_ADD | EV_DISABLE, NOTE_FFNOP, 0, NULL);
-          if (kevent(kqueue, &event, 1, NULL, 0, NULL) == -1) {
-            throw std::runtime_error("Dispatcher::yield, kevent failed, " + lastErrorMessage());
-          }
+          EV_SET(&updates[updatesCounter++], 0, EVFILT_USER, EV_ADD | EV_DISABLE, NOTE_FFNOP, 0, NULL);
           
           MutextGuard guard(*reinterpret_cast<pthread_mutex_t*>(this->mutex));
           while (!remoteSpawningProcedures.empty()) {
@@ -302,6 +314,9 @@ void Dispatcher::yield() {
 
         static_cast<OperationContext*>(events[i].udata)->context->interruptProcedure = nullptr;
         pushContext(static_cast<OperationContext*>(events[i].udata)->context);
+        if (events[i].filter == EVFILT_WRITE) {
+          EV_SET(&updates[updatesCounter++], events[i].ident, EVFILT_WRITE, EV_DELETE | EV_DISABLE, 0, 0, NULL);
+        }
       }
     } else {
       if (errno != EINTR) {

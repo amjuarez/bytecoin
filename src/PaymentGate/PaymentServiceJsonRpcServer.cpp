@@ -39,7 +39,6 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
     std::string method = req("method").getString();
 
-    CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
     CryptoNote::JsonOutputStreamSerializer outputSerializer;
 
     if (method == "send_transaction") {
@@ -48,6 +47,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(sendReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -67,6 +67,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(getAddrReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -106,6 +107,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(delAddrReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -125,6 +127,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(actualReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -150,6 +153,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(pendingReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -195,6 +199,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -216,6 +221,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -235,6 +241,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(listReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -254,6 +261,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);
@@ -273,6 +281,7 @@ void PaymentServiceJsonRpcServer::processJsonRpcRequest(const Common::JsonValue&
 
       //XXX: refactor it when migrate to different exception types in different subsystems!
       try {
+        CryptoNote::JsonInputValueSerializer inputSerializer(req("params"));
         serialize(getReq, inputSerializer);
       } catch (std::exception&) {
         makeGenericErrorReponse(resp, "Invalid Request", -32600);

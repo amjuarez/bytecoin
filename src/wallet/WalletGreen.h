@@ -36,7 +36,7 @@ class WalletGreen : public IWallet,
                     IBlockchainSynchronizerObserver,
                     IFusionManager {
 public:
-  WalletGreen(System::Dispatcher& dispatcher, const Currency& currency, INode& node);
+  WalletGreen(System::Dispatcher& dispatcher, const Currency& currency, INode& node, uint32_t transactionSoftLockTime = 1);
   virtual ~WalletGreen();
 
   virtual void initialize(const std::string& password) override;
@@ -53,6 +53,7 @@ public:
   virtual KeyPair getViewKey() const override;
   virtual std::string createAddress() override;
   virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) override;
+  virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) override;
   virtual void deleteAddress(const std::string& address) override;
 
   virtual uint64_t getActualBalance() const override;
@@ -81,6 +82,7 @@ public:
 protected:
   void throwIfNotInitialized() const;
   void throwIfStopped() const;
+  void throwIfTrackingMode() const;
   void doShutdown();
   void clearCaches();
   void initWithKeys(const Crypto::PublicKey& viewPublicKey, const Crypto::SecretKey& viewSecretKey, const std::string& password);
@@ -109,16 +111,18 @@ protected:
 
   virtual void onError(ITransfersSubscription* object, uint32_t height, std::error_code ec) override;
   virtual void onTransactionUpdated(ITransfersSubscription* object, const Crypto::Hash& transactionHash) override;
+  void transactionUpdated(ITransfersSubscription* object, const Crypto::Hash& transactionHash);
+
   virtual void onTransactionDeleted(ITransfersSubscription* object, const Crypto::Hash& transactionHash) override;
-  virtual void synchronizationProgressUpdated(uint32_t current, uint32_t total) override;
+  void transactionDeleted(ITransfersSubscription* object, const Crypto::Hash& transactionHash);
+
+  virtual void synchronizationProgressUpdated(uint32_t processedBlockCount, uint32_t totalBlockCount) override;
   virtual void synchronizationCompleted(std::error_code result) override;
 
-  void transactionUpdated(ITransfersSubscription* object, const Crypto::Hash& transactionHash);
-  void transactionDeleted(ITransfersSubscription* object, const Crypto::Hash& transactionHash);
-  void onSynchronizationProgressUpdated(uint32_t current, uint32_t total);
+  void onSynchronizationProgressUpdated(uint32_t processedBlockCount, uint32_t totalBlockCount);
   void onSynchronizationCompleted();
 
-  std::vector<WalletOuts> pickWalletsWithMoney();
+  std::vector<WalletOuts> pickWalletsWithMoney() const;
   WalletOuts pickWallet(const std::string& address);
 
   void updateBalance(CryptoNote::ITransfersContainer* container);
@@ -138,6 +142,7 @@ protected:
   AccountKeys makeAccountKeys(const WalletRecord& wallet) const;
   size_t getTransactionId(const Crypto::Hash& transactionHash) const;
   void pushEvent(const WalletEvent& event);
+  bool isFusionTransaction(const WalletTransaction& walletTx) const;
 
   size_t doTransfer(std::vector<WalletOuts>&& wallets,
     const std::vector<WalletTransfer>& destinations,
@@ -171,7 +176,7 @@ protected:
 
   size_t insertOutgoingTransaction(const Crypto::Hash& transactionHash, int64_t totalAmount, uint64_t fee, const BinaryArray& extra, uint64_t unlockTimestamp);
   bool transactionExists(const Crypto::Hash& hash);
-  void updateTransactionHeight(const Crypto::Hash& hash, uint32_t blockHeight);
+  bool updateWalletTransactionInfo(const Crypto::Hash& hash, const CryptoNote::TransactionInformation& info);
   size_t insertIncomingTransaction(const TransactionInformation& info, int64_t txBalance);
   void insertIncomingTransfer(size_t txId, const std::string& address, int64_t amount);
   void pushBackOutgoingTransfers(size_t txId, const std::vector<WalletTransfer> &destinations);
@@ -181,11 +186,20 @@ protected:
   void unsafeLoad(std::istream& source, const std::string& password);
   void unsafeSave(std::ostream& destination, bool saveDetails, bool saveCache);
 
-
+  std::vector<OutputToTransfer> pickRandomFusionInputs(uint64_t threshold, size_t minInputCount, size_t maxInputCount);
+  ReceiverAmounts decomposeFusionOutputs(uint64_t inputsAmount);
   enum class WalletState {
     INITIALIZED,
     NOT_INITIALIZED
   };
+
+  enum class WalletTrackingMode {
+    TRACKING,
+    NOT_TRACKING,
+    NO_ADDRESSES
+  };
+
+  WalletTrackingMode getTrackingMode() const;
 
   std::pair<WalletTransfers::const_iterator, WalletTransfers::const_iterator> getTransactionTransfers(size_t transactionIndex) const;
 
@@ -200,6 +214,7 @@ protected:
   WalletTransactions m_transactions;
   WalletTransfers m_transfers; //sorted
   TransactionChanges m_change;
+  mutable std::unordered_map<size_t, bool> m_fusionTxsCache; // txIndex -> isFusion
 
   BlockchainSynchronizer m_blockchainSynchronizer;
   TransfersSyncronizer m_synchronizer;
@@ -219,6 +234,7 @@ protected:
   uint64_t m_pendingBalance = 0;
 
   uint64_t m_upperTransactionSizeLimit;
+  uint32_t m_transactionSoftLockTime;
 };
 
 } //namespace CryptoNote

@@ -646,7 +646,7 @@ void CryptoNoteProtocolHandler::updateObservedHeight(uint32_t peerHeight, const 
       if (m_observedHeight != height) {
         updated = true;
       }
-    } else if (context.m_remote_blockchain_height == m_observedHeight) {
+    } else if (peerHeight != context.m_remote_blockchain_height && context.m_remote_blockchain_height == m_observedHeight) {
       //the client switched to alternative chain and had maximum observed height. need to recalculate max height
       recalculateMaxObservedHeight(context);
       if (m_observedHeight != height) {

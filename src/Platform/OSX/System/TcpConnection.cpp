@@ -168,7 +168,7 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
       context.context = dispatcher->getCurrentContext();
       context.interrupted = false;
       struct kevent event;
-      EV_SET(&event, connection, EVFILT_WRITE, EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, &context);
+      EV_SET(&event, connection, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, &context);
       if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
         message = "kevent failed, " + lastErrorMessage();
       } else {

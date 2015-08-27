@@ -107,7 +107,7 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
             connectorContext.connection = connection;
 
             struct kevent event;
-            EV_SET(&event, connection, EVFILT_WRITE, EV_ADD | EV_ENABLE | EV_ONESHOT | EV_CLEAR, 0, 0, &connectorContext);
+            EV_SET(&event, connection, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, &connectorContext);
             if (kevent(dispatcher->getKqueue(), &event, 1, NULL, 0, NULL) == -1) {
               message = "kevent failed, " + lastErrorMessage();
             } else {

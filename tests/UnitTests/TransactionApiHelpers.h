@@ -177,6 +177,9 @@ public:
   uint64_t getAmount() const;
   void setAmount(uint64_t val);
 
+  uint64_t getFirstInput() const;
+  void setFirstInput(uint64_t val);
+
   uint64_t getFirstOutput() const;
   void setFirstOutput(uint64_t val);
 
@@ -197,6 +200,7 @@ public:
 private:
   const Currency& m_currency;
   uint64_t m_amount;
+  uint64_t m_firstInput;
   uint64_t m_firstOutput;
   uint64_t m_fee;
   size_t m_extraSize;

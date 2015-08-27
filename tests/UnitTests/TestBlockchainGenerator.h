@@ -61,6 +61,7 @@ public:
 
   bool getTransactionGlobalIndexesByHash(const Crypto::Hash& transactionHash, std::vector<uint32_t>& globalIndexes);
   bool getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t globalIndex, CryptoNote::MultisignatureOutput& out);
+  void setMinerAccount(const CryptoNote::AccountBase& account);
 
 private:
   struct MultisignatureOutEntry {

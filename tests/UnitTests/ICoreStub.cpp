@@ -91,12 +91,38 @@ std::vector<CryptoNote::Transaction> ICoreStub::getPoolTransactions() {
 
 bool ICoreStub::getPoolChanges(const Crypto::Hash& tailBlockId, const std::vector<Crypto::Hash>& knownTxsIds,
                                std::vector<CryptoNote::Transaction>& addedTxs, std::vector<Crypto::Hash>& deletedTxsIds) {
-  return true;
+  std::unordered_set<Crypto::Hash> knownSet;
+  for (const Crypto::Hash& txId : knownTxsIds) {
+    if (transactionPool.find(txId) == transactionPool.end()) {
+      deletedTxsIds.push_back(txId);
+    }
+
+    knownSet.insert(txId);
+  }
+
+  for (const std::pair<Crypto::Hash, CryptoNote::Transaction>& poolEntry : transactionPool) {
+    if (knownSet.find(poolEntry.first) == knownSet.end()) {
+      addedTxs.push_back(poolEntry.second);
+    }
+  }
+
+  return poolChangesResult;
 }
 
 bool ICoreStub::getPoolChangesLite(const Crypto::Hash& tailBlockId, const std::vector<Crypto::Hash>& knownTxsIds,
         std::vector<CryptoNote::TransactionPrefixInfo>& addedTxs, std::vector<Crypto::Hash>& deletedTxsIds) {
-  return true;
+  std::vector<CryptoNote::Transaction> added;
+  bool returnStatus = getPoolChanges(tailBlockId, knownTxsIds, added, deletedTxsIds);
+
+  for (const auto& tx : added) {
+    CryptoNote::TransactionPrefixInfo tpi;
+    tpi.txPrefix = tx;
+    tpi.txHash = getObjectHash(tx);
+
+    addedTxs.push_back(std::move(tpi));
+  }
+
+  return returnStatus;
 }
 
 void ICoreStub::getPoolChanges(const std::vector<Crypto::Hash>& knownTxsIds, std::vector<CryptoNote::Transaction>& addedTxs,
@@ -315,4 +341,8 @@ bool ICoreStub::addMessageQueue(CryptoNote::MessageQueue<CryptoNote::BlockchainM
 
 bool ICoreStub::removeMessageQueue(CryptoNote::MessageQueue<CryptoNote::BlockchainMessage>& messageQueuePtr) {
   return true;
+}
+
+void ICoreStub::setPoolChangesResult(bool result) {
+  poolChangesResult = result;
 }

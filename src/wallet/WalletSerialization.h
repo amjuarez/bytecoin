@@ -49,7 +49,8 @@ public:
     UnlockTransactionJobs& unlockTransactions,
     TransactionChanges& change,
     WalletTransactions& transactions,
-    WalletTransfers& transfers
+    WalletTransfers& transfers,
+    uint32_t transactionSoftLockTime
   );
   
   void save(const std::string& password, Common::IOutputStream& destination, bool saveDetails, bool saveCache);
@@ -99,6 +100,7 @@ private:
   void loadWalletV1Keys(CryptoNote::BinaryInputStreamSerializer& serializer);
   void loadWalletV1Details(CryptoNote::BinaryInputStreamSerializer& serializer);
   void addWalletV1Details(const std::vector<WalletLegacyTransaction>& txs, const std::vector<WalletLegacyTransfer>& trs);
+  void updateTransactionsBaseStatus();
 
   ITransfersObserver& m_transfersObserver;
   Crypto::PublicKey& m_viewPublicKey;
@@ -112,6 +114,7 @@ private:
   TransactionChanges& m_change;
   WalletTransactions& m_transactions;
   WalletTransfers& m_transfers;
+  uint32_t m_transactionSoftLockTime;
 };
 
 } //namespace CryptoNote

@@ -21,9 +21,10 @@
 #include <boost/foreach.hpp>
 #include <functional>
 
+#include "CoreRpcServerCommandsDefinitions.h"
+#include <Common/JsonValue.h>
 #include "Serialization/ISerializer.h"
 #include "Serialization/SerializationTools.h"
-#include <Common/JsonValue.h>
 
 namespace CryptoNote {
 
@@ -204,7 +205,7 @@ bool invokeMethod(const JsonRpcRequest& jsReq, JsonRpcResponse& jsRes, Handler h
   Request req;
   Response res;
 
-  if (!jsReq.loadParams(req)) {
+  if (!std::is_same<Request, CryptoNote::EMPTY_STRUCT>::value && !jsReq.loadParams(req)) {
     throw JsonRpcError(JsonRpc::errInvalidParams);
   }
 

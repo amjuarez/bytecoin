@@ -1,3 +1,10 @@
+Release notes 1.0.8
+
+- Fusion transactions for Bytecoin Wallet
+- IWallet high-level API update
+- JSON RPC improvements
+- Synchronization improvements for OS X
+
 Release notes 1.0.7
 
 - Fusion transactions support

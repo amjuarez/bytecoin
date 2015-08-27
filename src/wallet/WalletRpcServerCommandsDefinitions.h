@@ -19,6 +19,7 @@
 #include "CryptoNoteProtocol/CryptoNoteProtocolDefinitions.h"
 #include "CryptoNoteCore/CryptoNoteBasic.h"
 #include "crypto/hash.h"
+#include "Rpc/CoreRpcServerCommandsDefinitions.h"
 #include "WalletRpcServerErrorCodes.h"
 
 namespace Tools
@@ -31,13 +32,9 @@ using CryptoNote::ISerializer;
 #define WALLET_RPC_STATUS_OK      "OK"
 #define WALLET_RPC_STATUS_BUSY    "BUSY"
 
-  struct EMPTY_STRUCT {
-    void serialize(ISerializer& s) {}
-  };
-
   struct COMMAND_RPC_GET_BALANCE
   {
-    typedef EMPTY_STRUCT request;
+    typedef CryptoNote::EMPTY_STRUCT request;
 
     struct response
     {
@@ -93,8 +90,8 @@ using CryptoNote::ISerializer;
 
   struct COMMAND_RPC_STORE
   {
-    typedef EMPTY_STRUCT request;
-    typedef EMPTY_STRUCT response;
+    typedef CryptoNote::EMPTY_STRUCT request;
+    typedef CryptoNote::EMPTY_STRUCT response;
   };
 
   struct payment_details
@@ -158,7 +155,7 @@ using CryptoNote::ISerializer;
   };
 
   struct COMMAND_RPC_GET_TRANSFERS {
-    typedef EMPTY_STRUCT request;
+    typedef CryptoNote::EMPTY_STRUCT request;
 
     struct response {
       std::list<Transfer> transfers;
@@ -170,7 +167,7 @@ using CryptoNote::ISerializer;
   };
 
   struct COMMAND_RPC_GET_HEIGHT {
-    typedef EMPTY_STRUCT request;
+    typedef CryptoNote::EMPTY_STRUCT request;
 
     struct response {
       uint64_t height;
@@ -182,8 +179,8 @@ using CryptoNote::ISerializer;
   };
 
   struct COMMAND_RPC_RESET {
-    typedef EMPTY_STRUCT request;
-    typedef EMPTY_STRUCT response;
+    typedef CryptoNote::EMPTY_STRUCT request;
+    typedef CryptoNote::EMPTY_STRUCT response;
   };
 }
 }

@@ -122,6 +122,8 @@ public:
 
   std::function<void(const Crypto::Hash&, std::vector<uint32_t>&)> getGlobalOutsFunctor = [](const Crypto::Hash&, std::vector<uint32_t>&) {};
 
+  void waitForAsyncContexts();
+
 protected:
   void doGetNewBlocks(std::vector<Crypto::Hash> knownBlockIds, std::vector<CryptoNote::block_complete_entry>& newBlocks,
           uint32_t& startHeight, std::vector<CryptoNote::Block> blockchain, const Callback& callback);

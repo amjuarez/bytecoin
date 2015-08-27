@@ -473,20 +473,14 @@ void core::on_synchronized() {
 
 bool core::getPoolChanges(const Crypto::Hash& tailBlockId, const std::vector<Crypto::Hash>& knownTxsIds,
                           std::vector<Transaction>& addedTxs, std::vector<Crypto::Hash>& deletedTxsIds) {
-  if (tailBlockId != m_blockchain.getTailId()) {
-    return false;
-  }
-
   getPoolChanges(knownTxsIds, addedTxs, deletedTxsIds);
-  return true;
+  return tailBlockId == m_blockchain.getTailId();
 }
 
 bool core::getPoolChangesLite(const Crypto::Hash& tailBlockId, const std::vector<Crypto::Hash>& knownTxsIds,
         std::vector<TransactionPrefixInfo>& addedTxs, std::vector<Crypto::Hash>& deletedTxsIds) {
   std::vector<Transaction> added;
-  if (!getPoolChanges(tailBlockId, knownTxsIds, added, deletedTxsIds)) {
-    return false;
-  }
+  bool returnStatus = getPoolChanges(tailBlockId, knownTxsIds, added, deletedTxsIds);
 
   for (const auto& tx: added) {
     TransactionPrefixInfo tpi;
@@ -496,12 +490,13 @@ bool core::getPoolChangesLite(const Crypto::Hash& tailBlockId, const std::vector
     addedTxs.push_back(std::move(tpi));
   }
 
-  return true;
+  return returnStatus;
 }
 
 void core::getPoolChanges(const std::vector<Crypto::Hash>& knownTxsIds, std::vector<Transaction>& addedTxs,
                           std::vector<Crypto::Hash>& deletedTxsIds) {
   std::vector<Crypto::Hash> addedTxsIds;
+  auto guard = m_mempool.obtainGuard();
   m_mempool.get_difference(knownTxsIds, addedTxsIds, deletedTxsIds);
   std::vector<Crypto::Hash> misses;
   m_mempool.getTransactions(addedTxsIds, addedTxs, misses);
