@@ -84,6 +84,7 @@ void NodeRpcProxy::resetInternalState() {
   m_nodeHeight.store(0, std::memory_order_relaxed);
   m_networkHeight.store(0, std::memory_order_relaxed);
   m_lastKnowHash = CryptoNote::NULL_HASH;
+  m_knownTxs.clear();
 }
 
 void NodeRpcProxy::init(const INode::Callback& callback) {
@@ -176,6 +177,39 @@ void NodeRpcProxy::workerThread(const INode::Callback& initialized_callback) {
 }
 
 void NodeRpcProxy::updateNodeStatus() {
+  bool updateBlockchain = true;
+  while (updateBlockchain) {
+    updateBlockchainStatus();
+    updateBlockchain = !updatePoolStatus();
+  }
+}
+
+bool NodeRpcProxy::updatePoolStatus() {
+  std::vector<Crypto::Hash> knownTxs = getKnownTxsVector();
+  Crypto::Hash tailBlock = m_lastKnowHash;
+
+  bool isBcActual = false;
+  std::vector<std::unique_ptr<ITransactionReader>> addedTxs;
+  std::vector<Crypto::Hash> deletedTxsIds;
+
+  std::error_code ec = doGetPoolSymmetricDifference(std::move(knownTxs), tailBlock, isBcActual, addedTxs, deletedTxsIds);
+  if (ec) {
+    return true;
+  }
+
+  if (!isBcActual) {
+    return false;
+  }
+
+  if (!addedTxs.empty() || !deletedTxsIds.empty()) {
+    updatePoolState(addedTxs, deletedTxsIds);
+    m_observerManager.notify(&INodeObserver::poolChanged);
+  }
+
+  return true;
+}
+
+void NodeRpcProxy::updateBlockchainStatus() {
   CryptoNote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::request req = AUTO_VAL_INIT(req);
   CryptoNote::COMMAND_RPC_GET_LAST_BLOCK_HEADER::response rsp = AUTO_VAL_INIT(rsp);
 
@@ -222,6 +256,21 @@ void NodeRpcProxy::updatePeerCount() {
       m_observerManager.notify(&INodeObserver::peerCountUpdated, m_peerCount.load(std::memory_order_relaxed));
     }
   }
+}
+
+void NodeRpcProxy::updatePoolState(const std::vector<std::unique_ptr<ITransactionReader>>& addedTxs, const std::vector<Crypto::Hash>& deletedTxsIds) {
+  for (const auto& hash : deletedTxsIds) {
+    m_knownTxs.erase(hash);
+  }
+
+  for (const auto& tx : addedTxs) {
+    Hash hash = tx->getTransactionHash();
+    m_knownTxs.emplace(std::move(hash));
+  }
+}
+
+std::vector<Crypto::Hash> NodeRpcProxy::getKnownTxsVector() const {
+  return std::vector<Crypto::Hash>(m_knownTxs.begin(), m_knownTxs.end());
 }
 
 bool NodeRpcProxy::addObserver(INodeObserver* observer) {

@@ -379,8 +379,9 @@ KeyPair WalletGreen::getViewKey() const {
 std::string WalletGreen::createAddress() {
   KeyPair spendKey;
   Crypto::generate_keys(spendKey.publicKey, spendKey.secretKey);
+  uint64_t creationTimestamp = static_cast<uint64_t>(time(nullptr));
 
-  return doCreateAddress(spendKey.publicKey, spendKey.secretKey);
+  return doCreateAddress(spendKey.publicKey, spendKey.secretKey, creationTimestamp);
 }
 
 std::string WalletGreen::createAddress(const Crypto::SecretKey& spendSecretKey) {
@@ -389,14 +390,14 @@ std::string WalletGreen::createAddress(const Crypto::SecretKey& spendSecretKey) 
     throw std::system_error(make_error_code(CryptoNote::error::KEY_GENERATION_ERROR));
   }
 
-  return doCreateAddress(spendPublicKey, spendSecretKey);
+  return doCreateAddress(spendPublicKey, spendSecretKey, 0);
 }
 
 std::string WalletGreen::createAddress(const Crypto::PublicKey& spendPublicKey) {
-  return doCreateAddress(spendPublicKey, NULL_SECRET_KEY);
+  return doCreateAddress(spendPublicKey, NULL_SECRET_KEY, 0);
 }
 
-std::string WalletGreen::doCreateAddress(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey) {
+std::string WalletGreen::doCreateAddress(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey, uint64_t creationTimestamp) {
   throwIfNotInitialized();
   throwIfStopped();
 
@@ -405,7 +406,7 @@ std::string WalletGreen::doCreateAddress(const Crypto::PublicKey& spendPublicKey
   }
 
   try {
-    addWallet(spendPublicKey, spendSecretKey);
+    addWallet(spendPublicKey, spendSecretKey, creationTimestamp);
   } catch (std::exception&) {
     if (m_walletsContainer.get<RandomAccessIndex>().size() != 0) {
       m_blockchainSynchronizer.start();
@@ -419,7 +420,7 @@ std::string WalletGreen::doCreateAddress(const Crypto::PublicKey& spendPublicKey
   return m_currency.accountAddressAsString({ spendPublicKey, m_viewPublicKey });
 }
 
-void WalletGreen::addWallet(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey) {
+void WalletGreen::addWallet(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey, uint64_t creationTimestamp) {
   auto& index = m_walletsContainer.get<KeysIndex>();
 
   auto trackingMode = getTrackingMode();
@@ -434,8 +435,6 @@ void WalletGreen::addWallet(const Crypto::PublicKey& spendPublicKey, const Crypt
     throw std::system_error(make_error_code(error::ADDRESS_ALREADY_EXISTS));
   }
 
-  time_t creationTimestamp = time(nullptr);
-
   AccountSubscription sub;
   sub.keys.address.viewPublicKey = m_viewPublicKey;
   sub.keys.address.spendPublicKey = spendPublicKey;
@@ -443,7 +442,7 @@ void WalletGreen::addWallet(const Crypto::PublicKey& spendPublicKey, const Crypt
   sub.keys.spendSecretKey = spendSecretKey;
   sub.transactionSpendableAge = m_transactionSoftLockTime;
   sub.syncStart.height = 0;
-  sub.syncStart.timestamp = static_cast<uint64_t>(creationTimestamp) - (60 * 60 * 24);
+  sub.syncStart.timestamp = std::max(creationTimestamp, ACCOUNT_CREATE_TIME_ACCURACY) - ACCOUNT_CREATE_TIME_ACCURACY;
 
   auto& trSubscription = m_synchronizer.addSubscription(sub);
   ITransfersContainer* container = &trSubscription.getContainer();
@@ -452,7 +451,7 @@ void WalletGreen::addWallet(const Crypto::PublicKey& spendPublicKey, const Crypt
   wallet.spendPublicKey = spendPublicKey;
   wallet.spendSecretKey = spendSecretKey;
   wallet.container = container;
-  wallet.creationTimestamp = creationTimestamp;
+  wallet.creationTimestamp = static_cast<time_t>(creationTimestamp);
   trSubscription.addObserver(this);
 
   index.insert(insertIt, std::move(wallet));
@@ -753,6 +752,12 @@ bool WalletGreen::updateWalletTransactionInfo(const Hash& hash, const CryptoNote
           updated = true;
         }
 
+        // Fix LegacyWallet error. Some old versions didn't fill extra field
+        if (transaction.extra.empty() && !info.extra.empty()) {
+          transaction.extra = Common::asString(info.extra);
+          updated = true;
+        }
+
         bool isBase = info.totalAmountIn == 0;
         if (transaction.isBase != isBase) {
           transaction.isBase = isBase;
@@ -767,7 +772,7 @@ bool WalletGreen::updateWalletTransactionInfo(const Hash& hash, const CryptoNote
   throw std::system_error(make_error_code(std::errc::invalid_argument));
 }
 
-size_t WalletGreen::insertIncomingTransaction(const TransactionInformation& info, int64_t txBalance) {
+size_t WalletGreen::insertBlockchainTransaction(const TransactionInformation& info, int64_t txBalance) {
   auto& index = m_transactions.get<RandomAccessIndex>();
 
   WalletTransaction tx;
@@ -1166,8 +1171,12 @@ void WalletGreen::transactionUpdated(ITransfersSubscription* object, const Hash&
       pushEvent(makeTransactionUpdatedEvent(id));
     }
   } else {
-    auto id = insertIncomingTransaction(info, txBalance);
-    insertIncomingTransfer(id, m_currency.accountAddressAsString({ getWalletRecord(container).spendPublicKey, m_viewPublicKey }), txBalance);
+    auto id = insertBlockchainTransaction(info, txBalance);
+    if (txBalance > 0) {
+      AccountPublicAddress walletAddress{ getWalletRecord(container).spendPublicKey, m_viewPublicKey };
+      insertIncomingTransfer(id, m_currency.accountAddressAsString(walletAddress), txBalance);
+    }
+
     m_fusionTxsCache.emplace(id, isFusionTransaction(m_transactions.get<RandomAccessIndex>()[id]));
 
     pushEvent(makeTransactionCreatedEvent(id));

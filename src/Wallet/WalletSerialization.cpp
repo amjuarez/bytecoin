@@ -726,7 +726,7 @@ void WalletSerializer::subscribeWallets() {
     sub.keys.spendSecretKey = wallet.spendSecretKey;
     sub.transactionSpendableAge = m_transactionSoftLockTime;
     sub.syncStart.height = 0;
-    sub.syncStart.timestamp = static_cast<uint64_t>(wallet.creationTimestamp) - (60 * 60 * 24);
+    sub.syncStart.timestamp = std::max(static_cast<uint64_t>(wallet.creationTimestamp), ACCOUNT_CREATE_TIME_ACCURACY) - ACCOUNT_CREATE_TIME_ACCURACY;
 
     auto& subscription = m_synchronizer.addSubscription(sub);
     bool r = index.modify(it, [&subscription] (WalletRecord& rec) { rec.container = &subscription.getContainer(); });

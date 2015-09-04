@@ -22,6 +22,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_set>
 
 #include "Common/ObserverManager.h"
 #include "INode.h"
@@ -68,7 +69,6 @@ public:
   virtual void getNewBlocks(std::vector<Crypto::Hash>&& knownBlockIds, std::vector<CryptoNote::block_complete_entry>& newBlocks, uint32_t& startHeight, const Callback& callback);
   virtual void getTransactionOutsGlobalIndices(const Crypto::Hash& transactionHash, std::vector<uint32_t>& outsGlobalIndices, const Callback& callback) override;
   virtual void queryBlocks(std::vector<Crypto::Hash>&& knownBlockIds, uint64_t timestamp, std::vector<BlockShortEntry>& newBlocks, uint32_t& startHeight, const Callback& callback) override;
-  // TODO INodeObserver::poolChanged() notification NOT implemented!!!
   virtual void getPoolSymmetricDifference(std::vector<Crypto::Hash>&& knownPoolTxIds, Crypto::Hash knownBlockId, bool& isBcActual,
           std::vector<std::unique_ptr<ITransactionReader>>& newTxs, std::vector<Crypto::Hash>& deletedTxIds, const Callback& callback) override;
   virtual void getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t gindex, MultisignatureOutput& out, const Callback& callback) override;
@@ -87,9 +87,13 @@ private:
   void resetInternalState();
   void workerThread(const Callback& initialized_callback);
 
+  std::vector<Crypto::Hash> getKnownTxsVector() const;
   void pullNodeStatusAndScheduleTheNext();
   void updateNodeStatus();
+  void updateBlockchainStatus();
+  bool updatePoolStatus();
   void updatePeerCount();
+  void updatePoolState(const std::vector<std::unique_ptr<ITransactionReader>>& addedTxs, const std::vector<Crypto::Hash>& deletedTxsIds);
 
   std::error_code doRelayTransaction(const CryptoNote::Transaction& transaction);
   std::error_code doGetRandomOutsByAmounts(std::vector<uint64_t>& amounts, uint64_t outsCount,
@@ -144,6 +148,7 @@ private:
   //protect it with mutex if decided to add worker threads
   Crypto::Hash m_lastKnowHash;
   std::atomic<uint64_t> m_lastLocalBlockTimestamp;
+  std::unordered_set<Crypto::Hash> m_knownTxs;
 
   bool m_connected;
 };
