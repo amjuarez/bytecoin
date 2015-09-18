@@ -19,15 +19,12 @@ public:
   ~Timer();
   Timer& operator=(const Timer&) = delete;
   Timer& operator=(Timer&& other);
-  void start();
-  void stop();
-  void sleep(std::chrono::milliseconds duration);
+  void sleep(std::chrono::nanoseconds duration);
 
 private:
   Dispatcher* dispatcher;
-  int timer;
-  bool stopped;
   void* context;
+  int timer;
 };
 
 }

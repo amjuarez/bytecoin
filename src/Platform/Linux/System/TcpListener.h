@@ -6,31 +6,28 @@
 
 #include <cstdint>
 #include <string>
-#include <stdint.h>
 
 namespace System {
 
 class Dispatcher;
+class Ipv4Address;
 class TcpConnection;
 
 class TcpListener {
 public:
   TcpListener();
-  TcpListener(Dispatcher& dispatcher, const std::string& address, uint16_t port);
+  TcpListener(Dispatcher& dispatcher, const Ipv4Address& address, uint16_t port);
   TcpListener(const TcpListener&) = delete;
   TcpListener(TcpListener&& other);
   ~TcpListener();
   TcpListener& operator=(const TcpListener&) = delete;
   TcpListener& operator=(TcpListener&& other);
-  void start();
-  void stop();
   TcpConnection accept();
 
 private:
   Dispatcher* dispatcher;
-  int listener;
-  bool stopped;
   void* context;
+  int listener;
 };
 
 }

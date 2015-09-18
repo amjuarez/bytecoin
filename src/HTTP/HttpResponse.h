@@ -8,7 +8,7 @@
 #include <string>
 #include <map>
 
-namespace cryptonote {
+namespace CryptoNote {
 
   class HttpResponse {
   public:
@@ -41,4 +41,4 @@ namespace cryptonote {
     return resp.printHttpResponse(os);
   }
 
-} //namespace cryptonote
+} //namespace CryptoNote

@@ -1,3 +1,17 @@
+Release notes 1.1.0
+
+- CryptoNote RPC Wallet
+- Aggregate multi-addresses for CryptoNote RPC Wallet
+- Fusion transactions
+- Transactions pool synchronization
+- Wallet synchronization speed increase
+- High-level API update
+
+- Full network layer refactoring
+- New multithreading library
+- Improved console logging
+- JSON RPC improvements
+
 Release notes 1.0.2
 
 - Multisignature with API

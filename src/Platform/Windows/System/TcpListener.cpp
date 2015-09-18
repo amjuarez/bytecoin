@@ -4,81 +4,75 @@
 
 #include "TcpListener.h"
 #include <cassert>
-#include <iostream>
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <winsock2.h>
 #include <mswsock.h>
-#include "InterruptedException.h"
+#include <System/InterruptedException.h>
+#include <System/Ipv4Address.h>
 #include "Dispatcher.h"
+#include "ErrorMessage.h"
 #include "TcpConnection.h"
 
-using namespace System;
+namespace System {
 
 namespace {
 
-struct Context : public OVERLAPPED {
-  void* context;
+struct TcpListenerContext : public OVERLAPPED {
+  NativeContext* context;
   bool interrupted;
 };
 
 LPFN_ACCEPTEX acceptEx = nullptr;
-LPFN_GETACCEPTEXSOCKADDRS getAcceptExSockaddrs = nullptr;
 
 }
 
 TcpListener::TcpListener() : dispatcher(nullptr) {
 }
 
-TcpListener::TcpListener(Dispatcher& dispatcher, const std::string& address, uint16_t port) : dispatcher(&dispatcher) {
+TcpListener::TcpListener(Dispatcher& dispatcher, const Ipv4Address& address, uint16_t port) : dispatcher(&dispatcher) {
+  std::string message;
   listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (listener == INVALID_SOCKET) {
-    std::cerr << "socket failed, result=" << WSAGetLastError() << '.' << std::endl;
+    message = "socket failed, " + errorMessage(WSAGetLastError());
   } else {
-    sockaddr_in address;
-    address.sin_family = AF_INET;
-    address.sin_port = htons(port);
-    address.sin_addr.s_addr = INADDR_ANY;
-    if (bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof address) != 0) {
-      std::cerr << "bind failed, result=" << WSAGetLastError() << '.' << std::endl;
+    sockaddr_in addressData;
+    addressData.sin_family = AF_INET;
+    addressData.sin_port = htons(port);
+    addressData.sin_addr.S_un.S_addr = htonl(address.getValue());
+    if (bind(listener, reinterpret_cast<sockaddr*>(&addressData), sizeof(addressData)) != 0) {
+      message = "bind failed, " + errorMessage(WSAGetLastError());
     } else if (listen(listener, SOMAXCONN) != 0) {
-      std::cerr << "listen failed, result=" << WSAGetLastError() << '.' << std::endl;
+      message = "listen failed, " + errorMessage(WSAGetLastError());
     } else {
       GUID guidAcceptEx = WSAID_ACCEPTEX;
       DWORD read = sizeof acceptEx;
       if (acceptEx == nullptr && WSAIoctl(listener, SIO_GET_EXTENSION_FUNCTION_POINTER, &guidAcceptEx, sizeof guidAcceptEx, &acceptEx, sizeof acceptEx, &read, NULL, NULL) != 0) {
-        std::cerr << "WSAIoctl failed, result=" << WSAGetLastError() << '.' << std::endl;
+        message = "WSAIoctl failed, " + errorMessage(WSAGetLastError());
       } else {
         assert(read == sizeof acceptEx);
-        GUID guidGetAcceptExSockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
-        read = sizeof getAcceptExSockaddrs;
-        if (getAcceptExSockaddrs == nullptr && WSAIoctl(listener, SIO_GET_EXTENSION_FUNCTION_POINTER, &guidGetAcceptExSockaddrs, sizeof guidGetAcceptExSockaddrs, &getAcceptExSockaddrs, sizeof getAcceptExSockaddrs, &read, NULL, NULL) != 0) {
-          std::cerr << "WSAIoctl failed, result=" << WSAGetLastError() << '.' << std::endl;
+        if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(listener), dispatcher.getCompletionPort(), 0, 0) != dispatcher.getCompletionPort()) {
+          message = "CreateIoCompletionPort failed, " + lastErrorMessage();
         } else {
-          assert(read == sizeof getAcceptExSockaddrs);
-          if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(listener), dispatcher.getCompletionPort(), 0, 0) != dispatcher.getCompletionPort()) {
-            std::cerr << "CreateIoCompletionPort failed, result=" << GetLastError() << '.' << std::endl;
-          } else {
-            stopped = false;
-            context = nullptr;
-            return;
-          }
+          context = nullptr;
+          return;
         }
       }
     }
 
-    if (closesocket(listener) != 0) {
-      std::cerr << "closesocket failed, result=" << WSAGetLastError() << '.' << std::endl;
-    }
+    int result = closesocket(listener);
+    assert(result == 0);
   }
 
-  throw std::runtime_error("TcpListener::TcpListener");
+  throw std::runtime_error("TcpListener::TcpListener, " + message);
 }
 
 TcpListener::TcpListener(TcpListener&& other) : dispatcher(other.dispatcher) {
-  if (other.dispatcher != nullptr) {
+  if (dispatcher != nullptr) {
+    assert(other.context == nullptr);
     listener = other.listener;
-    stopped = other.stopped;
-    context = other.context;
+    context = nullptr;
     other.dispatcher = nullptr;
   }
 }
@@ -86,9 +80,8 @@ TcpListener::TcpListener(TcpListener&& other) : dispatcher(other.dispatcher) {
 TcpListener::~TcpListener() {
   if (dispatcher != nullptr) {
     assert(context == nullptr);
-    if (closesocket(listener) != 0) {
-      std::cerr << "closesocket failed, result=" << WSAGetLastError() << '.' << std::endl;
-    }
+    int result = closesocket(listener);
+    assert(result == 0);
   }
 }
 
@@ -96,107 +89,94 @@ TcpListener& TcpListener::operator=(TcpListener&& other) {
   if (dispatcher != nullptr) {
     assert(context == nullptr);
     if (closesocket(listener) != 0) {
-      std::cerr << "closesocket failed, result=" << WSAGetLastError() << '.' << std::endl;
-      throw std::runtime_error("TcpListener::operator=");
+      throw std::runtime_error("TcpListener::operator=, closesocket failed, " + errorMessage(WSAGetLastError()));
     }
   }
 
   dispatcher = other.dispatcher;
-  if (other.dispatcher != nullptr) {
+  if (dispatcher != nullptr) {
+    assert(other.context == nullptr);
     listener = other.listener;
-    stopped = other.stopped;
-    context = other.context;
+    context = nullptr;
     other.dispatcher = nullptr;
   }
 
   return *this;
 }
 
-void TcpListener::start() {
-  assert(dispatcher != nullptr);
-  assert(stopped);
-  stopped = false;
-}
-
-void TcpListener::stop() {
-  assert(dispatcher != nullptr);
-  assert(!stopped);
-  if (context != nullptr) {
-    Context* context2 = static_cast<Context*>(context);
-    if (!context2->interrupted) {
-      if (CancelIoEx(reinterpret_cast<HANDLE>(listener), context2) != TRUE) {
-        std::cerr << "CancelIoEx failed, result=" << GetLastError() << '.' << std::endl;
-        throw std::runtime_error("TcpListener::stop");
-      }
-
-      context2->interrupted = true;
-    }
-  }
-
-  stopped = true;
-}
-
 TcpConnection TcpListener::accept() {
   assert(dispatcher != nullptr);
   assert(context == nullptr);
-  if (stopped) {
+  if (dispatcher->interrupted()) {
     throw InterruptedException();
   }
 
+  std::string message;
   SOCKET connection = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (connection == INVALID_SOCKET) {
-    std::cerr << "socket failed, result=" << WSAGetLastError() << '.' << std::endl;
+    message = "socket failed, " + errorMessage(WSAGetLastError());
   } else {
     uint8_t addresses[sizeof sockaddr_in * 2 + 32];
     DWORD received;
-    Context context2;
+    TcpListenerContext context2;
     context2.hEvent = NULL;
     if (acceptEx(listener, connection, addresses, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, &received, &context2) == TRUE) {
-      std::cerr << "AcceptEx returned immediately, which is not supported." << std::endl;
+      message = "AcceptEx returned immediately, which is not supported.";
     } else {
       int lastError = WSAGetLastError();
       if (lastError != WSA_IO_PENDING) {
-        std::cerr << "AcceptEx failed, result=" << lastError << '.' << std::endl;
+        message = "AcceptEx failed, " + errorMessage(lastError);
       } else {
-        context2.context = GetCurrentFiber();
+        context2.context = dispatcher->getCurrentContext();
         context2.interrupted = false;
         context = &context2;
-        dispatcher->yield();
+        dispatcher->getCurrentContext()->interruptProcedure = [&]() {
+          assert(dispatcher != nullptr);
+          assert(context != nullptr);
+          TcpListenerContext* context2 = static_cast<TcpListenerContext*>(context);
+          if (!context2->interrupted) {
+            if (CancelIoEx(reinterpret_cast<HANDLE>(listener), context2) != TRUE) {
+              DWORD lastError = GetLastError();
+              if (lastError != ERROR_NOT_FOUND) {
+                throw std::runtime_error("TcpListener::stop, CancelIoEx failed, " + lastErrorMessage());
+              }
+
+              context2->context->interrupted = true;
+            }
+
+            context2->interrupted = true;
+          }
+        };
+
+        dispatcher->dispatch();
+        dispatcher->getCurrentContext()->interruptProcedure = nullptr;
+        assert(context2.context == dispatcher->getCurrentContext());
         assert(dispatcher != nullptr);
-        assert(context2.context == GetCurrentFiber());
         assert(context == &context2);
         context = nullptr;
         DWORD transferred;
         DWORD flags;
         if (WSAGetOverlappedResult(listener, &context2, &transferred, FALSE, &flags) != TRUE) {
           lastError = WSAGetLastError();
-          if (lastError == ERROR_OPERATION_ABORTED) {
+          if (lastError != ERROR_OPERATION_ABORTED) {
+            message = "AcceptEx failed, " + errorMessage(lastError);
+          } else {
             assert(context2.interrupted);
             if (closesocket(connection) != 0) {
-              std::cerr << "closesocket failed, result=" << WSAGetLastError() << '.' << std::endl;
+              throw std::runtime_error("TcpListener::accept, closesocket failed, " + errorMessage(WSAGetLastError()));
+            } else {
+              throw InterruptedException();
             }
-
-            throw InterruptedException();
           }
-
-          std::cerr << "AcceptEx failed, result=" << lastError << '.' << std::endl;
         } else {
           assert(transferred == 0);
           assert(flags == 0);
           if (setsockopt(connection, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&listener), sizeof listener) != 0) {
-            std::cerr << "setsockopt failed, result=" << WSAGetLastError() << '.' << std::endl;
+            message = "setsockopt failed, " + errorMessage(WSAGetLastError());
           } else {
             if (CreateIoCompletionPort(reinterpret_cast<HANDLE>(connection), dispatcher->getCompletionPort(), 0, 0) != dispatcher->getCompletionPort()) {
-              std::cerr << "CreateIoCompletionPort failed, result=" << GetLastError() << '.' << std::endl;
+              message = "CreateIoCompletionPort failed, " + lastErrorMessage();
             } else {
-              //sockaddr_in* local;
-              //int localSize;
-              //sockaddr_in* remote;
-              //int remoteSize;
-              //static_cast<LPFN_GETACCEPTEXSOCKADDRS>(getAcceptExSockaddrs)(addresses, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, reinterpret_cast<sockaddr**>(&local), &localSize, reinterpret_cast<sockaddr**>(&remote), &remoteSize);
-              //assert(localSize == sizeof sockaddr_in);
-              //assert(remoteSize == sizeof sockaddr_in);
-              //std::cout << "Client connected from " << static_cast<unsigned int>(remote->sin_addr.S_un.S_un_b.s_b1) << '.' << static_cast<unsigned int>(remote->sin_addr.S_un.S_un_b.s_b2) << '.' << static_cast<unsigned int>(remote->sin_addr.S_un.S_un_b.s_b3) << '.' << static_cast<unsigned int>(remote->sin_addr.S_un.S_un_b.s_b4) << ':' << remote->sin_port << std::endl;
               return TcpConnection(*dispatcher, connection);
             }
           }
@@ -204,10 +184,11 @@ TcpConnection TcpListener::accept() {
       }
     }
 
-    if (closesocket(connection) != 0) {
-      std::cerr << "closesocket failed, result=" << WSAGetLastError() << '.' << std::endl;
-    }
+    int result = closesocket(connection);
+    assert(result == 0);
   }
 
-  throw std::runtime_error("TcpListener::accept");
+  throw std::runtime_error("TcpListener::accept, " + message);
+}
+
 }

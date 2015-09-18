@@ -17,7 +17,7 @@
 
 #include "aesb.h"
 #include "initializer.h"
-#include "common/int-util.h"
+#include "Common/int-util.h"
 #include "hash-ops.h"
 #include "oaes_lib.h"
 

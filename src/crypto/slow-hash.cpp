@@ -14,7 +14,7 @@
 
 using std::bad_alloc;
 
-namespace crypto {
+namespace Crypto {
 
   enum {
     MAP_SIZE = SLOW_HASH_CONTEXT_SIZE + ((-SLOW_HASH_CONTEXT_SIZE) & 0xfff)

@@ -4,11 +4,44 @@
 
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <queue>
 #include <stack>
 
 namespace System {
+
+struct NativeContextGroup;
+
+struct NativeContext {
+  void* ucontext;
+  void* stackPtr;
+  bool interrupted;
+  NativeContext* next;
+  NativeContextGroup* group;
+  NativeContext* groupPrev;
+  NativeContext* groupNext;
+  std::function<void()> procedure;
+  std::function<void()> interruptProcedure;
+};
+
+struct NativeContextGroup {
+  NativeContext* firstContext;
+  NativeContext* lastContext;
+  NativeContext* firstWaiter;
+  NativeContext* lastWaiter;
+};
+
+struct OperationContext {
+  NativeContext *context;
+  bool interrupted;
+  uint32_t events;
+};
+
+struct ContextPair {
+  OperationContext *readContext;
+  OperationContext *writeContext;
+};
 
 class Dispatcher {
 public:
@@ -16,35 +49,51 @@ public:
   Dispatcher(const Dispatcher&) = delete;
   ~Dispatcher();
   Dispatcher& operator=(const Dispatcher&) = delete;
-  void spawn(std::function<void()>&& procedure);
-  void yield();
   void clear();
+  void dispatch();
+  NativeContext* getCurrentContext() const;
+  void interrupt();
+  void interrupt(NativeContext* context);
+  bool interrupted();
+  void pushContext(NativeContext* context);
+  void remoteSpawn(std::function<void()>&& procedure);
+  void yield();
 
-  struct ContextExt {
-    void *context;
-    void *writeContext; //required workaround
-  };
+  // system-dependent
+  int getEpoll() const;
+  NativeContext& getReusableContext();
+  void pushReusableContext(NativeContext&);
+  int getTimer();
+  void pushTimer(int timer);
+
+#ifdef __x86_64__
+# if __WORDSIZE == 64
+  static const int SIZEOF_PTHREAD_MUTEX_T = 40;
+# else
+  static const int SIZEOF_PTHREAD_MUTEX_T = 32;
+# endif
+#else
+  static const int SIZEOF_PTHREAD_MUTEX_T = 24;
+#endif
+
 private:
-  friend class Event;
-  friend class DispatcherAccessor;
-  friend class TcpConnection;
-  friend class TcpConnector;
-  friend class TcpListener;
-  friend class Timer;
+  void spawn(std::function<void()>&& procedure);
   int epoll;
-  void* currentContext;
-  std::size_t contextCount;
-  std::queue<void*> resumingContexts;
-  std::stack<void*> reusableContexts;
-  std::stack<uint8_t *> allocatedStacks;
-  std::queue<std::function<void()>> spawningProcedures;
+  alignas(void*) uint8_t mutex[SIZEOF_PTHREAD_MUTEX_T];
+  int remoteSpawnEvent;
+  ContextPair remoteSpawnEventContext;
+  std::queue<std::function<void()>> remoteSpawningProcedures;
   std::stack<int> timers;
 
-  int getEpoll() const;
-  void pushContext(void* context);
-  void* getCurrentContext() const;
+  NativeContext mainContext;
+  NativeContextGroup contextGroup;
+  NativeContext* currentContext;
+  NativeContext* firstResumingContext;
+  NativeContext* lastResumingContext;
+  NativeContext* firstReusableContext;
+  size_t runningContextCount;
 
-  void contextProcedure();
+  void contextProcedure(void* ucontext);
   static void contextProcedureStatic(void* context);
 };
 
