@@ -22,6 +22,24 @@
 #include "CryptoNoteCore/IBlock.h"
 #include "CryptoNoteCore/VerificationContext.h"
 
+
+ICoreStub::ICoreStub() :
+    topHeight(0),
+    globalIndicesResult(false),
+    randomOutsResult(false),
+    poolTxVerificationResult(true),
+    poolChangesResult(true) {
+}
+
+ICoreStub::ICoreStub(const CryptoNote::Block& genesisBlock) :
+    topHeight(0),
+    globalIndicesResult(false),
+    randomOutsResult(false),
+    poolTxVerificationResult(true),
+    poolChangesResult(true) {
+  addBlock(genesisBlock);
+}
+
 bool ICoreStub::addObserver(CryptoNote::ICoreObserver* observer) {
   return true;
 }

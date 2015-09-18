@@ -86,7 +86,7 @@ protected:
   void doShutdown();
   void clearCaches();
   void initWithKeys(const Crypto::PublicKey& viewPublicKey, const Crypto::SecretKey& viewSecretKey, const std::string& password);
-  std::string doCreateAddress(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey);
+  std::string doCreateAddress(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey, uint64_t creationTimestamp);
 
   struct InputInfo {
     TransactionTypes::InputKeyInfo keyInfo;
@@ -133,7 +133,7 @@ protected:
   const WalletRecord& getWalletRecord(CryptoNote::ITransfersContainer* container) const;
 
   CryptoNote::AccountPublicAddress parseAddress(const std::string& address) const;
-  void addWallet(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey);
+  void addWallet(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey, uint64_t creationTimestamp);
   bool isOutputUsed(const TransactionOutputInformation& out) const;
   void markOutputsSpent(const Crypto::Hash& transactionHash, const std::vector<OutputToTransfer>& selectedTransfers);
   void deleteSpentOutputs(const Crypto::Hash& transactionHash);
@@ -177,7 +177,7 @@ protected:
   size_t insertOutgoingTransaction(const Crypto::Hash& transactionHash, int64_t totalAmount, uint64_t fee, const BinaryArray& extra, uint64_t unlockTimestamp);
   bool transactionExists(const Crypto::Hash& hash);
   bool updateWalletTransactionInfo(const Crypto::Hash& hash, const CryptoNote::TransactionInformation& info);
-  size_t insertIncomingTransaction(const TransactionInformation& info, int64_t txBalance);
+  size_t insertBlockchainTransaction(const TransactionInformation& info, int64_t txBalance);
   void insertIncomingTransfer(size_t txId, const std::string& address, int64_t amount);
   void pushBackOutgoingTransfers(size_t txId, const std::vector<WalletTransfer> &destinations);
   void insertUnlockTransactionJob(const Crypto::Hash& transactionHash, uint32_t blockHeight, CryptoNote::ITransfersContainer* container);

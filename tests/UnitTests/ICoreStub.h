@@ -28,11 +28,8 @@
 
 class ICoreStub: public CryptoNote::ICore {
 public:
-  ICoreStub() : topHeight(0), globalIndicesResult(false), randomOutsResult(false), poolTxVerificationResult(true) {};
-  ICoreStub(const CryptoNote::Block& genesisBlock) : topHeight(0), globalIndicesResult(false), randomOutsResult(false), poolTxVerificationResult(true),
-    poolChangesResult(true) {
-    addBlock(genesisBlock);
-  };
+  ICoreStub();
+  ICoreStub(const CryptoNote::Block& genesisBlock);
 
   virtual bool addObserver(CryptoNote::ICoreObserver* observer);
   virtual bool removeObserver(CryptoNote::ICoreObserver* observer);
@@ -124,6 +121,5 @@ private:
   std::unordered_map<Crypto::Hash, CryptoNote::Transaction> transactions;
   std::unordered_map<Crypto::Hash, CryptoNote::Transaction> transactionPool;
   bool poolTxVerificationResult;
-  
   bool poolChangesResult;
 };

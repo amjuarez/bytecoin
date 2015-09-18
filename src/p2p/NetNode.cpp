@@ -575,7 +575,10 @@ namespace CryptoNote
     get_local_node_data(arg.node_data);
     m_payload_handler.get_payload_sync_data(arg.payload_data);
 
-    proto.invoke(COMMAND_HANDSHAKE::ID, arg, rsp);
+    if (!proto.invoke(COMMAND_HANDSHAKE::ID, arg, rsp)) {
+      logger(Logging::ERROR) << context << "Failed to invoke COMMAND_HANDSHAKE, closing connection.";
+      return false;
+    }
 
     context.version = rsp.node_data.version;
 

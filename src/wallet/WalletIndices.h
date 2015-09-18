@@ -30,6 +30,10 @@
 #include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index/member.hpp>
 
+namespace CryptoNote {
+
+const uint64_t ACCOUNT_CREATE_TIME_ACCURACY = 60 * 60 * 24;
+
 struct WalletRecord {
   Crypto::PublicKey spendPublicKey;
   Crypto::SecretKey spendSecretKey;
@@ -122,3 +126,5 @@ typedef std::unordered_map<Crypto::Hash, uint64_t> TransactionChanges;
 
 typedef std::pair<size_t, CryptoNote::WalletTransfer> TransactionTransferPair;
 typedef std::vector<TransactionTransferPair> WalletTransfers;
+
+}
