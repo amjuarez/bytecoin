@@ -28,7 +28,7 @@ public:
   JsonOutputStreamSerializer();
   virtual ~JsonOutputStreamSerializer();
 
-  SerializerType type() const;
+  SerializerType type() const override;
 
   virtual bool beginObject(Common::StringView name) override;
   virtual void endObject() override;

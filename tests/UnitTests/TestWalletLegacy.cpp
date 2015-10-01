@@ -1392,7 +1392,7 @@ TEST_F(WalletLegacyApi, outcommingExternalTransactionTotalAmount) {
   wallet.initAndLoad(walletData, "pass");
   WaitWalletSync(&walletObserver);
 
-  ASSERT_EQ(-(sent + fee), externalTransactionObserver.totalAmount);
+  ASSERT_EQ(-static_cast<int64_t>(sent + fee), externalTransactionObserver.totalAmount);
   wallet.shutdown();
 }
 

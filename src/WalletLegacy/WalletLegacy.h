@@ -53,37 +53,37 @@ public:
   WalletLegacy(const CryptoNote::Currency& currency, INode& node);
   virtual ~WalletLegacy();
 
-  virtual void addObserver(IWalletLegacyObserver* observer);
-  virtual void removeObserver(IWalletLegacyObserver* observer);
+  virtual void addObserver(IWalletLegacyObserver* observer) override;
+  virtual void removeObserver(IWalletLegacyObserver* observer) override;
 
-  virtual void initAndGenerate(const std::string& password);
-  virtual void initAndLoad(std::istream& source, const std::string& password);
-  virtual void initWithKeys(const AccountKeys& accountKeys, const std::string& password);
-  virtual void shutdown();
-  virtual void reset();
+  virtual void initAndGenerate(const std::string& password) override;
+  virtual void initAndLoad(std::istream& source, const std::string& password) override;
+  virtual void initWithKeys(const AccountKeys& accountKeys, const std::string& password) override;
+  virtual void shutdown() override;
+  virtual void reset() override;
 
-  virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true);
+  virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true) override;
 
-  virtual std::error_code changePassword(const std::string& oldPassword, const std::string& newPassword);
+  virtual std::error_code changePassword(const std::string& oldPassword, const std::string& newPassword) override;
 
-  virtual std::string getAddress();
+  virtual std::string getAddress() override;
 
-  virtual uint64_t actualBalance();
-  virtual uint64_t pendingBalance();
+  virtual uint64_t actualBalance() override;
+  virtual uint64_t pendingBalance() override;
 
-  virtual size_t getTransactionCount();
-  virtual size_t getTransferCount();
+  virtual size_t getTransactionCount() override;
+  virtual size_t getTransferCount() override;
 
-  virtual TransactionId findTransactionByTransferId(TransferId transferId);
+  virtual TransactionId findTransactionByTransferId(TransferId transferId) override;
 
-  virtual bool getTransaction(TransactionId transactionId, WalletLegacyTransaction& transaction);
-  virtual bool getTransfer(TransferId transferId, WalletLegacyTransfer& transfer);
+  virtual bool getTransaction(TransactionId transactionId, WalletLegacyTransaction& transaction) override;
+  virtual bool getTransfer(TransferId transferId, WalletLegacyTransfer& transfer) override;
 
-  virtual TransactionId sendTransaction(const WalletLegacyTransfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
-  virtual TransactionId sendTransaction(const std::vector<WalletLegacyTransfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0);
-  virtual std::error_code cancelTransaction(size_t transactionId);
+  virtual TransactionId sendTransaction(const WalletLegacyTransfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) override;
+  virtual TransactionId sendTransaction(const std::vector<WalletLegacyTransfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) override;
+  virtual std::error_code cancelTransaction(size_t transactionId) override;
 
-  virtual void getAccountKeys(AccountKeys& keys);
+  virtual void getAccountKeys(AccountKeys& keys) override;
 
 private:
 

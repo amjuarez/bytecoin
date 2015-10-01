@@ -31,16 +31,16 @@ public:
   ICoreStub();
   ICoreStub(const CryptoNote::Block& genesisBlock);
 
-  virtual bool addObserver(CryptoNote::ICoreObserver* observer);
-  virtual bool removeObserver(CryptoNote::ICoreObserver* observer);
-  virtual void get_blockchain_top(uint32_t& height, Crypto::Hash& top_id);
+  virtual bool addObserver(CryptoNote::ICoreObserver* observer) override;
+  virtual bool removeObserver(CryptoNote::ICoreObserver* observer) override;
+  virtual void get_blockchain_top(uint32_t& height, Crypto::Hash& top_id) override;
   virtual std::vector<Crypto::Hash> findBlockchainSupplement(const std::vector<Crypto::Hash>& remoteBlockIds, size_t maxCount,
     uint32_t& totalBlockCount, uint32_t& startBlockIndex) override;
   virtual bool get_random_outs_for_amounts(const CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request& req,
-      CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res);
-  virtual bool get_tx_outputs_gindexs(const Crypto::Hash& tx_id, std::vector<uint32_t>& indexs);
-  virtual CryptoNote::i_cryptonote_protocol* get_protocol();
-  virtual bool handle_incoming_tx(CryptoNote::BinaryArray const& tx_blob, CryptoNote::tx_verification_context& tvc, bool keeped_by_block);
+      CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res) override;
+  virtual bool get_tx_outputs_gindexs(const Crypto::Hash& tx_id, std::vector<uint32_t>& indexs) override;
+  virtual CryptoNote::i_cryptonote_protocol* get_protocol() override;
+  virtual bool handle_incoming_tx(CryptoNote::BinaryArray const& tx_blob, CryptoNote::tx_verification_context& tvc, bool keeped_by_block) override;
   virtual std::vector<CryptoNote::Transaction> getPoolTransactions() override;
   virtual bool getPoolChanges(const Crypto::Hash& tailBlockId, const std::vector<Crypto::Hash>& knownTxsIds,
                               std::vector<CryptoNote::Transaction>& addedTxs, std::vector<Crypto::Hash>& deletedTxsIds) override;

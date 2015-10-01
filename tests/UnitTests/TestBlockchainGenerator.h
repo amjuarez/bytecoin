@@ -36,7 +36,7 @@ public:
   //TODO: get rid of this method
   std::vector<CryptoNote::Block>& getBlockchain();
   std::vector<CryptoNote::Block> getBlockchainCopy();
-  void generateEmptyBlocks(uint32_t count);
+  void generateEmptyBlocks(size_t count);
   bool getBlockRewardForAddress(const CryptoNote::AccountPublicAddress& address);
   bool generateTransactionsInOneBlock(const CryptoNote::AccountPublicAddress& address, size_t n);
   bool getSingleOutputTransaction(const CryptoNote::AccountPublicAddress& address, uint64_t amount);

@@ -134,11 +134,11 @@ void TestBlockchainGenerator::addMiningBlock() {
   m_generatedTransactionsIndex.add(block);
 }
 
-void TestBlockchainGenerator::generateEmptyBlocks(uint32_t count)
+void TestBlockchainGenerator::generateEmptyBlocks(size_t count)
 {
   std::unique_lock<std::mutex> lock(m_mutex);
 
-  for (uint32_t i = 0; i < count; ++i)
+  for (size_t i = 0; i < count; ++i)
   {
     CryptoNote::Block& prev_block = m_blockchain.back();
     CryptoNote::Block block;
@@ -359,11 +359,11 @@ void TestBlockchainGenerator::addTx(const CryptoNote::Transaction& tx) {
     const auto& out = tx.outputs[outIndex];
     if (out.target.type() == typeid(KeyOutput)) {
       auto& keyOutsContainer = keyOutsIndex[out.amount];
-      globalIndexes.push_back(keyOutsContainer.size());
+      globalIndexes.push_back(static_cast<uint32_t>(keyOutsContainer.size()));
       keyOutsContainer.push_back({ txHash, outIndex });
     } else if (out.target.type() == typeid(MultisignatureOutput)) {
       auto& msigOutsContainer = multisignatureOutsIndex[out.amount];
-      globalIndexes.push_back(msigOutsContainer.size());
+      globalIndexes.push_back(static_cast<uint32_t>(msigOutsContainer.size()));
       msigOutsContainer.push_back({ txHash, outIndex });
     }
   }

@@ -159,7 +159,7 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
 
   node->init([&initPromise, &log](std::error_code ec) {
     if (ec) {
-      log(Logging::INFO) << "Failed to init node: " << ec.message();
+      log(Logging::WARNING, Logging::YELLOW) << "Failed to init node: " << ec.message();
     } else {
       log(Logging::INFO) << "node is inited successfully";
     }
@@ -215,7 +215,7 @@ void PaymentGateService::runWalletService(const CryptoNote::Currency& currency, 
   try {
     service->init();
   } catch (std::exception& e) {
-    Logging::LoggerRef(logger, "run")(Logging::ERROR) << "Failed to init walletService reason: " << e.what();
+    Logging::LoggerRef(logger, "run")(Logging::ERROR, Logging::BRIGHT_RED) << "Failed to init walletService reason: " << e.what();
     return;
   }
 
@@ -236,7 +236,7 @@ void PaymentGateService::runWalletService(const CryptoNote::Currency& currency, 
     try {
       service->saveWallet();
     } catch (std::exception& ex) {
-      Logging::LoggerRef(logger, "saveWallet")(Logging::WARNING) << "Couldn't save wallet: " << ex.what();
+      Logging::LoggerRef(logger, "saveWallet")(Logging::WARNING, Logging::YELLOW) << "Couldn't save wallet: " << ex.what();
     }
   }
 }

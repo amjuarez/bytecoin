@@ -39,7 +39,7 @@ public:
   virtual ~NodeObserver() {
   }
 
-  virtual void peerCountUpdated(size_t count) {
+  virtual void peerCountUpdated(size_t count) override {
     logger(INFO) << '[' << m_name << "] peerCountUpdated " << count << " = " << m_nodeProxy.getPeerCount();
   }
 

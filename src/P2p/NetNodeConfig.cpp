@@ -80,6 +80,7 @@ NetNodeConfig::NetNodeConfig() {
   allowLocalIp = false;
   hideMyPort = false;
   configFolder = Tools::getDefaultDataDirectory();
+  testnet = false;
 }
 
 bool NetNodeConfig::init(const boost::program_options::variables_map& vm)

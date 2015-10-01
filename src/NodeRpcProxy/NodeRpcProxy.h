@@ -48,25 +48,25 @@ public:
   NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort);
   virtual ~NodeRpcProxy();
 
-  virtual bool addObserver(CryptoNote::INodeObserver* observer);
-  virtual bool removeObserver(CryptoNote::INodeObserver* observer);
+  virtual bool addObserver(CryptoNote::INodeObserver* observer) override;
+  virtual bool removeObserver(CryptoNote::INodeObserver* observer) override;
 
   virtual bool addObserver(CryptoNote::INodeRpcProxyObserver* observer);
   virtual bool removeObserver(CryptoNote::INodeRpcProxyObserver* observer);
 
-  virtual void init(const Callback& callback);
-  virtual bool shutdown();
+  virtual void init(const Callback& callback) override;
+  virtual bool shutdown() override;
 
-  virtual size_t getPeerCount() const;
-  virtual uint32_t getLastLocalBlockHeight() const;
-  virtual uint32_t getLastKnownBlockHeight() const;
+  virtual size_t getPeerCount() const override;
+  virtual uint32_t getLastLocalBlockHeight() const override;
+  virtual uint32_t getLastKnownBlockHeight() const override;
   virtual uint32_t getLocalBlockCount() const override;
   virtual uint32_t getKnownBlockCount() const override;
   virtual uint64_t getLastLocalBlockTimestamp() const override;
 
-  virtual void relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback);
-  virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback);
-  virtual void getNewBlocks(std::vector<Crypto::Hash>&& knownBlockIds, std::vector<CryptoNote::block_complete_entry>& newBlocks, uint32_t& startHeight, const Callback& callback);
+  virtual void relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) override;
+  virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback) override;
+  virtual void getNewBlocks(std::vector<Crypto::Hash>&& knownBlockIds, std::vector<CryptoNote::block_complete_entry>& newBlocks, uint32_t& startHeight, const Callback& callback) override;
   virtual void getTransactionOutsGlobalIndices(const Crypto::Hash& transactionHash, std::vector<uint32_t>& outsGlobalIndices, const Callback& callback) override;
   virtual void queryBlocks(std::vector<Crypto::Hash>&& knownBlockIds, uint64_t timestamp, std::vector<BlockShortEntry>& newBlocks, uint32_t& startHeight, const Callback& callback) override;
   virtual void getPoolSymmetricDifference(std::vector<Crypto::Hash>&& knownPoolTxIds, Crypto::Hash knownBlockId, bool& isBcActual,

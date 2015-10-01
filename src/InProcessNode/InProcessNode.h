@@ -51,9 +51,9 @@ public:
   virtual bool addObserver(INodeObserver* observer) override;
   virtual bool removeObserver(INodeObserver* observer) override;
 
-  virtual size_t getPeerCount() const;
-  virtual uint32_t getLastLocalBlockHeight() const;
-  virtual uint32_t getLastKnownBlockHeight() const;
+  virtual size_t getPeerCount() const override;
+  virtual uint32_t getLastLocalBlockHeight() const override;
+  virtual uint32_t getLastKnownBlockHeight() const override;
   virtual uint32_t getLocalBlockCount() const override;
   virtual uint32_t getKnownBlockCount() const override;
   virtual uint64_t getLastLocalBlockTimestamp() const override;

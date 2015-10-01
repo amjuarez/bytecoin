@@ -54,9 +54,13 @@ namespace CryptoNote {
         case WalletTransactionState::SUCCEEDED:
           o << "SUCCEEDED";
           break;
+        case WalletTransactionState::CREATED:
+          o << "CREATED";
+          break;
       }
       return o;
     }
+
     std::ostream& operator<<(std::ostream& o, const WalletTransaction& tx) {
       o << "WalletTransaction{state=" << tx.state << ", timestamp=" << tx.timestamp
         << ", blockHeight=" << tx.blockHeight << ", hash=" << tx.hash
@@ -123,6 +127,10 @@ namespace CryptoNote {
         return false;
       }
 
+      if (lhs.type != rhs.type) {
+        return false;
+      }
+
       return true;
     }
 
@@ -185,8 +193,10 @@ protected:
   size_t sendMoneyToRandomAddressFrom(const std::string& address, uint64_t amount, uint64_t fee);
   size_t sendMoneyToRandomAddressFrom(const std::string& address);
 
-  size_t sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
-  size_t sendMoney(const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t sendMoney(const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t sendMoneyWithDonation(const std::string& to, uint64_t amount, uint64_t fee,
+    const std::string& donationAddress, uint64_t donationAmount, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
 
   void fillWalletWithDetailsCache();
 
@@ -401,11 +411,11 @@ void WalletApi::generateAddressesWithPendingMoney(size_t count) {
 }
 
 size_t WalletApi::sendMoneyToRandomAddressFrom(const std::string& address, uint64_t amount, uint64_t fee) {
-  CryptoNote::WalletTransfer transfer;
-  transfer.address = RANDOM_ADDRESS;
-  transfer.amount = amount;
+  CryptoNote::WalletOrder order;
+  order.address = RANDOM_ADDRESS;
+  order.amount = amount;
 
-  return alice.transfer(address, transfer, fee, 0);
+  return alice.transfer(address, order, fee, 0);
 }
 
 size_t WalletApi::sendMoneyToRandomAddressFrom(const std::string& address) {
@@ -429,16 +439,31 @@ void WalletApi::fillWalletWithDetailsCache() {
   }
 }
 
-size_t WalletApi::sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
-  CryptoNote::WalletTransfer transfer;
-  transfer.address = to;
-  transfer.amount = amount;
+size_t WalletApi::sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+  CryptoNote::WalletOrder order;
+  order.address = to;
+  order.amount = amount;
 
-  return wallet.transfer(transfer, fee, mixIn, extra, unlockTimestamp);
+  return wallet.transfer(order, fee, mixIn, extra, unlockTimestamp);
 }
 
-size_t WalletApi::sendMoney(const std::string& to, int64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+size_t WalletApi::sendMoney(const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
   return sendMoney(alice, to, amount, fee, mixIn, extra, unlockTimestamp);
+}
+
+size_t WalletApi::sendMoneyWithDonation(const std::string& to, uint64_t amount, uint64_t fee,
+  const std::string& donationAddress, uint64_t donationAmount, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+
+  TransactionParameters params;
+  params.destinations.push_back({to, amount});
+  params.fee = fee;
+  params.donation.address = donationAddress;
+  params.donation.threshold = donationAmount;
+  params.mixIn = mixIn;
+  params.extra = extra;
+  params.unlockTimestamp = unlockTimestamp;
+
+  return alice.transfer(params);
 }
 
 void WalletApi::wait(uint64_t milliseconds) {
@@ -510,7 +535,7 @@ TEST_F(WalletApi, pendingBalanceUpdatedAfterTransactionGotInBlock) {
 
   auto prevPending = alice.getPendingBalance();
 
-  generator.generateEmptyBlocks(TRANSACTION_SOFTLOCK_TIME);
+  generator.generateEmptyBlocks(static_cast<size_t>(TRANSACTION_SOFTLOCK_TIME));
   node.updateObservers();
 
   waitPendingBalanceUpdated(prevPending);
@@ -524,7 +549,7 @@ TEST_F(WalletApi, moneyLockedIfTransactionIsSoftLocked) {
   bob.initialize("pass2");
 
   sendMoney(bob.createAddress(), SENT, FEE);
-  generator.generateEmptyBlocks(TRANSACTION_SOFTLOCK_TIME - 1);
+  generator.generateEmptyBlocks(static_cast<size_t>(TRANSACTION_SOFTLOCK_TIME - 1));
   node.updateObservers();
 
   waitPendingBalanceUpdated(bob, 0);
@@ -598,7 +623,11 @@ TEST_F(WalletApi, transferFromTwoAddresses) {
 }
 
 TEST_F(WalletApi, transferTooBigTransaction) {
-  CryptoNote::Currency cur = CryptoNote::CurrencyBuilder(logger).blockGrantedFullRewardZone(5).minerTxBlobReservedSize(2).currency();
+  const size_t testBlockGrantedFullRewardZone = 2000;
+  const size_t outputSize = 32 + 1;
+  const size_t bigTxOutputCount = 2 * testBlockGrantedFullRewardZone / outputSize;
+
+  CryptoNote::Currency cur = CryptoNote::CurrencyBuilder(logger).blockGrantedFullRewardZone(testBlockGrantedFullRewardZone).currency();
   TestBlockchainGenerator gen(cur);
   INodeTrivialRefreshStub n(gen);
 
@@ -613,11 +642,12 @@ TEST_F(WalletApi, transferTooBigTransaction) {
   n.updateObservers();
   waitActualBalanceUpdated(wallet, prev);
 
-  CryptoNote::WalletTransfer transfer;
-  transfer.address = RANDOM_ADDRESS;
-  transfer.amount = SENT;
+  std::vector<CryptoNote::WalletOrder> destinations;
+  for (size_t i = 0; i < bigTxOutputCount; ++i) {
+    destinations.push_back({ RANDOM_ADDRESS, 1 });
+  }
 
-  ASSERT_ANY_THROW(wallet.transfer(transfer, FEE));
+  ASSERT_ANY_THROW(wallet.transfer(destinations, FEE));
 }
 
 TEST_F(WalletApi, balanceAfterTransfer) {
@@ -1272,26 +1302,91 @@ TEST_F(WalletApi, incomingTxTransfer) {
   wait(100);
 }
 
+TEST_F(WalletApi, walletSendsTransactionUpdatedEventAfterAddingTransfer) {
+  generateAndUnlockMoney();
+
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
+  bob.initialize("pass2");
+  bob.createAddress();
+  bob.createAddress();
+  bob.createAddress();
+
+  std::vector<CryptoNote::WalletOrder> orders;
+  orders.emplace_back(CryptoNote::WalletOrder{ bob.getAddress(0), SENT });
+  orders.emplace_back(CryptoNote::WalletOrder{ bob.getAddress(1), SENT });
+  orders.emplace_back(CryptoNote::WalletOrder{ bob.getAddress(2), SENT });
+  alice.transfer(orders, FEE, 0, "", 0);
+
+  node.updateObservers();
+  ASSERT_TRUE(waitForWalletEvent(bob, CryptoNote::WalletEventType::TRANSACTION_CREATED, std::chrono::seconds(5)));
+  ASSERT_TRUE(waitForWalletEvent(bob, CryptoNote::WalletEventType::TRANSACTION_UPDATED, std::chrono::seconds(5)));
+  ASSERT_TRUE(waitForWalletEvent(bob, CryptoNote::WalletEventType::TRANSACTION_UPDATED, std::chrono::seconds(5)));
+
+  bob.shutdown();
+  wait(100);
+}
+
+TEST_F(WalletApi, walletCreatesTransferForEachTransactionFunding) {
+  generateAndUnlockMoney();
+
+  CryptoNote::WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
+  bob.initialize("pass2");
+  bob.createAddress();
+  bob.createAddress();
+
+  std::vector<CryptoNote::WalletOrder> orders;
+  orders.emplace_back(CryptoNote::WalletOrder{ bob.getAddress(0), SENT });
+  orders.emplace_back(CryptoNote::WalletOrder{ bob.getAddress(1), 2 * SENT });
+  alice.transfer(orders, FEE, 0, "", 0);
+
+  node.updateObservers();
+  ASSERT_TRUE(waitForWalletEvent(bob, CryptoNote::WalletEventType::TRANSACTION_UPDATED, std::chrono::seconds(5)));
+
+  ASSERT_EQ(2, bob.getTransactionTransferCount(0));
+  auto tr1 = bob.getTransactionTransfer(0, 0);
+  auto tr2 = bob.getTransactionTransfer(0, 1);
+  ASSERT_TRUE(tr1.address == bob.getAddress(0) || tr1.address == bob.getAddress(1));
+  ASSERT_TRUE(tr2.address == bob.getAddress(0) || tr2.address == bob.getAddress(1));
+  ASSERT_NE(tr1.address, tr2.address);
+
+  bob.shutdown();
+  wait(100);
+}
+
+size_t getTransactionUsualTransferCount(WalletGreen& wallet, size_t transactionIndex) {
+  size_t transfersCount = wallet.getTransactionTransferCount(transactionIndex);
+  size_t usualTransfersCount = 0;
+  for (size_t i = 0; i < transfersCount; ++i) {
+    if (wallet.getTransactionTransfer(transactionIndex, i).type == WalletTransferType::USUAL) {
+      ++usualTransfersCount;
+    }
+  }
+
+  return usualTransfersCount;
+}
+
 TEST_F(WalletApi, hybridTxTransfer) {
   generateAndUnlockMoney();
 
   alice.createAddress();
   alice.createAddress();
 
-  CryptoNote::WalletTransfer tr1 { alice.getAddress(1), static_cast<int64_t>(SENT) };
-  CryptoNote::WalletTransfer tr2 { alice.getAddress(2), static_cast<int64_t>(2 * SENT) };
+  CryptoNote::WalletOrder tr1 { alice.getAddress(1), SENT };
+  CryptoNote::WalletOrder tr2 { alice.getAddress(2), 2 * SENT };
 
   alice.transfer({tr1, tr2}, FEE);
   node.updateObservers();
   dispatcher.yield();
 
-  ASSERT_EQ(2, alice.getTransactionTransferCount(1));
+  ASSERT_EQ(2, getTransactionUsualTransferCount(alice, 1));
 
   EXPECT_EQ(tr1.address, alice.getTransactionTransfer(1, 0).address);
-  EXPECT_EQ(-tr1.amount, alice.getTransactionTransfer(1, 0).amount);
+  EXPECT_EQ(-static_cast<int64_t>(tr1.amount), alice.getTransactionTransfer(1, 0).amount);
+  EXPECT_EQ(WalletTransferType::USUAL, alice.getTransactionTransfer(1, 0).type);
 
   EXPECT_EQ(tr2.address, alice.getTransactionTransfer(1, 1).address);
-  EXPECT_EQ(-tr2.amount, alice.getTransactionTransfer(1, 1).amount);
+  EXPECT_EQ(-static_cast<int64_t>(tr2.amount), alice.getTransactionTransfer(1, 1).amount);
+  EXPECT_EQ(WalletTransferType::USUAL, alice.getTransactionTransfer(1, 1).type);
 }
 
 TEST_F(WalletApi, doubleSpendJustSentOut) {
@@ -1384,7 +1479,7 @@ TEST_F(WalletApi, DISABLED_loadTest) {
 
   steady_clock::time_point transferStart = steady_clock::now();
   for (size_t i = 0; i < TRANSACTIONS_COUNT; ++i) {
-    CryptoNote::WalletTransfer tr;
+    CryptoNote::WalletOrder tr;
     tr.amount = SENT;
     tr.address = RANDOM_ADDRESS;
     wallet.transfer(tr, FEE);
@@ -1839,10 +1934,10 @@ TEST_F(WalletApi, fusionManagerIsFusionTransactionSpent) {
   ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, id);
 
   unlockMoney();
-  CryptoNote::WalletTransfer transfer;
-  transfer.address = wallet.getAddress(0);
-  transfer.amount = alice.getActualBalance() - currency.minimumFee();
-  alice.transfer(aliceAddress, transfer, currency.minimumFee(), 0);
+  CryptoNote::WalletOrder order;
+  order.address = wallet.getAddress(0);
+  order.amount = alice.getActualBalance() - currency.minimumFee();
+  alice.transfer(aliceAddress, order, currency.minimumFee(), 0);
 
   auto pending = wallet.getPendingBalance();
   node.updateObservers();
@@ -1851,3 +1946,123 @@ TEST_F(WalletApi, fusionManagerIsFusionTransactionSpent) {
   ASSERT_TRUE(alice.isFusionTransaction(id));
 }
 
+size_t findDonationTransferId(const WalletGreen& wallet, size_t transactionId) {
+  for (size_t i = 0; i < wallet.getTransactionTransferCount(transactionId); ++i) {
+    if (wallet.getTransactionTransfer(transactionId, i).type == WalletTransferType::DONATION) {
+      return i;
+    }
+  }
+
+  return WALLET_INVALID_TRANSFER_ID;
+}
+
+TEST_F(WalletApi, donationTransferPresents) {
+  const uint64_t DONATION_THRESHOLD = 1000000;
+
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE + DONATION_THRESHOLD);
+  unlockMoney();
+
+  auto transactionId = sendMoneyWithDonation(RANDOM_ADDRESS, SENT, FEE, RANDOM_ADDRESS, DONATION_THRESHOLD);
+
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, transactionId);
+
+  auto donationTransferId = findDonationTransferId(alice, transactionId);
+  ASSERT_NE(WALLET_INVALID_TRANSFER_ID, donationTransferId);
+
+  auto donationTransfer = alice.getTransactionTransfer(transactionId, donationTransferId);
+  ASSERT_EQ(WalletTransferType::DONATION, donationTransfer.type);
+  ASSERT_EQ(-static_cast<int64_t>(DONATION_THRESHOLD), donationTransfer.amount);
+  ASSERT_EQ(RANDOM_ADDRESS, donationTransfer.address);
+}
+
+TEST_F(WalletApi, donationDidntHappenIfNotEnoughMoney) {
+  const uint64_t DONATION_THRESHOLD = 1000000;
+
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE);
+  unlockMoney();
+
+  auto transactionId = sendMoneyWithDonation(RANDOM_ADDRESS, SENT, FEE, RANDOM_ADDRESS, DONATION_THRESHOLD);
+  ASSERT_NE(WALLET_INVALID_TRANSACTION_ID, transactionId);
+  ASSERT_EQ(WALLET_INVALID_TRANSFER_ID, findDonationTransferId(alice, transactionId));
+}
+
+TEST_F(WalletApi, donationThrowsIfAddressEmpty) {
+  const uint64_t DONATION_THRESHOLD = 1000000;
+
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE + DONATION_THRESHOLD);
+  unlockMoney();
+
+  TransactionParameters params;
+  params.destinations.push_back({RANDOM_ADDRESS, SENT});
+  params.fee = FEE;
+  params.donation.threshold = DONATION_THRESHOLD;
+
+  ASSERT_ANY_THROW(alice.transfer(params));
+}
+
+TEST_F(WalletApi, donationThrowsIfThresholdZero) {
+  const uint64_t DONATION_THRESHOLD = 1000000;
+
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE + DONATION_THRESHOLD);
+  unlockMoney();
+
+  TransactionParameters params;
+  params.destinations.push_back({RANDOM_ADDRESS, SENT});
+  params.fee = FEE;
+  params.donation.address = RANDOM_ADDRESS;
+  params.donation.threshold = 0;
+
+  ASSERT_ANY_THROW(alice.transfer(params));
+}
+
+TEST_F(WalletApi, donationTransactionHaveCorrectFee) {
+  CatchTransactionNodeStub catchNode(generator);
+  CryptoNote::WalletGreen wallet(dispatcher, currency, catchNode);
+  wallet.initialize("pass");
+  wallet.createAddress();
+
+  const uint64_t DONATION_THRESHOLD = 1000000;
+
+  generator.getSingleOutputTransaction(parseAddress(wallet.getAddress(0)), SENT + FEE + DONATION_THRESHOLD);
+  unlockMoney(wallet, catchNode);
+
+  TransactionParameters params;
+  params.destinations.push_back({RANDOM_ADDRESS, SENT});
+  params.fee = FEE;
+  params.donation.address = RANDOM_ADDRESS;
+  params.donation.threshold = DONATION_THRESHOLD;
+
+  wallet.transfer(params);
+
+  ASSERT_TRUE(catchNode.caught);
+  ASSERT_EQ(FEE, getInputAmount(catchNode.transaction) - getOutputAmount(catchNode.transaction));
+
+  wallet.shutdown();
+}
+
+TEST_F(WalletApi, donationSerialization) {
+  const uint64_t DONATION_THRESHOLD = 1000000;
+
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE + DONATION_THRESHOLD);
+  unlockMoney();
+
+  sendMoneyWithDonation(RANDOM_ADDRESS, SENT, FEE, RANDOM_ADDRESS, DONATION_THRESHOLD);
+
+  std::stringstream data;
+  alice.save(data, true, true);
+
+  WalletGreen bob(dispatcher, currency, node, TRANSACTION_SOFTLOCK_TIME);
+  bob.load(data, "pass");
+
+  compareWalletsTransactionTransfers(alice, bob);
+  bob.shutdown();
+}
+
+TEST_F(WalletApi, transferThrowsIfDonationThresholdTooBig) {
+  const uint64_t DONATION_THRESHOLD = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1;
+
+  generator.getSingleOutputTransaction(parseAddress(aliceAddress), SENT + FEE);
+  unlockMoney();
+
+  ASSERT_ANY_THROW(sendMoneyWithDonation(RANDOM_ADDRESS, SENT, FEE, RANDOM_ADDRESS, DONATION_THRESHOLD));
+}

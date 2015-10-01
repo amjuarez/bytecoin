@@ -92,7 +92,7 @@ private:
   enum class UpdateConsumersResult {
     nothingChanged = 0,
     addedNewBlocks = 1,
-    errorOccured = 2
+    errorOccurred = 2
   };
 
   //void startSync();

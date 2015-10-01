@@ -158,7 +158,7 @@ void readVarint(IInputStream& in, uint64_t& value) {
       throw std::runtime_error("readVarint, value overflow");
     }
 
-    temp |= static_cast<size_t>(piece & 0x7f) << shift;
+    temp |= static_cast<uint64_t>(piece & 0x7f) << shift;
     if ((piece & 0x80) == 0) {
       if (piece == 0 && shift != 0) {
         throw std::runtime_error("readVarint, invalid value representation");
