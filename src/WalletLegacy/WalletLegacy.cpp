@@ -595,6 +595,9 @@ void WalletLegacy::notifyIfBalanceChanged() {
 
 }
 
+void WalletLegacy::syncAll(bool syncWalletFromZero) {
+  m_syncAll = syncWalletFromZero;
+}
 void WalletLegacy::getAccountKeys(AccountKeys& keys) {
   if (m_state == NOT_INITIALIZED) {
     throw std::system_error(make_error_code(CryptoNote::error::NOT_INITIALIZED));

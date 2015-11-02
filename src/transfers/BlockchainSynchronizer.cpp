@@ -372,7 +372,7 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
     lk.unlock();
 
     switch (result) {
-    case UpdateConsumersResult::errorOccured:
+    case UpdateConsumersResult::errorOccurred:
       if (setFutureStateIf(State::idle, std::bind(
         [](State futureState) -> bool {
         return futureState != State::stopped;
@@ -437,7 +437,7 @@ BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateCons
           static_cast<uint32_t>(interval.blocks.size()) - startOffset);
         smthChanged = true;
       } else {
-        return UpdateConsumersResult::errorOccured;
+        return UpdateConsumersResult::errorOccurred;
       }
     }
   }

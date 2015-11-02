@@ -1049,7 +1049,7 @@ TEST_F(BcSTest, checkBlocksRequesting) {
   });
 
 
-  uint32_t blocksExpected = 20;
+  size_t blocksExpected = 20;
 
   generator.generateEmptyBlocks(blocksExpected - 1); //-1 for genesis
   m_node.setGetNewBlocksLimit(3);
@@ -1085,7 +1085,7 @@ TEST_F(BcSTest, checkConsumerHeightReceived) {
 
   uint32_t firstlySnchronizedHeight = 20;
 
-  generator.generateEmptyBlocks(firstlySnchronizedHeight - 1);//-1 for genesis
+  generator.generateEmptyBlocks(static_cast<size_t>(firstlySnchronizedHeight - 1));//-1 for genesis
   m_node.setGetNewBlocksLimit(50);
 
   c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, size_t) -> bool {

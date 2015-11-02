@@ -26,13 +26,13 @@ namespace PaymentService {
 class NodeRpcStub: public CryptoNote::INode {
 public:
   virtual ~NodeRpcStub() {}
-  virtual bool addObserver(CryptoNote::INodeObserver* observer) { return true; }
-  virtual bool removeObserver(CryptoNote::INodeObserver* observer) { return true; }
+  virtual bool addObserver(CryptoNote::INodeObserver* observer) override { return true; }
+  virtual bool removeObserver(CryptoNote::INodeObserver* observer) override { return true; }
 
-  virtual void init(const Callback& callback) { }
-  virtual bool shutdown() { return true; }
+  virtual void init(const Callback& callback) override { }
+  virtual bool shutdown() override { return true; }
 
-  virtual size_t getPeerCount() const { return 0; }
+  virtual size_t getPeerCount() const override { return 0; }
   virtual uint32_t getLastLocalBlockHeight() const override { return 0; }
   virtual uint32_t getLastKnownBlockHeight() const override { return 0; }
   virtual uint32_t getLocalBlockCount() const override { return 0; }
@@ -56,7 +56,7 @@ public:
   };
 
   virtual void getPoolSymmetricDifference(std::vector<Crypto::Hash>&& knownPoolTxIds, Crypto::Hash knownBlockId, bool& isBcActual,
-          std::vector<std::unique_ptr<CryptoNote::ITransactionReader>>& newTxs, std::vector<Crypto::Hash>& deletedTxIds, const Callback& callback) {
+          std::vector<std::unique_ptr<CryptoNote::ITransactionReader>>& newTxs, std::vector<Crypto::Hash>& deletedTxIds, const Callback& callback) override {
     isBcActual = true;
     callback(std::error_code());
   }

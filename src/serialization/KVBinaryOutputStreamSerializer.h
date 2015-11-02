@@ -32,7 +32,7 @@ public:
 
   void dump(Common::IOutputStream& target);
 
-  virtual ISerializer::SerializerType type() const;
+  virtual ISerializer::SerializerType type() const override;
 
   virtual bool beginObject(Common::StringView name) override;
   virtual void endObject() override;

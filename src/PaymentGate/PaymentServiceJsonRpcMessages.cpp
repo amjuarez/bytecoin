@@ -127,6 +127,7 @@ void TransactionRpcInfo::serialize(CryptoNote::ISerializer& serializer) {
   serializer(fee, "fee");
   serializer(hash, "hash");
   serializer(blockHeight, "block_height");
+  serializer(state, "state");
   serializer(timestamp, "timestamp");
   serializer(extra, "extra");
   serializer(transfers, "transfers");
@@ -154,6 +155,7 @@ void ListTransactionsResponse::serialize(CryptoNote::ISerializer& serializer) {
 }
 
 void TransferRpcInfo::serialize(CryptoNote::ISerializer& serializer) {
+  serializer(type, "type");
   serializer(address, "address");
   serializer(amount, "amount");
 }

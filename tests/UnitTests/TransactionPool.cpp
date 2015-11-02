@@ -701,7 +701,8 @@ const size_t TEST_TX_COUNT_UP_TO_MEDIAN = 10;
 const size_t TEST_MAX_TX_COUNT_PER_BLOCK = TEST_TX_COUNT_UP_TO_MEDIAN * 125 / 100;
 const size_t TEST_TRANSACTION_SIZE = 2000;
 const size_t TEST_FUSION_TX_MAX_SIZE = TEST_FUSION_TX_COUNT_PER_BLOCK * TEST_TRANSACTION_SIZE;
-const size_t TEST_MEDIAN_SIZE = TEST_TX_COUNT_UP_TO_MEDIAN * TEST_TRANSACTION_SIZE;
+const size_t TEST_MINER_TX_BLOB_RESERVED_SIZE = 600;
+const size_t TEST_MEDIAN_SIZE = TEST_TX_COUNT_UP_TO_MEDIAN * TEST_TRANSACTION_SIZE + TEST_MINER_TX_BLOB_RESERVED_SIZE;
 
 Transaction createTestFusionTransaction(const Currency& currency) {
   FusionTransactionBuilder builder(currency, 30 * currency.defaultDustThreshold());

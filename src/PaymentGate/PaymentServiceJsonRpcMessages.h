@@ -137,6 +137,7 @@ struct GetTransactionRequest {
 };
 
 struct TransferRpcInfo {
+  uint8_t type;
   std::string address;
   int64_t amount;
 
@@ -152,6 +153,7 @@ struct TransactionRpcInfo {
   uint64_t blockHeight;
   uint64_t timestamp;
   std::string extra;
+  uint8_t state;
   std::vector<TransferRpcInfo> transfers;
 
   void serialize(CryptoNote::ISerializer& serializer);

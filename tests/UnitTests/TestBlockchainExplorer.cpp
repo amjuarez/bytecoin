@@ -1103,7 +1103,7 @@ TEST_F(BlockchainExplorerTests, getBlocksByTimestampNotInited) {
 }
 
 TEST_F(BlockchainExplorerTests, generatedTransactions) {
-  const uint32_t NUMBER_OF_BLOCKS = 10;
+  const size_t NUMBER_OF_BLOCKS = 10;
   const size_t POOL_TX_NUMBER = 10;
   std::vector<uint32_t> blockHeights;
   for (uint32_t i = 0; i < NUMBER_OF_BLOCKS + 3; ++i) {

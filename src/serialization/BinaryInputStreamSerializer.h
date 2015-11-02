@@ -28,7 +28,7 @@ public:
   BinaryInputStreamSerializer(Common::IInputStream& strm) : stream(strm) {}
   virtual ~BinaryInputStreamSerializer() {}
 
-  virtual ISerializer::SerializerType type() const;
+  virtual ISerializer::SerializerType type() const override;
 
   virtual bool beginObject(Common::StringView name) override;
   virtual void endObject() override;

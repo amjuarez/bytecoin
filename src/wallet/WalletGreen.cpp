@@ -153,6 +153,64 @@ size_t getTransactionSize(const ITransactionReader& transaction) {
   return transaction.getTransactionData().size();
 }
 
+std::vector<WalletTransfer> convertOrdersToTransfer(const std::vector<WalletOrder>& orders) {
+  std::vector<WalletTransfer> transfers;
+  transfers.reserve(orders.size());
+
+  for (const auto& order: orders) {
+    WalletTransfer transfer;
+
+    if (order.amount > std::numeric_limits<int64_t>::max()) {
+      throw std::system_error(make_error_code(CryptoNote::error::WRONG_AMOUNT),
+        "Order amount must not exceed " + std::to_string(std::numeric_limits<decltype(transfer.amount)>::max()));
+    }
+
+    transfer.type = WalletTransferType::USUAL;
+    transfer.address = order.address;
+    transfer.amount = static_cast<int64_t>(order.amount);
+
+    transfers.emplace_back(std::move(transfer));
+  }
+
+  return transfers;
+}
+
+uint64_t calculateDonationAmount(uint64_t freeAmount, uint64_t donationThreshold, uint64_t dustThreshold) {
+  std::vector<uint64_t> decomposedAmounts;
+  decomposeAmount(freeAmount, dustThreshold, decomposedAmounts);
+
+  std::sort(decomposedAmounts.begin(), decomposedAmounts.end(), std::greater<uint64_t>());
+
+  uint64_t donationAmount = 0;
+  for (auto amount: decomposedAmounts) {
+    if (amount > donationThreshold - donationAmount) {
+      continue;
+    }
+
+    donationAmount += amount;
+  }
+
+  assert(donationAmount <= freeAmount);
+  return donationAmount;
+}
+
+uint64_t pushDonationTransferIfPossible(const DonationSettings& donation, uint64_t freeAmount, uint64_t dustThreshold, std::vector<WalletTransfer>& destinations) {
+  uint64_t donationAmount = 0;
+  if (!donation.address.empty() && donation.threshold != 0) {
+    if (donation.threshold > std::numeric_limits<int64_t>::max()) {
+      throw std::system_error(make_error_code(error::WRONG_AMOUNT),
+        "Donation threshold must not exceed " + std::to_string(std::numeric_limits<int64_t>::max()));
+    }
+
+    donationAmount = calculateDonationAmount(freeAmount, donation.threshold, dustThreshold);
+    if (donationAmount != 0) {
+      destinations.emplace_back(WalletTransfer {WalletTransferType::DONATION, donation.address, static_cast<int64_t>(donationAmount)});
+    }
+  }
+
+  return donationAmount;
+}
+
 }
 
 namespace CryptoNote {
@@ -163,7 +221,7 @@ WalletGreen::WalletGreen(System::Dispatcher& dispatcher, const Currency& currenc
   m_node(node),
   m_blockchainSynchronizer(node, currency.genesisBlockHash()),
   m_synchronizer(currency, m_blockchainSynchronizer, node),
-  m_eventOccured(m_dispatcher),
+  m_eventOccurred(m_dispatcher),
   m_readyEvent(m_dispatcher),
   m_transactionSoftLockTime(transactionSoftLockTime)
 {
@@ -549,9 +607,7 @@ WalletTransfer WalletGreen::getTransactionTransfer(size_t transactionIndex, size
     throw std::system_error(std::make_error_code(std::errc::invalid_argument));
   }
 
-  auto it = bounds.first;
-  std::advance(it, transferIndex);
-  return it->second;
+  return std::next(bounds.first, transferIndex)->second;
 }
 
 std::pair<WalletTransfers::const_iterator, WalletTransfers::const_iterator> WalletGreen::getTransactionTransfers(
@@ -566,73 +622,111 @@ std::pair<WalletTransfers::const_iterator, WalletTransfers::const_iterator> Wall
   return bounds;
 }
 
-size_t WalletGreen::transfer(const WalletTransfer& destination,
-  uint64_t fee,
-  uint64_t mixIn,
-  std::string const& extra,
-  uint64_t unlockTimestamp)
-{
-  std::vector<WalletTransfer> destinations { destination };
-  return transfer(destinations, fee, mixIn, extra, unlockTimestamp);
-}
-
-size_t WalletGreen::transfer(
-  const std::vector<WalletTransfer>& destinations,
+size_t WalletGreen::transfer(const WalletOrder& destination,
   uint64_t fee,
   uint64_t mixIn,
   const std::string& extra,
   uint64_t unlockTimestamp) {
 
-  System::EventLock lk(m_readyEvent);
+  TransactionParameters transactionParameters;
+  transactionParameters.destinations.emplace_back(destination);
+  transactionParameters.fee = fee;
+  transactionParameters.mixIn = mixIn;
+  transactionParameters.extra = extra;
+  transactionParameters.unlockTimestamp = unlockTimestamp;
 
-  throwIfNotInitialized();
-  throwIfStopped();
-  throwIfTrackingMode();
+  return transfer(transactionParameters);
+}
 
-  return doTransfer(pickWalletsWithMoney(), destinations, fee, mixIn, extra, unlockTimestamp);
+size_t WalletGreen::transfer(
+  const std::vector<WalletOrder>& destinations,
+  uint64_t fee,
+  uint64_t mixIn,
+  const std::string& extra,
+  uint64_t unlockTimestamp) {
+
+  TransactionParameters transactionParameters;
+  transactionParameters.destinations = destinations;
+  transactionParameters.fee = fee;
+  transactionParameters.mixIn = mixIn;
+  transactionParameters.extra = extra;
+  transactionParameters.unlockTimestamp = unlockTimestamp;
+
+  return transfer(transactionParameters);
 }
 
 size_t WalletGreen::transfer(
     const std::string& sourceAddress,
-    const WalletTransfer& destination,
+    const WalletOrder& destination,
     uint64_t fee,
     uint64_t mixIn,
     std::string const& extra,
     uint64_t unlockTimestamp) {
-  std::vector<WalletTransfer> destinations { destination };
-  return transfer(sourceAddress, destinations, fee, mixIn, extra, unlockTimestamp);
+
+  TransactionParameters transactionParameters;
+  transactionParameters.sourceAddress = sourceAddress;
+  transactionParameters.destinations.emplace_back(destination);
+  transactionParameters.fee = fee;
+  transactionParameters.mixIn = mixIn;
+  transactionParameters.extra = extra;
+  transactionParameters.unlockTimestamp = unlockTimestamp;
+
+  return transfer(transactionParameters);
 }
 
 size_t WalletGreen::transfer(
     const std::string& sourceAddress,
-    const std::vector<WalletTransfer>& destinations,
+    const std::vector<WalletOrder>& destinations,
     uint64_t fee,
     uint64_t mixIn,
     const std::string& extra,
     uint64_t unlockTimestamp) {
+
+  TransactionParameters transactionParameters;
+  transactionParameters.sourceAddress = sourceAddress;
+  transactionParameters.destinations = destinations;
+  transactionParameters.fee = fee;
+  transactionParameters.mixIn = mixIn;
+  transactionParameters.extra = extra;
+  transactionParameters.unlockTimestamp = unlockTimestamp;
+
+  return transfer(transactionParameters);
+}
+
+size_t WalletGreen::transfer(const TransactionParameters& transactionParameters) {
   System::EventLock lk(m_readyEvent);
 
   throwIfNotInitialized();
-  throwIfStopped();
   throwIfTrackingMode();
+  throwIfStopped();
 
-  WalletOuts wallet = pickWallet(sourceAddress);
   std::vector<WalletOuts> wallets;
-
-  if (!wallet.outs.empty()) {
-    wallets.push_back(wallet);
+  if (!transactionParameters.sourceAddress.empty()) {
+    WalletOuts wallet = pickWallet(transactionParameters.sourceAddress);
+    if (!wallet.outs.empty()) {
+      wallets.emplace_back(std::move(wallet));
+    }
+  } else {
+    wallets = pickWalletsWithMoney();
   }
 
-  return doTransfer(std::move(wallets), destinations, fee, mixIn, extra, unlockTimestamp);
+  return doTransfer(std::move(wallets),
+    transactionParameters.destinations,
+    transactionParameters.fee,
+    transactionParameters.mixIn,
+    transactionParameters.extra,
+    transactionParameters.unlockTimestamp,
+    transactionParameters.donation);
 }
 
 size_t WalletGreen::doTransfer(std::vector<WalletOuts>&& wallets,
-    const std::vector<WalletTransfer>& destinations,
+    const std::vector<WalletOrder>& orders,
     uint64_t fee,
     uint64_t mixIn,
     const std::string& extra,
-    uint64_t unlockTimestamp) {
-  if (destinations.empty()) {
+    uint64_t unlockTimestamp,
+    const DonationSettings& donation) {
+  if (orders.empty()) {
     throw std::system_error(make_error_code(error::ZERO_DESTINATION));
   }
 
@@ -640,6 +734,11 @@ size_t WalletGreen::doTransfer(std::vector<WalletOuts>&& wallets,
     throw std::system_error(make_error_code(error::FEE_TOO_SMALL));
   }
 
+  if (donation.address.empty() ^ (donation.threshold == 0)) {
+    throw std::system_error(make_error_code(error::WRONG_PARAMETERS), "DonationSettings must have both address and threshold parameters filled");
+  }
+
+  std::vector<WalletTransfer> destinations = convertOrdersToTransfer(orders);
   validateAddresses(destinations, m_currency);
 
   uint64_t neededMoney = countNeededMoney(destinations, fee);
@@ -661,16 +760,19 @@ size_t WalletGreen::doTransfer(std::vector<WalletOuts>&& wallets,
   std::vector<InputInfo> keysInfo;
   prepareInputs(selectedTransfers, mixinResult, mixIn, keysInfo);
 
-  WalletTransfer changeDestination;
-  changeDestination.address = m_currency.accountAddressAsString({ m_walletsContainer.get<RandomAccessIndex>()[0].spendPublicKey, m_viewPublicKey });
-  changeDestination.amount = foundMoney - neededMoney;
+  uint64_t donationAmount = pushDonationTransferIfPossible(donation, foundMoney - neededMoney, m_currency.defaultDustThreshold(), destinations);
+  uint64_t changeAmount = foundMoney - neededMoney - donationAmount;
 
-  std::vector<ReceiverAmounts> decomposedOutputs;
-  splitDestinations(destinations, changeDestination, m_currency.defaultDustThreshold(), m_currency, decomposedOutputs);
+  std::vector<ReceiverAmounts> decomposedOutputs = splitDestinations(destinations, m_currency.defaultDustThreshold(), m_currency);
+  if (changeAmount != 0) {
+    CryptoNote::AccountPublicAddress changeDestination = { m_walletsContainer.get<RandomAccessIndex>()[0].spendPublicKey, m_viewPublicKey };
+    auto splittedChange = splitAmount(changeAmount, changeDestination, m_currency.defaultDustThreshold());
+    decomposedOutputs.emplace_back(std::move(splittedChange));
+  }
 
   std::unique_ptr<ITransaction> tx = makeTransaction(decomposedOutputs, keysInfo, extra, unlockTimestamp);
 
-  size_t txId = insertOutgoingTransaction(tx->getTransactionHash(), -static_cast<int64_t>(neededMoney), fee, tx->getExtra(), unlockTimestamp);
+  size_t txId = insertOutgoingTransactionAndPushEvent(tx->getTransactionHash(), -static_cast<int64_t>(neededMoney), fee, tx->getExtra(), unlockTimestamp);
   pushBackOutgoingTransfers(txId, destinations);
   m_fusionTxsCache.emplace(txId, false);
 
@@ -679,34 +781,34 @@ size_t WalletGreen::doTransfer(std::vector<WalletOuts>&& wallets,
   try {
     sendTransaction(tx.get());
   } catch (std::exception&) {
+    updateTransactionStateAndPushEvent(txId, WalletTransactionState::FAILED);
     deleteSpentOutputs(tx->getTransactionHash());
-    pushEvent(makeTransactionCreatedEvent(txId));
     throw;
   }
 
-  auto txIt = m_transactions.get<RandomAccessIndex>().begin();
-  std::advance(txIt, txId);
-  m_transactions.get<RandomAccessIndex>().modify(txIt,
-    [] (WalletTransaction& tx) { tx.state = WalletTransactionState::SUCCEEDED; });
-
-  m_change[tx->getTransactionHash()] = changeDestination.amount;
+  m_change[tx->getTransactionHash()] = changeAmount;
+  updateTransactionStateAndPushEvent(txId, WalletTransactionState::SUCCEEDED);
   updateUsedWalletsBalances(selectedTransfers);
-
-  pushEvent(makeTransactionCreatedEvent(txId));
 
   return txId;
 }
 
-void WalletGreen::pushBackOutgoingTransfers(size_t txId, const std::vector<WalletTransfer> &destinations) {
+void WalletGreen::pushBackOutgoingTransfers(size_t txId, const std::vector<WalletTransfer>& destinations) {
   for (const auto& dest: destinations) {
-    WalletTransfer d { dest.address, -dest.amount };
+    WalletTransfer d;
+    d.type = dest.type;
+    d.address = dest.address;
+    d.amount = -dest.amount;
+
     m_transfers.push_back(std::make_pair(txId, d));
   }
 }
 
-size_t WalletGreen::insertOutgoingTransaction(const Hash& transactionHash, int64_t totalAmount, uint64_t fee, const BinaryArray& extra, uint64_t unlockTimestamp) {
+size_t WalletGreen::insertOutgoingTransactionAndPushEvent(const Hash& transactionHash,
+  int64_t totalAmount, uint64_t fee, const BinaryArray& extra, uint64_t unlockTimestamp) {
+
   WalletTransaction insertTx;
-  insertTx.state = WalletTransactionState::FAILED;
+  insertTx.state = WalletTransactionState::CREATED;
   insertTx.creationTime = static_cast<uint64_t>(time(nullptr));
   insertTx.unlockTime = unlockTimestamp;
   insertTx.blockHeight = CryptoNote::WALLET_UNCONFIRMED_TRANSACTION_HEIGHT;
@@ -720,59 +822,67 @@ size_t WalletGreen::insertOutgoingTransaction(const Hash& transactionHash, int64
   size_t txId = m_transactions.get<RandomAccessIndex>().size();
   m_transactions.get<RandomAccessIndex>().push_back(std::move(insertTx));
 
+  pushEvent(makeTransactionCreatedEvent(txId));
+
   return txId;
 }
 
-bool WalletGreen::transactionExists(const Hash& hash) {
-  auto& hashIndex = m_transactions.get<TransactionIndex>();
-  auto it = hashIndex.find(hash);
-  return it != hashIndex.end();
-}
+void WalletGreen::updateTransactionStateAndPushEvent(size_t transactionId, WalletTransactionState state) {
+  auto it = std::next(m_transactions.get<RandomAccessIndex>().begin(), transactionId);
 
-bool WalletGreen::updateWalletTransactionInfo(const Hash& hash, const CryptoNote::TransactionInformation& info) {
-  auto& hashIndex = m_transactions.get<TransactionIndex>();
-
-  bool updated = false;
-  auto it = hashIndex.find(hash);
-  if (it != hashIndex.end()) {
-    bool r = hashIndex.modify(it, [&info, &updated] (WalletTransaction& transaction) {
-        if (transaction.blockHeight != info.blockHeight) {
-          transaction.blockHeight = info.blockHeight;
-          updated = true;
-        }
-
-        if (transaction.timestamp != info.timestamp) {
-          transaction.timestamp = info.timestamp;
-          updated = true;
-        }
-
-        if (transaction.state != WalletTransactionState::SUCCEEDED) {
-          //transaction may be deleted first then added again
-          transaction.state = WalletTransactionState::SUCCEEDED;
-          updated = true;
-        }
-
-        // Fix LegacyWallet error. Some old versions didn't fill extra field
-        if (transaction.extra.empty() && !info.extra.empty()) {
-          transaction.extra = Common::asString(info.extra);
-          updated = true;
-        }
-
-        bool isBase = info.totalAmountIn == 0;
-        if (transaction.isBase != isBase) {
-          transaction.isBase = isBase;
-          updated = true;
-        }
+  if (it->state != state) {
+    m_transactions.get<RandomAccessIndex>().modify(it, [state](WalletTransaction& tx) {
+      tx.state = state;
     });
 
-    assert(r);
-    return updated;
+    pushEvent(makeTransactionUpdatedEvent(transactionId));
   }
-
-  throw std::system_error(make_error_code(std::errc::invalid_argument));
 }
 
-size_t WalletGreen::insertBlockchainTransaction(const TransactionInformation& info, int64_t txBalance) {
+void WalletGreen::updateWalletTransactionInfoAndPushEvent(size_t transactionId, const CryptoNote::TransactionInformation& info, bool transfersUpdated) {
+  auto& txIdIndex = m_transactions.get<RandomAccessIndex>();
+  assert(transactionId < txIdIndex.size());
+  auto it = std::next(txIdIndex.begin(), transactionId);
+
+  bool updated = false;
+  bool r = txIdIndex.modify(it, [&info, &updated](WalletTransaction& transaction) {
+    if (transaction.blockHeight != info.blockHeight) {
+      transaction.blockHeight = info.blockHeight;
+      updated = true;
+    }
+
+    if (transaction.timestamp != info.timestamp) {
+      transaction.timestamp = info.timestamp;
+      updated = true;
+    }
+
+    if (transaction.state != WalletTransactionState::SUCCEEDED) {
+      //transaction may be deleted first then added again
+      transaction.state = WalletTransactionState::SUCCEEDED;
+      updated = true;
+    }
+
+    // Fix LegacyWallet error. Some old versions didn't fill extra field
+    if (transaction.extra.empty() && !info.extra.empty()) {
+      transaction.extra = Common::asString(info.extra);
+      updated = true;
+    }
+
+    bool isBase = info.totalAmountIn == 0;
+    if (transaction.isBase != isBase) {
+      transaction.isBase = isBase;
+      updated = true;
+    }
+  });
+
+  assert(r);
+
+  if (updated || transfersUpdated) {
+    pushEvent(makeTransactionUpdatedEvent(transactionId));
+  }
+}
+
+size_t WalletGreen::insertBlockchainTransactionAndPushEvent(const TransactionInformation& info, int64_t txBalance) {
   auto& index = m_transactions.get<RandomAccessIndex>();
 
   WalletTransaction tx;
@@ -787,8 +897,12 @@ size_t WalletGreen::insertBlockchainTransaction(const TransactionInformation& in
   tx.creationTime = info.timestamp;
   tx.isBase = info.totalAmountIn == 0;
 
+  size_t txId = index.size();
   index.push_back(std::move(tx));
-  return index.size() - 1;
+
+  pushEvent(makeTransactionCreatedEvent(txId));
+
+  return txId;
 }
 
 void WalletGreen::insertIncomingTransfer(size_t txId, const std::string& address, int64_t amount) {
@@ -796,7 +910,7 @@ void WalletGreen::insertIncomingTransfer(size_t txId, const std::string& address
     return val < a.first;
   });
 
-  WalletTransfer tr { address, amount };
+  WalletTransfer tr { WalletTransferType::USUAL, address, amount };
   m_transfers.insert(it, std::make_pair(txId, std::move(tr)));
 }
 
@@ -805,10 +919,21 @@ std::unique_ptr<CryptoNote::ITransaction> WalletGreen::makeTransaction(const std
 
   std::unique_ptr<ITransaction> tx = createTransaction();
 
+  typedef std::pair<const AccountPublicAddress*, uint64_t> AmountToAddress;
+  std::vector<AmountToAddress> amountsToAddresses;
   for (const auto& output: decomposedOutputs) {
     for (auto amount: output.amounts) {
-      tx->addOutput(amount, output.receiver);
+      amountsToAddresses.emplace_back(AmountToAddress{&output.receiver, amount});
     }
+  }
+
+  std::shuffle(amountsToAddresses.begin(), amountsToAddresses.end(), std::default_random_engine{Crypto::rand<std::default_random_engine::result_type>()});
+  std::sort(amountsToAddresses.begin(), amountsToAddresses.end(), [] (const AmountToAddress& left, const AmountToAddress& right) {
+    return left.second < right.second;
+  });
+
+  for (const auto& amountToAddress: amountsToAddresses) {
+    tx->addOutput(amountToAddress.second, *amountToAddress.first);
   }
 
   tx->setUnlockTime(unlockTimestamp);
@@ -984,26 +1109,30 @@ WalletGreen::WalletOuts WalletGreen::pickWallet(const std::string& address) {
   return outs;
 }
 
-void WalletGreen::splitDestinations(const std::vector<CryptoNote::WalletTransfer>& destinations,
-  const CryptoNote::WalletTransfer& changeDestination,
+std::vector<CryptoNote::WalletGreen::ReceiverAmounts> WalletGreen::splitDestinations(const std::vector<CryptoNote::WalletTransfer>& destinations,
   uint64_t dustThreshold,
-  const CryptoNote::Currency& currency,
-  std::vector<ReceiverAmounts>& decomposedOutputs) {
+  const CryptoNote::Currency& currency) {
 
+  std::vector<ReceiverAmounts> decomposedOutputs;
   for (const auto& destination: destinations) {
-    ReceiverAmounts receiverAmounts;
-
-    parseAddressString(destination.address, currency, receiverAmounts.receiver);
-    decomposeAmount(destination.amount, dustThreshold, receiverAmounts.amounts);
-
-    decomposedOutputs.push_back(std::move(receiverAmounts));
+    AccountPublicAddress address;
+    parseAddressString(destination.address, currency, address);
+    decomposedOutputs.push_back(splitAmount(destination.amount, address, dustThreshold));
   }
 
-  ReceiverAmounts changeAmounts;
-  parseAddressString(changeDestination.address, currency, changeAmounts.receiver);
-  decomposeAmount(changeDestination.amount, dustThreshold, changeAmounts.amounts);
+  return decomposedOutputs;
+}
 
-  decomposedOutputs.push_back(std::move(changeAmounts));
+CryptoNote::WalletGreen::ReceiverAmounts WalletGreen::splitAmount(
+  uint64_t amount,
+  const AccountPublicAddress& destination,
+  uint64_t dustThreshold) {
+
+  ReceiverAmounts receiverAmounts;
+
+  receiverAmounts.receiver = destination;
+  decomposeAmount(amount, dustThreshold, receiverAmounts.amounts);
+  return receiverAmounts;
 }
 
 void WalletGreen::prepareInputs(
@@ -1067,7 +1196,7 @@ void WalletGreen::start() {
 
 void WalletGreen::stop() {
   m_stopped = true;
-  m_eventOccured.set();
+  m_eventOccurred.set();
 }
 
 WalletEvent WalletGreen::getEvent() {
@@ -1075,8 +1204,8 @@ WalletEvent WalletGreen::getEvent() {
   throwIfStopped();
 
   while(m_events.empty()) {
-    m_eventOccured.wait();
-    m_eventOccured.clear();
+    m_eventOccurred.wait();
+    m_eventOccurred.clear();
     throwIfStopped();
   }
 
@@ -1161,25 +1290,23 @@ void WalletGreen::transactionUpdated(ITransfersSubscription* object, const Hash&
   int64_t txBalance;
   bool found = container->getTransactionInformation(transactionHash, info, txBalance);
   assert(found);
+  bool addTransfer = txBalance > 0;
 
-  if (transactionExists(info.transactionHash)) {
-    bool updated = updateWalletTransactionInfo(info.transactionHash, info);
+  auto& hashIndex = m_transactions.get<TransactionIndex>();
+  auto it = hashIndex.find(info.transactionHash);
 
-    auto id = getTransactionId(info.transactionHash);
-
-    if (updated) {
-      pushEvent(makeTransactionUpdatedEvent(id));
-    }
+  size_t transactionId;
+  if (it != hashIndex.end()) {
+    transactionId = std::distance(m_transactions.get<RandomAccessIndex>().begin(), m_transactions.project<RandomAccessIndex>(it));
+    updateWalletTransactionInfoAndPushEvent(transactionId, info, addTransfer);
   } else {
-    auto id = insertBlockchainTransaction(info, txBalance);
-    if (txBalance > 0) {
-      AccountPublicAddress walletAddress{ getWalletRecord(container).spendPublicKey, m_viewPublicKey };
-      insertIncomingTransfer(id, m_currency.accountAddressAsString(walletAddress), txBalance);
-    }
+    transactionId = insertBlockchainTransactionAndPushEvent(info, txBalance);
+    m_fusionTxsCache.emplace(transactionId, isFusionTransaction(m_transactions.get<RandomAccessIndex>()[transactionId]));
+  }
 
-    m_fusionTxsCache.emplace(id, isFusionTransaction(m_transactions.get<RandomAccessIndex>()[id]));
-
-    pushEvent(makeTransactionCreatedEvent(id));
+  if (addTransfer) {
+    AccountPublicAddress walletAddress{ getWalletRecord(container).spendPublicKey, m_viewPublicKey };
+    insertIncomingTransfer(transactionId, m_currency.accountAddressAsString(walletAddress), txBalance);
   }
 
   m_change.erase(transactionHash);
@@ -1194,7 +1321,7 @@ void WalletGreen::transactionUpdated(ITransfersSubscription* object, const Hash&
 
 void WalletGreen::pushEvent(const WalletEvent& event) {
   m_events.push(event);
-  m_eventOccured.set();
+  m_eventOccurred.set();
 }
 
 size_t WalletGreen::getTransactionId(const Hash& transactionHash) const {
@@ -1393,9 +1520,9 @@ size_t WalletGreen::createFusionTransaction(uint64_t threshold, uint64_t mixin) 
   System::EventLock lk(m_readyEvent);
 
   throwIfNotInitialized();
+  throwIfTrackingMode();
   throwIfStopped();
 
-  //TODO: check if wallet is not in tracking mode
   const size_t MAX_FUSION_OUTPUT_COUNT = 4;
 
   if (threshold <= m_currency.defaultDustThreshold()) {
@@ -1455,11 +1582,11 @@ size_t WalletGreen::createFusionTransaction(uint64_t threshold, uint64_t mixin) 
     throw std::runtime_error("Unable to create fusion transaction");
   }
 
-  size_t transactionId = insertOutgoingTransaction(fusionTransaction->getTransactionHash(), 0, 0, fusionTransaction->getExtra(), 0);
+  size_t transactionId = insertOutgoingTransactionAndPushEvent(fusionTransaction->getTransactionHash(), 0, 0, fusionTransaction->getExtra(), 0);
   m_fusionTxsCache.emplace(transactionId, true);
 
-  WalletTransfer destination = {m_currency.accountAddressAsString({m_walletsContainer.get<RandomAccessIndex>().begin()->spendPublicKey,
-                                                                   m_viewPublicKey }), 0};
+  std::string address = m_currency.accountAddressAsString({m_walletsContainer.get<RandomAccessIndex>().begin()->spendPublicKey, m_viewPublicKey });
+  WalletTransfer destination = {WalletTransferType::USUAL, address, 0};
   pushBackOutgoingTransfers(transactionId, std::vector<WalletTransfer> {destination});
 
   markOutputsSpent(fusionTransaction->getTransactionHash(), fusionInputs);
@@ -1467,21 +1594,14 @@ size_t WalletGreen::createFusionTransaction(uint64_t threshold, uint64_t mixin) 
   try {
     sendTransaction(fusionTransaction.get());
   } catch (std::exception&) {
+    updateTransactionStateAndPushEvent(transactionId, WalletTransactionState::FAILED);
     deleteSpentOutputs(fusionTransaction->getTransactionHash());
-    pushEvent(makeTransactionCreatedEvent(transactionId));
     throw;
   }
 
-  auto txIt = m_transactions.get<RandomAccessIndex>().begin();
-  std::advance(txIt, transactionId);
-  m_transactions.get<RandomAccessIndex>().modify(txIt,
-    [] (WalletTransaction& tx) { tx.state = WalletTransactionState::SUCCEEDED; });
-
   m_change[fusionTransaction->getTransactionHash()] = transactionAmount;
-
+  updateTransactionStateAndPushEvent(transactionId, WalletTransactionState::SUCCEEDED);
   updateUsedWalletsBalances(fusionInputs);
-
-  pushEvent(makeTransactionCreatedEvent(transactionId));
 
   return transactionId;
 }

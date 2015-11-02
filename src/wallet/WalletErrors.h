@@ -45,7 +45,8 @@ enum WalletErrorCodes {
   KEY_GENERATION_ERROR,
   INDEX_OUT_OF_RANGE,
   ADDRESS_ALREADY_EXISTS,
-  TRACKING_MODE
+  TRACKING_MODE,
+  WRONG_PARAMETERS
 };
 
 // custom category:
@@ -66,7 +67,7 @@ public:
     case NOT_INITIALIZED:          return "Object was not initialized";
     case WRONG_PASSWORD:           return "The password is wrong";
     case ALREADY_INITIALIZED:      return "The object is already initialized";
-    case INTERNAL_WALLET_ERROR:    return "Internal error occured";
+    case INTERNAL_WALLET_ERROR:    return "Internal error occurred";
     case MIXIN_COUNT_TOO_BIG:      return "MixIn count is too big";
     case BAD_ADDRESS:              return "Bad address";
     case TRANSACTION_SIZE_TOO_BIG: return "Transaction size is too big";
@@ -83,6 +84,7 @@ public:
     case INDEX_OUT_OF_RANGE:       return "Index is out of range";
     case ADDRESS_ALREADY_EXISTS:   return "Address already exists";
     case TRACKING_MODE:            return "The wallet is in tracking mode";
+    case WRONG_PARAMETERS:         return "Wrong parameters passed";
     default:                       return "Unknown error";
     }
   }

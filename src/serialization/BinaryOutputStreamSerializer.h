@@ -28,7 +28,7 @@ public:
   BinaryOutputStreamSerializer(Common::IOutputStream& strm) : stream(strm) {}
   virtual ~BinaryOutputStreamSerializer() {}
 
-  virtual ISerializer::SerializerType type() const;
+  virtual ISerializer::SerializerType type() const override;
 
   virtual bool beginObject(Common::StringView name) override;
   virtual void endObject() override;

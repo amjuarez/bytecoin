@@ -74,6 +74,25 @@ public:
   typedef WalletAsyncContextCounter AsyncContextCounter;
 
 private:
+  void poolUpdateEndHandler();
+
+  class PoolUpdateGuard {
+  public:
+    PoolUpdateGuard();
+
+    bool beginUpdate();
+    bool endUpdate();
+
+  private:
+    enum class State {
+      NONE,
+      UPDATING,
+      UPDATE_REQUIRED
+    };
+
+    std::atomic<State> m_state;
+  };
+
   enum State {
     NOT_INITIALIZED,
     INITIALIZED
@@ -94,6 +113,6 @@ private:
   Logging::LoggerRef logger;
 
   AsyncContextCounter asyncContextCounter;
-  
+  PoolUpdateGuard poolUpdateGuard;
 };
 }

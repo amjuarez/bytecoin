@@ -240,8 +240,8 @@ void WalletService::loadWallet() {
 
 void WalletService::loadPaymentsCacheAndTransferIndices() {
   size_t txCount = wallet->getTransactionCount();
-  transfersIndices.resize(1);
-  transfersIndices[0] = 0;
+  transfersIndices.reserve(txCount + 1);
+  transfersIndices.push_back(0);
 
   logger(Logging::DEBUGGING) << "seeking for payments among " << txCount << " transactions";
 
@@ -273,18 +273,18 @@ std::error_code WalletService::sendTransaction(const SendTransactionRequest& req
   logger(Logging::DEBUGGING) << "Send transaction request came";
 
   try {
-    std::vector<CryptoNote::WalletTransfer> transfers;
-    makeTransfers(req.destinations, transfers);
+    std::vector<CryptoNote::WalletOrder> orders;
+    makeOrders(req.destinations, orders);
 
     std::string extra;
     if (!req.paymentId.empty()) {
       addPaymentIdToExtra(req.paymentId, extra);
     }
 
-    size_t txId = wallet->transfer(transfers, req.fee, req.mixin, extra, req.unlockTime);
+    size_t txId = wallet->transfer(orders, req.fee, req.mixin, extra, req.unlockTime);
     if (txId == CryptoNote::WALLET_INVALID_TRANSACTION_ID) {
       logger(Logging::WARNING) << "Unable to send transaction";
-      throw std::runtime_error("Error occured while sending transaction");
+      throw std::runtime_error("Error occurred while sending transaction");
     }
 
     resp.transactionId = txId;
@@ -296,11 +296,11 @@ std::error_code WalletService::sendTransaction(const SendTransactionRequest& req
   return std::error_code();
 }
 
-void WalletService::makeTransfers(const std::vector<PaymentService::TransferDestination>& destinations, std::vector<CryptoNote::WalletTransfer>& transfers) {
-  transfers.reserve(destinations.size());
+void WalletService::makeOrders(const std::vector<PaymentService::TransferDestination>& destinations, std::vector<CryptoNote::WalletOrder>& orders) {
+  orders.reserve(destinations.size());
 
   for (auto dest: destinations) {
-    transfers.push_back( { dest.address, static_cast<int64_t>(dest.amount) } );
+    orders.push_back( { dest.address, dest.amount } );
   }
 }
 
@@ -429,7 +429,8 @@ std::error_code WalletService::getTransactionByTransferId(size_t transferId, siz
   }
 
   auto nextTxId = std::upper_bound(transfersIndices.begin(), transfersIndices.end(), transferId);
-  transactionId = (nextTxId - transfersIndices.begin()) - 1;
+  assert(nextTxId != transfersIndices.begin());
+  transactionId = std::distance(transfersIndices.begin(), nextTxId) - 1;
 
   return std::error_code();
 }
@@ -443,9 +444,10 @@ void WalletService::fillTransactionRpcInfo(size_t txId, const CryptoNote::Wallet
   rpcInfo.timestamp = tx.timestamp;
   rpcInfo.extra = Common::toHex(tx.extra.data(), tx.extra.size());
   rpcInfo.hash = Common::podToHex(tx.hash);
+  rpcInfo.state = static_cast<uint8_t>(tx.state);
   for (size_t transferId = 0; transferId < rpcInfo.transferCount; ++transferId) {
     auto transfer = wallet->getTransactionTransfer(txId, transferId);
-    TransferRpcInfo rpcTransfer{ transfer.address, transfer.amount };
+    TransferRpcInfo rpcTransfer{ static_cast<uint8_t>(transfer.type), transfer.address, transfer.amount };
     rpcInfo.transfers.push_back(rpcTransfer);
   }
 }
@@ -510,7 +512,9 @@ std::error_code WalletService::getTransfer(size_t globalTransferId, bool& found,
   logger(Logging::DEBUGGING) << "getTransfer request came";
   found = false;
   try {
-    size_t txId = (std::upper_bound(transfersIndices.begin(), transfersIndices.end(), globalTransferId) - transfersIndices.begin()) - 1;
+    auto nextTxIt = std::upper_bound(transfersIndices.begin(), transfersIndices.end(), globalTransferId);
+    assert(nextTxIt != transfersIndices.begin());
+    size_t txId = std::distance(transfersIndices.begin(), nextTxIt) - 1;
     size_t fakeTxId = transfersIndices.size() - 1;
 
     if (txId == fakeTxId) {
@@ -520,6 +524,7 @@ std::error_code WalletService::getTransfer(size_t globalTransferId, bool& found,
     auto transferId = globalTransferId - transfersIndices[txId];
     auto transfer = wallet->getTransactionTransfer(txId, transferId);
 
+    rpcInfo.type = static_cast<uint8_t>(transfer.type);
     rpcInfo.address = transfer.address;
     rpcInfo.amount = transfer.amount;
     found = true;
@@ -572,12 +577,22 @@ void WalletService::refresh() {
     for (;;) {
       auto event = wallet->getEvent();
       if (event.type == CryptoNote::TRANSACTION_CREATED || event.type == CryptoNote::TRANSACTION_UPDATED) {
-        size_t transactionId;
+        size_t transactionId = event.transactionCreated.transactionIndex;
+        size_t transferCount = wallet->getTransactionTransferCount(transactionId);
+
         if (event.type == CryptoNote::TRANSACTION_CREATED) {
-          transactionId = event.transactionCreated.transactionIndex;
-          transfersIndices.push_back(transfersIndices[transactionId] + wallet->getTransactionTransferCount(transactionId));
+          assert(transactionId == transfersIndices.size() - 1);
+          transfersIndices.push_back(transfersIndices[transactionId] + transferCount);
         } else {
-          transactionId = event.transactionUpdated.transactionIndex;
+          assert(event.type == CryptoNote::TRANSACTION_UPDATED);
+          assert(transactionId < transfersIndices.size() - 1);
+          size_t oldTransferCount = transfersIndices[transactionId + 1] - transfersIndices[transactionId];
+          int change = static_cast<int>(transferCount) - static_cast<int>(oldTransferCount);
+          if (change != 0) {
+            for (size_t i = transactionId + 1; i < transfersIndices.size(); ++i) {
+              transfersIndices[i] = static_cast<size_t>(static_cast<int>(transfersIndices[i]) + change);
+            }
+          }
         }
 
         auto tx = wallet->getTransaction(transactionId);

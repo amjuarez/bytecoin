@@ -75,7 +75,7 @@ void Configuration::init(const boost::program_options::variables_map& options) {
     throw ConfigurationError("It's impossible to use both \"register-service\" and \"unregister-service\" at the same time");
   }
 
-  if (options.count("testnet") != 0) {
+  if (options["testnet"].as<bool>()) {
     testnet = true;
   }
 

@@ -59,7 +59,7 @@ public:
 private:
   static const uint32_t SERIALIZATION_VERSION;
 
-  void loadCurrentVersion(Common::IInputStream& source, const std::string& password);
+  void loadWallet(Common::IInputStream& source, const std::string& password, uint32_t version);
   void loadWalletV1(Common::IInputStream& source, const std::string& password);
 
   CryptoContext generateCryptoContext(const std::string& password);
@@ -95,7 +95,7 @@ private:
   void loadUnlockTransactionsJobs(Common::IInputStream& source, CryptoContext& cryptoContext);
   void loadChange(Common::IInputStream& source, CryptoContext& cryptoContext);
   void loadTransactions(Common::IInputStream& source, CryptoContext& cryptoContext);
-  void loadTransfers(Common::IInputStream& source, CryptoContext& cryptoContext);
+  void loadTransfers(Common::IInputStream& source, CryptoContext& cryptoContext, uint32_t version);
 
   void loadWalletV1Keys(CryptoNote::BinaryInputStreamSerializer& serializer);
   void loadWalletV1Details(CryptoNote::BinaryInputStreamSerializer& serializer);

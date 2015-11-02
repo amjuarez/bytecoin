@@ -159,7 +159,7 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction();
   std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
-  std::cout << "Modify this line into your coin configuration file as is: " << std::endl;
+  std::cout << "Add this line into your coin configuration file as is: " << std::endl;
   std::cout << "GENESIS_COINBASE_TX_HEX=" << tx_hex << std::endl;
     }
   } else {

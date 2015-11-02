@@ -99,14 +99,18 @@ struct WalletTransactionDto {
 
 //DO NOT CHANGE IT
 struct WalletTransferDto {
-  WalletTransferDto() {}
-  WalletTransferDto(const CryptoNote::WalletTransfer& tr) {
+  WalletTransferDto(uint32_t version) : version(version) {}
+  WalletTransferDto(const CryptoNote::WalletTransfer& tr, uint32_t version) : WalletTransferDto(version) {
     address = tr.address;
     amount = tr.amount;
+    type = static_cast<uint8_t>(tr.type);
   }
 
   std::string address;
   uint64_t amount;
+  uint8_t type;
+
+  uint32_t version;
 };
 
 void serialize(WalletRecordDto& value, CryptoNote::ISerializer& serializer) {
@@ -156,8 +160,11 @@ void serialize(WalletTransactionDto& value, CryptoNote::ISerializer& serializer)
 void serialize(WalletTransferDto& value, CryptoNote::ISerializer& serializer) {
   serializer(value.address, "address");
   serializer(value.amount, "amount");
-}
 
+  if (value.version > 2) {
+    serializer(value.type, "type");
+  }
+}
 
 template <typename Object>
 std::string serialize(Object& obj, const std::string& name) {
@@ -266,7 +273,7 @@ CryptoNote::WalletTransfer convert(const CryptoNote::WalletLegacyTransfer& tr) {
 
 namespace CryptoNote {
 
-const uint32_t WalletSerializer::SERIALIZATION_VERSION = 2;
+const uint32_t WalletSerializer::SERIALIZATION_VERSION = 3;
 
 void CryptoContext::incIv() {
   uint64_t * i = reinterpret_cast<uint64_t *>(&iv.data[0]);
@@ -503,7 +510,7 @@ void WalletSerializer::saveTransfers(Common::IOutputStream& destination, CryptoC
 
   for (const auto& kv: m_transfers) {
     uint64_t txId = kv.first;
-    WalletTransferDto tr(kv.second);
+    WalletTransferDto tr(kv.second, SERIALIZATION_VERSION);
 
     serializeEncrypted(txId, "transaction_id", cryptoContext, destination);
     cryptoContext.incIv();
@@ -519,18 +526,18 @@ void WalletSerializer::load(const std::string& password, Common::IInputStream& s
 
   uint32_t version = loadVersion(source);
 
-  if (version == SERIALIZATION_VERSION) {
-    loadCurrentVersion(source, password);
-  } else if (version == 1) {
-    loadWalletV1(source, password);
-  } else {
+  if (version > SERIALIZATION_VERSION) {
     throw std::system_error(make_error_code(error::WRONG_VERSION));
+  } else if (version != 1) {
+    loadWallet(source, password, version);
+  } else {
+    loadWalletV1(source, password);
   }
 
   s.endObject();
 }
 
-void WalletSerializer::loadCurrentVersion(Common::IInputStream& source, const std::string& password) {
+void WalletSerializer::loadWallet(Common::IInputStream& source, const std::string& password, uint32_t version) {
   CryptoNote::CryptoContext cryptoContext;
 
   bool details = false;
@@ -549,7 +556,7 @@ void WalletSerializer::loadCurrentVersion(Common::IInputStream& source, const st
 
   if (details) {
     loadTransactions(source, cryptoContext);
-    loadTransfers(source, cryptoContext);
+    loadTransfers(source, cryptoContext, version);
   }
 
   if (cache) {
@@ -869,7 +876,7 @@ void WalletSerializer::loadTransactions(Common::IInputStream& source, CryptoCont
   }
 }
 
-void WalletSerializer::loadTransfers(Common::IInputStream& source, CryptoContext& cryptoContext) {
+void WalletSerializer::loadTransfers(Common::IInputStream& source, CryptoContext& cryptoContext, uint32_t version) {
   uint64_t count = 0;
   deserializeEncrypted(count, "transfers_count", cryptoContext, source);
   cryptoContext.incIv();
@@ -881,13 +888,19 @@ void WalletSerializer::loadTransfers(Common::IInputStream& source, CryptoContext
     deserializeEncrypted(txId, "transaction_id", cryptoContext, source);
     cryptoContext.incIv();
 
-    WalletTransferDto dto;
+    WalletTransferDto dto(version);
     deserializeEncrypted(dto, "transfer", cryptoContext, source);
     cryptoContext.incIv();
 
     WalletTransfer tr;
     tr.address = dto.address;
     tr.amount = dto.amount;
+
+    if (version > 2) {
+      tr.type = static_cast<WalletTransferType>(dto.type);
+    } else {
+      tr.type = WalletTransferType::USUAL;
+    }
 
     m_transfers.push_back(std::make_pair(txId, tr));
   }

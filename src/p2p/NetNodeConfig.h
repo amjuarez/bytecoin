@@ -79,7 +79,7 @@ private:
   std::string p2pStatTrustedPubKey;
   std::string configFolder;
   std::string p2pStateFilename;
-  bool testnet = false;
+  bool testnet;
 };
 
 } //namespace nodetool

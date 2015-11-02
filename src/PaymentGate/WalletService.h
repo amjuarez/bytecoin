@@ -83,7 +83,7 @@ private:
   void insertTransaction(size_t id, const Crypto::Hash& paymentIdBin, bool confirmed);
 
   void fillTransactionRpcInfo(size_t txId, const CryptoNote::WalletTransaction& tx, TransactionRpcInfo& rpcInfo);
-  void makeTransfers(const std::vector<TransferDestination>& destinations, std::vector<CryptoNote::WalletTransfer>& transfers);
+  void makeOrders(const std::vector<TransferDestination>& destinations, std::vector<CryptoNote::WalletOrder>& transfers);
 
   struct PaymentItem {
     std::string paymentId;

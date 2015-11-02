@@ -85,6 +85,7 @@ NetNodeConfig::NetNodeConfig() {
   hideMyPort = false;
   p2pStatTrustedPubKey = "";
   configFolder = Tools::getDefaultDataDirectory();
+  testnet = false;
 }
 
 bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
