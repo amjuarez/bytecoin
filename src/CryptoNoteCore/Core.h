@@ -121,6 +121,7 @@ namespace CryptoNote {
      size_t get_alternative_blocks_count();
 
      void set_cryptonote_protocol(i_cryptonote_protocol* pprotocol);
+     Checkpoints get_checkpoints();
      void set_checkpoints(Checkpoints&& chk_pts);
 
      std::vector<Transaction> getPoolTransactions() override;

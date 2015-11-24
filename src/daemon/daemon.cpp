@@ -77,7 +77,7 @@ namespace
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "uint64_t", CryptoNote::parameters::DIFFICULTY_LAG};
   const command_line::arg_descriptor<std::string> arg_CRYPTONOTE_NAME  = {"CRYPTONOTE_NAME", "Cryptonote name. Used for storage directory", ""};
   const command_line::arg_descriptor< std::vector<std::string> > arg_CHECKPOINT  = {"CHECKPOINT", "Checkpoints. Format: HEIGHT:HASH"};
-  const command_line::arg_descriptor<uint64_t>    arg_PREMINED_PERCENT  = {"PREMINED_PERCENT", "uint64_t", 0};
+  const command_line::arg_descriptor<uint64_t>    arg_GENESIS_BLOCK_REWARD  = {"GENESIS_BLOCK_REWARD", "uint64_t", 0};
   const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
     "network id is changed. Use it with --data-dir flag. The wallet must be launched with --testnet flag.", false};
 }
@@ -87,6 +87,7 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   std::vector<CryptoNote::AccountPublicAddress> targets;
   auto genesis_block_reward_addresses = command_line::get_arg(vm, arg_genesis_block_reward_address);
   CryptoNote::CurrencyBuilder currencyBuilder(logManager);
+    currencyBuilder.cryptonoteName(command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
     currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
     currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
     currencyBuilder.moneySupply(command_line::get_arg(vm, arg_MONEY_SUPPLY));
@@ -192,7 +193,7 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   }
   currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-  currencyBuilder.genesisBlockReward((command_line::get_arg(vm, arg_MONEY_SUPPLY) / 100) * command_line::get_arg(vm, arg_PREMINED_PERCENT));
+  currencyBuilder.genesisBlockReward(command_line::get_arg(vm, arg_GENESIS_BLOCK_REWARD));
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction(targets);
       std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
       std::cout << "Modify this line into your coin configuration file as is: " << std::endl;
@@ -265,7 +266,7 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_LAG);
     command_line::add_arg(desc_cmd_sett, arg_CRYPTONOTE_NAME);
     command_line::add_arg(desc_cmd_sett, arg_CHECKPOINT);
-    command_line::add_arg(desc_cmd_sett, arg_PREMINED_PERCENT);
+    command_line::add_arg(desc_cmd_sett, arg_GENESIS_BLOCK_REWARD);
 command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
   command_line::add_arg(desc_cmd_sett, arg_genesis_block_reward_address);
 
@@ -350,6 +351,7 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
 
     //create objects and link them
     CryptoNote::CurrencyBuilder currencyBuilder(logManager);
+    currencyBuilder.cryptonoteName(command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
     currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
     currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
     currencyBuilder.moneySupply(command_line::get_arg(vm, arg_MONEY_SUPPLY));
@@ -378,7 +380,7 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
     }
     currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
     currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
-    currencyBuilder.genesisBlockReward((command_line::get_arg(vm, arg_MONEY_SUPPLY) / 100) * command_line::get_arg(vm, arg_PREMINED_PERCENT));
+    currencyBuilder.genesisBlockReward(command_line::get_arg(vm, arg_GENESIS_BLOCK_REWARD));
     currencyBuilder.testnet(testnet_mode);
     try {
       currencyBuilder.currency();

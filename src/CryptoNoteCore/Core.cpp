@@ -87,6 +87,9 @@ void core::set_cryptonote_protocol(i_cryptonote_protocol* pprotocol) {
     m_pprotocol = &m_protocol_stub;
 }
 //-----------------------------------------------------------------------------------
+Checkpoints core::get_checkpoints() {
+  return m_blockchain.getCheckpoints();
+}
 void core::set_checkpoints(Checkpoints&& chk_pts) {
   m_blockchain.setCheckpoints(std::move(chk_pts));
 }
