@@ -729,9 +729,6 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   res.extensions.push_back("simplewallet-default-fee.json");
   res.extensions.push_back("max-transaction-size-limit.json");
   res.extensions.push_back("genesis-block-reward.json");
-  res.extensions.push_back("multiply.json");
-  res.extensions.push_back("multiply/max-transaction-size-limit.json");
-  res.extensions.push_back("multiply/genesis-block-reward.json");
 
   res.core.CRYPTONOTE_NAME = m_core.currency().cryptonoteName();
 
