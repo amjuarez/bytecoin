@@ -549,6 +549,8 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   res.block.prev_hash = block_header.prev_hash;
   res.block.nonce = block_header.nonce;
   res.block.hash = Common::podToHex(hash);
+  res.block.depth = m_core.get_current_blockchain_height() - res.block.height - 1;
+  m_core.getBlockDifficulty(static_cast<uint32_t>(res.block.height), res.block.difficulty);
 
   res.block.reward = block_header.reward;
 
@@ -568,9 +570,11 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   size_t minerTxBlobSize = getObjectBinarySize(blk.baseTransaction);
   res.block.blockSize = blokBlobSize + res.block.transactionsCumulativeSize - minerTxBlobSize;
 
-  if (!m_core.getAlreadyGeneratedCoins(hash, res.block.alreadyGeneratedCoins)) {
+  uint64_t alreadyGeneratedCoins;
+  if (!m_core.getAlreadyGeneratedCoins(hash, alreadyGeneratedCoins)) {
     return false;
   }
+  res.block.alreadyGeneratedCoins = std::to_string(alreadyGeneratedCoins);
 
   if (!m_core.getGeneratedTransactionsNumber(res.block.height, res.block.alreadyGeneratedTransactions)) {
     return false;
@@ -586,6 +590,11 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   uint64_t currentReward = 0;
   int64_t emissionChange = 0;
   bool penalizeFee = blk.majorVersion >= 2;
+  size_t blockGrantedFullRewardZone = penalizeFee ?
+  m_core.currency().blockGrantedFullRewardZone() :
+   m_core.currency().blockGrantedFullRewardZoneV1();
+  res.block.effectiveSizeMedian = std::max(res.block.sizeMedian, blockGrantedFullRewardZone);
+
   if (!m_core.getBlockReward(res.block.sizeMedian, 0, prevBlockGeneratedCoins, 0, penalizeFee, maxReward, emissionChange)) {
     return false;
   }
@@ -608,6 +617,7 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   transaction_short.hash = Common::podToHex(getObjectHash(blk.baseTransaction));
   transaction_short.fee = 0;
   transaction_short.amount_out = get_outs_money_amount(blk.baseTransaction);
+  transaction_short.size = getObjectBinarySize(blk.baseTransaction);
   res.block.transactions.push_back(transaction_short);
 
 
@@ -626,6 +636,7 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
     transaction_short.hash = Common::podToHex(getObjectHash(tx));
     transaction_short.fee = amount_in - amount_out;
     transaction_short.amount_out = amount_out;
+    transaction_short.size = getObjectBinarySize(tx);
     res.block.transactions.push_back(transaction_short);
 
     res.block.totalFeeAmount += transaction_short.fee;
@@ -686,6 +697,8 @@ bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAIL
 
   res.txDetails.hash = Common::podToHex(getObjectHash(res.tx));
   res.txDetails.fee = amount_in - amount_out;
+  if (amount_in == 0)
+    res.txDetails.fee = 0;
   res.txDetails.amount_out = amount_out;
   res.txDetails.size = getObjectBinarySize(res.tx);
 
