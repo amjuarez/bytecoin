@@ -202,11 +202,21 @@ int main(int argc, char* argv[])
     RpcServerConfig rpcConfig;
     rpcConfig.init(vm);
 
+    if (!coreConfig.configFolderDefaulted) {
+      if (!Tools::directoryExists(coreConfig.configFolder)) {
+        throw std::runtime_error("Directory does not exist: " + coreConfig.configFolder);
+      }
+    } else {
+      if (!Tools::create_directories_if_necessary(coreConfig.configFolder)) {
+        throw std::runtime_error("Can't create directory: " + coreConfig.configFolder);
+      }
+    }
+
     System::Dispatcher dispatcher;
 
     CryptoNote::CryptoNoteProtocolHandler cprotocol(currency, dispatcher, ccore, nullptr, logManager);
     CryptoNote::NodeServer p2psrv(dispatcher, cprotocol, logManager);
-    CryptoNote::RpcServer rpcServer(dispatcher, logManager, ccore, p2psrv);
+    CryptoNote::RpcServer rpcServer(dispatcher, logManager, ccore, p2psrv, cprotocol);
 
     cprotocol.set_p2p_endpoint(&p2psrv);
     ccore.set_cryptonote_protocol(&cprotocol);

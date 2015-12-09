@@ -47,6 +47,7 @@ public:
   void detach(uint32_t height);
   void addBlocks(const Crypto::Hash* blockHashes, uint32_t height, uint32_t count);
   uint32_t getHeight() const;
+  const std::vector<Crypto::Hash>& getKnownBlockHashes() const;
 
   // IStreamSerializable
   virtual void save(std::ostream& os) override;

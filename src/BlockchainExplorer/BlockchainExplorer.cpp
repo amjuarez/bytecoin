@@ -87,12 +87,16 @@ bool BlockchainExplorer::PoolUpdateGuard::beginUpdate() {
   for (;;) {
     switch (state) {
     case State::NONE:
-      return true;
+      if (m_state.compare_exchange_weak(state, State::UPDATING)) {
+        return true;
+      }
+      break;
 
     case State::UPDATING:
       if (m_state.compare_exchange_weak(state, State::UPDATE_REQUIRED)) {
         return false;
       }
+      break;
 
     case State::UPDATE_REQUIRED:
       return false;

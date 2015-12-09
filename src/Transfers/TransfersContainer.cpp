@@ -256,11 +256,11 @@ bool TransfersContainer::addTransactionOutputs(const TransactionBlockInfo& block
       assert(result.second);
     } else {
       if (info.type == TransactionTypes::OutputType::Multisignature) {
-      SpentOutputDescriptor descriptor(transfer);
-      if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
-          m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
-        throw std::runtime_error("Transfer already exists");
-      }
+        SpentOutputDescriptor descriptor(transfer);
+        if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
+            m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
+          throw std::runtime_error("Transfer already exists");
+        }
       }
 
       auto result = m_availableTransfers.emplace(std::move(info));
@@ -341,10 +341,10 @@ bool TransfersContainer::addTransactionInputs(const TransactionBlockInfo& block,
         outputDescriptorIndex.erase(availableOutputIt);
 
         inputsAdded = true;
-    }
+      }
     } else {
       assert(inputType == TransactionTypes::InputType::Generating);
-  }
+    }
   }
 
   return inputsAdded;
@@ -361,7 +361,7 @@ bool TransfersContainer::deleteUnconfirmedTransaction(const Hash& transactionHas
   } else {
     deleteTransactionTransfers(it->transactionHash);
     m_transactions.erase(it);
-  return true;
+    return true;
   }
 }
 
@@ -401,12 +401,12 @@ bool TransfersContainer::markTransactionConfirmed(const TransactionBlockInfo& bl
     transfer.globalOutputIndex = globalIndices[transfer.outputInTransaction];
 
     if (transfer.type == TransactionTypes::OutputType::Multisignature) {
-    SpentOutputDescriptor descriptor(transfer);
-    if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
-        m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
-      // This exception breaks TransfersContainer consistency
-      throw std::runtime_error("Transfer already exists");
-    }
+      SpentOutputDescriptor descriptor(transfer);
+      if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
+          m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
+        // This exception breaks TransfersContainer consistency
+        throw std::runtime_error("Transfer already exists");
+      }
     }
 
     auto result = m_availableTransfers.emplace(std::move(transfer));
@@ -417,7 +417,7 @@ bool TransfersContainer::markTransactionConfirmed(const TransactionBlockInfo& bl
 
     if (transfer.type == TransactionTypes::OutputType::Key) {
       updateTransfersVisibility(transfer.keyImage);
-  }
+    }
   }
 
   auto& spendingTransactionIndex = m_spentTransfers.get<SpendingTransactionIndex>();
@@ -430,7 +430,7 @@ bool TransfersContainer::markTransactionConfirmed(const TransactionBlockInfo& bl
     spendingTransactionIndex.replace(transferIt, transfer);
   }
 
-        return true;
+  return true;
 }
 
 /**
@@ -472,7 +472,7 @@ void TransfersContainer::deleteTransactionTransfers(const Hash& transactionHash)
       updateTransfersVisibility(keyImage);
     } else {
       it = transactionTransfersIndex.erase(it);
-  }
+    }
   }
 }
 
@@ -643,7 +643,7 @@ void TransfersContainer::getOutputs(std::vector<TransactionOutputInformation>& t
   }
 }
 
-bool TransfersContainer::getTransactionInformation(const Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) const {
+bool TransfersContainer::getTransactionInformation(const Hash& transactionHash, TransactionInformation& info, uint64_t* amountIn, uint64_t* amountOut) const {
   std::lock_guard<std::mutex> lk(m_mutex);
   auto it = m_transactions.find(transactionHash);
   if (it == m_transactions.end()) {
@@ -652,31 +652,34 @@ bool TransfersContainer::getTransactionInformation(const Hash& transactionHash, 
 
   info = *it;
 
-  int64_t amountOut = 0;
-  if (info.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
-    auto unconfirmedOutputsRange = m_unconfirmedTransfers.get<ContainingTransactionIndex>().equal_range(transactionHash);
-    for (auto it = unconfirmedOutputsRange.first; it != unconfirmedOutputsRange.second; ++it) {
-      amountOut += static_cast<int64_t>(it->amount);
-    }
-  } else {
-    auto availableOutputsRange = m_availableTransfers.get<ContainingTransactionIndex>().equal_range(transactionHash);
-    for (auto it = availableOutputsRange.first; it != availableOutputsRange.second; ++it) {
-      amountOut += static_cast<int64_t>(it->amount);
-    }
+  if (amountOut != nullptr) {
+    *amountOut = 0;
 
-    auto spentOutputsRange = m_spentTransfers.get<ContainingTransactionIndex>().equal_range(transactionHash);
-    for (auto it = spentOutputsRange.first; it != spentOutputsRange.second; ++it) {
-      amountOut += static_cast<int64_t>(it->amount);
+    if (info.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
+      auto unconfirmedOutputsRange = m_unconfirmedTransfers.get<ContainingTransactionIndex>().equal_range(transactionHash);
+      for (auto it = unconfirmedOutputsRange.first; it != unconfirmedOutputsRange.second; ++it) {
+        *amountOut += it->amount;
+      }
+    } else {
+      auto availableOutputsRange = m_availableTransfers.get<ContainingTransactionIndex>().equal_range(transactionHash);
+      for (auto it = availableOutputsRange.first; it != availableOutputsRange.second; ++it) {
+        *amountOut += it->amount;
+      }
+
+      auto spentOutputsRange = m_spentTransfers.get<ContainingTransactionIndex>().equal_range(transactionHash);
+      for (auto it = spentOutputsRange.first; it != spentOutputsRange.second; ++it) {
+        *amountOut += it->amount;
+      }
     }
   }
 
-  int64_t amountIn = 0;
-  auto rangeInputs = m_spentTransfers.get<SpendingTransactionIndex>().equal_range(transactionHash);
-  for (auto it = rangeInputs.first; it != rangeInputs.second; ++it) {
-    amountIn += static_cast<int64_t>(it->amount);
+  if (amountIn != nullptr) {
+    *amountIn = 0;
+    auto rangeInputs = m_spentTransfers.get<SpendingTransactionIndex>().equal_range(transactionHash);
+    for (auto it = rangeInputs.first; it != rangeInputs.second; ++it) {
+      *amountIn += it->amount;
+    }
   }
-
-  txBalance = amountOut - amountIn;
 
   return true;
 }

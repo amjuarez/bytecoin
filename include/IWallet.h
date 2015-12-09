@@ -32,7 +32,8 @@ enum class WalletTransactionState : uint8_t {
   SUCCEEDED = 0,
   FAILED,
   CANCELLED,
-  CREATED
+  CREATED,
+  DELETED
 };
 
 enum WalletEventType {
@@ -40,7 +41,7 @@ enum WalletEventType {
   TRANSACTION_UPDATED,
   BALANCE_UNLOCKED,
   SYNC_PROGRESS_UPDATED,
-  SYNC_COMPLETED
+  SYNC_COMPLETED,
 };
 
 struct WalletTransactionCreatedData {
@@ -80,7 +81,8 @@ struct WalletTransaction {
 
 enum class WalletTransferType : uint8_t {
   USUAL = 0,
-  DONATION
+  DONATION,
+  CHANGE
 };
 
 struct WalletOrder {
@@ -100,13 +102,24 @@ struct DonationSettings {
 };
 
 struct TransactionParameters {
-  std::string sourceAddress;
+  std::vector<std::string> sourceAddresses;
   std::vector<WalletOrder> destinations;
   uint64_t fee = 0;
   uint64_t mixIn = 0;
   std::string extra;
   uint64_t unlockTimestamp = 0;
   DonationSettings donation;
+  std::string changeDestination;
+};
+
+struct WalletTransactionWithTransfers {
+  WalletTransaction transaction;
+  std::vector<WalletTransfer> transfers;
+};
+
+struct TransactionsInBlockInfo {
+  Crypto::Hash blockHash;
+  std::vector<WalletTransactionWithTransfers> transactions;
 };
 
 class IWallet {
@@ -124,6 +137,7 @@ public:
   virtual size_t getAddressCount() const = 0;
   virtual std::string getAddress(size_t index) const = 0;
   virtual KeyPair getAddressSpendKey(size_t index) const = 0;
+  virtual KeyPair getAddressSpendKey(const std::string& address) const = 0;
   virtual KeyPair getViewKey() const = 0;
   virtual std::string createAddress() = 0;
   virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) = 0;
@@ -140,11 +154,19 @@ public:
   virtual size_t getTransactionTransferCount(size_t transactionIndex) const = 0;
   virtual WalletTransfer getTransactionTransfer(size_t transactionIndex, size_t transferIndex) const = 0;
 
-  virtual size_t transfer(const WalletOrder& destination, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0) = 0;
-  virtual size_t transfer(const std::vector<WalletOrder>& destinations, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0) = 0;
-  virtual size_t transfer(const std::string& sourceAddress, const WalletOrder& destination, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0) = 0;
-  virtual size_t transfer(const std::string& sourceAddress, const std::vector<WalletOrder>& destinations, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0) = 0;
+  virtual WalletTransactionWithTransfers getTransaction(const Crypto::Hash& transactionHash) const = 0;
+  virtual std::vector<TransactionsInBlockInfo> getTransactions(const Crypto::Hash& blockHash, size_t count) const = 0;
+  virtual std::vector<TransactionsInBlockInfo> getTransactions(uint32_t blockIndex, size_t count) const = 0;
+  virtual std::vector<Crypto::Hash> getBlockHashes(uint32_t blockIndex, size_t count) const = 0;
+  virtual uint32_t getBlockCount() const  = 0;
+  virtual std::vector<WalletTransactionWithTransfers> getUnconfirmedTransactions() const = 0;
+  virtual std::vector<size_t> getDelayedTransactionIds() const = 0;
+
   virtual size_t transfer(const TransactionParameters& sendingTransaction) = 0;
+
+  virtual size_t makeTransaction(const TransactionParameters& sendingTransaction) = 0;
+  virtual void commitTransaction(size_t transactionId) = 0;
+  virtual void rollbackUncommitedTransaction(size_t transactionId) = 0;
 
   virtual void start() = 0;
   virtual void stop() = 0;

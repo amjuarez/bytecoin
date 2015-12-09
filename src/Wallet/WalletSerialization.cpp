@@ -25,6 +25,7 @@
 #include "Common/StdInputStream.h"
 #include "Common/StdOutputStream.h"
 #include "CryptoNoteCore/CryptoNoteSerialization.h"
+#include "CryptoNoteCore/CryptoNoteTools.h"
 
 #include "Serialization/BinaryOutputStreamSerializer.h"
 #include "Serialization/BinaryInputStreamSerializer.h"
@@ -49,7 +50,7 @@ struct WalletRecordDto {
 };
 
 //DO NOT CHANGE IT
-struct SpentOutputDto {
+struct ObsoleteSpentOutputDto {
   uint64_t amount;
   Hash transactionHash;
   uint32_t outputInTransaction;
@@ -58,7 +59,7 @@ struct SpentOutputDto {
 };
 
 //DO NOT CHANGE IT
-struct ChangeDto {
+struct ObsoleteChangeDto {
   Hash txHash;
   uint64_t amount;
 };
@@ -121,7 +122,7 @@ void serialize(WalletRecordDto& value, CryptoNote::ISerializer& serializer) {
   serializer(value.creationTimestamp, "creation_timestamp");
 }
 
-void serialize(SpentOutputDto& value, CryptoNote::ISerializer& serializer) {
+void serialize(ObsoleteSpentOutputDto& value, CryptoNote::ISerializer& serializer) {
   serializer(value.amount, "amount");
   serializer(value.transactionHash, "transaction_hash");
   serializer(value.outputInTransaction, "output_in_transaction");
@@ -129,7 +130,7 @@ void serialize(SpentOutputDto& value, CryptoNote::ISerializer& serializer) {
   serializer(value.spendingTransactionHash, "spending_transaction_hash");
 }
 
-void serialize(ChangeDto& value, CryptoNote::ISerializer& serializer) {
+void serialize(ObsoleteChangeDto& value, CryptoNote::ISerializer& serializer) {
   serializer(value.txHash, "transaction_hash");
   serializer(value.amount, "amount");
 }
@@ -273,7 +274,7 @@ CryptoNote::WalletTransfer convert(const CryptoNote::WalletLegacyTransfer& tr) {
 
 namespace CryptoNote {
 
-const uint32_t WalletSerializer::SERIALIZATION_VERSION = 3;
+const uint32_t WalletSerializer::SERIALIZATION_VERSION = 5;
 
 void CryptoContext::incIv() {
   uint64_t * i = reinterpret_cast<uint64_t *>(&iv.data[0]);
@@ -288,12 +289,11 @@ WalletSerializer::WalletSerializer(
   uint64_t& pendingBalance,
   WalletsContainer& walletsContainer,
   TransfersSyncronizer& synchronizer,
-  SpentOutputs& spentOutputs,
   UnlockTransactionJobs& unlockTransactions,
-  TransactionChanges& change,
   WalletTransactions& transactions,
   WalletTransfers& transfers,
-  uint32_t transactionSoftLockTime
+  uint32_t transactionSoftLockTime,
+  UncommitedTransactions& uncommitedTransactions
 ) :
   m_transfersObserver(transfersObserver),
   m_viewPublicKey(viewPublicKey),
@@ -302,12 +302,11 @@ WalletSerializer::WalletSerializer(
   m_pendingBalance(pendingBalance),
   m_walletsContainer(walletsContainer),
   m_synchronizer(synchronizer),
-  m_spentOutputs(spentOutputs),
   m_unlockTransactions(unlockTransactions),
-  m_change(change),
   m_transactions(transactions),
   m_transfers(transfers),
-  m_transactionSoftLockTime(transactionSoftLockTime)
+  m_transactionSoftLockTime(transactionSoftLockTime),
+  uncommitedTransactions(uncommitedTransactions)
 { }
 
 void WalletSerializer::save(const std::string& password, Common::IOutputStream& destination, bool saveDetails, bool saveCache) {
@@ -331,9 +330,8 @@ void WalletSerializer::save(const std::string& password, Common::IOutputStream& 
   if (saveCache) {
     saveBalances(destination, saveCache, cryptoContext);
     saveTransfersSynchronizer(destination, cryptoContext);
-    saveSpentOutputs(destination, cryptoContext);
     saveUnlockTransactionsJobs(destination, cryptoContext);
-    saveChange(destination, cryptoContext);
+    saveUncommitedTransactions(destination, cryptoContext);
   }
 
   s.endObject();
@@ -426,29 +424,6 @@ void WalletSerializer::saveTransfersSynchronizer(Common::IOutputStream& destinat
   cryptoContext.incIv();
 }
 
-void WalletSerializer::saveSpentOutputs(Common::IOutputStream& destination, CryptoContext& cryptoContext) {
-  auto& index = m_spentOutputs.get<WalletIndex>();
-
-  uint64_t outsCount = index.size();
-  serializeEncrypted(outsCount, "spent_outputs_count", cryptoContext, destination);
-  cryptoContext.incIv();
-
-  for (const auto& o: index) {
-    auto it = m_walletsContainer.get<RandomAccessIndex>().iterator_to(*o.wallet);
-    uint64_t walletIndex = std::distance(m_walletsContainer.get<RandomAccessIndex>().begin(), it);
-
-    SpentOutputDto dto;
-    dto.amount = o.amount;
-    dto.transactionHash = o.transactionHash;
-    dto.outputInTransaction = o.outputInTransaction;
-    dto.walletIndex = walletIndex;
-    dto.spendingTransactionHash = o.spendingTransactionHash;
-
-    serializeEncrypted(dto, "", cryptoContext, destination);
-    cryptoContext.incIv();
-  }
-}
-
 void WalletSerializer::saveUnlockTransactionsJobs(Common::IOutputStream& destination, CryptoContext& cryptoContext) {
   auto& index = m_unlockTransactions.get<TransactionHashIndex>();
   auto& wallets = m_walletsContainer.get<TransfersContainerIndex>();
@@ -476,19 +451,8 @@ void WalletSerializer::saveUnlockTransactionsJobs(Common::IOutputStream& destina
   }
 }
 
-void WalletSerializer::saveChange(Common::IOutputStream& destination, CryptoContext& cryptoContext) {
-  uint64_t count = m_change.size();
-  serializeEncrypted(count, "changes_count", cryptoContext, destination);
-  cryptoContext.incIv();
-
-  for (const auto& kv: m_change) {
-    ChangeDto dto;
-    dto.txHash = kv.first;
-    dto.amount = kv.second;
-
-    serializeEncrypted(dto, "", cryptoContext, destination);
-    cryptoContext.incIv();
-  }
+void WalletSerializer::saveUncommitedTransactions(Common::IOutputStream& destination, CryptoContext& cryptoContext) {
+  serializeEncrypted(uncommitedTransactions, "uncommited_transactions", cryptoContext, destination);
 }
 
 void WalletSerializer::saveTransactions(Common::IOutputStream& destination, CryptoContext& cryptoContext) {
@@ -510,6 +474,7 @@ void WalletSerializer::saveTransfers(Common::IOutputStream& destination, CryptoC
 
   for (const auto& kv: m_transfers) {
     uint64_t txId = kv.first;
+
     WalletTransferDto tr(kv.second, SERIALIZATION_VERSION);
 
     serializeEncrypted(txId, "transaction_id", cryptoContext, destination);
@@ -559,12 +524,33 @@ void WalletSerializer::loadWallet(Common::IInputStream& source, const std::strin
     loadTransfers(source, cryptoContext, version);
   }
 
+  if (version < 5) {
+    updateTransfersSign();
+    cache = false;
+  }
+
   if (cache) {
     loadBalances(source, cryptoContext);
     loadTransfersSynchronizer(source, cryptoContext);
-    loadSpentOutputs(source, cryptoContext);
+    if (version < 5) {
+      loadObsoleteSpentOutputs(source, cryptoContext);
+    }
+
     loadUnlockTransactionsJobs(source, cryptoContext);
-    loadChange(source, cryptoContext);
+
+    if (version < 5) {
+      loadObsoleteChange(source, cryptoContext);
+    }
+
+    if (version > 3) {
+      loadUncommitedTransactions(source, cryptoContext);
+
+      if (version >= 5) {
+        initTransactionPool();
+      }
+    }
+  } else {
+    resetCachedBalance();
   }
 
   if (details && cache) {
@@ -762,30 +748,15 @@ void WalletSerializer::loadTransfersSynchronizer(Common::IInputStream& source, C
   m_synchronizer.load(stream);
 }
 
-void WalletSerializer::loadSpentOutputs(Common::IInputStream& source, CryptoContext& cryptoContext) {
-  auto& index = m_spentOutputs.get<WalletIndex>();
-  auto& walletsIndex = m_walletsContainer.get<RandomAccessIndex>();
-  const uint64_t walletsSize = walletsIndex.size();
-
+void WalletSerializer::loadObsoleteSpentOutputs(Common::IInputStream& source, CryptoContext& cryptoContext) {
   uint64_t count = 0;
   deserializeEncrypted(count, "spent_outputs_count", cryptoContext, source);
   cryptoContext.incIv();
 
   for (uint64_t i = 0; i < count; ++i) {
-    SpentOutputDto dto;
+    ObsoleteSpentOutputDto dto;
     deserializeEncrypted(dto, "", cryptoContext, source);
     cryptoContext.incIv();
-
-    assert(dto.walletIndex < walletsSize);
-
-    SpentOutput output;
-    output.amount = dto.amount;
-    output.transactionHash = dto.transactionHash;
-    output.outputInTransaction = dto.outputInTransaction;
-    output.spendingTransactionHash = dto.spendingTransactionHash;
-    output.wallet = &walletsIndex[dto.walletIndex];
-
-    index.insert(std::move(output));
   }
 }
 
@@ -814,17 +785,37 @@ void WalletSerializer::loadUnlockTransactionsJobs(Common::IInputStream& source, 
   }
 }
 
-void WalletSerializer::loadChange(Common::IInputStream& source, CryptoContext& cryptoContext) {
+void WalletSerializer::loadObsoleteChange(Common::IInputStream& source, CryptoContext& cryptoContext) {
   uint64_t count = 0;
   deserializeEncrypted(count, "changes_count", cryptoContext, source);
   cryptoContext.incIv();
 
   for (uint64_t i = 0; i < count; i++) {
-    ChangeDto dto;
+    ObsoleteChangeDto dto;
     deserializeEncrypted(dto, "", cryptoContext, source);
     cryptoContext.incIv();
+  }
+}
 
-    m_change[dto.txHash] = dto.amount;
+void WalletSerializer::loadUncommitedTransactions(Common::IInputStream& source, CryptoContext& cryptoContext) {
+  deserializeEncrypted(uncommitedTransactions, "uncommited_transactions", cryptoContext, source);
+}
+
+void WalletSerializer::initTransactionPool() {
+  std::unordered_set<Crypto::Hash> uncommitedTransactionsSet;
+  std::transform(uncommitedTransactions.begin(), uncommitedTransactions.end(), std::inserter(uncommitedTransactionsSet, uncommitedTransactionsSet.end()),
+    [](const UncommitedTransactions::value_type& pair) {
+      return getObjectHash(pair.second);
+    });
+  m_synchronizer.initTransactionPool(uncommitedTransactionsSet);
+}
+
+void WalletSerializer::resetCachedBalance() {
+  for (auto it = m_walletsContainer.begin(); it != m_walletsContainer.end(); ++it) {
+    m_walletsContainer.modify(it, [](WalletRecord& wallet) {
+      wallet.actualBalance = 0;
+      wallet.pendingBalance = 0;
+    });
   }
 }
 
@@ -838,13 +829,24 @@ void WalletSerializer::updateTransactionsBaseStatus() {
       auto& wallets = m_walletsContainer.get<RandomAccessIndex>();
       TransactionInformation txInfo;
       auto it = std::find_if(std::begin(wallets), std::end(wallets), [&](const WalletRecord& rec) {
-        int64_t id = 0;
         assert(rec.container != nullptr);
-        return rec.container->getTransactionInformation(tx.hash, txInfo, id);
+        return rec.container->getTransactionInformation(tx.hash, txInfo);
       });
 
       tx.isBase = it != std::end(wallets) && txInfo.totalAmountIn == 0;
     });
+  }
+}
+
+void WalletSerializer::updateTransfersSign() {
+  auto it = m_transfers.begin();
+  while (it != m_transfers.end()) {
+    if (it->second.amount < 0) {
+      it->second.amount = -it->second.amount;
+      ++it;
+    } else {
+      it = m_transfers.erase(it);
+    }
   }
 }
 

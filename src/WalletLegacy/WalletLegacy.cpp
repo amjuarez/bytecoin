@@ -536,10 +536,11 @@ void WalletLegacy::onTransactionUpdated(ITransfersSubscription* object, const Ha
   std::shared_ptr<WalletLegacyEvent> event;
 
   TransactionInformation txInfo;
-  int64_t txBalance;
-  if (m_transferDetails->getTransactionInformation(transactionHash, txInfo, txBalance)) {
+  uint64_t amountIn;
+  uint64_t amountOut;
+  if (m_transferDetails->getTransactionInformation(transactionHash, txInfo, &amountIn, &amountOut)) {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
-    event = m_transactionsCache.onTransactionUpdated(txInfo, txBalance);
+    event = m_transactionsCache.onTransactionUpdated(txInfo, static_cast<int64_t>(amountOut) - static_cast<int64_t>(amountIn));
   }
 
   if (event.get()) {

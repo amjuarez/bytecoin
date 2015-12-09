@@ -31,6 +31,7 @@ public:
   void init(const boost::program_options::variables_map& options);
 
   std::string configFolder;
+  bool configFolderDefaulted = true;
 };
 
 } //namespace CryptoNote

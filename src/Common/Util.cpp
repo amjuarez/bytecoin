@@ -359,4 +359,9 @@ std::string get_nix_version_display_string()
     return std::error_code(code, std::system_category());
   }
 
+  bool directoryExists(const std::string& path) {
+    boost::system::error_code ec;
+    return boost::filesystem::is_directory(path, ec);
+  }
+
 }

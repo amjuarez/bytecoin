@@ -99,7 +99,25 @@ public:
     return std::error_code();
   }
 
-  void getKnownPoolTxIds(std::vector<Crypto::Hash>& ids) override {
+  const std::unordered_set<Crypto::Hash>& getKnownPoolTxIds() const override {
+    //stub
+    static std::unordered_set<Crypto::Hash> empty;
+    return empty;
+  }
+
+  std::error_code addUnconfirmedTransaction(const ITransactionReader& /*transaction*/) override {
+    throw std::runtime_error("Not implemented");
+  }
+
+  void removeUnconfirmedTransaction(const Crypto::Hash& /*transactionHash*/) override {
+    throw std::runtime_error("Not implemented");
+  }
+
+  virtual void addObserver(IBlockchainConsumerObserver* observer) override {
+    //stub
+  }
+
+  virtual void removeObserver(IBlockchainConsumerObserver* observer) override {
     //stub
   }
 

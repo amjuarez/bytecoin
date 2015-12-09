@@ -52,12 +52,14 @@ const AccountKeys& TransfersSubscription::getKeys() const {
   return subscription.keys;
 }
 
-void TransfersSubscription::addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
+bool TransfersSubscription::addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
                                            const std::vector<TransactionOutputInformationIn>& transfersList) {
   bool added = transfers.addTransaction(blockInfo, tx, transfersList);
   if (added) {
     m_observerManager.notify(&ITransfersObserver::onTransactionUpdated, this, tx.getTransactionHash());
   }
+
+  return added;
 }
 
 AccountPublicAddress TransfersSubscription::getAddress() {
@@ -69,8 +71,9 @@ ITransfersContainer& TransfersSubscription::getContainer() {
 }
 
 void TransfersSubscription::deleteUnconfirmedTransaction(const Hash& transactionHash) {
-  transfers.deleteUnconfirmedTransaction(transactionHash);
-  m_observerManager.notify(&ITransfersObserver::onTransactionDeleted, this, transactionHash);
+  if (transfers.deleteUnconfirmedTransaction(transactionHash)) {
+    m_observerManager.notify(&ITransfersObserver::onTransactionDeleted, this, transactionHash);
+  }
 }
 
 void TransfersSubscription::markTransactionConfirmed(const TransactionBlockInfo& block, const Hash& transactionHash,

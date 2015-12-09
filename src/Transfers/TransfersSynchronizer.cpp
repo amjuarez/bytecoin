@@ -41,13 +41,21 @@ TransfersSyncronizer::~TransfersSyncronizer() {
   }
 }
 
+void TransfersSyncronizer::initTransactionPool(const std::unordered_set<Crypto::Hash>& uncommitedTransactions) {
+  for (auto it = m_consumers.begin(); it != m_consumers.end(); ++it) {
+    it->second->initTransactionPool(uncommitedTransactions);
+  }
+}
+
 ITransfersSubscription& TransfersSyncronizer::addSubscription(const AccountSubscription& acc) {
   auto it = m_consumers.find(acc.keys.address.viewPublicKey);
 
   if (it == m_consumers.end()) {
     std::unique_ptr<TransfersConsumer> consumer(
       new TransfersConsumer(m_currency, m_node, acc.keys.viewSecretKey));
+
     m_sync.addConsumer(consumer.get());
+    consumer->addObserver(this);
     it = m_consumers.insert(std::make_pair(acc.keys.address.viewPublicKey, std::move(consumer))).first;
   }
     
@@ -62,6 +70,8 @@ bool TransfersSyncronizer::removeSubscription(const AccountPublicAddress& acc) {
   if (it->second->removeSubscription(acc)) {
     m_sync.removeConsumer(it->second.get());
     m_consumers.erase(it);
+
+    m_subscribers.erase(acc.viewPublicKey);
   }
 
   return true;
@@ -75,7 +85,68 @@ void TransfersSyncronizer::getSubscriptions(std::vector<AccountPublicAddress>& s
 
 ITransfersSubscription* TransfersSyncronizer::getSubscription(const AccountPublicAddress& acc) {
   auto it = m_consumers.find(acc.viewPublicKey);
-  return (it == m_consumers.end()) ? 0 : it->second->getSubscription(acc);
+  return (it == m_consumers.end()) ? nullptr : it->second->getSubscription(acc);
+}
+
+std::vector<Crypto::Hash> TransfersSyncronizer::getViewKeyKnownBlocks(const Crypto::PublicKey& publicViewKey) {
+  auto it = m_consumers.find(publicViewKey);
+  if (it == m_consumers.end()) {
+    throw std::invalid_argument("Consumer not found");
+  }
+
+  return m_sync.getConsumerKnownBlocks(*it->second);
+}
+
+void TransfersSyncronizer::onBlocksAdded(IBlockchainConsumer* consumer, const std::vector<Crypto::Hash>& blockHashes) {
+  auto it = findSubscriberForConsumer(consumer);
+  if (it != m_subscribers.end()) {
+    it->second->notify(&ITransfersSynchronizerObserver::onBlocksAdded, it->first, blockHashes);
+  }
+}
+
+void TransfersSyncronizer::onBlockchainDetach(IBlockchainConsumer* consumer, uint32_t blockIndex) {
+  auto it = findSubscriberForConsumer(consumer);
+  if (it != m_subscribers.end()) {
+    it->second->notify(&ITransfersSynchronizerObserver::onBlockchainDetach, it->first, blockIndex);
+  }
+}
+
+void TransfersSyncronizer::onTransactionDeleteBegin(IBlockchainConsumer* consumer, Crypto::Hash transactionHash) {
+  auto it = findSubscriberForConsumer(consumer);
+  if (it != m_subscribers.end()) {
+    it->second->notify(&ITransfersSynchronizerObserver::onTransactionDeleteBegin, it->first, transactionHash);
+  }
+}
+
+void TransfersSyncronizer::onTransactionDeleteEnd(IBlockchainConsumer* consumer, Crypto::Hash transactionHash) {
+  auto it = findSubscriberForConsumer(consumer);
+  if (it != m_subscribers.end()) {
+    it->second->notify(&ITransfersSynchronizerObserver::onTransactionDeleteEnd, it->first, transactionHash);
+  }
+}
+
+void TransfersSyncronizer::onTransactionUpdated(IBlockchainConsumer* consumer, const Crypto::Hash& transactionHash,
+  const std::vector<ITransfersContainer*>& containers) {
+
+  auto it = findSubscriberForConsumer(consumer);
+  if (it != m_subscribers.end()) {
+    it->second->notify(&ITransfersSynchronizerObserver::onTransactionUpdated, it->first, transactionHash, containers);
+  }
+}
+
+void TransfersSyncronizer::subscribeConsumerNotifications(const Crypto::PublicKey& viewPublicKey, ITransfersSynchronizerObserver* observer) {
+  auto it = m_subscribers.find(viewPublicKey);
+  if (it != m_subscribers.end()) {
+    it->second->add(observer);
+    return;
+  }
+
+  auto insertedIt = m_subscribers.emplace(viewPublicKey, std::unique_ptr<SubscribersNotifier>(new SubscribersNotifier())).first;
+  insertedIt->second->add(observer);
+}
+
+void TransfersSyncronizer::unsubscribeConsumerNotifications(const Crypto::PublicKey& viewPublicKey, ITransfersSynchronizerObserver* observer) {
+  m_subscribers.at(viewPublicKey)->remove(observer);
 }
 
 void TransfersSyncronizer::save(std::ostream& os) {
@@ -231,6 +302,32 @@ void TransfersSyncronizer::load(std::istream& is) {
     throw;
   }
 
+}
+
+bool TransfersSyncronizer::findViewKeyForConsumer(IBlockchainConsumer* consumer, Crypto::PublicKey& viewKey) const {
+  //since we have only couple of consumers linear complexity is fine
+  auto it = std::find_if(m_consumers.begin(), m_consumers.end(), [consumer] (const ConsumersContainer::value_type& subscription) {
+    return subscription.second.get() == consumer;
+  });
+
+  if (it == m_consumers.end()) {
+    return false;
+  }
+
+  viewKey = it->first;
+  return true;
+}
+
+TransfersSyncronizer::SubscribersContainer::const_iterator TransfersSyncronizer::findSubscriberForConsumer(IBlockchainConsumer* consumer) const {
+  Crypto::PublicKey viewKey;
+  if (findViewKeyForConsumer(consumer, viewKey)) {
+    auto it = m_subscribers.find(viewKey);
+    if (it != m_subscribers.end()) {
+      return it;
+    }
+  }
+
+  return m_subscribers.end();
 }
 
 }

@@ -26,4 +26,5 @@ namespace Tools
   std::string get_os_version_string();
   bool create_directories_if_necessary(const std::string& path);
   std::error_code replace_file(const std::string& replacement_name, const std::string& replaced_name);
+  bool directoryExists(const std::string& path);
 }

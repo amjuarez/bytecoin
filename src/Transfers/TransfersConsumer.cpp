@@ -16,13 +16,15 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "TransfersConsumer.h"
-#include "CommonTypes.h"
 
+#include <numeric>
+
+#include "CommonTypes.h"
 #include "Common/BlockingQueue.h"
 #include "CryptoNoteCore/CryptoNoteFormatUtils.h"
 #include "CryptoNoteCore/TransactionApi.h"
 
-#include "IWalletLegacy.h"
+#include "IWallet.h"
 #include "INode.h"
 #include <future>
 
@@ -90,6 +92,17 @@ void findMyOutputs(
   }
 }
 
+std::vector<Crypto::Hash> getBlockHashes(const CryptoNote::CompleteBlock* blocks, size_t count) {
+  std::vector<Crypto::Hash> result;
+  result.reserve(count);
+
+  for (size_t i = 0; i < count; ++i) {
+    result.push_back(blocks[i].blockHash);
+  }
+
+  return result;
+}
+
 }
 
 namespace CryptoNote {
@@ -133,6 +146,19 @@ void TransfersConsumer::getSubscriptions(std::vector<AccountPublicAddress>& subs
   }
 }
 
+void TransfersConsumer::initTransactionPool(const std::unordered_set<Crypto::Hash>& uncommitedTransactions) {
+  for (auto itSubscriptions = m_subscriptions.begin(); itSubscriptions != m_subscriptions.end(); ++itSubscriptions) {
+    std::vector<Crypto::Hash> unconfirmedTransactions;
+    itSubscriptions->second->getContainer().getUnconfirmedTransactions(unconfirmedTransactions);
+
+    for (auto itTransactions = unconfirmedTransactions.begin(); itTransactions != unconfirmedTransactions.end(); ++itTransactions) {
+      if (uncommitedTransactions.count(*itTransactions) == 0) {
+        m_poolTxs.emplace(*itTransactions);
+      }
+    }
+  }
+}
+
 void TransfersConsumer::updateSyncStart() {
   SynchronizationStart start;
 
@@ -153,6 +179,8 @@ SynchronizationStart TransfersConsumer::getSyncStart() {
 }
 
 void TransfersConsumer::onBlockchainDetach(uint32_t height) {
+  m_observerManager.notify(&IBlockchainConsumerObserver::onBlockchainDetach, this, height);
+
   for (const auto& kv : m_subscriptions) {
     kv.second->onBlockchainDetach(height);
   }
@@ -253,24 +281,23 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startH
     }
   }
 
+  std::vector<Crypto::Hash> blockHashes = getBlockHashes(blocks, count);
   if (!processingError) {
+    m_observerManager.notify(&IBlockchainConsumerObserver::onBlocksAdded, this, blockHashes);
+
     // sort by block height and transaction index in block
     std::sort(preprocessedTransactions.begin(), preprocessedTransactions.end(), [](const PreprocessedTx& a, const PreprocessedTx& b) {
       return std::tie(a.blockInfo.height, a.blockInfo.transactionIndex) < std::tie(b.blockInfo.height, b.blockInfo.transactionIndex);
     });
 
     for (const auto& tx : preprocessedTransactions) {
-      processingError = processTransaction(tx.blockInfo, *tx.tx, tx);
-      if (processingError) {
-        break;
-      }
+      processTransaction(tx.blockInfo, *tx.tx, tx);
     }
-  }
-  
-  if (processingError) {
+  } else {
     forEachSubscription([&](TransfersSubscription& sub) {
       sub.onError(processingError, startHeight);
     });
+
     return false;
   }
 
@@ -285,44 +312,55 @@ bool TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t startH
 std::error_code TransfersConsumer::onPoolUpdated(const std::vector<std::unique_ptr<ITransactionReader>>& addedTransactions, const std::vector<Hash>& deletedTransactions) {
   TransactionBlockInfo unconfirmedBlockInfo;
   unconfirmedBlockInfo.timestamp = 0; 
-  unconfirmedBlockInfo.height = WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT;
+  unconfirmedBlockInfo.height = WALLET_UNCONFIRMED_TRANSACTION_HEIGHT;
+
   std::error_code processingError;
   for (auto& cryptonoteTransaction : addedTransactions) {
+    m_poolTxs.emplace(cryptonoteTransaction->getTransactionHash());
     processingError = processTransaction(unconfirmedBlockInfo, *cryptonoteTransaction.get());
     if (processingError) {
-      break;
-    }
-  }
+      for (auto& sub : m_subscriptions) {
+        sub.second->onError(processingError, WALLET_UNCONFIRMED_TRANSACTION_HEIGHT);
+      }
 
-  if (processingError) {
-    for (auto& sub : m_subscriptions) {
-      sub.second->onError(processingError, WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT);
+      return processingError;
     }
-
-    return processingError;
   }
   
   for (auto& deletedTxHash : deletedTransactions) {
-    for (auto& sub: m_subscriptions) {
+    m_poolTxs.erase(deletedTxHash);
+
+    m_observerManager.notify(&IBlockchainConsumerObserver::onTransactionDeleteBegin, this, deletedTxHash);
+    for (auto& sub : m_subscriptions) {
       sub.second->deleteUnconfirmedTransaction(*reinterpret_cast<const Hash*>(&deletedTxHash));
     }
+
+    m_observerManager.notify(&IBlockchainConsumerObserver::onTransactionDeleteEnd, this, deletedTxHash);
   }
 
   return std::error_code();
 }
 
-void TransfersConsumer::getKnownPoolTxIds(std::vector<Hash>& ids) {
-  ids.clear();
-  std::unordered_set<Hash> knownIds;
-  for (auto& sub : m_subscriptions) {
-    std::vector<Hash> subscriptionUnconfirmedTxIds;
-    sub.second->getContainer().getUnconfirmedTransactions(subscriptionUnconfirmedTxIds);
-    knownIds.insert(subscriptionUnconfirmedTxIds.begin(), subscriptionUnconfirmedTxIds.end());
-  }
-
-  ids.assign(knownIds.begin(), knownIds.end());
+const std::unordered_set<Crypto::Hash>& TransfersConsumer::getKnownPoolTxIds() const {
+  return m_poolTxs;
 }
 
+std::error_code TransfersConsumer::addUnconfirmedTransaction(const ITransactionReader& transaction) {
+  TransactionBlockInfo unconfirmedBlockInfo;
+  unconfirmedBlockInfo.height = WALLET_UNCONFIRMED_TRANSACTION_HEIGHT;
+  unconfirmedBlockInfo.timestamp = 0;
+  unconfirmedBlockInfo.transactionIndex = 0;
+
+  return processTransaction(unconfirmedBlockInfo, transaction);
+}
+
+void TransfersConsumer::removeUnconfirmedTransaction(const Crypto::Hash& transactionHash) {
+  m_observerManager.notify(&IBlockchainConsumerObserver::onTransactionDeleteBegin, this, transactionHash);
+  for (auto& subscription : m_subscriptions) {
+    subscription.second->deleteUnconfirmedTransaction(transactionHash);
+  }
+  m_observerManager.notify(&IBlockchainConsumerObserver::onTransactionDeleteEnd, this, transactionHash);
+}
 
 std::error_code createTransfers(
   const AccountKeys& account,
@@ -353,7 +391,7 @@ std::error_code createTransfers(
     info.type = outType;
     info.transactionPublicKey = txPubKey;
     info.outputInTransaction = idx;
-    info.globalOutputIndex = (blockInfo.height == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) ?
+    info.globalOutputIndex = (blockInfo.height == WALLET_UNCONFIRMED_TRANSACTION_HEIGHT) ?
       UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX : globalIdxs[idx];
 
     if (outType == TransactionTypes::OutputType::Key) {
@@ -399,7 +437,7 @@ std::error_code TransfersConsumer::preprocessOutputs(const TransactionBlockInfo&
 
   std::error_code errorCode;
   auto txHash = tx.getTransactionHash();
-  if (blockInfo.height != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
+  if (blockInfo.height != WALLET_UNCONFIRMED_TRANSACTION_HEIGHT) {
     errorCode = getGlobalIndices(reinterpret_cast<const Hash&>(txHash), info.globalIdxs);
     if (errorCode) {
       return errorCode;
@@ -427,50 +465,52 @@ std::error_code TransfersConsumer::processTransaction(const TransactionBlockInfo
     return ec;
   }
 
-  return processTransaction(blockInfo, tx, info);
+  processTransaction(blockInfo, tx, info);
+  return std::error_code();
 }
 
-
-std::error_code TransfersConsumer::processTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info) {
-  std::error_code errorCode;
+void TransfersConsumer::processTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info) {
   std::vector<TransactionOutputInformationIn> emptyOutputs;
+  std::vector<ITransfersContainer*> transactionContainers;
+  bool someContainerUpdated = false;
   for (auto& kv : m_subscriptions) {
     auto it = info.outputs.find(kv.first);
     auto& subscriptionOutputs = (it == info.outputs.end()) ? emptyOutputs : it->second;
-    errorCode = processOutputs(blockInfo, *kv.second, tx, subscriptionOutputs, info.globalIdxs);
-    if (errorCode) {
-      return errorCode;
+
+    bool containerContainsTx;
+    bool containerUpdated;
+    processOutputs(blockInfo, *kv.second, tx, subscriptionOutputs, info.globalIdxs, containerContainsTx, containerUpdated);
+    someContainerUpdated = someContainerUpdated || containerUpdated;
+    if (containerContainsTx) {
+      transactionContainers.emplace_back(&kv.second->getContainer());
     }
   }
 
-  return std::error_code();
-}
-
-
-
-std::error_code TransfersConsumer::processOutputs(const TransactionBlockInfo& blockInfo, TransfersSubscription& sub,
-  const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers, const std::vector<uint32_t>& globalIdxs) {
-
-  if (blockInfo.height != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
-    TransactionInformation subscribtionTxInfo;
-    int64_t txBalance;
-    if (sub.getContainer().getTransactionInformation(tx.getTransactionHash(), subscribtionTxInfo, txBalance)) {
-      if (subscribtionTxInfo.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
-        // pool->blockchain
-        sub.markTransactionConfirmed(blockInfo, tx.getTransactionHash(), globalIdxs);
-        return std::error_code();
-      } else {
-        // - Subscription already has this transaction as confirmed, so why are we here?
-        // - Because, for instance, some another subscription doesn't have this transactions, so it is given to us again.
-        return std::error_code();
-      }
-    }
+  if (someContainerUpdated) {
+    m_observerManager.notify(&IBlockchainConsumerObserver::onTransactionUpdated, this, tx.getTransactionHash(), transactionContainers);
   }
-  
-  sub.addTransaction(blockInfo, tx, transfers);
-  return std::error_code();
 }
 
+void TransfersConsumer::processOutputs(const TransactionBlockInfo& blockInfo, TransfersSubscription& sub, const ITransactionReader& tx,
+  const std::vector<TransactionOutputInformationIn>& transfers, const std::vector<uint32_t>& globalIdxs, bool& contains, bool& updated) {
+
+  TransactionInformation subscribtionTxInfo;
+  contains = sub.getContainer().getTransactionInformation(tx.getTransactionHash(), subscribtionTxInfo);
+  updated = false;
+
+  if (contains) {
+    if (subscribtionTxInfo.blockHeight == WALLET_UNCONFIRMED_TRANSACTION_HEIGHT && blockInfo.height != WALLET_UNCONFIRMED_TRANSACTION_HEIGHT) {
+      // pool->blockchain
+      sub.markTransactionConfirmed(blockInfo, tx.getTransactionHash(), globalIdxs);
+      updated = true;
+    } else {
+      assert(subscribtionTxInfo.blockHeight == blockInfo.height);
+    }
+  } else {
+    updated = sub.addTransaction(blockInfo, tx, transfers);
+    contains = updated;
+  }
+}
 
 std::error_code TransfersConsumer::getGlobalIndices(const Hash& transactionHash, std::vector<uint32_t>& outsGlobalIndices) {  
   std::promise<std::error_code> prom;

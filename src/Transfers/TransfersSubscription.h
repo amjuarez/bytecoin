@@ -32,7 +32,7 @@ public:
   void onError(const std::error_code& ec, uint32_t height);
   bool advanceHeight(uint32_t height);
   const AccountKeys& getKeys() const;
-  void addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
+  bool addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
                       const std::vector<TransactionOutputInformationIn>& transfers);
 
   void deleteUnconfirmedTransaction(const Crypto::Hash& transactionHash);

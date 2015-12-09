@@ -27,6 +27,9 @@
 #include "CryptoNoteCore/IBlock.h"
 #include "CryptoNoteCore/Miner.h"
 #include "CryptoNoteCore/TransactionExtra.h"
+
+#include "CryptoNoteProtocol/ICryptoNoteProtocolQuery.h"
+
 #include "P2p/NetNode.h"
 
 #include "CoreRpcServerErrorCodes.h"
@@ -78,50 +81,50 @@ RpcServer::HandlerFunction jsonMethod(bool (RpcServer::*handler)(typename Comman
 
 }
   
-std::unordered_map<std::string, RpcServer::HandlerFunction> RpcServer::s_handlers = {
+std::unordered_map<std::string, RpcServer::RpcHandler<RpcServer::HandlerFunction>> RpcServer::s_handlers = {
   
   // binary handlers
-  { "/getblocks.bin", binMethod<COMMAND_RPC_GET_BLOCKS_FAST>(&RpcServer::on_get_blocks) },
-  { "/queryblocks.bin", binMethod<COMMAND_RPC_QUERY_BLOCKS>(&RpcServer::on_query_blocks) },
-  { "/queryblockslite.bin", binMethod<COMMAND_RPC_QUERY_BLOCKS_LITE>(&RpcServer::on_query_blocks_lite) },
-  { "/get_o_indexes.bin", binMethod<COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES>(&RpcServer::on_get_indexes) },
-  { "/getrandom_outs.bin", binMethod<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS>(&RpcServer::on_get_random_outs) },
-  { "/get_pool_changes.bin", binMethod<COMMAND_RPC_GET_POOL_CHANGES>(&RpcServer::onGetPoolChanges) },
-  { "/get_pool_changes_lite.bin", binMethod<COMMAND_RPC_GET_POOL_CHANGES_LITE>(&RpcServer::onGetPoolChangesLite) },
+  { "/getblocks.bin", { binMethod<COMMAND_RPC_GET_BLOCKS_FAST>(&RpcServer::on_get_blocks), false } },
+  { "/queryblocks.bin", { binMethod<COMMAND_RPC_QUERY_BLOCKS>(&RpcServer::on_query_blocks), false } },
+  { "/queryblockslite.bin", { binMethod<COMMAND_RPC_QUERY_BLOCKS_LITE>(&RpcServer::on_query_blocks_lite), false } },
+  { "/get_o_indexes.bin", { binMethod<COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES>(&RpcServer::on_get_indexes), false } },
+  { "/getrandom_outs.bin", { binMethod<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS>(&RpcServer::on_get_random_outs), false } },
+  { "/get_pool_changes.bin", { binMethod<COMMAND_RPC_GET_POOL_CHANGES>(&RpcServer::onGetPoolChanges), false } },
+  { "/get_pool_changes_lite.bin", { binMethod<COMMAND_RPC_GET_POOL_CHANGES_LITE>(&RpcServer::onGetPoolChangesLite), false } },
 
   // json handlers
-  { "/getinfo", jsonMethod<COMMAND_RPC_GET_INFO>(&RpcServer::on_get_info) },
-  { "/getheight", jsonMethod<COMMAND_RPC_GET_HEIGHT>(&RpcServer::on_get_height) },
-  { "/gettransactions", jsonMethod<COMMAND_RPC_GET_TRANSACTIONS>(&RpcServer::on_get_transactions)},
-  { "/sendrawtransaction", jsonMethod<COMMAND_RPC_SEND_RAW_TX>(&RpcServer::on_send_raw_tx) },
-  { "/start_mining", jsonMethod<COMMAND_RPC_START_MINING>(&RpcServer::on_start_mining) },
-  { "/stop_mining", jsonMethod<COMMAND_RPC_STOP_MINING>(&RpcServer::on_stop_mining) },
-  { "/stop_daemon", jsonMethod<COMMAND_RPC_STOP_DAEMON>(&RpcServer::on_stop_daemon) },
+  { "/getinfo", { jsonMethod<COMMAND_RPC_GET_INFO>(&RpcServer::on_get_info), true } },
+  { "/getheight", { jsonMethod<COMMAND_RPC_GET_HEIGHT>(&RpcServer::on_get_height), true } },
+  { "/gettransactions", { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS>(&RpcServer::on_get_transactions), false } },
+  { "/sendrawtransaction", { jsonMethod<COMMAND_RPC_SEND_RAW_TX>(&RpcServer::on_send_raw_tx), false } },
+  { "/start_mining", { jsonMethod<COMMAND_RPC_START_MINING>(&RpcServer::on_start_mining), false } },
+  { "/stop_mining", { jsonMethod<COMMAND_RPC_STOP_MINING>(&RpcServer::on_stop_mining), false } },
+  { "/stop_daemon", { jsonMethod<COMMAND_RPC_STOP_DAEMON>(&RpcServer::on_stop_daemon), true } },
 
   // json rpc
-  { "/json_rpc", std::bind(&RpcServer::processJsonRpcRequest, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3) }
+  { "/json_rpc", { std::bind(&RpcServer::processJsonRpcRequest, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), true } }
 };
 
-RpcServer::RpcServer(System::Dispatcher& dispatcher, Logging::ILogger& log, core& c, NodeServer& p2p) :
-  HttpServer(dispatcher, log), logger(log, "RpcServer"), m_core(c), m_p2p(p2p) {
+RpcServer::RpcServer(System::Dispatcher& dispatcher, Logging::ILogger& log, core& c, NodeServer& p2p, const ICryptoNoteProtocolQuery& protocolQuery) :
+  HttpServer(dispatcher, log), logger(log, "RpcServer"), m_core(c), m_p2p(p2p), m_protocolQuery(protocolQuery) {
 }
 
 void RpcServer::processRequest(const HttpRequest& request, HttpResponse& response) {
   auto url = request.getUrl();
-  
+
   auto it = s_handlers.find(url);
   if (it == s_handlers.end()) {
     response.setStatus(HttpResponse::STATUS_404);
     return;
   }
 
-  if (url != "/json_rpc" && !checkCoreReady()) {
+  if (!it->second.allowBusyCore && !isCoreReady()) {
     response.setStatus(HttpResponse::STATUS_500);
     response.setBody("Core is busy");
     return;
   }
 
-  it->second(this, request, response);
+  it->second.handler(this, request, response);
 }
 
 bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& response) {
@@ -138,15 +141,15 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
     jsonRequest.parseRequest(request.getBody());
     jsonResponse.setId(jsonRequest.getId()); // copy id
 
-    static std::unordered_map<std::string, JsonMemberMethod> jsonRpcHandlers = {
-      { "getblockcount", makeMemberMethod(&RpcServer::on_getblockcount) },
-      { "on_getblockhash", makeMemberMethod(&RpcServer::on_getblockhash) },
-      { "getblocktemplate", makeMemberMethod(&RpcServer::on_getblocktemplate) },
-      { "getcurrencyid", makeMemberMethod(&RpcServer::on_get_currency_id) },
-      { "submitblock", makeMemberMethod(&RpcServer::on_submitblock) },
-      { "getlastblockheader", makeMemberMethod(&RpcServer::on_get_last_block_header) },
-      { "getblockheaderbyhash", makeMemberMethod(&RpcServer::on_get_block_header_by_hash) },
-      { "getblockheaderbyheight", makeMemberMethod(&RpcServer::on_get_block_header_by_height) }
+    static std::unordered_map<std::string, RpcServer::RpcHandler<JsonMemberMethod>> jsonRpcHandlers = {
+      { "getblockcount", { makeMemberMethod(&RpcServer::on_getblockcount), true } },
+      { "on_getblockhash", { makeMemberMethod(&RpcServer::on_getblockhash), false } },
+      { "getblocktemplate", { makeMemberMethod(&RpcServer::on_getblocktemplate), false } },
+      { "getcurrencyid", { makeMemberMethod(&RpcServer::on_get_currency_id), true } },
+      { "submitblock", { makeMemberMethod(&RpcServer::on_submitblock), false } },
+      { "getlastblockheader", { makeMemberMethod(&RpcServer::on_get_last_block_header), false } },
+      { "getblockheaderbyhash", { makeMemberMethod(&RpcServer::on_get_block_header_by_hash), false } },
+      { "getblockheaderbyheight", { makeMemberMethod(&RpcServer::on_get_block_header_by_height), false } }
     };
 
     auto it = jsonRpcHandlers.find(jsonRequest.getMethod());
@@ -154,11 +157,11 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
       throw JsonRpcError(JsonRpc::errMethodNotFound);
     }
 
-    if (jsonRequest.getMethod() != "getcurrencyid" && !checkCoreReady()) {
+    if (!it->second.allowBusyCore && !isCoreReady()) {
       throw JsonRpcError(CORE_RPC_ERROR_CODE_CORE_BUSY, "Core is busy");
     }
 
-    it->second(this, jsonRequest, jsonResponse);
+    it->second.handler(this, jsonRequest, jsonResponse);
 
   } catch (const JsonRpcError& err) {
     jsonResponse.setError(err);
@@ -171,10 +174,8 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
   return true;
 }
 
-#define CHECK_CORE_READY()
-
-bool RpcServer::checkCoreReady() {
-  return m_core.is_ready() && m_p2p.get_payload_object().isSynchronized();
+bool RpcServer::isCoreReady() {
+  return m_core.currency().isTestnet() || m_p2p.get_payload_object().isSynchronized();
 }
 
 //
@@ -219,8 +220,6 @@ bool RpcServer::on_get_blocks(const COMMAND_RPC_GET_BLOCKS_FAST::request& req, C
 }
 
 bool RpcServer::on_query_blocks(const COMMAND_RPC_QUERY_BLOCKS::request& req, COMMAND_RPC_QUERY_BLOCKS::response& res) {
-  CHECK_CORE_READY();
-
   uint32_t startHeight;
   uint32_t currentHeight;
   uint32_t fullOffset;
@@ -238,8 +237,6 @@ bool RpcServer::on_query_blocks(const COMMAND_RPC_QUERY_BLOCKS::request& req, CO
 }
 
 bool RpcServer::on_query_blocks_lite(const COMMAND_RPC_QUERY_BLOCKS_LITE::request& req, COMMAND_RPC_QUERY_BLOCKS_LITE::response& res) {
-  CHECK_CORE_READY();
-
   uint32_t startHeight;
   uint32_t currentHeight;
   uint32_t fullOffset;
@@ -256,8 +253,6 @@ bool RpcServer::on_query_blocks_lite(const COMMAND_RPC_QUERY_BLOCKS_LITE::reques
 }
 
 bool RpcServer::on_get_indexes(const COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::request& req, COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::response& res) {
-  CHECK_CORE_READY();
-
   std::vector<uint32_t> outputIndexes;
   if (!m_core.get_tx_outputs_gindexs(req.txid, outputIndexes)) {
     res.status = "Failed";
@@ -271,7 +266,6 @@ bool RpcServer::on_get_indexes(const COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::
 }
 
 bool RpcServer::on_get_random_outs(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::response& res) {
-  CHECK_CORE_READY();
   res.status = "Failed";
   if (!m_core.get_random_outs_for_amounts(req, res)) {
     return true;
@@ -301,8 +295,6 @@ bool RpcServer::on_get_random_outs(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOU
 }
 
 bool RpcServer::onGetPoolChanges(const COMMAND_RPC_GET_POOL_CHANGES::request& req, COMMAND_RPC_GET_POOL_CHANGES::response& rsp) {
-  CHECK_CORE_READY();
-
   rsp.status = CORE_RPC_STATUS_OK;
   std::vector<CryptoNote::Transaction> addedTransactions;
   rsp.isTailBlockActual = m_core.getPoolChanges(req.tailBlockId, req.knownTxsIds, addedTransactions, rsp.deletedTxsIds);
@@ -320,8 +312,6 @@ bool RpcServer::onGetPoolChanges(const COMMAND_RPC_GET_POOL_CHANGES::request& re
 
 
 bool RpcServer::onGetPoolChangesLite(const COMMAND_RPC_GET_POOL_CHANGES_LITE::request& req, COMMAND_RPC_GET_POOL_CHANGES_LITE::response& rsp) {
-  CHECK_CORE_READY();
-
   rsp.status = CORE_RPC_STATUS_OK;
   rsp.isTailBlockActual = m_core.getPoolChangesLite(req.tailBlockId, req.knownTxsIds, rsp.addedTxs, rsp.deletedTxsIds);
 
@@ -343,19 +333,18 @@ bool RpcServer::on_get_info(const COMMAND_RPC_GET_INFO::request& req, COMMAND_RP
   res.incoming_connections_count = total_conn - res.outgoing_connections_count;
   res.white_peerlist_size = m_p2p.getPeerlistManager().get_white_peers_count();
   res.grey_peerlist_size = m_p2p.getPeerlistManager().get_gray_peers_count();
+  res.last_known_block_index = std::max(static_cast<uint32_t>(1), m_protocolQuery.getObservedHeight()) - 1;
   res.status = CORE_RPC_STATUS_OK;
   return true;
 }
 
 bool RpcServer::on_get_height(const COMMAND_RPC_GET_HEIGHT::request& req, COMMAND_RPC_GET_HEIGHT::response& res) {
-  CHECK_CORE_READY();
   res.height = m_core.get_current_blockchain_height();
   res.status = CORE_RPC_STATUS_OK;
   return true;
 }
 
 bool RpcServer::on_get_transactions(const COMMAND_RPC_GET_TRANSACTIONS::request& req, COMMAND_RPC_GET_TRANSACTIONS::response& res) {
-  CHECK_CORE_READY();
   std::vector<Hash> vh;
   for (const auto& tx_hex_str : req.txs_hashes) {
     BinaryArray b;
@@ -387,8 +376,6 @@ bool RpcServer::on_get_transactions(const COMMAND_RPC_GET_TRANSACTIONS::request&
 }
 
 bool RpcServer::on_send_raw_tx(const COMMAND_RPC_SEND_RAW_TX::request& req, COMMAND_RPC_SEND_RAW_TX::response& res) {
-  CHECK_CORE_READY();
-
   BinaryArray tx_blob;
   if (!fromHex(req.tx_as_hex, tx_blob))
   {
@@ -429,7 +416,6 @@ bool RpcServer::on_send_raw_tx(const COMMAND_RPC_SEND_RAW_TX::request& req, COMM
 }
 
 bool RpcServer::on_start_mining(const COMMAND_RPC_START_MINING::request& req, COMMAND_RPC_START_MINING::response& res) {
-  CHECK_CORE_READY();
   AccountPublicAddress adr;
   if (!m_core.currency().parseAccountAddressString(req.miner_address, adr)) {
     res.status = "Failed, wrong address";
@@ -446,7 +432,6 @@ bool RpcServer::on_start_mining(const COMMAND_RPC_START_MINING::request& req, CO
 }
 
 bool RpcServer::on_stop_mining(const COMMAND_RPC_STOP_MINING::request& req, COMMAND_RPC_STOP_MINING::response& res) {
-  CHECK_CORE_READY();
   if (!m_core.get_miner().stop()) {
     res.status = "Failed, mining not stopped";
     return true;
@@ -456,7 +441,6 @@ bool RpcServer::on_stop_mining(const COMMAND_RPC_STOP_MINING::request& req, COMM
 }
 
 bool RpcServer::on_stop_daemon(const COMMAND_RPC_STOP_DAEMON::request& req, COMMAND_RPC_STOP_DAEMON::response& res) {
-  CHECK_CORE_READY();
   if (m_core.currency().isTestnet()) {
     m_p2p.sendStopSignal();
     res.status = CORE_RPC_STATUS_OK;

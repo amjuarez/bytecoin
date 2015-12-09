@@ -46,7 +46,11 @@ enum WalletErrorCodes {
   INDEX_OUT_OF_RANGE,
   ADDRESS_ALREADY_EXISTS,
   TRACKING_MODE,
-  WRONG_PARAMETERS
+  WRONG_PARAMETERS,
+  OBJECT_NOT_FOUND,
+  WALLET_NOT_FOUND,
+  CHANGE_ADDRESS_REQUIRED,
+  CHANGE_ADDRESS_NOT_FOUND
 };
 
 // custom category:
@@ -85,6 +89,10 @@ public:
     case ADDRESS_ALREADY_EXISTS:   return "Address already exists";
     case TRACKING_MODE:            return "The wallet is in tracking mode";
     case WRONG_PARAMETERS:         return "Wrong parameters passed";
+    case OBJECT_NOT_FOUND:         return "Object not found";
+    case WALLET_NOT_FOUND:         return "Requested wallet not found";
+    case CHANGE_ADDRESS_REQUIRED:  return "Change address required";
+    case CHANGE_ADDRESS_NOT_FOUND: return "Change address not found";
     default:                       return "Unknown error";
     }
   }
@@ -99,4 +107,11 @@ private:
 
 inline std::error_code make_error_code(CryptoNote::error::WalletErrorCodes e) {
   return std::error_code(static_cast<int>(e), CryptoNote::error::WalletErrorCategory::INSTANCE);
+}
+
+namespace std {
+
+template <>
+struct is_error_code_enum<CryptoNote::error::WalletErrorCodes>: public true_type {};
+
 }

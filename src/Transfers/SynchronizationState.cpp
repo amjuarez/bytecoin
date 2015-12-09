@@ -103,6 +103,10 @@ uint32_t SynchronizationState::getHeight() const {
   return static_cast<uint32_t>(m_blockchain.size());
 }
 
+const std::vector<Crypto::Hash>& SynchronizationState::getKnownBlockHashes() const {
+  return m_blockchain;
+}
+
 void SynchronizationState::save(std::ostream& os) {
   StdOutputStream stream(os);
   CryptoNote::BinaryOutputStreamSerializer s(stream);
