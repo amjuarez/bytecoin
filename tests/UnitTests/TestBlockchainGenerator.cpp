@@ -210,6 +210,10 @@ void TestBlockchainGenerator::addToBlockchain(const CryptoNote::Transaction& tx)
 }
 
 void TestBlockchainGenerator::addToBlockchain(const std::vector<CryptoNote::Transaction>& txs) {
+  addToBlockchain(txs, miner_acc);
+}
+
+void TestBlockchainGenerator::addToBlockchain(const std::vector<CryptoNote::Transaction>& txs, const CryptoNote::AccountBase& minerAddress) {
   std::list<CryptoNote::Transaction> txsToBlock;
 
   for (const auto& tx: txs) {
@@ -222,7 +226,7 @@ void TestBlockchainGenerator::addToBlockchain(const std::vector<CryptoNote::Tran
   CryptoNote::Block& prev_block = m_blockchain.back();
   CryptoNote::Block block;
 
-  generator.constructBlock(block, prev_block, miner_acc, txsToBlock);
+  generator.constructBlock(block, prev_block, minerAddress, txsToBlock);
   m_blockchain.push_back(block);
   addTx(block.baseTransaction);
 
@@ -394,5 +398,11 @@ bool TestBlockchainGenerator::getMultisignatureOutputByGlobalIndex(uint64_t amou
   assert(tx.outputs.size() > entry.indexOut);
   assert(tx.outputs[entry.indexOut].target.type() == typeid(MultisignatureOutput));
   out = boost::get<MultisignatureOutput>(tx.outputs[entry.indexOut].target);
+  return true;
+}
+
+bool TestBlockchainGenerator::generateFromBaseTx(const CryptoNote::AccountBase& address) {
+  std::unique_lock<std::mutex> lock(m_mutex);
+  addToBlockchain({}, address);
   return true;
 }

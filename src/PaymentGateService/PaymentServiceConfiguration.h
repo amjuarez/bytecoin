@@ -39,12 +39,12 @@ struct Configuration {
   std::string bindAddress;
   uint16_t bindPort;
 
-  std::string walletFile;
-  std::string walletPassword;
+  std::string containerFile;
+  std::string containerPassword;
   std::string logFile;
   std::string serverRoot;
 
-  bool generateNewWallet;
+  bool generateNewContainer;
   bool daemonize;
   bool registerService;
   bool unregisterService;

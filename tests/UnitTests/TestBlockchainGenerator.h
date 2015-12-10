@@ -43,6 +43,7 @@ public:
   void addTxToBlockchain(const CryptoNote::Transaction& transaction);
   bool getTransactionByHash(const Crypto::Hash& hash, CryptoNote::Transaction& tx, bool checkTxPool = false);
   const CryptoNote::AccountBase& getMinerAccount() const;
+  bool generateFromBaseTx(const CryptoNote::AccountBase& address);
 
   void putTxToPool(const CryptoNote::Transaction& tx);
   void getPoolSymmetricDifference(std::vector<Crypto::Hash>&& known_pool_tx_ids, Crypto::Hash known_block_id, bool& is_bc_actual,
@@ -96,6 +97,7 @@ private:
 
   void addToBlockchain(const CryptoNote::Transaction& tx);
   void addToBlockchain(const std::vector<CryptoNote::Transaction>& txs);
+  void addToBlockchain(const std::vector<CryptoNote::Transaction>& txs, const CryptoNote::AccountBase& minerAddress);
   void addTx(const CryptoNote::Transaction& tx);
 
   bool doGenerateTransactionsInOneBlock(CryptoNote::AccountPublicAddress const &address, size_t n);

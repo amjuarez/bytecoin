@@ -225,36 +225,36 @@ void NodeRpcProxy::updateBlockchainStatus() {
       m_lastKnowHash = blockHash;
       m_nodeHeight.store(static_cast<uint32_t>(rsp.block_header.height), std::memory_order_relaxed);
       m_lastLocalBlockTimestamp.store(rsp.block_header.timestamp, std::memory_order_relaxed);
-      // TODO request and update network height
-      m_networkHeight.store(static_cast<uint32_t>(rsp.block_header.height), std::memory_order_relaxed);
-      m_observerManager.notify(&INodeObserver::lastKnownBlockHeightUpdated, m_networkHeight.load(std::memory_order_relaxed));
-      //if (m_networkHeight.load(std::memory_order_relaxed) != rsp.block_header.network_height) {
-      //  m_networkHeight.store(rsp.block_header.height, std::memory_order_relaxed);
-      //  m_observerManager.notify(&INodeObserver::lastKnownBlockHeightUpdated, m_networkHeight);
-      //}
       m_observerManager.notify(&INodeObserver::localBlockchainUpdated, m_nodeHeight.load(std::memory_order_relaxed));
     }
   }
 
-  updatePeerCount();
+  CryptoNote::COMMAND_RPC_GET_INFO::request getInfoReq = AUTO_VAL_INIT(getInfoReq);
+  CryptoNote::COMMAND_RPC_GET_INFO::response getInfoResp = AUTO_VAL_INIT(getInfoResp);
+
+  ec = jsonCommand("/getinfo", getInfoReq, getInfoResp);
+  if (!ec) {
+    //a quirk to let wallets work with previous versions daemons.
+    //Previous daemons didn't have the 'last_known_block_index' parameter in RPC so it may have zero value.
+    auto lastKnownBlockIndex = std::max(getInfoResp.last_known_block_index, m_nodeHeight.load(std::memory_order_relaxed));
+    if (m_networkHeight.load(std::memory_order_relaxed) != lastKnownBlockIndex) {
+      m_networkHeight.store(lastKnownBlockIndex, std::memory_order_relaxed);
+      m_observerManager.notify(&INodeObserver::lastKnownBlockHeightUpdated, m_networkHeight.load(std::memory_order_relaxed));
+    }
+
+    updatePeerCount(getInfoResp.incoming_connections_count + getInfoResp.outgoing_connections_count);
+  }
+
   if (m_connected != m_httpClient->isConnected()) {
     m_connected = m_httpClient->isConnected();
     m_rpcProxyObserverManager.notify(&INodeRpcProxyObserver::connectionStatusUpdated, m_connected);
   }
 }
 
-void NodeRpcProxy::updatePeerCount() {
-  CryptoNote::COMMAND_RPC_GET_INFO::request req = AUTO_VAL_INIT(req);
-  CryptoNote::COMMAND_RPC_GET_INFO::response rsp = AUTO_VAL_INIT(rsp);
-
-  std::error_code ec = jsonCommand("/getinfo", req, rsp);
-
-  if (!ec) {
-    size_t peerCount = rsp.incoming_connections_count + rsp.outgoing_connections_count;
-    if (peerCount != m_peerCount) {
-      m_peerCount = peerCount;
-      m_observerManager.notify(&INodeObserver::peerCountUpdated, m_peerCount.load(std::memory_order_relaxed));
-    }
+void NodeRpcProxy::updatePeerCount(size_t peerCount) {
+  if (peerCount != m_peerCount) {
+    m_peerCount = peerCount;
+    m_observerManager.notify(&INodeObserver::peerCountUpdated, m_peerCount.load(std::memory_order_relaxed));
   }
 }
 
@@ -306,7 +306,7 @@ uint32_t NodeRpcProxy::getLocalBlockCount() const {
 }
 
 uint32_t NodeRpcProxy::getKnownBlockCount() const {
-  return m_networkHeight.load(std::memory_order_relaxed);
+  return m_networkHeight.load(std::memory_order_relaxed) + 1;
 }
 
 uint64_t NodeRpcProxy::getLastLocalBlockTimestamp() const {

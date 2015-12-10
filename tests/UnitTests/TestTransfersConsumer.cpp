@@ -742,8 +742,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_checkTransactionInformation) {
   ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 0, 2));
 
   TransactionInformation info;
-  int64_t balance;
-  ASSERT_TRUE(container.getTransactionInformation(tx->getTransactionHash(), info, balance));
+  ASSERT_TRUE(container.getTransactionInformation(tx->getTransactionHash(), info));
 
   ASSERT_EQ(tx->getTransactionHash(), info.transactionHash);
   ASSERT_EQ(tx->getTransactionPublicKey(), info.publicKey);
@@ -875,7 +874,7 @@ TEST_F(TransfersConsumerTest, onPoolUpdated_addTransactionDoesNotGetsGlobalIndic
   ASSERT_TRUE(m_node.calls_getTransactionOutsGlobalIndices.empty());
 }
 
-TEST_F(TransfersConsumerTest, onPoolUpdated_deleteTransaction) {
+TEST_F(TransfersConsumerTest, onPoolUpdated_deleteTransactionNotDeleted) {
   auto& sub = addSubscription();
   TransfersObserver observer;
   sub.addObserver(&observer);
@@ -887,15 +886,42 @@ TEST_F(TransfersConsumerTest, onPoolUpdated_deleteTransaction) {
 
   m_consumer.onPoolUpdated({}, deleted);
 
+  ASSERT_EQ(0, observer.deleted.size());
+}
+
+TEST_F(TransfersConsumerTest, onPoolUpdated_deleteTransaction) {
+  const uint8_t TX_COUNT = 2;
+  auto& sub = addSubscription();
+  TransfersObserver observer;
+  sub.addObserver(&observer);
+
+  std::vector<std::unique_ptr<ITransactionReader>> added;
+  std::vector<Crypto::Hash> deleted;
+
+  for (uint8_t i = 0; i < TX_COUNT; ++i) {
+    // construct tx
+    TestTransactionBuilder b1;
+    auto unknownSender = generateAccountKeys();
+    b1.addTestInput(10000, unknownSender);
+    auto out = b1.addTestKeyOutput(10000, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX, m_accountKeys);
+
+    auto tx = std::shared_ptr<ITransactionReader>(b1.build().release());
+
+    std::unique_ptr<ITransactionReader> prefix = createTransactionPrefix(convertTx(*tx));
+    added.push_back(std::move(prefix));
+    deleted.push_back(added.back()->getTransactionHash());
+  }
+  
+  m_consumer.onPoolUpdated(added, {});
+  m_consumer.onPoolUpdated({}, deleted);
+
   ASSERT_EQ(deleted.size(), observer.deleted.size());
-  ASSERT_EQ(reinterpret_cast<const Hash&>(deleted[0]), observer.deleted[0]);
-  ASSERT_EQ(reinterpret_cast<const Hash&>(deleted[1]), observer.deleted[1]);
+  ASSERT_EQ(deleted, observer.deleted);
 }
 
 TEST_F(TransfersConsumerTest, getKnownPoolTxIds_empty) {
   addSubscription();
-  std::vector<Crypto::Hash> ids;
-  m_consumer.getKnownPoolTxIds(ids);
+  const std::unordered_set<Crypto::Hash>& ids = m_consumer.getKnownPoolTxIds();
   ASSERT_TRUE(ids.empty());
 }
 
@@ -926,14 +952,13 @@ TEST_F(TransfersConsumerTest, getKnownPoolTxIds_returnsUnconfirmed) {
   v.push_back(createTransactionPrefix(convertTx(*txs[2])));
   m_consumer.onPoolUpdated(v, {});
 
-  std::vector<Crypto::Hash> ids;
-  m_consumer.getKnownPoolTxIds(ids);
+  const std::unordered_set<Crypto::Hash>& ids = m_consumer.getKnownPoolTxIds();
 
   ASSERT_EQ(3, ids.size());
 
   for (int i = 0; i < 3; ++i) {
     auto txhash = txs[i]->getTransactionHash();
-    ASSERT_TRUE(std::find(ids.begin(), ids.end(), reinterpret_cast<const Crypto::Hash&>(txhash)) != ids.end());
+    ASSERT_EQ(1, ids.count(txhash));
   }
 }
 

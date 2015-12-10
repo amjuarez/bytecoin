@@ -319,7 +319,6 @@ m_currency(currency),
 m_tx_pool(tx_pool),
 m_current_block_cumul_sz_limit(0),
 m_is_in_checkpoint_zone(false),
-m_is_blockchain_storing(false),
 m_upgradeDetector(currency, m_blocks, BLOCK_MAJOR_VERSION_2, logger),
 m_checkpoints(logger) {
 

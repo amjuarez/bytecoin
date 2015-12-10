@@ -92,7 +92,7 @@ private:
   void updateNodeStatus();
   void updateBlockchainStatus();
   bool updatePoolStatus();
-  void updatePeerCount();
+  void updatePeerCount(size_t peerCount);
   void updatePoolState(const std::vector<std::unique_ptr<ITransactionReader>>& addedTxs, const std::vector<Crypto::Hash>& deletedTxsIds);
 
   std::error_code doRelayTransaction(const CryptoNote::Transaction& transaction);

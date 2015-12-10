@@ -68,7 +68,6 @@ public:
   virtual bool handle_incoming_block_blob(const CryptoNote::BinaryArray& block_blob, CryptoNote::block_verification_context& bvc, bool control_miner, bool relay_block) = 0;
   virtual bool handle_get_objects(NOTIFY_REQUEST_GET_OBJECTS_request& arg, NOTIFY_RESPONSE_GET_OBJECTS_request& rsp) = 0; //Deprecated. Should be removed with CryptoNoteProtocolHandler.
   virtual void on_synchronized() = 0;
-  virtual bool is_ready() = 0;
   virtual size_t addChain(const std::vector<const IBlock*>& chain) = 0;
 
   virtual void get_blockchain_top(uint32_t& height, Crypto::Hash& top_id) = 0;
