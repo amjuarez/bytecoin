@@ -38,7 +38,7 @@ public:
   WalletTransactionUpdatedEvent(TransactionId transactionId) : m_id(transactionId) {};
   virtual ~WalletTransactionUpdatedEvent() {};
 
-  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer)
+  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) override
   {
     observer.notify(&IWalletLegacyObserver::transactionUpdated, m_id);
   }
@@ -53,7 +53,7 @@ public:
   WalletSendTransactionCompletedEvent(TransactionId transactionId, std::error_code result) : m_id(transactionId), m_error(result) {};
   virtual ~WalletSendTransactionCompletedEvent() {};
 
-  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer)
+  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) override
   {
     observer.notify(&IWalletLegacyObserver::sendTransactionCompleted, m_id, m_error);
   }
@@ -69,7 +69,7 @@ public:
   WalletExternalTransactionCreatedEvent(TransactionId transactionId) : m_id(transactionId) {};
   virtual ~WalletExternalTransactionCreatedEvent() {};
 
-  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer)
+  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) override
   {
     observer.notify(&IWalletLegacyObserver::externalTransactionCreated, m_id);
   }
@@ -83,7 +83,7 @@ public:
   WalletSynchronizationProgressUpdatedEvent(uint32_t current, uint32_t total) : m_current(current), m_total(total) {};
   virtual ~WalletSynchronizationProgressUpdatedEvent() {};
 
-  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer)
+  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) override
   {
     observer.notify(&IWalletLegacyObserver::synchronizationProgressUpdated, m_current, m_total);
   }
@@ -98,7 +98,7 @@ public:
   WalletSynchronizationCompletedEvent(uint32_t current, uint32_t total, std::error_code result) : m_ec(result) {};
   virtual ~WalletSynchronizationCompletedEvent() {};
 
-  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) {
+  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) override {
     observer.notify(&IWalletLegacyObserver::synchronizationCompleted, m_ec);
   }
 
@@ -112,7 +112,7 @@ public:
   WalletActualBalanceUpdatedEvent(uint64_t balance) : m_balance(balance) {};
   virtual ~WalletActualBalanceUpdatedEvent() {};
 
-  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer)
+  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) override
   {
     observer.notify(&IWalletLegacyObserver::actualBalanceUpdated, m_balance);
   }
@@ -126,7 +126,7 @@ public:
   WalletPendingBalanceUpdatedEvent(uint64_t balance) : m_balance(balance) {};
   virtual ~WalletPendingBalanceUpdatedEvent() {};
 
-  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer)
+  virtual void notify(Tools::ObserverManager<CryptoNote::IWalletLegacyObserver>& observer) override
   {
     observer.notify(&IWalletLegacyObserver::pendingBalanceUpdated, m_balance);
   }

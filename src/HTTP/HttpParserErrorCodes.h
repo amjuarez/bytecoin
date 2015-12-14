@@ -35,15 +35,15 @@ class HttpParserErrorCategory : public std::error_category {
 public:
   static HttpParserErrorCategory INSTANCE;
 
-  virtual const char* name() const throw() {
+  virtual const char* name() const throw() override {
     return "HttpParserErrorCategory";
   }
 
-  virtual std::error_condition default_error_condition(int ev) const throw() {
+  virtual std::error_condition default_error_condition(int ev) const throw() override {
     return std::error_condition(ev, *this);
   }
 
-  virtual std::string message(int ev) const {
+  virtual std::string message(int ev) const override {
     switch (ev) {
       case STREAM_NOT_GOOD: return "The stream is not good";
       case END_OF_STREAM: return "The stream is ended";

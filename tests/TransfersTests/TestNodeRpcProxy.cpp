@@ -47,7 +47,7 @@ namespace {
 
   class PoolChangedObserver : public INodeObserver {
   public:
-    virtual void poolChanged() {
+    virtual void poolChanged() override {
       std::unique_lock<std::mutex> lk(mutex);
       ready = true;
       cv.notify_all();

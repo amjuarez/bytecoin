@@ -62,7 +62,7 @@ public:
     node(coreStub, protocolQueryStub),
     currency(CryptoNote::CurrencyBuilder(logger).currency()),
     generator(currency) {}
-  void SetUp();
+  void SetUp() override;
 
 protected:
   void initNode();

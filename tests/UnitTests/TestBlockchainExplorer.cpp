@@ -104,8 +104,8 @@ public:
     nodeStub(generator),
     blockchainExplorer(nodeStub, logger) {
   }
-  void SetUp();
-  void TearDown();
+  void SetUp() override;
+  void TearDown() override;
 
 protected:
   Currency currency;

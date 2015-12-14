@@ -158,7 +158,7 @@ public:
   WalletLegacyApi() : m_currency(CryptoNote::CurrencyBuilder(m_logger).currency()), generator(m_currency) {
   }
 
-  void SetUp();
+  void SetUp() override;
 
 protected:
   void prepareAliceWallet();

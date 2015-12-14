@@ -390,10 +390,10 @@ TEST_F(BcSTest, stopIsWaiting) {
 
   bool flag = false;
 
-  o1.updFunc = std::move([&e, &flag](uint32_t, uint32_t) {
+  o1.updFunc = [&e, &flag](uint32_t, uint32_t) {
     e.notify(); std::this_thread::sleep_for(std::chrono::milliseconds(1000)); flag = true;
 
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -413,9 +413,9 @@ TEST_F(BcSTest, syncCompletedError) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
 
-  o1.updFunc = std::move([&e](uint32_t curr, uint32_t total) {
+  o1.updFunc = [&e](uint32_t curr, uint32_t total) {
     e.notify(); std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  });
+  };
 
   m_sync.addObserver(&o);
   m_sync.addObserver(&o1);
@@ -434,9 +434,9 @@ TEST_F(BcSTest, onLastKnownBlockHeightUpdated) {
   generator.generateEmptyBlocks(20);
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -460,9 +460,9 @@ TEST_F(BcSTest, onPoolChanged) {
   generator.generateEmptyBlocks(20);
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -594,9 +594,9 @@ TEST_F(BcSTest, firstPoolSynchronizationCheck) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -635,9 +635,9 @@ TEST_F(BcSTest, firstPoolSynchronizationCheckNonActual) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -671,9 +671,9 @@ TEST_F(BcSTest, firstPoolSynchronizationCheckGetPoolErr) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -692,9 +692,9 @@ TEST_F(BcSTest, poolSynchronizationCheckActual) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -730,10 +730,10 @@ TEST_F(BcSTest, poolSynchronizationCheckError) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -778,9 +778,9 @@ TEST_F(BcSTest, poolSynchronizationCheckTxAdded) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -836,9 +836,9 @@ TEST_F(BcSTest, poolSynchronizationCheckTxDeleted) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -892,9 +892,9 @@ TEST_F(BcSTest, poolSynchronizationCheckNotification) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -920,9 +920,9 @@ TEST_F(BcSTest, poolSynchronizationCheckConsumersNotififcation) {
 
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
-  o1.syncFunc = std::move([&e](std::error_code) {
+  o1.syncFunc = [&e](std::error_code) {
     e.notify();
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.addConsumer(&c1);
@@ -956,10 +956,10 @@ TEST_F(BcSTest, poolSynchronizationCheckConsumerReturnError) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   m_sync.addObserver(&o1);
   m_sync.addConsumer(&c1);
@@ -996,10 +996,10 @@ TEST_F(BcSTest, checkINodeError) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   m_node.queryBlocksFunctor = [](const std::vector<Hash>& knownBlockIds, uint64_t timestamp, std::vector<BlockShortEntry>& newBlocks, uint32_t& startHeight, const INode::Callback& callback) -> bool {
     callback(std::make_error_code(std::errc::invalid_argument));
@@ -1021,10 +1021,10 @@ TEST_F(BcSTest, checkConsumerError) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   generator.generateEmptyBlocks(10);
 
@@ -1048,10 +1048,10 @@ TEST_F(BcSTest, checkBlocksRequesting) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
 
   size_t blocksExpected = 20;
@@ -1082,10 +1082,10 @@ TEST_F(BcSTest, checkConsumerHeightReceived) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
 
   uint32_t firstlySnchronizedHeight = 20;
@@ -1127,10 +1127,10 @@ TEST_F(BcSTest, checkConsumerOldBlocksNotIvoked) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   generator.generateEmptyBlocks(20);
   m_node.setGetNewBlocksLimit(50);
@@ -1169,10 +1169,10 @@ TEST_F(BcSTest, checkConsumerHeightReceivedOnDetach) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   generator.generateEmptyBlocks(20);
   m_node.setGetNewBlocksLimit(50);
@@ -1218,10 +1218,10 @@ TEST_F(BcSTest, checkStatePreservingBetweenSynchronizations) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   generator.generateEmptyBlocks(20);
 
@@ -1255,10 +1255,10 @@ TEST_F(BcSTest, checkBlocksRerequestingOnError) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   generator.generateEmptyBlocks(20);
   m_node.setGetNewBlocksLimit(10);
@@ -1325,10 +1325,10 @@ TEST_F(BcSTest, checkTxOrder) {
   IBlockchainSynchronizerFunctorialObserver o1;
   EventWaiter e;
   std::error_code errc;
-  o1.syncFunc = std::move([&](std::error_code ec) {
+  o1.syncFunc = [&](std::error_code ec) {
     e.notify();
     errc = ec;
-  });
+  };
 
   auto tx1ptr = createTransaction();
   auto tx2ptr = createTransaction();
