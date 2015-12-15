@@ -1011,21 +1011,21 @@ class TestEventListener {
 // above.
 class EmptyTestEventListener : public TestEventListener {
  public:
-  virtual void OnTestProgramStart(const UnitTest& /*unit_test*/) {}
+  virtual void OnTestProgramStart(const UnitTest& /*unit_test*/) override {}
   virtual void OnTestIterationStart(const UnitTest& /*unit_test*/,
-                                    int /*iteration*/) {}
-  virtual void OnEnvironmentsSetUpStart(const UnitTest& /*unit_test*/) {}
-  virtual void OnEnvironmentsSetUpEnd(const UnitTest& /*unit_test*/) {}
-  virtual void OnTestCaseStart(const TestCase& /*test_case*/) {}
-  virtual void OnTestStart(const TestInfo& /*test_info*/) {}
-  virtual void OnTestPartResult(const TestPartResult& /*test_part_result*/) {}
-  virtual void OnTestEnd(const TestInfo& /*test_info*/) {}
-  virtual void OnTestCaseEnd(const TestCase& /*test_case*/) {}
-  virtual void OnEnvironmentsTearDownStart(const UnitTest& /*unit_test*/) {}
-  virtual void OnEnvironmentsTearDownEnd(const UnitTest& /*unit_test*/) {}
+                                    int /*iteration*/) override {}
+  virtual void OnEnvironmentsSetUpStart(const UnitTest& /*unit_test*/) override {}
+  virtual void OnEnvironmentsSetUpEnd(const UnitTest& /*unit_test*/) override {}
+  virtual void OnTestCaseStart(const TestCase& /*test_case*/) override {}
+  virtual void OnTestStart(const TestInfo& /*test_info*/) override {}
+  virtual void OnTestPartResult(const TestPartResult& /*test_part_result*/) override {}
+  virtual void OnTestEnd(const TestInfo& /*test_info*/) override {}
+  virtual void OnTestCaseEnd(const TestCase& /*test_case*/) override {}
+  virtual void OnEnvironmentsTearDownStart(const UnitTest& /*unit_test*/) override {}
+  virtual void OnEnvironmentsTearDownEnd(const UnitTest& /*unit_test*/) override {}
   virtual void OnTestIterationEnd(const UnitTest& /*unit_test*/,
-                                  int /*iteration*/) {}
-  virtual void OnTestProgramEnd(const UnitTest& /*unit_test*/) {}
+                                  int /*iteration*/) override {}
+  virtual void OnTestProgramEnd(const UnitTest& /*unit_test*/) override {}
 };
 
 // TestEventListeners lets users add listeners to track events in Google Test.

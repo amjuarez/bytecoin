@@ -94,7 +94,7 @@ public:
   SyncStarter(BlockchainSynchronizer& sync) : m_sync(sync) {}
   virtual ~SyncStarter() {}
 
-  virtual void initCompleted(std::error_code result) {
+  virtual void initCompleted(std::error_code result) override {
     if (!result) {
       m_sync.start();
     }

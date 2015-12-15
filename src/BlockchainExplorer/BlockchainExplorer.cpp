@@ -550,12 +550,10 @@ void BlockchainExplorer::poolChanged() {
       for (const Hash hash : *removedTransactionsPtr) {
         auto iter = knownPoolState.find(hash);
         if (iter != knownPoolState.end()) {
-          removedTransactionsHashesPtr->push_back(
-            std::move(std::make_pair(
-              hash, 
-              TransactionRemoveReason::INCLUDED_IN_BLOCK  //Can't have real reason here.
-            ))
-          );
+          removedTransactionsHashesPtr->push_back({
+              hash,
+              TransactionRemoveReason::INCLUDED_IN_BLOCK // Can't have real reason here.
+          });
           knownPoolState.erase(iter);
         }
       }

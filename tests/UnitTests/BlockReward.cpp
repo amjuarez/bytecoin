@@ -93,7 +93,7 @@ namespace
   protected:
     static const uint64_t alreadyGeneratedCoins = 0;
 
-    virtual void SetUp() {
+    virtual void SetUp() override {
       m_blockTooBig = !m_currency.getBlockReward(0, 0, alreadyGeneratedCoins, 0, false,
         m_standardBlockReward, m_emissionChange);
       ASSERT_FALSE(m_blockTooBig);
@@ -190,7 +190,7 @@ namespace
     static const size_t testMedian = 7 * TEST_GRANTED_FULL_REWARD_ZONE;
     static const uint64_t alreadyGeneratedCoins = 0;
 
-    virtual void SetUp() {
+    virtual void SetUp() override {
       m_blockTooBig = !m_currency.getBlockReward(testMedian, 0, alreadyGeneratedCoins, 0, false,
         m_standardBlockReward, m_emissionChange);
 
@@ -293,7 +293,7 @@ namespace
     }
 
   protected:
-    virtual void SetUp() {
+    virtual void SetUp() override {
       uint64_t blockReward;
       int64_t emissionChange;
 

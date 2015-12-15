@@ -775,7 +775,7 @@ bool Blockchain::switch_to_alternative_blockchain(std::list<blocks_ext_by_hash::
     m_alternative_chains.erase(ch_ent);
   }
 
-  sendMessage(BlockchainMessage(std::move(ChainSwitchMessage(std::move(blocksFromCommonRoot)))));
+  sendMessage(BlockchainMessage(ChainSwitchMessage(std::move(blocksFromCommonRoot))));
 
   logger(INFO, BRIGHT_GREEN) << "REORGANIZE SUCCESS! on height: " << split_height << ", new blockchain size: " << m_blocks.size();
   return true;
@@ -1099,7 +1099,7 @@ bool Blockchain::handle_alternative_block(const Block& b, const Crypto::Hash& id
         << ENDL << "PoW:\t" << proof_of_work
         << ENDL << "difficulty:\t" << current_diff;
       if (sendNewAlternativeBlockMessage) {
-        sendMessage(BlockchainMessage(std::move(NewAlternativeBlockMessage(id))));
+        sendMessage(BlockchainMessage(NewAlternativeBlockMessage(id)));
       }
       return true;
     }
@@ -1688,7 +1688,7 @@ bool Blockchain::addNewBlock(const Block& bl_, block_verification_context& bvc) 
     } else {
       add_result = pushBlock(bl, bvc);
       if (add_result) {
-        sendMessage(BlockchainMessage(std::move(NewBlockMessage(id))));
+        sendMessage(BlockchainMessage(NewBlockMessage(id)));
       }
     }
   }

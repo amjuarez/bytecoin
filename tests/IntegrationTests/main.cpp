@@ -120,7 +120,7 @@ public:
   public:
     WaitForActualGrowObserver(Tests::Common::Semaphore& GotActual, uint64_t lastFunds) : m_GotActual(GotActual), m_lastFunds(lastFunds) { }
 
-    virtual void actualBalanceUpdated(uint64_t actualBalance) {
+    virtual void actualBalanceUpdated(uint64_t actualBalance) override {
       if (m_lastFunds < actualBalance) {
         m_GotActual.notify();
       }
@@ -136,7 +136,7 @@ public:
   public:
     WaitForActualDwindleObserver(Tests::Common::Semaphore& GotActual, uint64_t lastFunds) : m_GotActual(GotActual), m_lastFunds(lastFunds) { }
 
-    virtual void actualBalanceUpdated(uint64_t actualBalance) {
+    virtual void actualBalanceUpdated(uint64_t actualBalance) override {
       if (m_lastFunds > actualBalance) {
         m_GotActual.notify();
       }
@@ -152,7 +152,7 @@ public:
   public:
     WaitForPendingGrowObserver(Tests::Common::Semaphore& GotActual, uint64_t lastFunds) : m_GotActual(GotActual), m_lastFunds(lastFunds) { }
 
-    virtual void pendingBalanceUpdated(uint64_t pendingBalance) {
+    virtual void pendingBalanceUpdated(uint64_t pendingBalance) override {
       if (m_lastFunds < pendingBalance) {
         m_GotActual.notify();
       }

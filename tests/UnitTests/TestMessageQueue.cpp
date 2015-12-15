@@ -41,8 +41,8 @@ public:
   void sendBlockchainMessage(const BlockchainMessage& message);
   void interruptBlockchainMessageWaiting();
 
-  void SetUp();
-  void TearDown();
+  void SetUp() override;
+  void TearDown() override;
 
 protected:
   System::Dispatcher dispatcher;
@@ -97,7 +97,7 @@ TEST_F(MessageQueueTest, singleNewBlockMessage) {
     ASSERT_NO_THROW(queue.pop());
   });
 
-  ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(std::move(NewBlockMessage(randomHash)))));
+  ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(NewBlockMessage(randomHash))));
 
   contextGroup.wait();
 }
@@ -120,7 +120,7 @@ TEST_F(MessageQueueTest, singleNewAlternativeBlockMessage) {
     ASSERT_NO_THROW(queue.pop());
   });
 
-  ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(std::move(NewAlternativeBlockMessage(randomHash)))));
+  ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(NewAlternativeBlockMessage(randomHash))));
 
   contextGroup.wait();
 }
@@ -150,7 +150,7 @@ TEST_F(MessageQueueTest, singleChainSwitchMessage) {
 
 
   std::vector<Crypto::Hash> copy = randomHashes;
-  ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(std::move(ChainSwitchMessage(std::move(copy))))));
+  ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(ChainSwitchMessage(std::move(copy)))));
 
   contextGroup.wait();
 }
@@ -181,7 +181,7 @@ TEST_F(MessageQueueTest, manyMessagesOneListener) {
   });
 
   for (auto h : randomHashes) {
-    ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(std::move(NewBlockMessage(h)))));
+    ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(NewBlockMessage(h))));
   }
 
   contextGroup.wait();
@@ -193,8 +193,8 @@ TEST_F(MessageQueueTest, manyMessagesManyListeners) {
   std::array<std::unique_ptr<MesageQueueGuard<MessageQueueTest, BlockchainMessage>>, NUMBER_OF_LISTENERS> quards;
 
   for (size_t i = 0; i < NUMBER_OF_LISTENERS; ++i) {
-    queues[i] = std::move(std::unique_ptr<MessageQueue<BlockchainMessage>>(new MessageQueue<BlockchainMessage>(dispatcher)));
-    quards[i] = std::move(std::unique_ptr<MesageQueueGuard<MessageQueueTest, BlockchainMessage>>(new MesageQueueGuard<MessageQueueTest, BlockchainMessage>(*this, *queues[i])));
+    queues[i] = std::unique_ptr<MessageQueue<BlockchainMessage>>(new MessageQueue<BlockchainMessage>(dispatcher));
+    quards[i] = std::unique_ptr<MesageQueueGuard<MessageQueueTest, BlockchainMessage>>(new MesageQueueGuard<MessageQueueTest, BlockchainMessage>(*this, *queues[i]));
   }
 
   const size_t NUMBER_OF_BLOCKS = 10;
@@ -222,7 +222,7 @@ TEST_F(MessageQueueTest, manyMessagesManyListeners) {
 
 
   for (auto h : randomHashes) {
-    ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(std::move(NewBlockMessage(h)))));
+    ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(NewBlockMessage(h))));
   }
 
   contextGroup.wait();
@@ -234,8 +234,8 @@ TEST_F(MessageQueueTest, interruptWaiting) {
   std::array<std::unique_ptr<MesageQueueGuard<MessageQueueTest, BlockchainMessage>>, NUMBER_OF_LISTENERS> quards;
 
   for (size_t i = 0; i < NUMBER_OF_LISTENERS; ++i) {
-    queues[i] = std::move(std::unique_ptr<MessageQueue<BlockchainMessage>>(new MessageQueue<BlockchainMessage>(dispatcher)));
-    quards[i] = std::move(std::unique_ptr<MesageQueueGuard<MessageQueueTest, BlockchainMessage>>(new MesageQueueGuard<MessageQueueTest, BlockchainMessage>(*this, *queues[i])));
+    queues[i] = std::unique_ptr<MessageQueue<BlockchainMessage>>(new MessageQueue<BlockchainMessage>(dispatcher));
+    quards[i] = std::unique_ptr<MesageQueueGuard<MessageQueueTest, BlockchainMessage>>(new MesageQueueGuard<MessageQueueTest, BlockchainMessage>(*this, *queues[i]));
   }
 
   const size_t NUMBER_OF_BLOCKS = 10;
@@ -272,7 +272,7 @@ TEST_F(MessageQueueTest, interruptWaiting) {
   });
 
   for (auto h : randomHashes) {
-    ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(std::move(NewBlockMessage(h)))));
+    ASSERT_NO_THROW(sendBlockchainMessage(BlockchainMessage(NewBlockMessage(h))));
   }
 
   interruptBlockchainMessageWaiting();

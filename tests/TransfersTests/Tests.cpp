@@ -43,13 +43,13 @@ public:
 
 class WalletLegacyObserver : public IWalletLegacyObserver {
 public:
-  virtual void actualBalanceUpdated(uint64_t actualBalance) {
+  virtual void actualBalanceUpdated(uint64_t actualBalance) override {
     std::cout << "Actual balance updated = " << currency.formatAmount(actualBalance) << std::endl;
     m_actualBalance = actualBalance;
     m_sem.notify();
   }
 
-  virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) {
+  virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) override {
     std::cout << "Transaction sent, result = " << result << std::endl;
   }
 

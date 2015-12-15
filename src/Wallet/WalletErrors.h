@@ -58,15 +58,15 @@ class WalletErrorCategory : public std::error_category {
 public:
   static WalletErrorCategory INSTANCE;
 
-  virtual const char* name() const throw() {
+  virtual const char* name() const throw() override {
     return "WalletErrorCategory";
   }
 
-  virtual std::error_condition default_error_condition(int ev) const throw() {
+  virtual std::error_condition default_error_condition(int ev) const throw() override {
     return std::error_condition(ev, *this);
   }
 
-  virtual std::string message(int ev) const {
+  virtual std::string message(int ev) const override {
     switch (ev) {
     case NOT_INITIALIZED:          return "Object was not initialized";
     case WRONG_PASSWORD:           return "The password is wrong";

@@ -70,7 +70,7 @@ namespace {
       m_waiting = false;
     }
 
-    virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) {
+    virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) override {
       m_dispatcher.remoteSpawn([this, transactionId, result]() {
         if (m_waiting &&  m_expectedTxId == transactionId) {
           m_result = result;

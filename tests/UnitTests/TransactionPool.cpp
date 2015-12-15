@@ -60,7 +60,7 @@ public:
     : timeNow(currentTime) {}
 
   time_t timeNow;
-  virtual time_t now() { return timeNow; }
+  virtual time_t now() override { return timeNow; }
 };
 
 

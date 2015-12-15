@@ -75,7 +75,7 @@ struct IWalletBaseStub : public CryptoNote::IWallet {
   virtual uint64_t getPendingBalance(const std::string& address) const override { return 0; }
 
   virtual size_t getTransactionCount() const override { return 0; }
-virtual WalletTransaction  getTransaction(size_t transactionIndex) const override { return WalletTransaction(); }
+  virtual WalletTransaction getTransaction(size_t transactionIndex) const override { return WalletTransaction(); }
   virtual size_t getTransactionTransferCount(size_t transactionIndex) const override { return 0; }
   virtual WalletTransfer getTransactionTransfer(size_t transactionIndex, size_t transferIndex) const override { return WalletTransfer(); }
 
@@ -902,7 +902,7 @@ struct WalletGetDelayedTransactionIdsStub : public IWalletBaseStub {
     return {0};
   }
 
-virtual WalletTransaction getTransaction(size_t transactionIndex) const override {
+  virtual WalletTransaction getTransaction(size_t transactionIndex) const override {
     return WalletTransactionBuilder().hash(hash).build();
   }
 

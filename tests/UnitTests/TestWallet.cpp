@@ -1599,7 +1599,7 @@ class INodeNoRelay : public INodeTrivialRefreshStub {
 public:
   INodeNoRelay(TestBlockchainGenerator& generator) : INodeTrivialRefreshStub(generator) {}
 
-  virtual void relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) {
+  virtual void relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) override {
     m_asyncCounter.addAsyncContext();
     std::thread task(&INodeNoRelay::doNoRelayTransaction, this, transaction, callback);
     task.detach();

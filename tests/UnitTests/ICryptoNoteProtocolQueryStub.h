@@ -26,11 +26,11 @@ class ICryptoNoteProtocolQueryStub: public CryptoNote::ICryptoNoteProtocolQuery 
 public:
   ICryptoNoteProtocolQueryStub() : peers(0), observedHeight(0), synchronized(false) {}
 
-  virtual bool addObserver(CryptoNote::ICryptoNoteProtocolObserver* observer);
-  virtual bool removeObserver(CryptoNote::ICryptoNoteProtocolObserver* observer);
-  virtual uint32_t getObservedHeight() const;
-  virtual size_t getPeerCount() const;
-  virtual bool isSynchronized() const;
+  virtual bool addObserver(CryptoNote::ICryptoNoteProtocolObserver* observer) override;
+  virtual bool removeObserver(CryptoNote::ICryptoNoteProtocolObserver* observer) override;
+  virtual uint32_t getObservedHeight() const override;
+  virtual size_t getPeerCount() const override;
+  virtual bool isSynchronized() const override;
 
   void setPeerCount(uint32_t count);
   void setObservedHeight(uint32_t height);

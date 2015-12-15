@@ -42,7 +42,7 @@ TEST(EventTests, eventIsWorking) {
 
 TEST(EventTests, movedEventIsWorking) {
   Dispatcher dispatcher;
-  Event event(std::move(Event(dispatcher)));
+  Event event{Event(dispatcher)};
   Context<> context(dispatcher, [&]() {
     event.set();
   });

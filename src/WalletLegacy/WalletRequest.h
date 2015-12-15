@@ -48,7 +48,7 @@ public:
 
   virtual ~WalletGetRandomOutsByAmountsRequest() {};
 
-  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
+  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb) override
   {
     node.getRandomOutsByAmounts(std::move(m_amounts), m_outsCount, std::ref(m_context->outs), std::bind(cb, m_cb, std::placeholders::_1));
   };
@@ -66,7 +66,7 @@ public:
   WalletRelayTransactionRequest(const CryptoNote::Transaction& tx, Callback cb) : m_tx(tx), m_cb(cb) {};
   virtual ~WalletRelayTransactionRequest() {};
 
-  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
+  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb) override
   {
     node.relayTransaction(m_tx, std::bind(cb, m_cb, std::placeholders::_1));
   }

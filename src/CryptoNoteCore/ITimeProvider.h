@@ -27,7 +27,7 @@ namespace CryptoNote {
   };
 
   struct RealTimeProvider : public ITimeProvider {
-    virtual time_t now() {
+    virtual time_t now() override {
       return time(nullptr);
     }
   };
