@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -22,12 +22,6 @@
 
 namespace PaymentService {
 
-struct SendTransactionRequest;
-struct SendTransactionResponse;
-struct TransferDestination;
-struct TransactionRpcInfo;
-struct TransferRpcInfo;
-
 struct WalletConfiguration {
   std::string walletFile;
   std::string walletPassword;
@@ -35,71 +29,74 @@ struct WalletConfiguration {
 
 void generateNewWallet(const CryptoNote::Currency &currency, const WalletConfiguration &conf, Logging::ILogger &logger, System::Dispatcher& dispatcher);
 
+struct TransactionsInBlockInfoFilter;
+
 class WalletService {
 public:
-  typedef std::map<std::string, std::vector<PaymentDetails> > IncomingPayments;
-
-  explicit WalletService(const CryptoNote::Currency& currency, System::Dispatcher& sys, CryptoNote::INode& node, const WalletConfiguration& conf, Logging::ILogger& logger);
+  WalletService(const CryptoNote::Currency& currency, System::Dispatcher& sys, CryptoNote::INode& node, CryptoNote::IWallet& wallet, const WalletConfiguration& conf, Logging::ILogger& logger);
   virtual ~WalletService();
 
   void init();
   void saveWallet();
 
-  std::error_code sendTransaction(const SendTransactionRequest& req, SendTransactionResponse& resp);
-  std::error_code getIncomingPayments(const std::vector<std::string>& payments, IncomingPayments& result);
-  std::error_code getAddress(size_t index, std::string& address);
-  std::error_code getAddressCount(size_t& count);
+  std::error_code resetWallet();
+  std::error_code replaceWithNewWallet(const std::string& viewSecretKey);
+  std::error_code createAddress(const std::string& spendSecretKeyText, std::string& address);
   std::error_code createAddress(std::string& address);
+  std::error_code createTrackingAddress(const std::string& spendPublicKeyText, std::string& address);
   std::error_code deleteAddress(const std::string& address);
-  std::error_code getActualBalance(const std::string& address, uint64_t& actualBalance);
-  std::error_code getPendingBalance(const std::string& address, uint64_t& pendingBalance);
-  std::error_code getActualBalance(uint64_t& actualBalance);
-  std::error_code getPendingBalance(uint64_t& pendingBalance);
-  std::error_code getTransactionsCount(uint64_t& txCount);
-  std::error_code getTransfersCount(uint64_t& trCount);
-  std::error_code getTransactionByTransferId(size_t transfer, size_t& transaction);
-  std::error_code getTransaction(size_t txId, bool& found, TransactionRpcInfo& rpcInfo);
-  std::error_code listTransactions(size_t startingTxId, uint32_t maxTxCount, std::vector<TransactionRpcInfo>& txsRpcInfo);
-  std::error_code getTransfer(size_t txId, bool& found, TransferRpcInfo& rpcInfo);
+  std::error_code getSpendkeys(const std::string& address, std::string& publicSpendKeyText, std::string& secretSpendKeyText);
+  std::error_code getBalance(const std::string& address, uint64_t& availableBalance, uint64_t& lockedAmount);
+  std::error_code getBalance(uint64_t& availableBalance, uint64_t& lockedAmount);
+  std::error_code getBlockHashes(uint32_t firstBlockIndex, uint32_t blockCount, std::vector<std::string>& blockHashes);
+  std::error_code getViewKey(std::string& viewSecretKey);
+  std::error_code getTransactionHashes(const std::vector<std::string>& addresses, const std::string& blockHash,
+    uint32_t blockCount, const std::string& paymentId, std::vector<TransactionHashesInBlockRpcInfo>& transactionHashes);
+  std::error_code getTransactionHashes(const std::vector<std::string>& addresses, uint32_t firstBlockIndex,
+    uint32_t blockCount, const std::string& paymentId, std::vector<TransactionHashesInBlockRpcInfo>& transactionHashes);
+  std::error_code getTransactions(const std::vector<std::string>& addresses, const std::string& blockHash,
+    uint32_t blockCount, const std::string& paymentId, std::vector<TransactionsInBlockRpcInfo>& transactionHashes);
+  std::error_code getTransactions(const std::vector<std::string>& addresses, uint32_t firstBlockIndex,
+    uint32_t blockCount, const std::string& paymentId, std::vector<TransactionsInBlockRpcInfo>& transactionHashes);
+  std::error_code getTransaction(const std::string& transactionHash, TransactionRpcInfo& transaction);
+  std::error_code getAddresses(std::vector<std::string>& addresses);
+  std::error_code sendTransaction(const SendTransaction::Request& request, std::string& transactionHash);
+  std::error_code createDelayedTransaction(const CreateDelayedTransaction::Request& request, std::string& transactionHash);
+  std::error_code getDelayedTransactionHashes(std::vector<std::string>& transactionHashes);
+  std::error_code deleteDelayedTransaction(const std::string& transactionHash);
+  std::error_code sendDelayedTransaction(const std::string& transactionHash);
+  std::error_code getUnconfirmedTransactionHashes(const std::vector<std::string>& addresses, std::vector<std::string>& transactionHashes);
+  std::error_code getStatus(uint32_t& blockCount, uint32_t& knownBlockCount, std::string& lastBlockHash, uint32_t& peerCount);
 
 private:
   void refresh();
+  void reset();
 
   void loadWallet();
-  void loadPaymentsCacheAndTransferIndices();
-  void insertTransaction(size_t id, const Crypto::Hash& paymentIdBin, bool confirmed);
+  void loadTransactionIdIndex();
 
-  void fillTransactionRpcInfo(size_t txId, const CryptoNote::WalletTransaction& tx, TransactionRpcInfo& rpcInfo);
-  void makeTransfers(const std::vector<TransferDestination>& destinations, std::vector<CryptoNote::WalletTransfer>& transfers);
+  void replaceWithNewWallet(const Crypto::SecretKey& viewSecretKey);
 
-  struct PaymentItem {
-    std::string paymentId;
-    size_t transactionId;
-    bool confirmed;
-  };
+  std::vector<CryptoNote::TransactionsInBlockInfo> getTransactions(const Crypto::Hash& blockHash, size_t blockCount) const;
+  std::vector<CryptoNote::TransactionsInBlockInfo> getTransactions(uint32_t firstBlockIndex, size_t blockCount) const;
 
-  typedef boost::multi_index::hashed_unique<BOOST_MULTI_INDEX_MEMBER(PaymentItem, size_t, transactionId)> TxIdIndex;
-  typedef boost::multi_index::hashed_non_unique<BOOST_MULTI_INDEX_MEMBER(PaymentItem, std::string, paymentId)> PaymentIndex;
-  typedef boost::multi_index::multi_index_container<
-    PaymentItem,
-    boost::multi_index::indexed_by<
-      TxIdIndex,
-      PaymentIndex
-    >
-  > PaymentsContainer;
+  std::vector<TransactionHashesInBlockRpcInfo> getRpcTransactionHashes(const Crypto::Hash& blockHash, size_t blockCount, const TransactionsInBlockInfoFilter& filter) const;
+  std::vector<TransactionHashesInBlockRpcInfo> getRpcTransactionHashes(uint32_t firstBlockIndex, size_t blockCount, const TransactionsInBlockInfoFilter& filter) const;
 
-  std::unique_ptr<CryptoNote::IWallet > wallet;
-  CryptoNote::INode* node;
+  std::vector<TransactionsInBlockRpcInfo> getRpcTransactions(const Crypto::Hash& blockHash, size_t blockCount, const TransactionsInBlockInfoFilter& filter) const;
+  std::vector<TransactionsInBlockRpcInfo> getRpcTransactions(uint32_t firstBlockIndex, size_t blockCount, const TransactionsInBlockInfoFilter& filter) const;
+
+  const CryptoNote::Currency& currency;
+  CryptoNote::IWallet& wallet;
+  CryptoNote::INode& node;
   const WalletConfiguration& config;
   bool inited;
   Logging::LoggerRef logger;
-  std::vector<size_t> transfersIndices;
   System::Dispatcher& dispatcher;
+  System::Event readyEvent;
   System::ContextGroup refreshContext;
 
-  PaymentsContainer paymentsCache;
-  PaymentsContainer::nth_index<0>::type& txIdIndex;
-  PaymentsContainer::nth_index<1>::type& paymentIdIndex;
+  std::map<std::string, size_t> transactionIdIndex;
 };
 
 } //namespace PaymentService

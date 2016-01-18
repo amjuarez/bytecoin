@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -49,7 +49,7 @@ public:
     node(coreStub, protocolQueryStub),
     currency(CryptoNote::CurrencyBuilder(logger).currency()),
     generator(currency) {}
-  void SetUp();
+  void SetUp() override;
 
 protected:
   void initNode();
@@ -254,7 +254,7 @@ TEST_F(InProcessNodeTests, getBlocksByHeightEmpty) {
 }
 
 TEST_F(InProcessNodeTests, getBlocksByHeightMany) {
-  const uint32_t NUMBER_OF_BLOCKS = 10;
+  const size_t NUMBER_OF_BLOCKS = 10;
 
   std::vector<uint32_t> blockHeights;
   std::vector<std::vector<CryptoNote::BlockDetails>> actualBlocks;
@@ -298,7 +298,7 @@ TEST_F(InProcessNodeTests, getBlocksByHeightMany) {
 }
 
 TEST_F(InProcessNodeTests, getBlocksByHeightFail) {
-  const uint32_t NUMBER_OF_BLOCKS = 10;
+  const size_t NUMBER_OF_BLOCKS = 10;
 
   std::vector<uint32_t> blockHeights;
   std::vector<std::vector<CryptoNote::BlockDetails>> actualBlocks;
@@ -353,7 +353,7 @@ TEST_F(InProcessNodeTests, getBlocksByHashEmpty) {
 }
 
 TEST_F(InProcessNodeTests, getBlocksByHashMany) {
-  const uint32_t NUMBER_OF_BLOCKS = 10;
+  const size_t NUMBER_OF_BLOCKS = 10;
 
   std::vector<Crypto::Hash> blockHashes;
   std::vector<CryptoNote::BlockDetails> actualBlocks;
@@ -394,7 +394,7 @@ TEST_F(InProcessNodeTests, getBlocksByHashMany) {
 }
 
 TEST_F(InProcessNodeTests, getBlocksByHashFail) {
-  const uint32_t NUMBER_OF_BLOCKS = 10;
+  const size_t NUMBER_OF_BLOCKS = 10;
 
   std::vector<Crypto::Hash> blockHashes;
   std::vector<CryptoNote::BlockDetails> actualBlocks;

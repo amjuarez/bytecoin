@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -282,10 +282,12 @@ TEST_F(TransfersContainer_addTransaction, handlesAddingUnconfirmedOutputToKey) {
   ASSERT_TRUE(transfers.empty());
 
   TransactionInformation txInfo;
-  int64_t txBalance;
-  ASSERT_TRUE(container.getTransactionInformation(tx->getTransactionHash(), txInfo, txBalance));
+  uint64_t amountIn;
+  uint64_t amountOut;
+  ASSERT_TRUE(container.getTransactionInformation(tx->getTransactionHash(), txInfo, &amountIn, &amountOut));
   ASSERT_EQ(blockInfo.height, txInfo.blockHeight);
-  ASSERT_EQ(TEST_OUTPUT_AMOUNT, txBalance);
+  ASSERT_EQ(0, amountIn);
+  ASSERT_EQ(TEST_OUTPUT_AMOUNT, amountOut);
 
   std::vector<Crypto::Hash> unconfirmedTransactions;
   container.getUnconfirmedTransactions(unconfirmedTransactions);
@@ -326,10 +328,12 @@ TEST_F(TransfersContainer_addTransaction, handlesAddingConfirmedOutputToKey) {
   ASSERT_EQ(1, transfers.size());
 
   TransactionInformation txInfo;
-  int64_t txBalance;
-  ASSERT_TRUE(container.getTransactionInformation(tx->getTransactionHash(), txInfo, txBalance));
+  uint64_t amountIn;
+  uint64_t amountOut;
+  ASSERT_TRUE(container.getTransactionInformation(tx->getTransactionHash(), txInfo, &amountIn, &amountOut));
   ASSERT_EQ(blockInfo.height, txInfo.blockHeight);
-  ASSERT_EQ(TEST_OUTPUT_AMOUNT, txBalance);
+  ASSERT_EQ(0, amountIn);
+  ASSERT_EQ(TEST_OUTPUT_AMOUNT, amountOut);
 
   std::vector<Crypto::Hash> unconfirmedTransactions;
   container.getUnconfirmedTransactions(unconfirmedTransactions);
@@ -366,8 +370,7 @@ TEST_F(TransfersContainer_addTransaction, addingEmptyTransactionOuptutsDoesNotCh
   ASSERT_TRUE(transfers.empty());
 
   TransactionInformation txInfo;
-  int64_t txBalance;
-  ASSERT_FALSE(container.getTransactionInformation(tx->getTransactionHash(), txInfo, txBalance));
+  ASSERT_FALSE(container.getTransactionInformation(tx->getTransactionHash(), txInfo));
 
   std::vector<Crypto::Hash> unconfirmedTransactions;
   container.getUnconfirmedTransactions(unconfirmedTransactions);

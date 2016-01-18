@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,13 +26,13 @@ bool ConfigurationManager::init(int argc, char** argv) {
 
   po::options_description confGeneralOptions;
   confGeneralOptions.add(cmdGeneralOptions).add_options()
-      ("testnet", po::value<bool>(), "")
-      ("local", po::value<bool>(), "");
+      ("testnet", po::bool_switch(), "")
+      ("local", po::bool_switch(), "");
 
   cmdGeneralOptions.add_options()
       ("help,h", "produce this help message and exit")
-      ("local", "start with local node (remote is default)")
-      ("testnet", "testnet mode");
+      ("local", po::bool_switch(), "start with local node (remote is default)")
+      ("testnet", po::bool_switch(), "testnet mode");
 
   command_line::add_arg(cmdGeneralOptions, command_line::arg_data_dir, Tools::getDefaultDataDirectory());
   command_line::add_arg(confGeneralOptions, command_line::arg_data_dir, Tools::getDefaultDataDirectory());
@@ -77,9 +77,8 @@ bool ConfigurationManager::init(int argc, char** argv) {
     coreConfig.init(confOptions);
     remoteNodeConfig.init(confOptions);
 
-    if (confOptions.count("local")) {
-      startInprocess = confOptions["local"].as<bool>();
-    }
+    netNodeConfig.setTestnet(confOptions["testnet"].as<bool>());
+    startInprocess = confOptions["local"].as<bool>();
   }
 
   //command line options should override options from config file
@@ -88,7 +87,11 @@ bool ConfigurationManager::init(int argc, char** argv) {
   coreConfig.init(cmdOptions);
   remoteNodeConfig.init(cmdOptions);
 
-  if (cmdOptions.count("local")) {
+  if (cmdOptions["testnet"].as<bool>()) {
+    netNodeConfig.setTestnet(true);
+  }
+
+  if (cmdOptions["local"].as<bool>()) {
     startInprocess = true;
   }
 

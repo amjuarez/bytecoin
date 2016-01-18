@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -34,6 +34,7 @@ public:
   void detach(uint32_t height);
   void addBlocks(const Crypto::Hash* blockHashes, uint32_t height, uint32_t count);
   uint32_t getHeight() const;
+  const std::vector<Crypto::Hash>& getKnownBlockHashes() const;
 
   // IStreamSerializable
   virtual void save(std::ostream& os) override;

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,7 +15,7 @@ public:
   BinaryOutputStreamSerializer(Common::IOutputStream& strm) : stream(strm) {}
   virtual ~BinaryOutputStreamSerializer() {}
 
-  virtual ISerializer::SerializerType type() const;
+  virtual ISerializer::SerializerType type() const override;
 
   virtual bool beginObject(Common::StringView name) override;
   virtual void endObject() override;

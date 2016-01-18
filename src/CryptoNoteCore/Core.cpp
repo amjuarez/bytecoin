@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -85,11 +85,6 @@ bool core::handle_command_line(const boost::program_options::variables_map& vm) 
   m_config_folder = command_line::get_arg(vm, command_line::arg_data_dir);
   return true;
 }
-
-bool core::is_ready() {
-  return !m_blockchain.isStoringBlockchain();
-}
-
 
 uint32_t core::get_current_blockchain_height() {
   return m_blockchain.getCurrentBlockchainHeight();

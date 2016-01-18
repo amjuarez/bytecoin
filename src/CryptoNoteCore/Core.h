@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -35,18 +35,18 @@ namespace CryptoNote {
      core(const Currency& currency, i_cryptonote_protocol* pprotocol, Logging::ILogger& logger);
      ~core();
 
-     bool on_idle();
-     virtual bool handle_incoming_tx(const BinaryArray& tx_blob, tx_verification_context& tvc, bool keeped_by_block); //Deprecated. Should be removed with CryptoNoteProtocolHandler.
-     bool handle_incoming_block_blob(const BinaryArray& block_blob, block_verification_context& bvc, bool control_miner, bool relay_block);
-     virtual i_cryptonote_protocol* get_protocol(){return m_pprotocol;}
+     bool on_idle() override;
+     virtual bool handle_incoming_tx(const BinaryArray& tx_blob, tx_verification_context& tvc, bool keeped_by_block) override; //Deprecated. Should be removed with CryptoNoteProtocolHandler.
+     bool handle_incoming_block_blob(const BinaryArray& block_blob, block_verification_context& bvc, bool control_miner, bool relay_block) override;
+     virtual i_cryptonote_protocol* get_protocol() override {return m_pprotocol;}
      const Currency& currency() const { return m_currency; }
 
      //-------------------- IMinerHandler -----------------------
-     virtual bool handle_block_found(Block& b);
-     virtual bool get_block_template(Block& b, const AccountPublicAddress& adr, difficulty_type& diffic, uint32_t& height, const BinaryArray& ex_nonce);
+     virtual bool handle_block_found(Block& b) override;
+     virtual bool get_block_template(Block& b, const AccountPublicAddress& adr, difficulty_type& diffic, uint32_t& height, const BinaryArray& ex_nonce) override;
 
-     bool addObserver(ICoreObserver* observer);
-     bool removeObserver(ICoreObserver* observer);
+     bool addObserver(ICoreObserver* observer) override;
+     bool removeObserver(ICoreObserver* observer) override;
 
      miner& get_miner() { return *m_miner; }
      static void init_options(boost::program_options::options_description& desc);
@@ -80,13 +80,12 @@ namespace CryptoNote {
      virtual bool removeMessageQueue(MessageQueue<BlockchainMessage>& messageQueue) override;
 
      uint32_t get_current_blockchain_height();
-     bool have_block(const Crypto::Hash& id);
+     bool have_block(const Crypto::Hash& id) override;
      std::vector<Crypto::Hash> buildSparseChain() override;
      std::vector<Crypto::Hash> buildSparseChain(const Crypto::Hash& startBlockId) override;
-     void on_synchronized();
-     bool is_ready() override;
+     void on_synchronized() override;
 
-     virtual void get_blockchain_top(uint32_t& height, Crypto::Hash& top_id);
+     virtual void get_blockchain_top(uint32_t& height, Crypto::Hash& top_id) override;
      bool get_blocks(uint32_t start_offset, uint32_t count, std::list<Block>& blocks, std::list<Transaction>& txs);
      bool get_blocks(uint32_t start_offset, uint32_t count, std::list<Block>& blocks);
      template<class t_ids_container, class t_blocks_container, class t_missed_container>
@@ -116,13 +115,13 @@ namespace CryptoNote {
      //bool get_outs(uint64_t amount, std::list<Crypto::PublicKey>& pkeys);
      virtual std::vector<Crypto::Hash> findBlockchainSupplement(const std::vector<Crypto::Hash>& remoteBlockIds, size_t maxCount,
        uint32_t& totalBlockCount, uint32_t& startBlockIndex) override;
-     bool get_stat_info(core_stat_info& st_inf);
+     bool get_stat_info(core_stat_info& st_inf) override;
      
-     virtual bool get_tx_outputs_gindexs(const Crypto::Hash& tx_id, std::vector<uint32_t>& indexs);
+     virtual bool get_tx_outputs_gindexs(const Crypto::Hash& tx_id, std::vector<uint32_t>& indexs) override;
      Crypto::Hash get_tail_id();
-     virtual bool get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res);
-     void pause_mining();
-     void update_block_template_and_resume_mining();
+     virtual bool get_random_outs_for_amounts(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_response& res) override;
+     void pause_mining() override;
+     void update_block_template_and_resume_mining() override;
      //Blockchain& get_blockchain_storage(){return m_blockchain;}
      //debug functions
      void print_blockchain(uint32_t start_index, uint32_t end_index);

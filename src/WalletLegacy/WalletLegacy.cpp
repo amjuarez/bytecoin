@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -81,7 +81,7 @@ public:
   SyncStarter(BlockchainSynchronizer& sync) : m_sync(sync) {}
   virtual ~SyncStarter() {}
 
-  virtual void initCompleted(std::error_code result) {
+  virtual void initCompleted(std::error_code result) override {
     if (!result) {
       m_sync.start();
     }
@@ -523,10 +523,11 @@ void WalletLegacy::onTransactionUpdated(ITransfersSubscription* object, const Ha
   std::shared_ptr<WalletLegacyEvent> event;
 
   TransactionInformation txInfo;
-  int64_t txBalance;
-  if (m_transferDetails->getTransactionInformation(transactionHash, txInfo, txBalance)) {
+  uint64_t amountIn;
+  uint64_t amountOut;
+  if (m_transferDetails->getTransactionInformation(transactionHash, txInfo, &amountIn, &amountOut)) {
     std::unique_lock<std::mutex> lock(m_cacheMutex);
-    event = m_transactionsCache.onTransactionUpdated(txInfo, txBalance);
+    event = m_transactionsCache.onTransactionUpdated(txInfo, static_cast<int64_t>(amountOut) - static_cast<int64_t>(amountIn));
   }
 
   if (event.get()) {

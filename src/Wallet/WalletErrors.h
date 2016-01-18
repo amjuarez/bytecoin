@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -32,7 +32,12 @@ enum WalletErrorCodes {
   KEY_GENERATION_ERROR,
   INDEX_OUT_OF_RANGE,
   ADDRESS_ALREADY_EXISTS,
-  TRACKING_MODE
+  TRACKING_MODE,
+  WRONG_PARAMETERS,
+  OBJECT_NOT_FOUND,
+  WALLET_NOT_FOUND,
+  CHANGE_ADDRESS_REQUIRED,
+  CHANGE_ADDRESS_NOT_FOUND
 };
 
 // custom category:
@@ -40,20 +45,20 @@ class WalletErrorCategory : public std::error_category {
 public:
   static WalletErrorCategory INSTANCE;
 
-  virtual const char* name() const throw() {
+  virtual const char* name() const throw() override {
     return "WalletErrorCategory";
   }
 
-  virtual std::error_condition default_error_condition(int ev) const throw() {
+  virtual std::error_condition default_error_condition(int ev) const throw() override {
     return std::error_condition(ev, *this);
   }
 
-  virtual std::string message(int ev) const {
+  virtual std::string message(int ev) const override {
     switch (ev) {
     case NOT_INITIALIZED:          return "Object was not initialized";
     case WRONG_PASSWORD:           return "The password is wrong";
     case ALREADY_INITIALIZED:      return "The object is already initialized";
-    case INTERNAL_WALLET_ERROR:    return "Internal error occured";
+    case INTERNAL_WALLET_ERROR:    return "Internal error occurred";
     case MIXIN_COUNT_TOO_BIG:      return "MixIn count is too big";
     case BAD_ADDRESS:              return "Bad address";
     case TRANSACTION_SIZE_TOO_BIG: return "Transaction size is too big";
@@ -70,6 +75,11 @@ public:
     case INDEX_OUT_OF_RANGE:       return "Index is out of range";
     case ADDRESS_ALREADY_EXISTS:   return "Address already exists";
     case TRACKING_MODE:            return "The wallet is in tracking mode";
+    case WRONG_PARAMETERS:         return "Wrong parameters passed";
+    case OBJECT_NOT_FOUND:         return "Object not found";
+    case WALLET_NOT_FOUND:         return "Requested wallet not found";
+    case CHANGE_ADDRESS_REQUIRED:  return "Change address required";
+    case CHANGE_ADDRESS_NOT_FOUND: return "Change address not found";
     default:                       return "Unknown error";
     }
   }
@@ -84,4 +94,11 @@ private:
 
 inline std::error_code make_error_code(CryptoNote::error::WalletErrorCodes e) {
   return std::error_code(static_cast<int>(e), CryptoNote::error::WalletErrorCategory::INSTANCE);
+}
+
+namespace std {
+
+template <>
+struct is_error_code_enum<CryptoNote::error::WalletErrorCodes>: public true_type {};
+
 }

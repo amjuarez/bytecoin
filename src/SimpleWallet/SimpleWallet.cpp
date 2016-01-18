@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -451,7 +451,8 @@ simple_wallet::simple_wallet(System::Dispatcher& dispatcher, const CryptoNote::C
   logManager(log),
   logger(log, "simplewallet"),
   m_refresh_progress_reporter(*this), 
-  m_initResultPromise(nullptr) {
+  m_initResultPromise(nullptr),
+  m_walletSynchronized(false) {
   m_consoleHandler.setHandler("start_mining", boost::bind(&simple_wallet::start_mining, this, _1), "start_mining [<number_of_threads>] - Start mining in daemon");
   m_consoleHandler.setHandler("stop_mining", boost::bind(&simple_wallet::stop_mining, this, _1), "Stop mining in daemon");
   //m_consoleHandler.setHandler("refresh", boost::bind(&simple_wallet::refresh, this, _1), "Resynchronize transactions and balance");
@@ -721,8 +722,21 @@ bool simple_wallet::save(const std::vector<std::string> &args)
 }
 
 bool simple_wallet::reset(const std::vector<std::string> &args) {
+  {
+    std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
+    m_walletSynchronized = false;
+  }
+
   m_wallet->reset();
-  success_msg_writer(true) << "Reset is complete successfully";
+  success_msg_writer(true) << "Reset completed successfully.";
+
+  std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
+  while (!m_walletSynchronized) {
+    m_walletSynchronizedCV.wait(lock);
+  }
+
+  std::cout << std::endl;
+
   return true;
 }
 
@@ -801,10 +815,6 @@ void simple_wallet::initCompleted(std::error_code result) {
   }
 }
 //----------------------------------------------------------------------------------------------------
-void simple_wallet::localBlockchainUpdated(uint32_t height) {
-  m_refresh_progress_reporter.update(height, false);
-}
-//----------------------------------------------------------------------------------------------------
 void simple_wallet::connectionStatusUpdated(bool connected) {
   if (connected) {
     logger(INFO, GREEN) << "Wallet connected to daemon.";
@@ -841,6 +851,19 @@ void simple_wallet::externalTransactionCreated(CryptoNote::TransactionId transac
   }
 }
 //----------------------------------------------------------------------------------------------------
+void simple_wallet::synchronizationCompleted(std::error_code result) {
+  std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
+  m_walletSynchronized = true;
+  m_walletSynchronizedCV.notify_one();
+}
+
+void simple_wallet::synchronizationProgressUpdated(uint32_t current, uint32_t total) {
+  std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
+  if (!m_walletSynchronized) {
+    m_refresh_progress_reporter.update(current, false);
+  }
+}
+
 bool simple_wallet::show_balance(const std::vector<std::string>& args/* = std::vector<std::string>()*/) {
   success_msg_writer() << "available balance: " << m_currency.formatAmount(m_wallet->actualBalance()) <<
     ", locked amount: " << m_currency.formatAmount(m_wallet->pendingBalance());
@@ -997,6 +1020,15 @@ bool simple_wallet::transfer(const std::vector<std::string> &args) {
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::run() {
+  {
+    std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
+    while (!m_walletSynchronized) {
+      m_walletSynchronizedCV.wait(lock);
+    }
+  }
+
+  std::cout << std::endl;
+
   std::string addr_start = m_wallet->getAddress().substr(0, 6);
   m_consoleHandler.start(false, "[wallet " + addr_start + "]: ", Common::Console::Color::BrightYellow);
   return true;

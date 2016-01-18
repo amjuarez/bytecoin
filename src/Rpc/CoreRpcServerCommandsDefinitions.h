@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -264,6 +264,7 @@ struct COMMAND_RPC_GET_INFO {
     uint64_t incoming_connections_count;
     uint64_t white_peerlist_size;
     uint64_t grey_peerlist_size;
+    uint32_t last_known_block_index;
 
     void serialize(ISerializer &s) {
       KV_MEMBER(status)
@@ -276,6 +277,7 @@ struct COMMAND_RPC_GET_INFO {
       KV_MEMBER(incoming_connections_count)
       KV_MEMBER(white_peerlist_size)
       KV_MEMBER(grey_peerlist_size)
+      KV_MEMBER(last_known_block_index)
     }
   };
 };

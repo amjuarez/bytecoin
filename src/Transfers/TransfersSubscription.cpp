@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -39,12 +39,14 @@ const AccountKeys& TransfersSubscription::getKeys() const {
   return subscription.keys;
 }
 
-void TransfersSubscription::addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
+bool TransfersSubscription::addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
                                            const std::vector<TransactionOutputInformationIn>& transfersList) {
   bool added = transfers.addTransaction(blockInfo, tx, transfersList);
   if (added) {
     m_observerManager.notify(&ITransfersObserver::onTransactionUpdated, this, tx.getTransactionHash());
   }
+
+  return added;
 }
 
 AccountPublicAddress TransfersSubscription::getAddress() {
@@ -56,8 +58,9 @@ ITransfersContainer& TransfersSubscription::getContainer() {
 }
 
 void TransfersSubscription::deleteUnconfirmedTransaction(const Hash& transactionHash) {
-  transfers.deleteUnconfirmedTransaction(transactionHash);
-  m_observerManager.notify(&ITransfersObserver::onTransactionDeleted, this, transactionHash);
+  if (transfers.deleteUnconfirmedTransaction(transactionHash)) {
+    m_observerManager.notify(&ITransfersObserver::onTransactionDeleted, this, transactionHash);
+  }
 }
 
 void TransfersSubscription::markTransactionConfirmed(const TransactionBlockInfo& block, const Hash& transactionHash,

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -121,11 +121,11 @@ void TestBlockchainGenerator::addMiningBlock() {
   m_generatedTransactionsIndex.add(block);
 }
 
-void TestBlockchainGenerator::generateEmptyBlocks(uint32_t count)
+void TestBlockchainGenerator::generateEmptyBlocks(size_t count)
 {
   std::unique_lock<std::mutex> lock(m_mutex);
 
-  for (uint32_t i = 0; i < count; ++i)
+  for (size_t i = 0; i < count; ++i)
   {
     CryptoNote::Block& prev_block = m_blockchain.back();
     CryptoNote::Block block;
@@ -197,6 +197,10 @@ void TestBlockchainGenerator::addToBlockchain(const CryptoNote::Transaction& tx)
 }
 
 void TestBlockchainGenerator::addToBlockchain(const std::vector<CryptoNote::Transaction>& txs) {
+  addToBlockchain(txs, miner_acc);
+}
+
+void TestBlockchainGenerator::addToBlockchain(const std::vector<CryptoNote::Transaction>& txs, const CryptoNote::AccountBase& minerAddress) {
   std::list<CryptoNote::Transaction> txsToBlock;
 
   for (const auto& tx: txs) {
@@ -209,7 +213,7 @@ void TestBlockchainGenerator::addToBlockchain(const std::vector<CryptoNote::Tran
   CryptoNote::Block& prev_block = m_blockchain.back();
   CryptoNote::Block block;
 
-  generator.constructBlock(block, prev_block, miner_acc, txsToBlock);
+  generator.constructBlock(block, prev_block, minerAddress, txsToBlock);
   m_blockchain.push_back(block);
   addTx(block.baseTransaction);
 
@@ -346,11 +350,11 @@ void TestBlockchainGenerator::addTx(const CryptoNote::Transaction& tx) {
     const auto& out = tx.outputs[outIndex];
     if (out.target.type() == typeid(KeyOutput)) {
       auto& keyOutsContainer = keyOutsIndex[out.amount];
-      globalIndexes.push_back(keyOutsContainer.size());
+      globalIndexes.push_back(static_cast<uint32_t>(keyOutsContainer.size()));
       keyOutsContainer.push_back({ txHash, outIndex });
     } else if (out.target.type() == typeid(MultisignatureOutput)) {
       auto& msigOutsContainer = multisignatureOutsIndex[out.amount];
-      globalIndexes.push_back(msigOutsContainer.size());
+      globalIndexes.push_back(static_cast<uint32_t>(msigOutsContainer.size()));
       msigOutsContainer.push_back({ txHash, outIndex });
     }
   }
@@ -381,5 +385,11 @@ bool TestBlockchainGenerator::getMultisignatureOutputByGlobalIndex(uint64_t amou
   assert(tx.outputs.size() > entry.indexOut);
   assert(tx.outputs[entry.indexOut].target.type() == typeid(MultisignatureOutput));
   out = boost::get<MultisignatureOutput>(tx.outputs[entry.indexOut].target);
+  return true;
+}
+
+bool TestBlockchainGenerator::generateFromBaseTx(const CryptoNote::AccountBase& address) {
+  std::unique_lock<std::mutex> lock(m_mutex);
+  addToBlockchain({}, address);
   return true;
 }

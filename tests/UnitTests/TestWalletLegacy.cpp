@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -145,7 +145,7 @@ public:
   WalletLegacyApi() : m_currency(CryptoNote::CurrencyBuilder(m_logger).currency()), generator(m_currency) {
   }
 
-  void SetUp();
+  void SetUp() override;
 
 protected:
   void prepareAliceWallet();
@@ -1379,7 +1379,7 @@ TEST_F(WalletLegacyApi, outcommingExternalTransactionTotalAmount) {
   wallet.initAndLoad(walletData, "pass");
   WaitWalletSync(&walletObserver);
 
-  ASSERT_EQ(-(sent + fee), externalTransactionObserver.totalAmount);
+  ASSERT_EQ(-static_cast<int64_t>(sent + fee), externalTransactionObserver.totalAmount);
   wallet.shutdown();
 }
 

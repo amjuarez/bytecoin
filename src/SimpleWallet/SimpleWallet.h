@@ -1,11 +1,13 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
-#include <memory>
+#include <condition_variable>
 #include <future>
+#include <memory>
+#include <mutex>
 
 #include <boost/program_options/variables_map.hpp>
 
@@ -82,13 +84,11 @@ namespace CryptoNote
 
     void printConnectionError() const;
 
-    //---------------- IWalletObserver -------------------------
+    //---------------- IWalletLegacyObserver -------------------------
     virtual void initCompleted(std::error_code result) override;
     virtual void externalTransactionCreated(CryptoNote::TransactionId transactionId) override;
-    //----------------------------------------------------------
-
-    //----------------- INodeObserver --------------------------
-    virtual void localBlockchainUpdated(uint32_t height) override;
+    virtual void synchronizationCompleted(std::error_code result) override;
+    virtual void synchronizationProgressUpdated(uint32_t current, uint32_t total) override;
     //----------------------------------------------------------
 
     //----------------- INodeRpcProxyObserver --------------------------
@@ -117,8 +117,7 @@ namespace CryptoNote
           m_blockchain_height = (std::max)(m_blockchain_height, height);
         }
 
-        if (std::chrono::milliseconds(1) < current_time - m_print_time || force)
-        {
+        if (std::chrono::milliseconds(1) < current_time - m_print_time || force) {
           std::cout << "Height " << height << " of " << m_blockchain_height << '\r';
           m_print_time = current_time;
         }
@@ -127,17 +126,9 @@ namespace CryptoNote
     private:
       void update_blockchain_height()
       {
-        std::string err;
         uint64_t blockchain_height = m_simple_wallet.m_node->getLastLocalBlockHeight();
-        if (err.empty())
-        {
-          m_blockchain_height = blockchain_height;
-          m_blockchain_height_update_time = std::chrono::system_clock::now();
-        }
-        else
-        {
-          std::cerr << "Failed to get current blockchain height: " << err;
-        }
+        m_blockchain_height = blockchain_height;
+        m_blockchain_height_update_time = std::chrono::system_clock::now();
       }
 
     private:
@@ -169,5 +160,9 @@ namespace CryptoNote
     std::unique_ptr<CryptoNote::NodeRpcProxy> m_node;
     std::unique_ptr<CryptoNote::IWalletLegacy> m_wallet;
     refresh_progress_reporter_t m_refresh_progress_reporter;
+
+    bool m_walletSynchronized;
+    std::mutex m_walletSynchronizedMutex;
+    std::condition_variable m_walletSynchronizedCV;
   };
 }

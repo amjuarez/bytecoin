@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,7 +28,10 @@ inline std::vector<uint8_t> stringToVector(const std::string& s) {
 namespace CryptoNote {
 
 BlockchainSynchronizer::BlockchainSynchronizer(INode& node, const Hash& genesisBlockHash) :
-m_node(node), m_genesisBlockHash(genesisBlockHash), m_currentState(State::stopped), m_futureState(State::stopped), shouldSyncConsumersPool(true) {
+  m_node(node),
+  m_genesisBlockHash(genesisBlockHash),
+  m_currentState(State::stopped),
+  m_futureState(State::stopped) {
 }
 
 BlockchainSynchronizer::~BlockchainSynchronizer() {
@@ -44,7 +47,6 @@ void BlockchainSynchronizer::addConsumer(IBlockchainConsumer* consumer) {
   }
 
   m_consumers.insert(std::make_pair(consumer, std::make_shared<SynchronizationState>(m_genesisBlockHash)));
-  shouldSyncConsumersPool = true;
 }
 
 bool BlockchainSynchronizer::removeConsumer(IBlockchainConsumer* consumer) {
@@ -57,23 +59,81 @@ bool BlockchainSynchronizer::removeConsumer(IBlockchainConsumer* consumer) {
   return m_consumers.erase(consumer) > 0;
 }
 
-IStreamSerializable* BlockchainSynchronizer::getConsumerState(IBlockchainConsumer* consumer) {
-  assert(consumer != nullptr);
-
-  if (!(checkIfStopped() && checkIfShouldStop())) {
-    throw std::runtime_error("Can't get consumer state, because BlockchainSynchronizer isn't stopped");
-  }
-
+IStreamSerializable* BlockchainSynchronizer::getConsumerState(IBlockchainConsumer* consumer) const {
   std::unique_lock<std::mutex> lk(m_consumersMutex);
-
-  auto it = m_consumers.find(consumer);
-  if (it == m_consumers.end()) {
-    return nullptr;
-  }
-
-  return it->second.get();
+  return getConsumerSynchronizationState(consumer);
 }
 
+std::vector<Crypto::Hash> BlockchainSynchronizer::getConsumerKnownBlocks(IBlockchainConsumer& consumer) const {
+  std::unique_lock<std::mutex> lk(m_consumersMutex);
+
+  auto state = getConsumerSynchronizationState(&consumer);
+  if (state == nullptr) {
+    throw std::invalid_argument("Consumer not found");
+  }
+
+  return state->getKnownBlockHashes();
+}
+
+std::future<std::error_code> BlockchainSynchronizer::addUnconfirmedTransaction(const ITransactionReader& transaction) {
+  std::unique_lock<std::mutex> lock(m_stateMutex);
+
+  if (m_currentState == State::stopped || m_futureState == State::stopped) {
+    throw std::runtime_error("Can't add transaction, because BlockchainSynchronizer is stopped");
+  }
+
+  std::promise<std::error_code> promise;
+  auto future = promise.get_future();
+  m_addTransactionTasks.emplace_back(&transaction, std::move(promise));
+  m_hasWork.notify_one();
+
+  return future;
+}
+
+std::future<void> BlockchainSynchronizer::removeUnconfirmedTransaction(const Crypto::Hash& transactionHash) {
+  std::unique_lock<std::mutex> lock(m_stateMutex);
+
+  if (m_currentState == State::stopped || m_futureState == State::stopped) {
+    throw std::runtime_error("Can't remove transaction, because BlockchainSynchronizer is stopped");
+  }
+
+  std::promise<void> promise;
+  auto future = promise.get_future();
+  m_removeTransactionTasks.emplace_back(&transactionHash, std::move(promise));
+  m_hasWork.notify_one();
+
+  return future;
+}
+
+std::error_code BlockchainSynchronizer::doAddUnconfirmedTransaction(const ITransactionReader& transaction) {
+  std::unique_lock<std::mutex> lk(m_consumersMutex);
+
+  std::error_code ec;
+  auto addIt = m_consumers.begin();
+  for (; addIt != m_consumers.end(); ++addIt) {
+    ec = addIt->first->addUnconfirmedTransaction(transaction);
+    if (ec) {
+      break;
+    }
+  }
+
+  if (ec) {
+    auto transactionHash = transaction.getTransactionHash();
+    for (auto rollbackIt = m_consumers.begin(); rollbackIt != addIt; ++rollbackIt) {
+      rollbackIt->first->removeUnconfirmedTransaction(transactionHash);
+    }
+  }
+
+  return ec;
+}
+
+void BlockchainSynchronizer::doRemoveUnconfirmedTransaction(const Crypto::Hash& transactionHash) {
+  std::unique_lock<std::mutex> lk(m_consumersMutex);
+
+  for (auto& consumer : m_consumers) {
+    consumer.first->removeUnconfirmedTransaction(transactionHash);
+  }
+}
 
 void BlockchainSynchronizer::save(std::ostream& os) {
   os.write(reinterpret_cast<const char*>(&m_genesisBlockHash), sizeof(m_genesisBlockHash));
@@ -90,16 +150,14 @@ void BlockchainSynchronizer::load(std::istream& in) {
 //--------------------------- FSM ------------------------------------
 
 bool BlockchainSynchronizer::setFutureState(State s) {
-  return setFutureStateIf(s, std::bind(
-    [](State futureState, State s) -> bool {
-    return s > futureState;
-  }, std::ref(m_futureState), s));
+  return setFutureStateIf(s, [this, s] { return s > m_futureState; });
 }
 
 bool BlockchainSynchronizer::setFutureStateIf(State s, std::function<bool(void)>&& pred) {
   std::unique_lock<std::mutex> lk(m_stateMutex);
   if (pred()) {
     m_futureState = s;
+    m_hasWork.notify_one();
     return true;
   }
 
@@ -116,10 +174,37 @@ void BlockchainSynchronizer::actualizeFutureState() {
     m_node.removeObserver(this);
   }
 
+  while (!m_removeTransactionTasks.empty()) {
+    auto& task = m_removeTransactionTasks.front();
+    const Crypto::Hash& transactionHash = *task.first;
+    auto detachedPromise = std::move(task.second);
+    m_removeTransactionTasks.pop_front();
+
+    try {
+      doRemoveUnconfirmedTransaction(transactionHash);
+      detachedPromise.set_value();
+    } catch (...) {
+      detachedPromise.set_exception(std::current_exception());
+    }
+  }
+
+  while (!m_addTransactionTasks.empty()) {
+    auto& task = m_addTransactionTasks.front();
+    const ITransactionReader& transaction = *task.first;
+    auto detachedPromise = std::move(task.second);
+    m_addTransactionTasks.pop_front();
+
+    try {
+      auto ec = doAddUnconfirmedTransaction(transaction);
+      detachedPromise.set_value(ec);
+    } catch (...) {
+      detachedPromise.set_exception(std::current_exception());
+    }
+  }
+
   m_currentState = m_futureState;
   switch (m_futureState) {
   case State::stopped:
-    m_futureState = State::stopped;
     break;
   case State::blockchainSync:
     m_futureState = State::poolSync;
@@ -132,21 +217,22 @@ void BlockchainSynchronizer::actualizeFutureState() {
     startPoolSync();
     break;
   case State::idle:
-    m_futureState = State::idle;
+    m_hasWork.wait(lk, [this] {
+      return m_futureState != State::idle || !m_removeTransactionTasks.empty() || !m_addTransactionTasks.empty();
+    });
     lk.unlock();
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     break;
   default:
     break;
   }
 }
 
-bool BlockchainSynchronizer::checkIfShouldStop() {
+bool BlockchainSynchronizer::checkIfShouldStop() const {
   std::unique_lock<std::mutex> lk(m_stateMutex);
   return m_futureState == State::stopped;
 }
 
-bool BlockchainSynchronizer::checkIfStopped() {
+bool BlockchainSynchronizer::checkIfStopped() const {
   std::unique_lock<std::mutex> lk(m_stateMutex);
   return m_currentState == State::stopped;
 }
@@ -165,16 +251,11 @@ void BlockchainSynchronizer::start() {
     throw std::runtime_error("Can't start, because BlockchainSynchronizer has no consumers");
   }
 
-  if (!setFutureStateIf(State::blockchainSync, std::bind(
-    [](State currentState, State futureState) -> bool {
-    return currentState == State::stopped && futureState == State::stopped;
-  }, std::ref(m_currentState), std::ref(m_futureState)))) {
+  if (!setFutureStateIf(State::blockchainSync, [this] { return m_currentState == State::stopped && m_futureState == State::stopped; })) {
     throw std::runtime_error("BlockchainSynchronizer already started");
   }
 
-  shouldSyncConsumersPool = true;
-
-  workingThread.reset(new std::thread([this] {this->workingProcedure(); }));
+  workingThread.reset(new std::thread([this] { workingProcedure(); }));
 }
 
 void BlockchainSynchronizer::stop() {
@@ -188,7 +269,11 @@ void BlockchainSynchronizer::stop() {
   workingThread.reset();
 }
 
-void BlockchainSynchronizer::lastKnownBlockHeightUpdated(uint32_t height) {
+void BlockchainSynchronizer::localBlockchainUpdated(uint32_t /*height*/) {
+  setFutureState(State::blockchainSync);
+}
+
+void BlockchainSynchronizer::lastKnownBlockHeightUpdated(uint32_t /*height*/) {
   setFutureState(State::blockchainSync);
 }
 
@@ -197,52 +282,27 @@ void BlockchainSynchronizer::poolChanged() {
 }
 //--------------------------- FSM END ------------------------------------
 
-BlockchainSynchronizer::GetPoolRequest BlockchainSynchronizer::getUnionPoolHistory() {
-  GetPoolRequest request;
-  std::unordered_set<Hash> unionHistory;
-  {
-    std::unique_lock<std::mutex> lk(m_consumersMutex);
-    for (auto& consumer : m_consumers) {
-      std::vector<Hash> consumerKnownIds;
-      consumer.first->getKnownPoolTxIds(consumerKnownIds);
-      for (auto& txId : consumerKnownIds) {
-        unionHistory.insert(txId);
+void BlockchainSynchronizer::getPoolUnionAndIntersection(std::unordered_set<Crypto::Hash>& poolUnion, std::unordered_set<Crypto::Hash>& poolIntersection) const {
+  std::unique_lock<std::mutex> lk(m_consumersMutex);
+
+  auto itConsumers = m_consumers.begin();
+  poolUnion = itConsumers->first->getKnownPoolTxIds();
+  poolIntersection = itConsumers->first->getKnownPoolTxIds();
+  ++itConsumers;
+
+  for (; itConsumers != m_consumers.end(); ++itConsumers) {
+    const std::unordered_set<Crypto::Hash>& consumerKnownIds = itConsumers->first->getKnownPoolTxIds();
+
+    poolUnion.insert(consumerKnownIds.begin(), consumerKnownIds.end());
+
+    for (auto itIntersection = poolIntersection.begin(); itIntersection != poolIntersection.end();) {
+      if (consumerKnownIds.count(*itIntersection) == 0) {
+        itIntersection = poolIntersection.erase(itIntersection);
+      } else {
+        ++itIntersection;
       }
     }
   }
-
-  for (auto& id : unionHistory) {
-    request.knownTxIds.push_back(id);
-  }
-
-  request.lastKnownBlock = lastBlockId;
-  return request;
-}
-
-BlockchainSynchronizer::GetPoolRequest BlockchainSynchronizer::getIntersectedPoolHistory() {
-  GetPoolRequest request;
-  {
-    std::unique_lock<std::mutex> lk(m_consumersMutex);
-    auto it = m_consumers.begin();
-
-    it->first->getKnownPoolTxIds(request.knownTxIds);
-    ++it;
-
-    for (; it != m_consumers.end(); ++it) { //iterate over consumers
-      std::vector<Hash> consumerKnownIds;
-      it->first->getKnownPoolTxIds(consumerKnownIds);
-      for (auto itReq = request.knownTxIds.begin(); itReq != request.knownTxIds.end();) { //iterate over intersection
-        if (std::count(consumerKnownIds.begin(), consumerKnownIds.end(), *itReq) == 0) { //consumer doesn't contain id from intersection, so delete this id from intersection
-          itReq = request.knownTxIds.erase(itReq);
-        } else {
-          ++itReq;
-        }
-      }
-    }
-  }
-
-  request.lastKnownBlock = lastBlockId;
-  return request;
 }
 
 BlockchainSynchronizer::GetBlocksRequest BlockchainSynchronizer::getCommonHistory() {
@@ -277,40 +337,32 @@ void BlockchainSynchronizer::startBlockchainSync() {
 
   try {
     if (!req.knownBlocks.empty()) {
-      asyncOperationCompleted = std::promise<std::error_code>();
-      asyncOperationWaitFuture = asyncOperationCompleted.get_future();
+      auto queryBlocksCompleted = std::promise<std::error_code>();
+      auto queryBlocksWaitFuture = queryBlocksCompleted.get_future();
 
-      m_node.queryBlocks
-              (std::move(req.knownBlocks), req.syncStart.timestamp, response.newBlocks, response.startHeight,
-        std::bind(&BlockchainSynchronizer::onGetBlocksCompleted, this, std::placeholders::_1));
+      m_node.queryBlocks(
+        std::move(req.knownBlocks),
+        req.syncStart.timestamp,
+        response.newBlocks,
+        response.startHeight,
+        [&queryBlocksCompleted](std::error_code ec) {
+          auto detachedPromise = std::move(queryBlocksCompleted);
+          detachedPromise.set_value(ec);
+        });
 
-      std::error_code ec = asyncOperationWaitFuture.get();
+      std::error_code ec = queryBlocksWaitFuture.get();
 
       if (ec) {
-        setFutureStateIf(State::idle, std::bind(
-          [](State futureState) -> bool {
-            return futureState != State::stopped; 
-          }, std::ref(m_futureState)));
+        setFutureStateIf(State::idle, [this] { return m_futureState != State::stopped; });
         m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, ec);
       } else {
         processBlocks(response);
       }
     }
-  } catch (std::exception& e) {
-    std::cout << e.what() << std::endl;
-    setFutureStateIf(State::idle, std::bind(
-      [](State futureState) -> bool {
-      return futureState != State::stopped;
-    }, std::ref(m_futureState)));
-    m_observerManager.notify(
-      &IBlockchainSynchronizerObserver::synchronizationCompleted,
-      std::make_error_code(std::errc::invalid_argument));
+  } catch (std::exception&) {
+    setFutureStateIf(State::idle,  [this] { return m_futureState != State::stopped; });
+    m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, std::make_error_code(std::errc::invalid_argument));
   }
-}
-
-void BlockchainSynchronizer::onGetBlocksCompleted(std::error_code ec) {
-  decltype(asyncOperationCompleted) detachedPromise = std::move(asyncOperationCompleted);
-  detachedPromise.set_value(ec);
 }
 
 void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
@@ -322,6 +374,7 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
     if (checkIfShouldStop()) {
       break;
     }
+
     CompleteBlock completeBlock;
     completeBlock.blockHash = block.blockHash;
     interval.blocks.push_back(completeBlock.blockHash);
@@ -331,19 +384,11 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
 
       try {
         for (const auto& txShortInfo : block.txsShortInfo) {
-          completeBlock.transactions.push_back(createTransactionPrefix(txShortInfo.txPrefix,
-                  reinterpret_cast<const Hash&>(txShortInfo.txId)));
+          completeBlock.transactions.push_back(createTransactionPrefix(txShortInfo.txPrefix, reinterpret_cast<const Hash&>(txShortInfo.txId)));
         }
       } catch (std::exception&) {
-        setFutureStateIf(State::idle, std::bind(
-          [](State futureState) -> bool {
-            return futureState != State::stopped;
-          }, std::ref(m_futureState)));
-
-        m_observerManager.notify(
-          &IBlockchainSynchronizerObserver::synchronizationCompleted,
-          std::make_error_code(std::errc::invalid_argument));
-
+        setFutureStateIf(State::idle, [this] { return m_futureState != State::stopped; });
+        m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, std::make_error_code(std::errc::invalid_argument));
         return;
       }
     }
@@ -359,23 +404,19 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
     lk.unlock();
 
     switch (result) {
-    case UpdateConsumersResult::errorOccured:
-      if (setFutureStateIf(State::idle, std::bind(
-        [](State futureState) -> bool {
-        return futureState != State::stopped;
-      }, std::ref(m_futureState)))) {
-        m_observerManager.notify(
-          &IBlockchainSynchronizerObserver::synchronizationCompleted,
-          std::make_error_code(std::errc::invalid_argument));
+    case UpdateConsumersResult::errorOccurred:
+      if (setFutureStateIf(State::idle, [this] { return m_futureState != State::stopped; })) {
+        m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, std::make_error_code(std::errc::invalid_argument));
       }
-
       break;
+
     case UpdateConsumersResult::nothingChanged:
       if (m_node.getLastKnownBlockHeight() != m_node.getLastLocalBlockHeight()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
       } else {
         break;
       }
+
     case UpdateConsumersResult::addedNewBlocks:
       setFutureState(State::blockchainSync);
       m_observerManager.notify(
@@ -391,12 +432,11 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
   }
 
   if (checkIfShouldStop()) { //Sic!
-    m_observerManager.notify(
-      &IBlockchainSynchronizerObserver::synchronizationCompleted,
-      std::make_error_code(std::errc::interrupted));
+    m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, std::make_error_code(std::errc::interrupted));
   }
 }
 
+/// \pre m_consumersMutex is locked
 BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateConsumers(const BlockchainInterval& interval, const std::vector<CompleteBlock>& blocks) {
   bool smthChanged = false;
 
@@ -411,18 +451,12 @@ BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateCons
     if (result.hasNewBlocks) {
       uint32_t startOffset = result.newBlockHeight - interval.startHeight;
       // update consumer
-      if (kv.first->onNewBlocks(
-        blocks.data() + startOffset,
-        result.newBlockHeight,
-        static_cast<uint32_t>(blocks.size()) - startOffset)) {
+      if (kv.first->onNewBlocks(blocks.data() + startOffset, result.newBlockHeight, static_cast<uint32_t>(blocks.size()) - startOffset)) {
         // update state if consumer succeeded
-        kv.second->addBlocks(
-          interval.blocks.data() + startOffset,
-          result.newBlockHeight,
-          static_cast<uint32_t>(interval.blocks.size()) - startOffset);
+        kv.second->addBlocks(interval.blocks.data() + startOffset, result.newBlockHeight, static_cast<uint32_t>(interval.blocks.size()) - startOffset);
         smthChanged = true;
       } else {
-        return UpdateConsumersResult::errorOccured;
+        return UpdateConsumersResult::errorOccurred;
       }
     }
   }
@@ -431,57 +465,41 @@ BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateCons
 }
 
 void BlockchainSynchronizer::startPoolSync() {
+  std::unordered_set<Crypto::Hash> unionPoolHistory;
+  std::unordered_set<Crypto::Hash> intersectedPoolHistory;
+  getPoolUnionAndIntersection(unionPoolHistory, intersectedPoolHistory);
+
+  GetPoolRequest unionRequest;
+  unionRequest.knownTxIds.assign(unionPoolHistory.begin(), unionPoolHistory.end());
+  unionRequest.lastKnownBlock = lastBlockId;
+
   GetPoolResponse unionResponse;
-  GetPoolRequest unionRequest = getUnionPoolHistory();
-
-  asyncOperationCompleted = std::promise<std::error_code>();
-  asyncOperationWaitFuture = asyncOperationCompleted.get_future();
-
   unionResponse.isLastKnownBlockActual = false;
 
-  m_node.getPoolSymmetricDifference(std::move(unionRequest.knownTxIds), std::move(unionRequest.lastKnownBlock), unionResponse.isLastKnownBlockActual,
-    unionResponse.newTxs, unionResponse.deletedTxIds, std::bind(&BlockchainSynchronizer::onGetPoolChanges, this, std::placeholders::_1));
-
-  std::error_code ec = asyncOperationWaitFuture.get();
+  std::error_code ec = getPoolSymmetricDifferenceSync(std::move(unionRequest), unionResponse);
 
   if (ec) {
-    setFutureStateIf(State::idle, std::bind(
-      [](State futureState) -> bool {
-      return futureState != State::stopped;
-    }, std::ref(m_futureState)));
-    m_observerManager.notify(
-      &IBlockchainSynchronizerObserver::synchronizationCompleted,
-      ec);
+    setFutureStateIf(State::idle, [this] { return m_futureState != State::stopped; });
+    m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, ec);
   } else { //get union ok
     if (!unionResponse.isLastKnownBlockActual) { //bc outdated
       setFutureState(State::blockchainSync);
     } else {
-      if (!shouldSyncConsumersPool) { //usual case, start pool processing
-        m_observerManager.notify(
-          &IBlockchainSynchronizerObserver::synchronizationCompleted,
-          processPoolTxs(unionResponse));
-      } else {// first launch, we should sync consumers' pools, so let's ask for intersection
+      if (unionPoolHistory == intersectedPoolHistory) { //usual case, start pool processing
+        m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, processPoolTxs(unionResponse));
+      } else {
+        GetPoolRequest intersectionRequest;
+        intersectionRequest.knownTxIds.assign(intersectedPoolHistory.begin(), intersectedPoolHistory.end());
+        intersectionRequest.lastKnownBlock = lastBlockId;
+
         GetPoolResponse intersectionResponse;
-        GetPoolRequest intersectionRequest = getIntersectedPoolHistory();
-
-        asyncOperationCompleted = std::promise<std::error_code>();
-        asyncOperationWaitFuture = asyncOperationCompleted.get_future();
-
         intersectionResponse.isLastKnownBlockActual = false;
 
-        m_node.getPoolSymmetricDifference(std::move(intersectionRequest.knownTxIds), std::move(intersectionRequest.lastKnownBlock), intersectionResponse.isLastKnownBlockActual,
-          intersectionResponse.newTxs, intersectionResponse.deletedTxIds, std::bind(&BlockchainSynchronizer::onGetPoolChanges, this, std::placeholders::_1));
-
-        std::error_code ec2 = asyncOperationWaitFuture.get();
+        std::error_code ec2 = getPoolSymmetricDifferenceSync(std::move(intersectionRequest), intersectionResponse);
 
         if (ec2) {
-          setFutureStateIf(State::idle, std::bind(
-            [](State futureState) -> bool {
-            return futureState != State::stopped;
-          }, std::ref(m_futureState)));
-          m_observerManager.notify(
-            &IBlockchainSynchronizerObserver::synchronizationCompleted,
-            ec2);
+          setFutureStateIf(State::idle, [this] { return m_futureState != State::stopped; });
+          m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, ec2);
         } else { //get intersection ok
           if (!intersectionResponse.isLastKnownBlockActual) { //bc outdated
             setFutureState(State::blockchainSync);
@@ -490,13 +508,7 @@ void BlockchainSynchronizer::startPoolSync() {
             std::error_code ec3 = processPoolTxs(intersectionResponse);
 
             //notify about error, or success
-            m_observerManager.notify(
-              &IBlockchainSynchronizerObserver::synchronizationCompleted,
-              ec3);
-
-            if (!ec3) {
-              shouldSyncConsumersPool = false;
-            }
+            m_observerManager.notify(&IBlockchainSynchronizerObserver::synchronizationCompleted, ec3);
           }
         }
       }
@@ -504,9 +516,22 @@ void BlockchainSynchronizer::startPoolSync() {
   }
 }
 
-void BlockchainSynchronizer::onGetPoolChanges(std::error_code ec) {
-  decltype(asyncOperationCompleted) detachedPromise = std::move(asyncOperationCompleted);
-  detachedPromise.set_value(ec);
+std::error_code BlockchainSynchronizer::getPoolSymmetricDifferenceSync(GetPoolRequest&& request, GetPoolResponse& response) {
+  auto promise = std::promise<std::error_code>();
+  auto future = promise.get_future();
+
+  m_node.getPoolSymmetricDifference(
+    std::move(request.knownTxIds),
+    std::move(request.lastKnownBlock),
+    response.isLastKnownBlockActual,
+    response.newTxs,
+    response.deletedTxIds,
+    [&promise](std::error_code ec) {
+      auto detachedPromise = std::move(promise);
+      detachedPromise.set_value(ec);
+    });
+
+  return future.get();
 }
 
 std::error_code BlockchainSynchronizer::processPoolTxs(GetPoolResponse& response) {
@@ -526,6 +551,22 @@ std::error_code BlockchainSynchronizer::processPoolTxs(GetPoolResponse& response
   }
 
   return error;
+}
+
+///pre: m_consumersMutex is locked
+SynchronizationState* BlockchainSynchronizer::getConsumerSynchronizationState(IBlockchainConsumer* consumer) const {
+  assert(consumer != nullptr);
+
+  if (!(checkIfStopped() && checkIfShouldStop())) {
+    throw std::runtime_error("Can't get consumer state, because BlockchainSynchronizer isn't stopped");
+  }
+
+  auto it = m_consumers.find(consumer);
+  if (it == m_consumers.end()) {
+    return nullptr;
+  }
+
+  return it->second.get();
 }
 
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,21 +14,28 @@ namespace CryptoNote {
 
 class core;
 class NodeServer;
+class ICryptoNoteProtocolQuery;
 
 class RpcServer : public HttpServer {
 public:
-  RpcServer(System::Dispatcher& dispatcher, Logging::ILogger& log, core& c, NodeServer& p2p);
+  RpcServer(System::Dispatcher& dispatcher, Logging::ILogger& log, core& c, NodeServer& p2p, const ICryptoNoteProtocolQuery& protocolQuery);
 
   typedef std::function<bool(RpcServer*, const HttpRequest& request, HttpResponse& response)> HandlerFunction;
 
 private:
 
+  template <class Handler>
+  struct RpcHandler {
+    const Handler handler;
+    const bool allowBusyCore;
+  };
+
   typedef void (RpcServer::*HandlerPtr)(const HttpRequest& request, HttpResponse& response);
-  static std::unordered_map<std::string, HandlerFunction> s_handlers;
+  static std::unordered_map<std::string, RpcHandler<HandlerFunction>> s_handlers;
 
   virtual void processRequest(const HttpRequest& request, HttpResponse& response) override;
   bool processJsonRpcRequest(const HttpRequest& request, HttpResponse& response);
-  bool checkCoreReady();
+  bool isCoreReady();
 
   // binary handlers
   bool on_get_blocks(const COMMAND_RPC_GET_BLOCKS_FAST::request& req, COMMAND_RPC_GET_BLOCKS_FAST::response& res);
@@ -63,6 +70,7 @@ private:
   Logging::LoggerRef logger;
   core& m_core;
   NodeServer& m_p2p;
+  const ICryptoNoteProtocolQuery& m_protocolQuery;
 };
 
 }

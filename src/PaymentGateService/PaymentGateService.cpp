@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,6 +15,7 @@
 #include "CryptoNoteCore/Core.h"
 #include "CryptoNoteProtocol/CryptoNoteProtocolHandler.h"
 #include "P2p/NetNode.h"
+#include "PaymentGate/WalletFactory.h"
 #include <System/Context.h>
 
 #ifdef ERROR
@@ -73,8 +74,8 @@ bool PaymentGateService::init(int argc, char** argv) {
 
 WalletConfiguration PaymentGateService::getWalletConfig() const {
   return WalletConfiguration{
-    config.gateConfiguration.walletFile,
-    config.gateConfiguration.walletPassword
+    config.gateConfiguration.containerFile,
+    config.gateConfiguration.containerPassword
   };
 }
 
@@ -119,6 +120,16 @@ void PaymentGateService::stop() {
 }
 
 void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
+  if (!config.coreConfig.configFolderDefaulted) {
+    if (!Tools::directoryExists(config.coreConfig.configFolder)) {
+      throw std::runtime_error("Directory does not exist: " + config.coreConfig.configFolder);
+    }
+  } else {
+    if (!Tools::create_directories_if_necessary(config.coreConfig.configFolder)) {
+      throw std::runtime_error("Can't create directory: " + config.coreConfig.configFolder);
+    }
+  }
+
   log(Logging::INFO) << "Starting Payment Gate with local node";
 
   CryptoNote::Currency currency = currencyBuilder.currency();
@@ -146,7 +157,7 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
 
   node->init([&initPromise, &log](std::error_code ec) {
     if (ec) {
-      log(Logging::INFO) << "Failed to init node: " << ec.message();
+      log(Logging::WARNING, Logging::YELLOW) << "Failed to init node: " << ec.message();
     } else {
       log(Logging::INFO) << "node is inited successfully";
     }
@@ -193,28 +204,27 @@ void PaymentGateService::runRpcProxy(Logging::LoggerRef& log) {
 
 void PaymentGateService::runWalletService(const CryptoNote::Currency& currency, CryptoNote::INode& node) {
   PaymentService::WalletConfiguration walletConfiguration{
-    config.gateConfiguration.walletFile,
-    config.gateConfiguration.walletPassword
+    config.gateConfiguration.containerFile,
+    config.gateConfiguration.containerPassword
   };
 
-  service = new PaymentService::WalletService(currency, *dispatcher, node, walletConfiguration, logger);
+  std::unique_ptr<CryptoNote::IWallet> wallet (WalletFactory::createWallet(currency, node, *dispatcher));
+
+  service = new PaymentService::WalletService(currency, *dispatcher, node, *wallet, walletConfiguration, logger);
   std::unique_ptr<PaymentService::WalletService> serviceGuard(service);
   try {
     service->init();
   } catch (std::exception& e) {
-    Logging::LoggerRef(logger, "run")(Logging::ERROR) << "Failed to init walletService reason: " << e.what();
+    Logging::LoggerRef(logger, "run")(Logging::ERROR, Logging::BRIGHT_RED) << "Failed to init walletService reason: " << e.what();
     return;
   }
 
   if (config.gateConfiguration.printAddresses) {
     // print addresses and exit
-    size_t addressCount = 0;
-    service->getAddressCount(addressCount);
-    for (size_t i = 0; i < addressCount; ++i) {
-      std::string address;
-      if (service->getAddress(i, address) == std::error_code()) {
-        std::cout << "Address: " << address << std::endl;
-      }
+    std::vector<std::string> addresses;
+    service->getAddresses(addresses);
+    for (const auto& address: addresses) {
+      std::cout << "Address: " << address << std::endl;
     }
   } else {
     PaymentService::PaymentServiceJsonRpcServer rpcServer(*dispatcher, *stopEvent, *service, logger);
@@ -223,7 +233,7 @@ void PaymentGateService::runWalletService(const CryptoNote::Currency& currency, 
     try {
       service->saveWallet();
     } catch (std::exception& ex) {
-      Logging::LoggerRef(logger, "saveWallet")(Logging::WARNING) << "Couldn't save wallet: " << ex.what();
+      Logging::LoggerRef(logger, "saveWallet")(Logging::WARNING, Logging::YELLOW) << "Couldn't save container: " << ex.what();
     }
   }
 }

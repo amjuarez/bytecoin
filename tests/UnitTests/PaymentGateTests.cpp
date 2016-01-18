@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,6 +10,7 @@
 #include <Logging/ConsoleLogger.h>
 
 #include "PaymentGate/WalletService.h"
+#include "PaymentGate/WalletFactory.h"
 
 // test helpers
 #include "INodeStubs.h"
@@ -32,7 +33,8 @@ public:
   }
 
   std::unique_ptr<WalletService> createWalletService(const WalletConfiguration& cfg) {
-    std::unique_ptr<WalletService> service(new WalletService(currency, dispatcher, nodeStub, cfg, logger));
+    wallet.reset(WalletFactory::createWallet(currency, nodeStub, dispatcher));
+    std::unique_ptr<WalletService> service(new WalletService(currency, dispatcher, nodeStub, *wallet, cfg, logger));
     service->init();
     return service;
   }
@@ -48,6 +50,8 @@ protected:
   TestBlockchainGenerator generator;
   INodeTrivialRefreshStub nodeStub;
   System::Dispatcher dispatcher;
+
+  std::unique_ptr<CryptoNote::IWallet> wallet;
 };
 
 
@@ -77,15 +81,9 @@ TEST_F(PaymentGateTest, addTransaction) {
 
   System::Timer(dispatcher).sleep(std::chrono::seconds(2));
 
-  uint64_t txCount = 0;
-
-  ASSERT_TRUE(!service->getTransactionsCount(txCount));
-  ASSERT_EQ(3, txCount);
-
   uint64_t pending = 0, actual = 0;
 
-  ASSERT_TRUE(!service->getPendingBalance(pending));
-  ASSERT_TRUE(!service->getActualBalance(actual));
+  service->getBalance(actual, pending);
 
   ASSERT_NE(0, pending);
   ASSERT_NE(0, actual);
@@ -93,6 +91,7 @@ TEST_F(PaymentGateTest, addTransaction) {
   ASSERT_EQ(pending * 2, actual);
 }
 
+/*
 TEST_F(PaymentGateTest, DISABLED_sendTransaction) {
 
   auto cfg = createWalletConfiguration();
@@ -129,16 +128,16 @@ TEST_F(PaymentGateTest, DISABLED_sendTransaction) {
   uint64_t txId = 0;
 
   {
-    SendTransactionRequest req;
-    SendTransactionResponse res;
+    SendTransaction::Request req;
+    SendTransaction::Response res;
 
-    req.destinations.push_back(TransferDestination{ TEST_AMOUNT, recvAddress });
+    req.transfers.push_back(WalletRpcOrder{ TEST_AMOUNT, recvAddress });
     req.fee = currency.minimumFee();
-    req.mixin = 1;
+    req.anonymity = 1;
     req.unlockTime = 0;
     req.paymentId = paymentIdStr;
 
-    ASSERT_TRUE(!service->sendTransaction(req, res));
+    ASSERT_TRUE(!service->sendTransaction(req, res.transactionHash));
 
     txId = res.transactionId;
   }
@@ -250,4 +249,4 @@ TEST_F(PaymentGateTest, DISABLED_sendTransaction) {
     ASSERT_EQ(1, recvPayment.size());
     ASSERT_EQ(TEST_AMOUNT / 2, recvPayment[0].amount);
   }
-}
+} */

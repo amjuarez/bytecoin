@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -32,12 +32,11 @@ public:
     uint64_t& pendingBalance,
     WalletsContainer& walletsContainer,
     TransfersSyncronizer& synchronizer,
-    SpentOutputs& spentOutputs,
     UnlockTransactionJobs& unlockTransactions,
-    TransactionChanges& change,
     WalletTransactions& transactions,
     WalletTransfers& transfers,
-    uint32_t transactionSoftLockTime
+    uint32_t transactionSoftLockTime,
+    UncommitedTransactions& uncommitedTransactions
   );
   
   void save(const std::string& password, Common::IOutputStream& destination, bool saveDetails, bool saveCache);
@@ -46,7 +45,7 @@ public:
 private:
   static const uint32_t SERIALIZATION_VERSION;
 
-  void loadCurrentVersion(Common::IInputStream& source, const std::string& password);
+  void loadWallet(Common::IInputStream& source, const std::string& password, uint32_t version);
   void loadWalletV1(Common::IInputStream& source, const std::string& password);
 
   CryptoContext generateCryptoContext(const std::string& password);
@@ -60,9 +59,8 @@ private:
   void saveWallets(Common::IOutputStream& destination, bool saveCache, CryptoContext& cryptoContext);
   void saveBalances(Common::IOutputStream& destination, bool saveCache, CryptoContext& cryptoContext);
   void saveTransfersSynchronizer(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveSpentOutputs(Common::IOutputStream& destination, CryptoContext& cryptoContext);
   void saveUnlockTransactionsJobs(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveChange(Common::IOutputStream& destination, CryptoContext& cryptoContext);
+  void saveUncommitedTransactions(Common::IOutputStream& destination, CryptoContext& cryptoContext);
   void saveTransactions(Common::IOutputStream& destination, CryptoContext& cryptoContext);
   void saveTransfers(Common::IOutputStream& destination, CryptoContext& cryptoContext);
 
@@ -78,16 +76,20 @@ private:
   void subscribeWallets();
   void loadBalances(Common::IInputStream& source, CryptoContext& cryptoContext);
   void loadTransfersSynchronizer(Common::IInputStream& source, CryptoContext& cryptoContext);
-  void loadSpentOutputs(Common::IInputStream& source, CryptoContext& cryptoContext);
+  void loadObsoleteSpentOutputs(Common::IInputStream& source, CryptoContext& cryptoContext);
   void loadUnlockTransactionsJobs(Common::IInputStream& source, CryptoContext& cryptoContext);
-  void loadChange(Common::IInputStream& source, CryptoContext& cryptoContext);
+  void loadObsoleteChange(Common::IInputStream& source, CryptoContext& cryptoContext);
+  void loadUncommitedTransactions(Common::IInputStream& source, CryptoContext& cryptoContext);
   void loadTransactions(Common::IInputStream& source, CryptoContext& cryptoContext);
-  void loadTransfers(Common::IInputStream& source, CryptoContext& cryptoContext);
+  void loadTransfers(Common::IInputStream& source, CryptoContext& cryptoContext, uint32_t version);
 
   void loadWalletV1Keys(CryptoNote::BinaryInputStreamSerializer& serializer);
   void loadWalletV1Details(CryptoNote::BinaryInputStreamSerializer& serializer);
   void addWalletV1Details(const std::vector<WalletLegacyTransaction>& txs, const std::vector<WalletLegacyTransfer>& trs);
+  void initTransactionPool();
+  void resetCachedBalance();
   void updateTransactionsBaseStatus();
+  void updateTransfersSign();
 
   ITransfersObserver& m_transfersObserver;
   Crypto::PublicKey& m_viewPublicKey;
@@ -96,12 +98,11 @@ private:
   uint64_t& m_pendingBalance;
   WalletsContainer& m_walletsContainer;
   TransfersSyncronizer& m_synchronizer;
-  SpentOutputs& m_spentOutputs;
   UnlockTransactionJobs& m_unlockTransactions;
-  TransactionChanges& m_change;
   WalletTransactions& m_transactions;
   WalletTransfers& m_transfers;
   uint32_t m_transactionSoftLockTime;
+  UncommitedTransactions& uncommitedTransactions;
 };
 
 } //namespace CryptoNote

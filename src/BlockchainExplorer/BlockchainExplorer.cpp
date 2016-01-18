@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -65,12 +65,76 @@ private:
   const std::function<void(const INode::Callback&)> requestFunc;
 };
 
+BlockchainExplorer::PoolUpdateGuard::PoolUpdateGuard() :
+  m_state(State::NONE) {
+}
+
+bool BlockchainExplorer::PoolUpdateGuard::beginUpdate() {
+  auto state = m_state.load();
+  for (;;) {
+    switch (state) {
+    case State::NONE:
+      if (m_state.compare_exchange_weak(state, State::UPDATING)) {
+        return true;
+      }
+      break;
+
+    case State::UPDATING:
+      if (m_state.compare_exchange_weak(state, State::UPDATE_REQUIRED)) {
+        return false;
+      }
+      break;
+
+    case State::UPDATE_REQUIRED:
+      return false;
+
+    default:
+      assert(false);
+      return false;
+    }
+  }
+}
+
+bool BlockchainExplorer::PoolUpdateGuard::endUpdate() {
+  auto state = m_state.load();
+  for (;;) {
+    assert(state != State::NONE);
+
+    if (m_state.compare_exchange_weak(state, State::NONE)) {
+      return state == State::UPDATE_REQUIRED;
+    }
+  }
+}
+
+class ScopeExitHandler {
+public:
+  ScopeExitHandler(std::function<void()>&& handler) :
+    m_handler(std::move(handler)),
+    m_cancelled(false) {
+  }
+
+  ~ScopeExitHandler() {
+    if (!m_cancelled) {
+      m_handler();
+    }
+  }
+
+  void reset() {
+    m_cancelled = true;
+  }
+
+private:
+  std::function<void()> m_handler;
+  bool m_cancelled;
+};
+
 BlockchainExplorer::BlockchainExplorer(INode& node, Logging::ILogger& logger) : 
   node(node), 
   logger(logger, "BlockchainExplorer"),
   state(NOT_INITIALIZED), 
   synchronized(false), 
-  observersCounter(0) {}
+  observersCounter(0) {
+}
 
 BlockchainExplorer::~BlockchainExplorer() {}
     
@@ -416,6 +480,12 @@ void BlockchainExplorer::poolChanged() {
     return;
   }
 
+  if (!poolUpdateGuard.beginUpdate()) {
+    return;
+  }
+
+  ScopeExitHandler poolUpdateEndGuard(std::bind(&BlockchainExplorer::poolUpdateEndHandler, this));
+
   std::unique_lock<std::mutex> lock(mutex);
 
   std::shared_ptr<std::vector<std::unique_ptr<ITransactionReader>>> rawNewTransactionsPtr = std::make_shared<std::vector<std::unique_ptr<ITransactionReader>>>();
@@ -438,8 +508,11 @@ void BlockchainExplorer::poolChanged() {
       );
     }
   );
+
   request.performAsync(asyncContextCounter,
     [this, rawNewTransactionsPtr, removedTransactionsPtr, isBlockchainActualPtr](std::error_code ec) {
+      ScopeExitHandler poolUpdateEndGuard(std::bind(&BlockchainExplorer::poolUpdateEndHandler, this));
+
       if (ec) {
         logger(ERROR) << "Can't send poolChanged notification because can't get pool symmetric difference: " << ec.message();
         return;
@@ -461,12 +534,10 @@ void BlockchainExplorer::poolChanged() {
       for (const Hash hash : *removedTransactionsPtr) {
         auto iter = knownPoolState.find(hash);
         if (iter != knownPoolState.end()) {
-          removedTransactionsHashesPtr->push_back(
-            std::move(std::make_pair(
-              hash, 
-              TransactionRemoveReason::INCLUDED_IN_BLOCK  //Can't have real reason here.
-            ))
-          );
+          removedTransactionsHashesPtr->push_back({
+              hash,
+              TransactionRemoveReason::INCLUDED_IN_BLOCK // Can't have real reason here.
+          });
           knownPoolState.erase(iter);
         }
       }
@@ -487,21 +558,34 @@ void BlockchainExplorer::poolChanged() {
           std::placeholders::_1
         )
       );
+
       request.performAsync(asyncContextCounter,
         [this, newTransactionsHashesPtr, newTransactionsPtr, removedTransactionsHashesPtr](std::error_code ec) {
+          ScopeExitHandler poolUpdateEndGuard(std::bind(&BlockchainExplorer::poolUpdateEndHandler, this));
+
           if (ec) {
             logger(ERROR) << "Can't send poolChanged notification because can't get transactions: " << ec.message();
             return;
           }
+
           if (!newTransactionsPtr->empty() || !removedTransactionsHashesPtr->empty()) {
             observerManager.notify(&IBlockchainObserver::poolUpdated, *newTransactionsPtr, *removedTransactionsHashesPtr);
             logger(DEBUGGING) << "poolUpdated notification was successfully sent.";
           }
         }
       );
+
+      poolUpdateEndGuard.reset();
     }
   );
-  
+
+  poolUpdateEndGuard.reset();
+}
+
+void BlockchainExplorer::poolUpdateEndHandler() {
+  if (poolUpdateGuard.endUpdate()) {
+    poolChanged();
+  }
 }
 
 void BlockchainExplorer::blockchainSynchronized(uint32_t topHeight) {

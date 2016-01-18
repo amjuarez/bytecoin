@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -49,6 +49,16 @@ public:
   virtual ITransfersContainer& getContainer() = 0;
 };
 
+class ITransfersSynchronizerObserver {
+public:
+  virtual void onBlocksAdded(const Crypto::PublicKey& viewPublicKey, const std::vector<Crypto::Hash>& blockHashes) {}
+  virtual void onBlockchainDetach(const Crypto::PublicKey& viewPublicKey, uint32_t blockIndex) {}
+  virtual void onTransactionDeleteBegin(const Crypto::PublicKey& viewPublicKey, Crypto::Hash transactionHash) {}
+  virtual void onTransactionDeleteEnd(const Crypto::PublicKey& viewPublicKey, Crypto::Hash transactionHash) {}
+  virtual void onTransactionUpdated(const Crypto::PublicKey& viewPublicKey, const Crypto::Hash& transactionHash,
+    const std::vector<ITransfersContainer*>& containers) {}
+};
+
 class ITransfersSynchronizer : public IStreamSerializable {
 public:
   virtual ~ITransfersSynchronizer() {}
@@ -58,6 +68,7 @@ public:
   virtual void getSubscriptions(std::vector<AccountPublicAddress>& subscriptions) = 0;
   // returns nullptr if address is not found
   virtual ITransfersSubscription* getSubscription(const AccountPublicAddress& acc) = 0;
+  virtual std::vector<Crypto::Hash> getViewKeyKnownBlocks(const Crypto::PublicKey& publicViewKey) = 0;
 };
 
 }

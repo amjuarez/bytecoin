@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,7 +28,7 @@ const char* getErrorBody(CryptoNote::HttpResponse::HTTP_STATUS status) {
   case CryptoNote::HttpResponse::STATUS_404:
     return "Requested url is not found\n";
   case CryptoNote::HttpResponse::STATUS_500:
-    return "Internal server error is occured\n";
+    return "Internal server error is occurred\n";
   default:
     throw std::runtime_error("Error body for given status is not available");
   }

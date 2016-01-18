@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,7 +11,7 @@ cn_slow_hash_noaesni
 (void *restrict context, const void *restrict data, size_t length, void *restrict hash)
 {
 #define ctx ((struct cn_ctx *) context)
-  uint8_t ExpandedKey[256];
+  ALIGNED_DECL(uint8_t ExpandedKey[256], 16);
   size_t i;
   __m128i *longoutput, *expkey, *xmminput, b_x;
   ALIGNED_DECL(uint64_t a[2], 16);

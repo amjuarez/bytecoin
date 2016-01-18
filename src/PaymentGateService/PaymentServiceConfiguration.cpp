@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,7 +15,7 @@ namespace po = boost::program_options;
 namespace PaymentService {
 
 Configuration::Configuration() {
-  generateNewWallet = false;
+  generateNewContainer = false;
   daemonize = false;
   registerService = false;
   unregisterService = false;
@@ -31,9 +31,9 @@ void Configuration::initOptions(boost::program_options::options_description& des
   desc.add_options()
       ("bind-address", po::value<std::string>()->default_value("0.0.0.0"), "payment service bind address")
       ("bind-port", po::value<uint16_t>()->default_value(8070), "payment service bind port")
-      ("wallet-file,w", po::value<std::string>(), "wallet file")
-      ("wallet-password,p", po::value<std::string>(), "wallet password")
-      ("generate-wallet,g", "generate new wallet file and exit")
+      ("container-file,w", po::value<std::string>(), "container file")
+      ("container-password,p", po::value<std::string>(), "container password")
+      ("generate-container,g", "generate new container file with one wallet and exit")
       ("daemon,d", "run as daemon in Unix or as service in Windows")
 #ifdef _WIN32
       ("register-service", "register service and exit (Windows only)")
@@ -62,7 +62,7 @@ void Configuration::init(const boost::program_options::variables_map& options) {
     throw ConfigurationError("It's impossible to use both \"register-service\" and \"unregister-service\" at the same time");
   }
 
-  if (options.count("testnet") != 0) {
+  if (options["testnet"].as<bool>()) {
     testnet = true;
   }
 
@@ -90,16 +90,16 @@ void Configuration::init(const boost::program_options::variables_map& options) {
     bindPort = options["bind-port"].as<uint16_t>();
   }
 
-  if (options.count("wallet-file") != 0) {
-    walletFile = options["wallet-file"].as<std::string>();
+  if (options.count("container-file") != 0) {
+    containerFile = options["container-file"].as<std::string>();
   }
 
-  if (options.count("wallet-password") != 0) {
-    walletPassword = options["wallet-password"].as<std::string>();
+  if (options.count("container-password") != 0) {
+    containerPassword = options["container-password"].as<std::string>();
   }
 
-  if (options.count("generate-wallet") != 0) {
-    generateNewWallet = true;
+  if (options.count("generate-container") != 0) {
+    generateNewContainer = true;
   }
 
   if (options.count("address") != 0) {
@@ -107,8 +107,8 @@ void Configuration::init(const boost::program_options::variables_map& options) {
   }
 
   if (!registerService && !unregisterService) {
-    if (walletFile.empty() || walletPassword.empty()) {
-      throw ConfigurationError("Both wallet-file and wallet-password parameters are required");
+    if (containerFile.empty() || containerPassword.empty()) {
+      throw ConfigurationError("Both container-file and container-password parameters are required");
     }
   }
 }

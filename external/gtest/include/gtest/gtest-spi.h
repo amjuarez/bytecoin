@@ -75,7 +75,7 @@ class GTEST_API_ ScopedFakeTestPartResultReporter
   //
   // This method is from the TestPartResultReporterInterface
   // interface.
-  virtual void ReportTestPartResult(const TestPartResult& result);
+  virtual void ReportTestPartResult(const TestPartResult& result) override;
  private:
   void Init();
 

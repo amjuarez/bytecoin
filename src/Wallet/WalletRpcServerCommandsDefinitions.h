@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -35,7 +35,7 @@ using CryptoNote::ISerializer;
     };
   };
 
-  struct trnsfer_destination
+  struct transfer_destination
   {
     uint64_t amount;
     std::string address;
@@ -50,7 +50,7 @@ using CryptoNote::ISerializer;
   {
     struct request
     {
-      std::list<trnsfer_destination> destinations;
+      std::list<transfer_destination> destinations;
       uint64_t fee;
       uint64_t mixin;
       uint64_t unlock_time;

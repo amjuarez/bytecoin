@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -35,7 +35,7 @@ public:
 
   virtual ~WalletGetRandomOutsByAmountsRequest() {};
 
-  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
+  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb) override
   {
     node.getRandomOutsByAmounts(std::move(m_amounts), m_outsCount, std::ref(m_context->outs), std::bind(cb, m_cb, std::placeholders::_1));
   };
@@ -53,7 +53,7 @@ public:
   WalletRelayTransactionRequest(const CryptoNote::Transaction& tx, Callback cb) : m_tx(tx), m_cb(cb) {};
   virtual ~WalletRelayTransactionRequest() {};
 
-  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb)
+  virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb) override
   {
     node.relayTransaction(m_tx, std::bind(cb, m_cb, std::placeholders::_1));
   }

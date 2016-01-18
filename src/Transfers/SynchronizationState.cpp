@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -88,6 +88,10 @@ void SynchronizationState::addBlocks(const Crypto::Hash* blockHashes, uint32_t h
 
 uint32_t SynchronizationState::getHeight() const {
   return static_cast<uint32_t>(m_blockchain.size());
+}
+
+const std::vector<Crypto::Hash>& SynchronizationState::getKnownBlockHashes() const {
+  return m_blockchain;
 }
 
 void SynchronizationState::save(std::ostream& os) {

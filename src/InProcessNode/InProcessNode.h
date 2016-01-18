@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -38,9 +38,9 @@ public:
   virtual bool addObserver(INodeObserver* observer) override;
   virtual bool removeObserver(INodeObserver* observer) override;
 
-  virtual size_t getPeerCount() const;
-  virtual uint32_t getLastLocalBlockHeight() const;
-  virtual uint32_t getLastKnownBlockHeight() const;
+  virtual size_t getPeerCount() const override;
+  virtual uint32_t getLastLocalBlockHeight() const override;
+  virtual uint32_t getLastKnownBlockHeight() const override;
   virtual uint32_t getLocalBlockCount() const override;
   virtual uint32_t getKnownBlockCount() const override;
   virtual uint64_t getLastLocalBlockTimestamp() const override;

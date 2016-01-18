@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -61,6 +61,25 @@ public:
   typedef WalletAsyncContextCounter AsyncContextCounter;
 
 private:
+  void poolUpdateEndHandler();
+
+  class PoolUpdateGuard {
+  public:
+    PoolUpdateGuard();
+
+    bool beginUpdate();
+    bool endUpdate();
+
+  private:
+    enum class State {
+      NONE,
+      UPDATING,
+      UPDATE_REQUIRED
+    };
+
+    std::atomic<State> m_state;
+  };
+
   enum State {
     NOT_INITIALIZED,
     INITIALIZED
@@ -81,6 +100,6 @@ private:
   Logging::LoggerRef logger;
 
   AsyncContextCounter asyncContextCounter;
-  
+  PoolUpdateGuard poolUpdateGuard;
 };
 }

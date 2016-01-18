@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -34,7 +34,7 @@ TEST_F(TimerTests, timerIsWorking) {
 }
 
 TEST_F(TimerTests, movedTimerIsWorking) {
-  Timer t(std::move(Timer(dispatcher)));
+  Timer t{Timer{dispatcher}};
   bool done = false;
   contextGroup.spawn([&]() {
     done = true;
@@ -130,7 +130,7 @@ TEST_F(TimerTests, movedTimerIsWorking2) {
   bool done = false;
   contextGroup.spawn([&] {
     Timer t(dispatcher);
-    t = std::move(Timer(dispatcher));
+    t = Timer{dispatcher};
     //contextGroup.spawn([&]() { done = true; });
 
     ASSERT_FALSE(done);

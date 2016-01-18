@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -91,8 +91,8 @@ public:
     nodeStub(generator),
     blockchainExplorer(nodeStub, logger) {
   }
-  void SetUp();
-  void TearDown();
+  void SetUp() override;
+  void TearDown() override;
 
 protected:
   Currency currency;
@@ -1090,7 +1090,7 @@ TEST_F(BlockchainExplorerTests, getBlocksByTimestampNotInited) {
 }
 
 TEST_F(BlockchainExplorerTests, generatedTransactions) {
-  const uint32_t NUMBER_OF_BLOCKS = 10;
+  const size_t NUMBER_OF_BLOCKS = 10;
   const size_t POOL_TX_NUMBER = 10;
   std::vector<uint32_t> blockHeights;
   for (uint32_t i = 0; i < NUMBER_OF_BLOCKS + 3; ++i) {

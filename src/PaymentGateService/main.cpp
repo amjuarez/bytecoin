@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -46,7 +46,7 @@ std::string GetLastErrorMessage(DWORD errorMessageID)
 void __stdcall serviceHandler(DWORD fdwControl) {
   if (fdwControl == SERVICE_CONTROL_STOP) {
     Logging::LoggerRef log(ppg->getLogger(), "serviceHandler");
-    log(Logging::INFO) << "Stop signal caught";
+    log(Logging::INFO, Logging::BRIGHT_YELLOW) << "Stop signal caught";
 
     SERVICE_STATUS serviceStatus{ SERVICE_WIN32_OWN_PROCESS, SERVICE_STOP_PENDING, 0, NO_ERROR, 0, 0, 0 };
     SetServiceStatus(serviceStatusHandle, &serviceStatus);
@@ -60,26 +60,26 @@ void __stdcall serviceMain(DWORD dwArgc, char **lpszArgv) {
 
   serviceStatusHandle = RegisterServiceCtrlHandler("PaymentGate", serviceHandler);
   if (serviceStatusHandle == NULL) {
-    logRef(Logging::FATAL) << "Couldn't make RegisterServiceCtrlHandler call: " << GetLastErrorMessage(GetLastError());
+    logRef(Logging::FATAL, Logging::BRIGHT_RED) << "Couldn't make RegisterServiceCtrlHandler call: " << GetLastErrorMessage(GetLastError());
     return;
   }
 
   SERVICE_STATUS serviceStatus{ SERVICE_WIN32_OWN_PROCESS, SERVICE_START_PENDING, 0, NO_ERROR, 0, 1, 3000 };
   if (SetServiceStatus(serviceStatusHandle, &serviceStatus) != TRUE) {
-    logRef(Logging::FATAL) << "Couldn't make SetServiceStatus call: " << GetLastErrorMessage(GetLastError());
+    logRef(Logging::FATAL, Logging::BRIGHT_RED) << "Couldn't make SetServiceStatus call: " << GetLastErrorMessage(GetLastError());
     return;
   }
 
   serviceStatus = { SERVICE_WIN32_OWN_PROCESS, SERVICE_RUNNING, SERVICE_ACCEPT_STOP, NO_ERROR, 0, 0, 0 };
   if (SetServiceStatus(serviceStatusHandle, &serviceStatus) != TRUE) {
-    logRef(Logging::FATAL) << "Couldn't make SetServiceStatus call: " << GetLastErrorMessage(GetLastError());
+    logRef(Logging::FATAL, Logging::BRIGHT_RED) << "Couldn't make SetServiceStatus call: " << GetLastErrorMessage(GetLastError());
     return;
   }
 
   try {
     ppg->run();
   } catch (std::exception& ex) {
-    logRef(Logging::FATAL) << "Error occured: " << ex.what();
+    logRef(Logging::FATAL, Logging::BRIGHT_RED) << "Error occurred: " << ex.what();
   }
 
   serviceStatus = { SERVICE_WIN32_OWN_PROCESS, SERVICE_STOPPED, 0, NO_ERROR, 0, 0, 0 };
@@ -125,10 +125,14 @@ int runDaemon() {
     { NULL, NULL }
   };
 
+  Logging::LoggerRef logRef(ppg->getLogger(), "RunService");
+
   if (StartServiceCtrlDispatcher(serviceTable) != TRUE) {
+    logRef(Logging::FATAL, Logging::BRIGHT_RED) << "Couldn't start service: " << GetLastErrorMessage(GetLastError());
     return 1;
   }
 
+  logRef(Logging::INFO) << "Service stopped";
   return 0;
 
 #else
@@ -138,7 +142,7 @@ int runDaemon() {
     //parent
     return 0;
   } else if (daemonResult < 0) {
-    //error occured
+    //error occurred
     return 1;
   }
 
@@ -161,7 +165,7 @@ int registerService() {
 
   for (;;) {
     if (GetModuleFileName(NULL, pathBuff, ARRAYSIZE(pathBuff)) == 0) {
-      logRef(Logging::FATAL) << "GetModuleFileName failed with error: " << GetLastErrorMessage(GetLastError());
+      logRef(Logging::FATAL, Logging::BRIGHT_RED) << "GetModuleFileName failed with error: " << GetLastErrorMessage(GetLastError());
       ret = 1;
       break;
     }
@@ -173,7 +177,7 @@ int registerService() {
 
     scManager = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
     if (scManager == NULL) {
-      logRef(Logging::FATAL) << "OpenSCManager failed with error: " << GetLastErrorMessage(GetLastError());
+      logRef(Logging::FATAL, Logging::BRIGHT_RED) << "OpenSCManager failed with error: " << GetLastErrorMessage(GetLastError());
       ret = 1;
       break;
     }
@@ -182,7 +186,7 @@ int registerService() {
       SERVICE_ERROR_NORMAL, modulePath.c_str(), NULL, NULL, NULL, NULL, NULL);
 
     if (scService == NULL) {
-      logRef(Logging::FATAL) << "CreateService failed with error: " << GetLastErrorMessage(GetLastError());
+      logRef(Logging::FATAL, Logging::BRIGHT_RED) << "CreateService failed with error: " << GetLastErrorMessage(GetLastError());
       ret = 1;
       break;
     }
@@ -218,14 +222,14 @@ int unregisterService() {
   for (;;) {
     scManager = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
     if (scManager == NULL) {
-      logRef(Logging::FATAL) << "OpenSCManager failed with error: " << GetLastErrorMessage(GetLastError());
+      logRef(Logging::FATAL, Logging::BRIGHT_RED) << "OpenSCManager failed with error: " << GetLastErrorMessage(GetLastError());
       ret = 1;
       break;
     }
 
     scService = OpenService(scManager, SERVICE_NAME, SERVICE_STOP | SERVICE_QUERY_STATUS | DELETE);
     if (scService == NULL) {
-      logRef(Logging::FATAL) << "OpenService failed with error: " << GetLastErrorMessage(GetLastError());
+      logRef(Logging::FATAL, Logging::BRIGHT_RED) << "OpenService failed with error: " << GetLastErrorMessage(GetLastError());
       ret = 1;
       break;
     }
@@ -247,12 +251,12 @@ int unregisterService() {
       if (ssSvcStatus.dwCurrentState == SERVICE_STOPPED) {
         logRef(Logging::INFO) << SERVICE_NAME << " is stopped";
       } else {
-        logRef(Logging::FATAL) << SERVICE_NAME << " failed to stop" << std::endl;
+        logRef(Logging::FATAL, Logging::BRIGHT_RED) << SERVICE_NAME << " failed to stop" << std::endl;
       }
     }
 
     if (!DeleteService(scService)) {
-      logRef(Logging::FATAL) << "DeleteService failed with error: " << GetLastErrorMessage(GetLastError());
+      logRef(Logging::FATAL, Logging::BRIGHT_RED) << "DeleteService failed with error: " << GetLastErrorMessage(GetLastError());
       ret = 1;
       break;
     }
@@ -288,7 +292,7 @@ int main(int argc, char** argv) {
 
     const auto& config = pg.getConfig();
 
-    if (config.gateConfiguration.generateNewWallet) {
+    if (config.gateConfiguration.generateNewContainer) {
       System::Dispatcher d;
       generateNewWallet(pg.getCurrency(), pg.getWalletConfig(), pg.getLogger(), d);
       return 0;

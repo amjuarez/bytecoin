@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -37,8 +37,8 @@ namespace CryptoNote
 
     CryptoNoteProtocolHandler(const Currency& currency, System::Dispatcher& dispatcher, ICore& rcore, IP2pEndpoint* p_net_layout, Logging::ILogger& log);
 
-    virtual bool addObserver(ICryptoNoteProtocolObserver* observer);
-    virtual bool removeObserver(ICryptoNoteProtocolObserver* observer);
+    virtual bool addObserver(ICryptoNoteProtocolObserver* observer) override;
+    virtual bool removeObserver(ICryptoNoteProtocolObserver* observer) override;
 
     void set_p2p_endpoint(IP2pEndpoint* p2p);
     // ICore& get_core() { return m_core; }
@@ -55,8 +55,8 @@ namespace CryptoNote
     bool get_payload_sync_data(CORE_SYNC_DATA& hshd);
     bool process_payload_sync_data(const CORE_SYNC_DATA& hshd, CryptoNoteConnectionContext& context, bool is_inital);
     int handleCommand(bool is_notify, int command, const BinaryArray& in_buff, BinaryArray& buff_out, CryptoNoteConnectionContext& context, bool& handled);
-    virtual size_t getPeerCount() const;
-    virtual uint32_t getObservedHeight() const;
+    virtual size_t getPeerCount() const override;
+    virtual uint32_t getObservedHeight() const override;
     void requestMissingPoolTransactions(const CryptoNoteConnectionContext& context);
 
   private:

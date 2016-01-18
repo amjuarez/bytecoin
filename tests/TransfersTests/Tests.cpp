@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,13 +30,13 @@ public:
 
 class WalletLegacyObserver : public IWalletLegacyObserver {
 public:
-  virtual void actualBalanceUpdated(uint64_t actualBalance) {
+  virtual void actualBalanceUpdated(uint64_t actualBalance) override {
     std::cout << "Actual balance updated = " << currency.formatAmount(actualBalance) << std::endl;
     m_actualBalance = actualBalance;
     m_sem.notify();
   }
 
-  virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) {
+  virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) override {
     std::cout << "Transaction sent, result = " << result << std::endl;
   }
 
@@ -86,7 +86,25 @@ public:
     return std::error_code();
   }
 
-  void getKnownPoolTxIds(std::vector<Crypto::Hash>& ids) override {
+  const std::unordered_set<Crypto::Hash>& getKnownPoolTxIds() const override {
+    //stub
+    static std::unordered_set<Crypto::Hash> empty;
+    return empty;
+  }
+
+  std::error_code addUnconfirmedTransaction(const ITransactionReader& /*transaction*/) override {
+    throw std::runtime_error("Not implemented");
+  }
+
+  void removeUnconfirmedTransaction(const Crypto::Hash& /*transactionHash*/) override {
+    throw std::runtime_error("Not implemented");
+  }
+
+  virtual void addObserver(IBlockchainConsumerObserver* observer) override {
+    //stub
+  }
+
+  virtual void removeObserver(IBlockchainConsumerObserver* observer) override {
     //stub
   }
 

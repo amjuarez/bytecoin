@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,6 +18,8 @@ public:
 
   const static Size MAXIMUM_SIZE = MAXIMUM_SIZE_VALUE;
   const static Size INVALID;
+
+  static_assert(MAXIMUM_SIZE != 0, "StringBuffer's size must not be zero");
 
   // Default constructor.
   // After construction, 'StringBuffer' is empty, that is 'size' == 0
@@ -189,7 +191,6 @@ public:
 
   // Compare two strings character-wise.
   bool operator<(StringView other) const {
-    assert(data != nullptr || size == 0);
     Size count = other.getSize() < size ? other.getSize() : size;
     for (Size i = 0; i < count; ++i) {
       Object char1 = *(data + i);
@@ -341,7 +342,6 @@ public:
   // Looks for the last occurence of 'object' in 'StringView',
   // returns index or INVALID if there are no occurences.
   Size findLast(const Object& object) const {
-    assert(data != nullptr || size == 0);
     for (Size i = 0; i < size; ++i) {
       if (*(data + (size - 1 - i)) == object) {
         return size - 1 - i;

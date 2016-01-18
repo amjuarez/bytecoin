@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,12 +26,12 @@ struct Configuration {
   std::string bindAddress;
   uint16_t bindPort;
 
-  std::string walletFile;
-  std::string walletPassword;
+  std::string containerFile;
+  std::string containerPassword;
   std::string logFile;
   std::string serverRoot;
 
-  bool generateNewWallet;
+  bool generateNewContainer;
   bool daemonize;
   bool registerService;
   bool unregisterService;

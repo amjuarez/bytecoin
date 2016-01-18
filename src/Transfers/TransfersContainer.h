@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -152,7 +152,8 @@ public:
   virtual size_t transactionsCount() const override;
   virtual uint64_t balance(uint32_t flags) const override;
   virtual void getOutputs(std::vector<TransactionOutputInformation>& transfers, uint32_t flags) const override;
-  virtual bool getTransactionInformation(const Crypto::Hash& transactionHash, TransactionInformation& info, int64_t& txBalance) const override;
+  virtual bool getTransactionInformation(const Crypto::Hash& transactionHash, TransactionInformation& info,
+    uint64_t* amountIn = nullptr, uint64_t* amountOut = nullptr) const override;
   virtual std::vector<TransactionOutputInformation> getTransactionOutputs(const Crypto::Hash& transactionHash, uint32_t flags) const override;
   //only type flags are feasible for this function
   virtual std::vector<TransactionOutputInformation> getTransactionInputs(const Crypto::Hash& transactionHash, uint32_t flags) const override;

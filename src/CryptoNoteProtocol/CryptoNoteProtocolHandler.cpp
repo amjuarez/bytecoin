@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -95,6 +95,9 @@ bool CryptoNoteProtocolHandler::start_sync(CryptoNoteConnectionContext& context)
   logger(Logging::TRACE) << context << "Starting synchronization";
 
   if (context.m_state == CryptoNoteConnectionContext::state_synchronizing) {
+    assert(context.m_needed_objects.empty());
+    assert(context.m_requested_objects.empty());
+
     NOTIFY_REQUEST_CHAIN::request r = boost::value_initialized<NOTIFY_REQUEST_CHAIN::request>();
     r.block_ids = m_core.buildSparseChain();
     logger(Logging::TRACE) << context << "-->>NOTIFY_REQUEST_CHAIN: m_block_ids.size()=" << r.block_ids.size();
@@ -342,15 +345,16 @@ int CryptoNoteProtocolHandler::handle_response_get_objects(int command, NOTIFY_R
       }
     }
 
-    auto req_it = context.m_requested_objects.find(get_block_hash(b));
+    auto blockHash = get_block_hash(b);
+    auto req_it = context.m_requested_objects.find(blockHash);
     if (req_it == context.m_requested_objects.end()) {
-      logger(Logging::ERROR) << context << "sent wrong NOTIFY_RESPONSE_GET_OBJECTS: block with id=" << Common::podToHex(getBinaryArrayHash(asBinaryArray(block_entry.block)))
+      logger(Logging::ERROR) << context << "sent wrong NOTIFY_RESPONSE_GET_OBJECTS: block with id=" << Common::podToHex(blockHash)
         << " wasn't requested, dropping connection";
       context.m_state = CryptoNoteConnectionContext::state_shutdown;
       return 1;
     }
     if (b.transactionHashes.size() != block_entry.txs.size()) {
-      logger(Logging::ERROR) << context << "sent wrong NOTIFY_RESPONSE_GET_OBJECTS: block with id=" << Common::podToHex(getBinaryArrayHash(asBinaryArray(block_entry.block)))
+      logger(Logging::ERROR) << context << "sent wrong NOTIFY_RESPONSE_GET_OBJECTS: block with id=" << Common::podToHex(blockHash)
         << ", transactionHashes.size()=" << b.transactionHashes.size() << " mismatch with block_complete_entry.m_txs.size()=" << block_entry.txs.size() << ", dropping connection";
       context.m_state = CryptoNoteConnectionContext::state_shutdown;
       return 1;
@@ -424,6 +428,8 @@ int CryptoNoteProtocolHandler::processObjects(CryptoNoteConnectionContext& conte
     } else if (bvc.m_already_exists) {
       logger(Logging::DEBUGGING) << context << "Block already exists, switching to idle state";
       context.m_state = CryptoNoteConnectionContext::state_idle;
+      context.m_needed_objects.clear();
+      context.m_requested_objects.clear();
       return 1;
     }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,7 +19,7 @@ public:
   void onError(const std::error_code& ec, uint32_t height);
   bool advanceHeight(uint32_t height);
   const AccountKeys& getKeys() const;
-  void addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
+  bool addTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx,
                       const std::vector<TransactionOutputInformationIn>& transfers);
 
   void deleteUnconfirmedTransaction(const Crypto::Hash& transactionHash);
