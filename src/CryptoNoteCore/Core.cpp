@@ -1,19 +1,6 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "Core.h"
 
@@ -327,23 +314,8 @@ bool core::get_block_template(Block& b, const AccountPublicAddress& adr, difficu
     }
 
     b = boost::value_initialized<Block>();
-    b.majorVersion = m_blockchain.getBlockMajorVersionForHeight(height);
-
-    if (BLOCK_MAJOR_VERSION_1 == b.majorVersion) {
-      b.minorVersion = BLOCK_MINOR_VERSION_1;
-    } else if (BLOCK_MAJOR_VERSION_2 == b.majorVersion) {
-      b.minorVersion = BLOCK_MINOR_VERSION_0;
-
-      b.parentBlock.majorVersion = BLOCK_MAJOR_VERSION_1;
-      b.parentBlock.majorVersion = BLOCK_MINOR_VERSION_0;
-      b.parentBlock.transactionCount = 1;
-      TransactionExtraMergeMiningTag mm_tag = boost::value_initialized<decltype(mm_tag)>();
-
-      if (!appendMergeMiningTagToExtra(b.parentBlock.baseTransaction.extra, mm_tag)) {
-        logger(ERROR, BRIGHT_RED) << "Failed to append merge mining tag to extra of the parent block miner transaction";
-        return false;
-      }
-    }
+    b.majorVersion = BLOCK_MAJOR_VERSION_1;
+    b.minorVersion = BLOCK_MINOR_VERSION_0;
 
     b.previousBlockHash = get_tail_id();
     b.timestamp = time(NULL);
@@ -364,8 +336,7 @@ bool core::get_block_template(Block& b, const AccountPublicAddress& adr, difficu
      block size, so first miner transaction generated with fake amount of money, and with phase we know think we know expected block size
      */
   //make blocks coin-base tx looks close to real coinbase tx to get truthful blob size
-  bool penalizeFee = b.majorVersion > BLOCK_MAJOR_VERSION_1;
-  bool r = m_currency.constructMinerTx(height, median_size, already_generated_coins, txs_size, fee, adr, b.baseTransaction, ex_nonce, 11, penalizeFee);
+  bool r = m_currency.constructMinerTx(height, median_size, already_generated_coins, txs_size, fee, adr, b.baseTransaction, ex_nonce, 11);
   if (!r) { 
     logger(ERROR, BRIGHT_RED) << "Failed to construct miner tx, first chance"; 
     return false; 
@@ -373,7 +344,7 @@ bool core::get_block_template(Block& b, const AccountPublicAddress& adr, difficu
 
   size_t cumulative_size = txs_size + getObjectBinarySize(b.baseTransaction);
   for (size_t try_count = 0; try_count != 10; ++try_count) {
-    r = m_currency.constructMinerTx(height, median_size, already_generated_coins, cumulative_size, fee, adr, b.baseTransaction, ex_nonce, 11, penalizeFee);
+    r = m_currency.constructMinerTx(height, median_size, already_generated_coins, cumulative_size, fee, adr, b.baseTransaction, ex_nonce, 11);
 
     if (!(r)) { logger(ERROR, BRIGHT_RED) << "Failed to construct miner tx, second chance"; return false; }
     size_t coinbase_blob_size = getObjectBinarySize(b.baseTransaction);
@@ -833,8 +804,8 @@ bool core::getAlreadyGeneratedCoins(const Crypto::Hash& hash, uint64_t& generate
 }
 
 bool core::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee,
-                        bool penalizeFee, uint64_t& reward, int64_t& emissionChange) {
-  return m_currency.getBlockReward(medianSize, currentBlockSize, alreadyGeneratedCoins, fee, penalizeFee, reward, emissionChange);
+                          uint64_t& reward, int64_t& emissionChange) {
+  return m_currency.getBlockReward(medianSize, currentBlockSize, alreadyGeneratedCoins, fee, reward, emissionChange);
 }
 
 bool core::scanOutputkeysForIndices(const KeyInput& txInToKey, std::list<std::pair<Crypto::Hash, size_t>>& outputReferences) {

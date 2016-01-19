@@ -1,19 +1,6 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "Blockchain.h"
 
@@ -319,7 +306,6 @@ m_currency(currency),
 m_tx_pool(tx_pool),
 m_current_block_cumul_sz_limit(0),
 m_is_in_checkpoint_zone(false),
-m_upgradeDetector(currency, m_blocks, BLOCK_MAJOR_VERSION_2, logger),
 m_checkpoints(logger) {
 
   m_outputs.set_deleted_key(0);
@@ -455,11 +441,6 @@ bool Blockchain::init(const std::string& config_folder, bool load_existing) {
         "network.";
       return false;
     }
-  }
-
-  if (!m_upgradeDetector.init()) {
-    logger(ERROR, BRIGHT_RED) << "Failed to initialize upgrade detector";
-    return false;
   }
 
   update_next_comulative_size_limit();
@@ -676,10 +657,6 @@ uint64_t Blockchain::getCoinsInCirculation() {
   }
 }
 
-uint8_t Blockchain::getBlockMajorVersionForHeight(uint32_t height) const {
-  return height > m_upgradeDetector.upgradeHeight() ? m_upgradeDetector.targetVersion() : BLOCK_MAJOR_VERSION_1;
-}
-
 bool Blockchain::rollback_blockchain_switching(std::list<Block> &original_chain, size_t rollback_height) {
   std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
   // remove failed subchain
@@ -872,8 +849,7 @@ bool Blockchain::validate_miner_transaction(const Block& b, uint32_t height, siz
   get_last_n_blocks_sizes(lastBlocksSizes, m_currency.rewardBlocksWindow());
   size_t blocksSizeMedian = Common::medianValue(lastBlocksSizes);
 
-  bool penalizeFee = getBlockMajorVersionForHeight(height) > BLOCK_MAJOR_VERSION_1;
-  if (!m_currency.getBlockReward(blocksSizeMedian, cumulativeBlockSize, alreadyGeneratedCoins, fee, penalizeFee, reward, emissionChange)) {
+  if (!m_currency.getBlockReward(blocksSizeMedian, cumulativeBlockSize, alreadyGeneratedCoins, fee, reward, emissionChange)) {
     logger(INFO, BRIGHT_WHITE) << "block size " << cumulativeBlockSize << " is bigger than allowed for this blockchain";
     return false;
   }
@@ -952,16 +928,6 @@ bool Blockchain::handle_alternative_block(const Block& b, const Crypto::Hash& id
     logger(TRACE) << "Block with id: " << id << std::endl <<
       " can't be accepted for alternative chain, block height: " << block_height << std::endl <<
       " blockchain height: " << getCurrentBlockchainHeight();
-    bvc.m_verifivation_failed = true;
-    return false;
-  }
-
-  if (!checkBlockVersion(b, id)) {
-    bvc.m_verifivation_failed = true;
-    return false;
-  }
-
-  if (!checkParentBlockSize(b, id)) {
     bvc.m_verifivation_failed = true;
     return false;
   }
@@ -1579,39 +1545,6 @@ bool Blockchain::check_block_timestamp(std::vector<uint64_t> timestamps, const B
   return true;
 }
 
-bool Blockchain::checkBlockVersion(const Block& b, const Crypto::Hash& blockHash) {
-  uint32_t height = get_block_height(b);
-  const uint8_t expectedBlockVersion = getBlockMajorVersionForHeight(height);
-  if (b.majorVersion != expectedBlockVersion) {
-    logger(TRACE) << "Block " << blockHash << " has wrong major version: " << static_cast<int>(b.majorVersion) <<
-      ", at height " << height << " expected version is " << static_cast<int>(expectedBlockVersion);
-    return false;
-  }
-
-  return true;
-}
-
-bool Blockchain::checkParentBlockSize(const Block& b, const Crypto::Hash& blockHash) {
-  if (BLOCK_MAJOR_VERSION_2 == b.majorVersion) {
-    auto serializer = makeParentBlockSerializer(b, false, false);
-    size_t parentBlockSize;
-    if (!getObjectBinarySize(serializer, parentBlockSize)) {
-      logger(ERROR, BRIGHT_RED) <<
-        "Block " << blockHash << ": failed to determine parent block size";
-      return false;
-    }
-
-    if (parentBlockSize > 2 * 1024) {
-      logger(INFO, BRIGHT_WHITE) <<
-        "Block " << blockHash << " contains too big parent block: " << parentBlockSize <<
-        " bytes, expected no more than " << 2 * 1024 << " bytes";
-      return false;
-    }
-  }
-
-  return true;
-}
-
 bool Blockchain::checkCumulativeBlockSize(const Crypto::Hash& blockId, size_t cumulativeBlockSize, uint64_t height) {
   size_t maxBlockCumulativeSize = m_currency.maxBlockCumulativeSize(height);
   if (cumulativeBlockSize > maxBlockCumulativeSize) {
@@ -1640,17 +1573,12 @@ bool Blockchain::getBlockCumulativeSize(const Block& block, size_t& cumulativeSi
 
 // Precondition: m_blockchain_lock is locked.
 bool Blockchain::update_next_comulative_size_limit() {
-  uint8_t nextBlockMajorVersion = getBlockMajorVersionForHeight(static_cast<uint32_t>(m_blocks.size()));
-  size_t nextBlockGrantedFullRewardZone = nextBlockMajorVersion == BLOCK_MAJOR_VERSION_1 ?
-    parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 :
-    m_currency.blockGrantedFullRewardZone();
-
   std::vector<size_t> sz;
   get_last_n_blocks_sizes(sz, m_currency.rewardBlocksWindow());
 
   uint64_t median = Common::medianValue(sz);
-  if (median <= nextBlockGrantedFullRewardZone) {
-    median = nextBlockGrantedFullRewardZone;
+  if (median <= m_currency.blockGrantedFullRewardZone()) {
+    median = m_currency.blockGrantedFullRewardZone();
   }
 
   m_current_block_cumul_sz_limit = median * 2;
@@ -1729,16 +1657,6 @@ bool Blockchain::pushBlock(const Block& blockData, const std::vector<Transaction
   if (m_blockIndex.hasBlock(blockHash)) {
     logger(ERROR, BRIGHT_RED) <<
       "Block " << blockHash << " already exists in blockchain.";
-    bvc.m_verifivation_failed = true;
-    return false;
-  }
-
-  if (!checkBlockVersion(blockData, blockHash)) {
-    bvc.m_verifivation_failed = true;
-    return false;
-  }
-
-  if (!checkParentBlockSize(blockData, blockHash)) {
     bvc.m_verifivation_failed = true;
     return false;
   }
@@ -1869,7 +1787,6 @@ bool Blockchain::pushBlock(const Block& blockData, const std::vector<Transaction
 
   bvc.m_added_to_main_chain = true;
 
-  m_upgradeDetector.blockPushed();
   update_next_comulative_size_limit();
 
   return true;
@@ -1912,8 +1829,6 @@ void Blockchain::popBlock(const Crypto::Hash& blockHash) {
   m_blockIndex.pop();
 
   assert(m_blockIndex.size() == m_blocks.size());
-
-  m_upgradeDetector.blockPopped();
 }
 
 bool Blockchain::pushTransaction(BlockEntry& block, const Crypto::Hash& transactionHash, TransactionIndex transactionIndex) {

@@ -1,19 +1,6 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "CryptoNoteFormatUtils.h"
 
@@ -453,24 +440,10 @@ bool get_block_hashing_blob(const Block& b, BinaryArray& ba) {
   return true;
 }
 
-bool get_parent_block_hashing_blob(const Block& b, BinaryArray& blob) {
-  auto serializer = makeParentBlockSerializer(b, true, true);
-  return toBinaryArray(serializer, blob);
-}
-
 bool get_block_hash(const Block& b, Hash& res) {
   BinaryArray ba;
   if (!get_block_hashing_blob(b, ba)) {
     return false;
-  }
-
-  if (BLOCK_MAJOR_VERSION_2 <= b.majorVersion) {
-    BinaryArray parent_blob;
-    auto serializer = makeParentBlockSerializer(b, true, false);
-    if (!toBinaryArray(serializer, parent_blob))
-      return false;
-
-    ba.insert(ba.end(), parent_blob.begin(), parent_blob.end());
   }
 
   return getObjectHash(ba, res);
@@ -493,17 +466,10 @@ bool get_aux_block_header_hash(const Block& b, Hash& res) {
 
 bool get_block_longhash(cn_context &context, const Block& b, Hash& res) {
   BinaryArray bd;
-  if (b.majorVersion == BLOCK_MAJOR_VERSION_1) {
-    if (!get_block_hashing_blob(b, bd)) {
-      return false;
-    }
-  } else if (b.majorVersion == BLOCK_MAJOR_VERSION_2) {
-    if (!get_parent_block_hashing_blob(b, bd)) {
-      return false;
-    }
-  } else {
+  if (!get_block_hashing_blob(b, bd)) {
     return false;
   }
+
   cn_slow_hash(context, bd.data(), bd.size(), res);
   return true;
 }
