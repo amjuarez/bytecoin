@@ -409,7 +409,7 @@ if (command_line::has_arg(vm, arg_CHECKPOINT) && checkpoint_args.size() != 0)
 }
 else
 {
-  if (!command_line::has_arg(vm, arg_UPGRADE_HEIGHT) || command_line::get_arg(vm, arg_UPGRADE_HEIGHT) == 0 || command_line::get_arg(vm, arg_UPGRADE_HEIGHT) == 1) {
+  if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT) || command_line::get_arg(vm, arg_UPGRADE_HEIGHT) > 1) {
       checkpoint_input = CryptoNote::CHECKPOINTS;
   }
 }

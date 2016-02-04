@@ -595,7 +595,7 @@ Transaction CurrencyBuilder::generateGenesisTransaction() {
     uint64_t block_reward = m_currency.m_genesisBlockReward;
     uint64_t target_amount = block_reward / targets.size();
     uint64_t first_target_amount = target_amount + block_reward % targets.size();
-    for (size_t i = 0; i < targets.size(); ++i) {
+    for (size_t i = 0; i < targets.size(); i++) {
       Crypto::KeyDerivation derivation = boost::value_initialized<Crypto::KeyDerivation>();
       Crypto::PublicKey outEphemeralPubKey = boost::value_initialized<Crypto::PublicKey>();
       bool r = Crypto::generate_key_derivation(targets[i].viewPublicKey, txkey.secretKey, derivation);
