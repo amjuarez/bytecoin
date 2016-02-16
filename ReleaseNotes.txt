@@ -1,3 +1,14 @@
+Release notes 3.0.0-beta
+
+- New industrial type wallet for services: walletd
+- New RPC-API for walletd
+- XDN addresses for services and processing centers: multi-addresses. Can use instead of Payment ID, like Bitcoin
+- Transactions pool synchronization
+- Network layer refactoring
+- Extra high wallet synchronization speed
+- New multithreading library
+- Improved console logging
+
 Release notes 2.0.0-beta
 
 - DigitalNote

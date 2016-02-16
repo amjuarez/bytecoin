@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,71 +7,27 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <vector>
 
+#include "CryptoNote.h"
+
 namespace CryptoNote {
-
-typedef std::array<uint8_t, 32> PublicKey;
-typedef std::array<uint8_t, 32> SecretKey;
-typedef std::array<uint8_t, 32> KeyImage;
-typedef std::array<uint8_t, 32> Hash;
-typedef std::vector<uint8_t> Blob;
-
-struct AccountAddress {
-  PublicKey spendPublicKey;
-  PublicKey viewPublicKey;
-};
-
-struct AccountKeys {
-  AccountAddress address;
-  SecretKey spendSecretKey;
-  SecretKey viewSecretKey;
-};
-
-struct KeyPair {
-  PublicKey publicKey;
-  SecretKey secretKey;
-};
 
 namespace TransactionTypes {
   
   enum class InputType : uint8_t { Invalid, Key, Multisignature, Generating };
   enum class OutputType : uint8_t { Invalid, Key, Multisignature };
 
-  struct InputKey {
-    uint64_t amount;
-    std::vector<uint64_t> keyOffsets;
-    KeyImage keyImage;      // double spending protection
-  };
-
-  struct InputMultisignature {
-    uint64_t amount;
-    uint32_t signatures;
-    uint64_t outputIndex;
-    uint32_t term;
-  };
-
-  struct OutputKey {
-    uint64_t amount;
-    PublicKey key;
-  };
-
-  struct OutputMultisignature {
-    uint64_t amount;
-    std::vector<PublicKey> keys;
-    uint32_t requiredSignatures;
-    uint32_t term;
-  };
-
   struct GlobalOutput {
-    PublicKey targetKey;
-    uint64_t outputIndex;
+    Crypto::PublicKey targetKey;
+    uint32_t outputIndex;
   };
 
   typedef std::vector<GlobalOutput> GlobalOutputsContainer;
 
   struct OutputKeyInfo {
-    PublicKey transactionPublicKey;
+    Crypto::PublicKey transactionPublicKey;
     size_t transactionIndex;
     size_t outputInTransaction;
   };
@@ -81,7 +37,6 @@ namespace TransactionTypes {
     GlobalOutputsContainer outputs;
     OutputKeyInfo realOutput;
   };
-
 }
 
 //
@@ -91,33 +46,34 @@ class ITransactionReader {
 public:
   virtual ~ITransactionReader() { }
 
-  virtual Hash getTransactionHash() const = 0;
-  virtual Hash getTransactionPrefixHash() const = 0;
-  virtual PublicKey getTransactionPublicKey() const = 0;
+  virtual Crypto::Hash getTransactionHash() const = 0;
+  virtual Crypto::Hash getTransactionPrefixHash() const = 0;
+  virtual Crypto::PublicKey getTransactionPublicKey() const = 0;
+  virtual bool getTransactionSecretKey(Crypto::SecretKey& key) const = 0;
   virtual uint64_t getUnlockTime() const = 0;
 
   // extra
-  virtual std::vector<uint8_t> getExtra() const = 0;
-  virtual bool getPaymentId(Hash& paymentId) const = 0;
-  virtual bool getExtraNonce(std::string& nonce) const = 0;
+  virtual bool getPaymentId(Crypto::Hash& paymentId) const = 0;
+  virtual bool getExtraNonce(BinaryArray& nonce) const = 0;
+  virtual BinaryArray getExtra() const = 0;
 
   // inputs
   virtual size_t getInputCount() const = 0;
   virtual uint64_t getInputTotalAmount() const = 0;
   virtual TransactionTypes::InputType getInputType(size_t index) const = 0;
-  virtual void getInput(size_t index, TransactionTypes::InputKey& input) const = 0;
-  virtual void getInput(size_t index, TransactionTypes::InputMultisignature& input) const = 0;
+  virtual void getInput(size_t index, KeyInput& input) const = 0;
+  virtual void getInput(size_t index, MultisignatureInput& input) const = 0;
 
   // outputs
   virtual size_t getOutputCount() const = 0;
   virtual uint64_t getOutputTotalAmount() const = 0;
   virtual TransactionTypes::OutputType getOutputType(size_t index) const = 0;
-  virtual void getOutput(size_t index, TransactionTypes::OutputKey& output) const = 0;
-  virtual void getOutput(size_t index, TransactionTypes::OutputMultisignature& output) const = 0;
+  virtual void getOutput(size_t index, KeyOutput& output, uint64_t& amount) const = 0;
+  virtual void getOutput(size_t index, MultisignatureOutput& output, uint64_t& amount) const = 0;
 
   // signatures
   virtual size_t getRequiredSignaturesCount(size_t inputIndex) const = 0;
-  virtual bool findOutputsToAccount(const AccountAddress& addr, const SecretKey& viewSecretKey, std::vector<uint32_t>& outs, uint64_t& outputAmount) const = 0;
+  virtual bool findOutputsToAccount(const AccountPublicAddress& addr, const Crypto::SecretKey& viewSecretKey, std::vector<uint32_t>& outs, uint64_t& outputAmount) const = 0;
 
   // various checks
   virtual bool validateInputs() const = 0;
@@ -125,7 +81,7 @@ public:
   virtual bool validateSignatures() const = 0;
 
   // serialized transaction
-  virtual Blob getTransactionData() const = 0;
+  virtual BinaryArray getTransactionData() const = 0;
 };
 
 //
@@ -140,24 +96,27 @@ public:
   virtual void setUnlockTime(uint64_t unlockTime) = 0;
 
   // extra
-  virtual void setPaymentId(const Hash& paymentId) = 0;
-  virtual void setExtraNonce(const std::string& nonce) = 0;
+  virtual void setPaymentId(const Crypto::Hash& paymentId) = 0;
+  virtual void setExtraNonce(const BinaryArray& nonce) = 0;
+  virtual void appendExtra(const BinaryArray& extraData) = 0;
 
   // Inputs/Outputs 
-  virtual size_t addInput(const TransactionTypes::InputKey& input) = 0;
+  virtual size_t addInput(const KeyInput& input) = 0;
+  virtual size_t addInput(const MultisignatureInput& input) = 0;
   virtual size_t addInput(const AccountKeys& senderKeys, const TransactionTypes::InputKeyInfo& info, KeyPair& ephKeys) = 0;
-  virtual size_t addInput(const TransactionTypes::InputMultisignature& input) = 0;
 
-  virtual size_t addOutput(uint64_t amount, const AccountAddress& to) = 0;
-  virtual size_t addOutput(uint64_t amount, const std::vector<AccountAddress>& to, uint32_t requiredSignatures, uint32_t term = 0) = 0;
+  virtual size_t addOutput(uint64_t amount, const AccountPublicAddress& to) = 0;
+  virtual size_t addOutput(uint64_t amount, const std::vector<AccountPublicAddress>& to, uint32_t requiredSignatures, uint32_t term = 0) = 0;
+  virtual size_t addOutput(uint64_t amount, const KeyOutput& out) = 0;
+  virtual size_t addOutput(uint64_t amount, const MultisignatureOutput& out) = 0;
 
   // transaction info
-  virtual bool getTransactionSecretKey(SecretKey& key) const = 0;
-  virtual void setTransactionSecretKey(const SecretKey& key) = 0;
+  virtual void setTransactionSecretKey(const Crypto::SecretKey& key) = 0;
 
   // signing
   virtual void signInputKey(size_t input, const TransactionTypes::InputKeyInfo& info, const KeyPair& ephKeys) = 0;
-  virtual void signInputMultisignature(size_t input, const PublicKey& sourceTransactionKey, size_t outputIndex, const AccountKeys& accountKeys) = 0;
+  virtual void signInputMultisignature(size_t input, const Crypto::PublicKey& sourceTransactionKey, size_t outputIndex, const AccountKeys& accountKeys) = 0;
+  virtual void signInputMultisignature(size_t input, const KeyPair& ephemeralKeys) = 0;
 };
 
 class ITransaction : 

@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,7 +18,7 @@
 
 #include "aesb.h"
 #include "initializer.h"
-#include "common/int-util.h"
+#include "Common/int-util.h"
 #include "hash-ops.h"
 #include "oaes_lib.h"
 

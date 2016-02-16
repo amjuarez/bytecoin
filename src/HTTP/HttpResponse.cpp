@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,13 +9,15 @@
 
 namespace {
 
-const char* getStatusString(cryptonote::HttpResponse::HTTP_STATUS status) {
+const char* getStatusString(CryptoNote::HttpResponse::HTTP_STATUS status) {
   switch (status) {
-  case cryptonote::HttpResponse::STATUS_200:
+  case CryptoNote::HttpResponse::STATUS_200:
     return "200 OK";
-  case cryptonote::HttpResponse::STATUS_404:
+  case CryptoNote::HttpResponse::STATUS_401:
+    return "401 Unauthorized";
+  case CryptoNote::HttpResponse::STATUS_404:
     return "404 Not Found";
-  case cryptonote::HttpResponse::STATUS_500:
+  case CryptoNote::HttpResponse::STATUS_500:
     return "500 Internal Server Error";
   default:
     throw std::runtime_error("Unknown HTTP status code is given");
@@ -24,18 +26,36 @@ const char* getStatusString(cryptonote::HttpResponse::HTTP_STATUS status) {
   return ""; //unaccessible
 }
 
+const char* getErrorBody(CryptoNote::HttpResponse::HTTP_STATUS status) {
+  switch (status) {
+  case CryptoNote::HttpResponse::STATUS_401:
+    return "Authorization required\n";
+  case CryptoNote::HttpResponse::STATUS_404:
+    return "Requested url is not found\n";
+  case CryptoNote::HttpResponse::STATUS_500:
+    return "Internal server error is occurred\n";
+  default:
+    throw std::runtime_error("Error body for given status is not available");
+  }
+
+  return ""; //unaccessible
+}
 
 } //namespace
 
-namespace cryptonote {
+namespace CryptoNote {
 
 HttpResponse::HttpResponse() {
   status = STATUS_200;
-  headers["Server"] = "Cryptonote-based HTTP server";
+  headers["Server"] = "CryptoNote-based HTTP server";
 }
 
 void HttpResponse::setStatus(HTTP_STATUS s) {
   status = s;
+
+  if (status != HttpResponse::STATUS_200) {
+    setBody(getErrorBody(status));
+  }
 }
 
 void HttpResponse::addHeader(const std::string& name, const std::string& value) {
@@ -66,6 +86,4 @@ std::ostream& HttpResponse::printHttpResponse(std::ostream& os) const {
   return os;
 }
 
-} //namespace cryptonote
-
-
+} //namespace CryptoNote

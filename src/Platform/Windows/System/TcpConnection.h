@@ -1,16 +1,17 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace System {
 
 class Dispatcher;
+class Ipv4Address;
 
 class TcpConnection {
 public:
@@ -20,21 +21,20 @@ public:
   ~TcpConnection();
   TcpConnection& operator=(const TcpConnection&) = delete;
   TcpConnection& operator=(TcpConnection&& other);
-  void start();
-  void stop();
-  std::size_t read(uint8_t* data, std::size_t size);
-  void write(const uint8_t* data, std::size_t size);
+  size_t read(uint8_t* data, size_t size);
+  size_t write(const uint8_t* data, size_t size);
+  std::pair<Ipv4Address, uint16_t> getPeerAddressAndPort() const;
 
 private:
   friend class TcpConnector;
   friend class TcpListener;
 
-  explicit TcpConnection(Dispatcher& dispatcher, std::size_t connection);
-
   Dispatcher* dispatcher;
-  std::size_t connection;
-  bool stopped;
-  void* context;
+  size_t connection;
+  void* readContext;
+  void* writeContext;
+
+  TcpConnection(Dispatcher& dispatcher, size_t connection);
 };
 
 }

@@ -25,7 +25,7 @@ Test suite: run `make test-release` to run tests in addition to building. Runnin
 Building with Clang: it may be possible to use Clang instead of GCC, but this may not work everywhere. To build, run `export CC=clang CXX=clang++` before running `make`.
 
 ### On Windows:
-Dependencies: MSVC 2012 or later, CMake 2.8.6 or later, and Boost 1.55 or later. You may download them from:
+Dependencies: MSVC 2013 or later, CMake 2.8.6 or later, and Boost 1.55 or later. You may download them from:
 
 - http://www.microsoft.com/
 - http://www.cmake.org/
@@ -35,7 +35,7 @@ To build, change to a directory where this file is located, and run this command
 ```
 mkdir build
 cd build
-cmake -G "Visual Studio 11 Win64" ..
+cmake -G "Visual Studio 12 Win64" ..
 ```
 
 And then do Build.

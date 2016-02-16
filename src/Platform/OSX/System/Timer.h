@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -20,14 +20,11 @@ public:
   ~Timer();
   Timer& operator=(const Timer&) = delete;
   Timer& operator=(Timer&& other);
-  void start();
-  void stop();
-  void sleep(std::chrono::milliseconds duration);
+  void sleep(std::chrono::nanoseconds duration);
 
 private:
   Dispatcher* dispatcher;
   int timer;
-  bool stopped;
   void* context;
 };
 

@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,15 +30,16 @@ class ITransfersSubscription;
 class ITransfersObserver {
 public:
   virtual void onError(ITransfersSubscription* object,
-    uint64_t height, std::error_code ec) {}
+    uint32_t height, std::error_code ec) {
+  }
 
-  virtual void onTransactionUpdated(ITransfersSubscription* object, const Hash& transactionHash) {}
+  virtual void onTransactionUpdated(ITransfersSubscription* object, const Crypto::Hash& transactionHash) {}
 
   /**
    * \note The sender must guarantee that onTransactionDeleted() is called only after onTransactionUpdated() is called
    * for the same \a transactionHash.
    */
-  virtual void onTransactionDeleted(ITransfersSubscription* object, const Hash& transactionHash) { }
+  virtual void onTransactionDeleted(ITransfersSubscription* object, const Crypto::Hash& transactionHash) {}
 
   /**
    * \note this method MUST be called after appropriate onTransactionUpdated has been called
@@ -52,8 +53,18 @@ class ITransfersSubscription : public IObservable < ITransfersObserver > {
 public:
   virtual ~ITransfersSubscription() {}
 
-  virtual AccountAddress getAddress() = 0;
+  virtual AccountPublicAddress getAddress() = 0;
   virtual ITransfersContainer& getContainer() = 0;
+};
+
+class ITransfersSynchronizerObserver {
+public:
+  virtual void onBlocksAdded(const Crypto::PublicKey& viewPublicKey, const std::vector<Crypto::Hash>& blockHashes) {}
+  virtual void onBlockchainDetach(const Crypto::PublicKey& viewPublicKey, uint32_t blockIndex) {}
+  virtual void onTransactionDeleteBegin(const Crypto::PublicKey& viewPublicKey, Crypto::Hash transactionHash) {}
+  virtual void onTransactionDeleteEnd(const Crypto::PublicKey& viewPublicKey, Crypto::Hash transactionHash) {}
+  virtual void onTransactionUpdated(const Crypto::PublicKey& viewPublicKey, const Crypto::Hash& transactionHash,
+    const std::vector<ITransfersContainer*>& containers) {}
 };
 
 class ITransfersSynchronizer : public IStreamSerializable {
@@ -61,10 +72,11 @@ public:
   virtual ~ITransfersSynchronizer() {}
 
   virtual ITransfersSubscription& addSubscription(const AccountSubscription& acc) = 0;
-  virtual bool removeSubscription(const AccountAddress& acc) = 0;
-  virtual void getSubscriptions(std::vector<AccountAddress>& subscriptions) = 0;
+  virtual bool removeSubscription(const AccountPublicAddress& acc) = 0;
+  virtual void getSubscriptions(std::vector<AccountPublicAddress>& subscriptions) = 0;
   // returns nullptr if address is not found
-  virtual ITransfersSubscription* getSubscription(const AccountAddress& acc) = 0;
+  virtual ITransfersSubscription* getSubscription(const AccountPublicAddress& acc) = 0;
+  virtual std::vector<Crypto::Hash> getViewKeyKnownBlocks(const Crypto::PublicKey& publicViewKey) = 0;
 };
 
 }

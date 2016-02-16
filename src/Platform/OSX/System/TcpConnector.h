@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,27 +11,23 @@
 namespace System {
 
 class Dispatcher;
+class Ipv4Address;
 class TcpConnection;
 
 class TcpConnector {
 public:
   TcpConnector();
-  TcpConnector(Dispatcher& dispatcher, const std::string& address, uint16_t port);
+  TcpConnector(Dispatcher& dispatcher);
   TcpConnector(const TcpConnector&) = delete;
   TcpConnector(TcpConnector&& other);
   ~TcpConnector();
   TcpConnector& operator=(const TcpConnector&) = delete;
   TcpConnector& operator=(TcpConnector&& other);
-  void start();
-  void stop();
-  TcpConnection connect();
+  TcpConnection connect(const Ipv4Address& address, uint16_t port);
 
 private:
-  Dispatcher* dispatcher;
-  std::string address;
-  uint16_t port;
-  bool stopped;
   void* context;
+  Dispatcher* dispatcher;
 };
 
 }

@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,7 +15,7 @@ void hash_permutation(union hash_state *state) {
 }
 
 void hash_process(union hash_state *state, const uint8_t *buf, size_t count) {
-  keccak1600(buf, count, (uint8_t*)state);
+  keccak1600(buf, (int)count, (uint8_t*)state);
 }
 
 void cn_fast_hash(const void *data, size_t length, char *hash) {

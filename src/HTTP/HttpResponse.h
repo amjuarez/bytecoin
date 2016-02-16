@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,12 +9,13 @@
 #include <string>
 #include <map>
 
-namespace cryptonote {
+namespace CryptoNote {
 
   class HttpResponse {
   public:
     enum HTTP_STATUS {
       STATUS_200,
+      STATUS_401,
       STATUS_404,
       STATUS_500
     };
@@ -42,4 +43,4 @@ namespace cryptonote {
     return resp.printHttpResponse(os);
   }
 
-} //namespace cryptonote
+} //namespace CryptoNote

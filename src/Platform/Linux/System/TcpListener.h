@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,31 +7,28 @@
 
 #include <cstdint>
 #include <string>
-#include <stdint.h>
 
 namespace System {
 
 class Dispatcher;
+class Ipv4Address;
 class TcpConnection;
 
 class TcpListener {
 public:
   TcpListener();
-  TcpListener(Dispatcher& dispatcher, const std::string& address, uint16_t port);
+  TcpListener(Dispatcher& dispatcher, const Ipv4Address& address, uint16_t port);
   TcpListener(const TcpListener&) = delete;
   TcpListener(TcpListener&& other);
   ~TcpListener();
   TcpListener& operator=(const TcpListener&) = delete;
   TcpListener& operator=(TcpListener&& other);
-  void start();
-  void stop();
   TcpConnection accept();
 
 private:
   Dispatcher* dispatcher;
-  int listener;
-  bool stopped;
   void* context;
+  int listener;
 };
 
 }

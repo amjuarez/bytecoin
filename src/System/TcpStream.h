@@ -1,35 +1,34 @@
-// Copyright (c) 2011-2015 The Cryptonote developers
-// Copyright (c) 2014-2015 XDN developers
+// Copyright (c) 2011-2016 The Cryptonote developers
+// Copyright (c) 2014-2016 XDN developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
-#include <streambuf>
 #include <array>
-
-#include <System/TcpConnection.h>
+#include <cstdint>
+#include <streambuf>
 
 namespace System {
 
+class TcpConnection;
+
 class TcpStreambuf : public std::streambuf {
 public:
-  TcpStreambuf(TcpConnection& connection);
+  explicit TcpStreambuf(TcpConnection& connection);
   TcpStreambuf(const TcpStreambuf&) = delete;
-
-  virtual ~TcpStreambuf();
+  ~TcpStreambuf();
+  TcpStreambuf& operator=(const TcpStreambuf&) = delete;
 
 private:
-  std::streambuf::int_type underflow() override;
+  TcpConnection& connection;
+  std::array<char, 4096> readBuf;
+  std::array<uint8_t, 1024> writeBuf;
+
   std::streambuf::int_type overflow(std::streambuf::int_type ch) override;
   int sync() override;
-
-  bool dumpBuffer();
-
-  TcpConnection& connection;
-
-  std::array<char, 4096> readBuf;
-  std::array<uint8_t, /*1024*/ 16> writeBuf;
+  std::streambuf::int_type underflow() override;
+  bool dumpBuffer(bool finalize);
 };
 
 }
