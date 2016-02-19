@@ -39,9 +39,11 @@ namespace PaymentService {
 namespace po = boost::program_options;
 
 CoinBaseConfiguration::CoinBaseConfiguration() {
+    CRYPTONOTE_NAME=CryptoNote::CRYPTONOTE_NAME;
     GENESIS_COINBASE_TX_HEX=CryptoNote::parameters::GENESIS_COINBASE_TX_HEX;
     CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX=CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     MONEY_SUPPLY=CryptoNote::parameters::MONEY_SUPPLY;
+    GENESIS_BLOCK_REWARD=CryptoNote::parameters::GENESIS_BLOCK_REWARD;
     EMISSION_SPEED_FACTOR=CryptoNote::parameters::EMISSION_SPEED_FACTOR;
     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE=CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1=CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
@@ -60,9 +62,11 @@ MAX_TRANSACTION_SIZE_LIMIT=CryptoNote::parameters::MAX_TRANSACTION_SIZE_LIMIT;
 
 void CoinBaseConfiguration::initOptions(boost::program_options::options_description& desc) {
   desc.add_options()
+    ("CRYPTONOTE_NAME", po::value<std::string>()->default_value(CryptoNote::CRYPTONOTE_NAME), "Blockchain name")
     ("GENESIS_COINBASE_TX_HEX", po::value<std::string>()->default_value(CryptoNote::parameters::GENESIS_COINBASE_TX_HEX), "Genesis transaction hex")
     ("CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX), "uint64_t")
     ("MONEY_SUPPLY", po::value<uint64_t>()->default_value(CryptoNote::parameters::MONEY_SUPPLY), "uint64_t")
+    ("GENESIS_BLOCK_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("EMISSION_SPEED_FACTOR", po::value<unsigned int>()->default_value(CryptoNote::parameters::EMISSION_SPEED_FACTOR), "unsigned int")
     ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE), "uint64_t")
     ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1), "uint64_t")
@@ -82,15 +86,20 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
 }
 
 void CoinBaseConfiguration::init(const boost::program_options::variables_map& options) {
+  if (options.count("CRYPTONOTE_NAME")) {
+    CRYPTONOTE_NAME = options["CRYPTONOTE_NAME"].as<std::string>();
+  }
   if (options.count("GENESIS_COINBASE_TX_HEX")) {
     GENESIS_COINBASE_TX_HEX = options["GENESIS_COINBASE_TX_HEX"].as<std::string>();
   }
-
   if (options.count("CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX")) {
     CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = options["CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX"].as<uint64_t>();
   }
   if (options.count("MONEY_SUPPLY")) {
     MONEY_SUPPLY = options["MONEY_SUPPLY"].as<uint64_t>();
+  }
+  if (options.count("GENESIS_BLOCK_REWARD")) {
+    GENESIS_BLOCK_REWARD = options["GENESIS_BLOCK_REWARD"].as<uint64_t>();
   }
   if (options.count("EMISSION_SPEED_FACTOR")) {
     EMISSION_SPEED_FACTOR = options["EMISSION_SPEED_FACTOR"].as<unsigned int>();

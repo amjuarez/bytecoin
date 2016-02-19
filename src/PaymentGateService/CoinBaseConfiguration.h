@@ -49,9 +49,11 @@ public:
   static void initOptions(boost::program_options::options_description& desc);
   void init(const boost::program_options::variables_map& options);
 
+  std::string CRYPTONOTE_NAME;
   std::string GENESIS_COINBASE_TX_HEX;
   uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
   uint64_t MONEY_SUPPLY;
+  uint64_t GENESIS_BLOCK_REWARD;
   unsigned int EMISSION_SPEED_FACTOR;
   uint64_t CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
   uint64_t CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;

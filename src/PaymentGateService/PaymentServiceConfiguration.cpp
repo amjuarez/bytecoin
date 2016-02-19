@@ -35,6 +35,7 @@ Configuration::Configuration() {
   logFile = "payment_gate.log";
   testnet = false;
   printAddresses = false;
+  syncFromZero = false;
   logLevel = Logging::INFO;
   bindAddress = "";
   bindPort = 0;
@@ -55,6 +56,7 @@ void Configuration::initOptions(boost::program_options::options_description& des
       ("log-file,l", po::value<std::string>(), "log file")
       ("server-root", po::value<std::string>(), "server root. The service will use it as working directory. Don't set it if don't want to change it")
       ("log-level", po::value<size_t>(), "log level")
+      ("SYNC_FROM_ZERO", "sync from timestamp 0")
       ("address", "print wallet addresses and exit");
 }
 
@@ -119,6 +121,9 @@ void Configuration::init(const boost::program_options::variables_map& options) {
     printAddresses = true;
   }
 
+  if (options.count("SYNC_FROM_ZERO") != 0) {
+    syncFromZero = true;
+  }
   if (!registerService && !unregisterService) {
     if (containerFile.empty() || containerPassword.empty()) {
       throw ConfigurationError("Both container-file and container-password parameters are required");

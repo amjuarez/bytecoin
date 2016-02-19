@@ -19,6 +19,7 @@
 
 #include <fstream>
 #include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "Common/CommandLine.h"
 #include "Common/Util.h"
@@ -100,6 +101,12 @@ bool ConfigurationManager::init(int argc, char** argv) {
   //command line options should override options from config file
   gateConfiguration.init(cmdOptions);
   netNodeConfig.init(cmdOptions);
+    std::string default_data_dir = Tools::getDefaultDataDirectory();
+    if (!coinBaseConfig.CRYPTONOTE_NAME.empty()) {
+      boost::replace_all(default_data_dir, CryptoNote::CRYPTONOTE_NAME, coinBaseConfig.CRYPTONOTE_NAME);
+    }
+    coreConfig.configFolder = default_data_dir;
+    netNodeConfig.setConfigFolder(default_data_dir);
   coreConfig.init(cmdOptions);
   remoteNodeConfig.init(cmdOptions);
 

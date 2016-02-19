@@ -42,7 +42,7 @@ public:
   {}
 
   WalletConfiguration createWalletConfiguration(const std::string& walletFile = "pgwalleg.bin") const {
-    return WalletConfiguration{ walletFile, "pass" };
+  return WalletConfiguration{ walletFile, "pass", false };
   }
 
   std::unique_ptr<WalletService> createWalletService(const WalletConfiguration& cfg) {
