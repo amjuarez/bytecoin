@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -46,7 +46,7 @@ public:
     currency(CurrencyBuilder(m_logger).currency()),
     account(generateAccountKeys()),
     syncStart(SynchronizationStart{ 0, 0 }),
-    sub(currency, AccountSubscription{ account, syncStart, 10 }) {
+    sub(currency, m_logger, AccountSubscription{ account, syncStart, 10 }) {
     sub.addObserver(&observer);
   }
 

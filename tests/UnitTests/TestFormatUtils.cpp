@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -132,7 +132,7 @@ TEST(parse_and_validate_tx_extra, is_valid_tx_extra_parsed)
   CryptoNote::AccountBase acc;
   acc.generate();
   CryptoNote::BinaryArray b = Common::asBinaryArray("dsdsdfsdfsf");
-  ASSERT_TRUE(currency.constructMinerTx(0, 0, 10000000000000, 1000, currency.minimumFee(), acc.getAccountKeys().address, tx, b, 1));
+  ASSERT_TRUE(currency.constructMinerTx(CryptoNote::BLOCK_MAJOR_VERSION_1, 0, 0, 10000000000000, 1000, currency.minimumFee(), acc.getAccountKeys().address, tx, b, 1));
   Crypto::PublicKey tx_pub_key = CryptoNote::getTransactionPublicKeyFromExtra(tx.extra);
   ASSERT_NE(tx_pub_key, CryptoNote::NULL_PUBLIC_KEY);
 }
@@ -144,7 +144,7 @@ TEST(parse_and_validate_tx_extra, fails_on_big_extra_nonce)
   CryptoNote::AccountBase acc;
   acc.generate();
   CryptoNote::BinaryArray b(TX_EXTRA_NONCE_MAX_COUNT + 1, 0);
-  ASSERT_FALSE(currency.constructMinerTx(0, 0, 10000000000000, 1000, currency.minimumFee(), acc.getAccountKeys().address, tx, b, 1));
+  ASSERT_FALSE(currency.constructMinerTx(CryptoNote::BLOCK_MAJOR_VERSION_1, 0, 0, 10000000000000, 1000, currency.minimumFee(), acc.getAccountKeys().address, tx, b, 1));
 }
 TEST(parse_and_validate_tx_extra, fails_on_wrong_size_in_extra_nonce)
 {

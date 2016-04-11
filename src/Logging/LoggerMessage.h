@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -32,6 +32,7 @@ public:
 
 private:
   int sync() override;
+  std::streamsize xsputn(const char* s, std::streamsize n) override;
   int overflow(int c) override;
 
   std::string message;

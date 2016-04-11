@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -64,6 +64,20 @@ struct BlockShortEntry {
   std::vector<TransactionShortInfo> txsShortInfo;
 };
 
+struct BlockHeaderInfo {
+  uint32_t index;
+  uint8_t majorVersion;
+  uint8_t minorVersion;
+  uint64_t timestamp;
+  Crypto::Hash hash;
+  Crypto::Hash prevHash;
+  uint32_t nonce;
+  bool isAlternative;
+  uint32_t depth; // last block index = current block index + depth
+  difficulty_type difficulty;
+  uint64_t reward;
+};
+
 class INode {
 public:
   typedef std::function<void(std::error_code)> Callback;
@@ -81,6 +95,7 @@ public:
   virtual uint32_t getLocalBlockCount() const = 0;
   virtual uint32_t getKnownBlockCount() const = 0;
   virtual uint64_t getLastLocalBlockTimestamp() const = 0;
+  virtual BlockHeaderInfo getLastLocalBlockHeaderInfo() const = 0;
 
   virtual void relayTransaction(const Transaction& transaction, const Callback& callback) = 0;
   virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback) = 0;

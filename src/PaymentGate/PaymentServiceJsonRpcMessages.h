@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -30,6 +30,16 @@ const uint32_t DEFAULT_ANONYMITY_LEVEL = 6;
 class RequestSerializationError: public std::exception {
 public:
   virtual const char* what() const throw() override { return "Request error"; }
+};
+
+struct Save {
+  struct Request {
+    void serialize(CryptoNote::ISerializer& serializer);
+  };
+
+  struct Response {
+    void serialize(CryptoNote::ISerializer& serializer);
+  };
 };
 
 struct Reset {
@@ -338,6 +348,39 @@ struct SendDelayedTransaction {
   };
 
   struct Response {
+    void serialize(CryptoNote::ISerializer& serializer);
+  };
+};
+
+struct SendFusionTransaction {
+  struct Request {
+    uint64_t threshold;
+    uint32_t anonymity = DEFAULT_ANONYMITY_LEVEL;
+    std::vector<std::string> addresses;
+    std::string destinationAddress;
+
+    void serialize(CryptoNote::ISerializer& serializer);
+  };
+
+  struct Response {
+    std::string transactionHash;
+
+    void serialize(CryptoNote::ISerializer& serializer);
+  };
+};
+
+struct EstimateFusion {
+  struct Request {
+    uint64_t threshold;
+    std::vector<std::string> addresses;
+
+    void serialize(CryptoNote::ISerializer& serializer);
+  };
+
+  struct Response {
+    uint32_t fusionReadyCount;
+    uint32_t totalOutputCount;
+
     void serialize(CryptoNote::ISerializer& serializer);
   };
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -132,7 +132,7 @@ public:
   virtual void shutdown() = 0;
 
   virtual void changePassword(const std::string& oldPassword, const std::string& newPassword) = 0;
-  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true) = 0;
+  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true, bool encrypt = true) = 0;
 
   virtual size_t getAddressCount() const = 0;
   virtual std::string getAddress(size_t index) const = 0;

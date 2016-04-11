@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -521,10 +521,10 @@ inline bool do_replay_file(const std::string& filename)
     std::list<CryptoNote::Transaction> SET_NAME; \
     MAKE_TX_LIST(VEC_EVENTS, SET_NAME, FROM, TO, AMOUNT, HEAD);
 
-#define MAKE_MINER_TX_AND_KEY_MANUALLY(TX, BLK, KEY)                                                                  \
-  Transaction TX;                                                                                                     \
-  if (!constructMinerTxManually(this->m_currency, get_block_height(BLK) + 1, generator.getAlreadyGeneratedCoins(BLK), \
-    miner_account.getAccountKeys().address, TX, 0, KEY))                                                          \
+#define MAKE_MINER_TX_AND_KEY_MANUALLY(TX, BLK, KEY)                                                                                    \
+  Transaction TX;                                                                                                                       \
+  if (!constructMinerTxManually(this->m_currency, BLK.majorVersion, get_block_height(BLK) + 1, generator.getAlreadyGeneratedCoins(BLK), \
+    miner_account.getAccountKeys().address, TX, 0, KEY))                                                                                \
     return false;
 
 #define MAKE_MINER_TX_MANUALLY(TX, BLK) MAKE_MINER_TX_AND_KEY_MANUALLY(TX, BLK, 0)

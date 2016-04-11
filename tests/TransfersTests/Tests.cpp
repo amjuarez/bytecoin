@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -316,8 +316,8 @@ TEST_F(TransfersTest, base) {
 
   AccountKeys dstKeys = reinterpret_cast<const AccountKeys&>(dstAcc.getAccountKeys());
 
-  BlockchainSynchronizer blockSync(*node2.get(), currency.genesisBlockHash());
-  TransfersSyncronizer transferSync(currency, blockSync, *node2.get());
+  BlockchainSynchronizer blockSync(*node2.get(), logger, currency.genesisBlockHash());
+  TransfersSyncronizer transferSync(currency, logger, blockSync, *node2.get());
   TransfersObserver transferObserver;
   WalletLegacyObserver walletObserver;
 
@@ -483,8 +483,8 @@ TEST_F(MultisignatureTest, createMulitisignatureTransaction) {
   nodeDaemons[0]->makeINode(node1);
   nodeDaemons[1]->makeINode(node2);
 
-  BlockchainSynchronizer blockSync(*node2.get(), currency.genesisBlockHash());
-  TransfersSyncronizer transferSync(currency, blockSync, *node2.get());
+  BlockchainSynchronizer blockSync(*node2.get(), logger, currency.genesisBlockHash());
+  TransfersSyncronizer transferSync(currency, logger, blockSync, *node2.get());
   
   // add transaction collector
   TransactionConsumer txConsumer;

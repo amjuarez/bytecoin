@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -30,6 +30,7 @@
 #include "PaymentGate/WalletService.h"
 #include "PaymentGate/WalletServiceErrorCategory.h"
 #include "INodeStubs.h"
+#include "Wallet/IFusionManager.h"
 #include "Wallet/WalletErrors.h"
 
 using namespace CryptoNote;
@@ -47,7 +48,7 @@ bool operator== (const DonationSettings& lhs, const DonationSettings& rhs) {
 
 } //namespace CryptoNote
 
-struct IWalletBaseStub : public CryptoNote::IWallet {
+struct IWalletBaseStub : public CryptoNote::IWallet, public CryptoNote::IFusionManager {
   IWalletBaseStub(System::Dispatcher& dispatcher) : m_eventOccurred(dispatcher) {}
   virtual ~IWalletBaseStub() {}
 
@@ -57,7 +58,7 @@ struct IWalletBaseStub : public CryptoNote::IWallet {
   virtual void shutdown() override { }
 
   virtual void changePassword(const std::string& oldPassword, const std::string& newPassword) override { }
-  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true) override { }
+  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true, bool encrypt = true) override { }
 
   virtual size_t getAddressCount() const override { return 0; }
   virtual std::string getAddress(size_t index) const override { return ""; }
@@ -117,6 +118,20 @@ struct IWalletBaseStub : public CryptoNote::IWallet {
     m_eventOccurred.set();
   }
 
+  // IFusionManager
+  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin,
+    const std::vector<std::string>& sourceAddresses = {}, const std::string& destinationAddress = "") override {
+    throw std::runtime_error("Not implemented");
+  }
+
+  virtual bool isFusionTransaction(size_t transactionId) const override {
+    throw std::runtime_error("Not implemented");
+  }
+
+  virtual EstimateResult estimate(uint64_t threshold, const std::vector<std::string>& sourceAddresses = {}) const override {
+    throw std::runtime_error("Not implemented");
+  }
+
 protected:
   void throwIfStopped() {
     if (m_stopped) {
@@ -132,6 +147,7 @@ protected:
 class WalletServiceTest: public ::testing::Test {
 public:
   WalletServiceTest() :
+    logger(Logging::ERROR),
     currency(CryptoNote::CurrencyBuilder(logger).currency()),
     generator(currency),
     nodeStub(generator),
@@ -148,7 +164,8 @@ protected:
   System::Dispatcher dispatcher;
   IWalletBaseStub walletBase;
 
-  std::unique_ptr<WalletService> createWalletService(CryptoNote::IWallet& wallet);
+  std::unique_ptr<WalletService> createWalletService(CryptoNote::IWallet& wallet, CryptoNote::IFusionManager& fusionManager);
+  std::unique_ptr<WalletService> createWalletService(IWalletBaseStub& wallet);
   std::unique_ptr<WalletService> createWalletService();
   Crypto::Hash generateRandomHash();
 };
@@ -160,8 +177,12 @@ void WalletServiceTest::SetUp() {
   walletConfig.walletPassword = "test";
 }
 
-std::unique_ptr<WalletService> WalletServiceTest::createWalletService(CryptoNote::IWallet& wallet) {
-  return std::unique_ptr<WalletService> (new WalletService(currency, dispatcher, nodeStub, wallet, walletConfig, logger));
+std::unique_ptr<WalletService> WalletServiceTest::createWalletService(CryptoNote::IWallet& wallet, CryptoNote::IFusionManager& fusionManager) {
+  return std::unique_ptr<WalletService>(new WalletService(currency, dispatcher, nodeStub, wallet, fusionManager, walletConfig, logger));
+}
+
+std::unique_ptr<WalletService> WalletServiceTest::createWalletService(IWalletBaseStub& wallet) {
+  return createWalletService(wallet, wallet);
 }
 
 std::unique_ptr<WalletService> WalletServiceTest::createWalletService() {
@@ -998,4 +1019,178 @@ TEST_F(WalletServiceTest_getUnconfirmedTransactionHashes, wrongAddressFilter) {
   auto ec = service->getUnconfirmedTransactionHashes({"wrong address"}, hashes);
 
   ASSERT_EQ(make_error_code(CryptoNote::error::BAD_ADDRESS), ec);
+}
+
+class FusionManagerStub : public IWalletBaseStub {
+public:
+  const size_t TEST_TRANSACTION_INDEX = 7;
+  const size_t TEST_FUSION_READY_COUNT = 6253;
+  const size_t TEST_TOTAL_OUTPUT_COUNT = 823632;
+
+  FusionManagerStub(System::Dispatcher& dispatcher) : IWalletBaseStub(dispatcher) {
+    testTransactionHash = Crypto::rand<Crypto::Hash>();
+  }
+
+  virtual WalletTransaction getTransaction(size_t transactionIndex) const override {
+    if (transactionIndex != TEST_TRANSACTION_INDEX) {
+      throw std::runtime_error(std::string("bad transactionIndex: ") + std::to_string(transactionIndex));
+    }
+
+    WalletTransaction tx;
+    tx.hash = testTransactionHash;
+    return tx;
+  }
+
+  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin,
+    const std::vector<std::string>& sourceAddresses = {}, const std::string& destinationAddress = "") override {
+
+    lastThreshold = threshold;
+    lastMixin = mixin;
+    lastSourceAddresses = sourceAddresses;
+    lastDestinationAddress = destinationAddress;
+
+    return TEST_TRANSACTION_INDEX;
+  }
+
+  virtual bool isFusionTransaction(size_t transactionId) const override {
+    return true;
+  }
+
+  virtual EstimateResult estimate(uint64_t threshold, const std::vector<std::string>& sourceAddresses = {}) const override {
+    lastThreshold = threshold;
+    lastSourceAddresses = sourceAddresses;
+
+    return EstimateResult{ TEST_FUSION_READY_COUNT, TEST_TOTAL_OUTPUT_COUNT };
+  };
+
+  mutable uint64_t lastThreshold;
+  mutable uint64_t lastMixin;
+  mutable std::vector<std::string> lastSourceAddresses;
+  mutable std::string lastDestinationAddress;
+  Crypto::Hash testTransactionHash;
+};
+
+class WalletServiceTest_sendFusionTransaction : public WalletServiceTest {
+public:
+  const uint64_t TEST_THRESHOLD = 10000000;
+  const uint32_t TEST_MIXIN = 3;
+
+  virtual void SetUp() override {
+    CryptoNote::AccountBase account;
+
+    account.generate();
+    testAddress1 = currency.accountAddressAsString(account);
+
+    account.generate();
+    testAddress2 = currency.accountAddressAsString(account);
+  }
+
+protected:
+  std::string testAddress1;
+  std::string testAddress2;
+};
+
+TEST_F(WalletServiceTest_sendFusionTransaction, failsOnWrongSourceAddress) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  std::string transactionHash;
+  auto ec = service->sendFusionTransaction(TEST_THRESHOLD, TEST_MIXIN, { testAddress1, "WRONG ADDRESS" }, testAddress2, transactionHash);
+  ASSERT_EQ(make_error_code(CryptoNote::error::BAD_ADDRESS), ec);
+}
+
+TEST_F(WalletServiceTest_sendFusionTransaction, failsOnWrongDestinationAddress) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  std::string transactionHash;
+  auto ec = service->sendFusionTransaction(TEST_THRESHOLD, TEST_MIXIN, { testAddress1 }, "WRONG ADDRESS", transactionHash);
+  ASSERT_EQ(make_error_code(CryptoNote::error::BAD_ADDRESS), ec);
+}
+
+TEST_F(WalletServiceTest_sendFusionTransaction, acceptsEmptySourceAddresses) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  std::string transactionHash;
+  ASSERT_FALSE(static_cast<bool>(service->sendFusionTransaction(TEST_THRESHOLD, TEST_MIXIN, {}, testAddress2, transactionHash)));
+}
+
+TEST_F(WalletServiceTest_sendFusionTransaction, acceptsEmptyDestinationAddress) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  std::string transactionHash;
+  ASSERT_FALSE(static_cast<bool>(service->sendFusionTransaction(TEST_THRESHOLD, TEST_MIXIN, { testAddress1 }, "", transactionHash)));
+}
+
+TEST_F(WalletServiceTest_sendFusionTransaction, correctlyPassAgrumentsToWallet) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  std::string transactionHash;
+  std::vector<std::string> sourceAddresses = { testAddress1, testAddress2 };
+  ASSERT_FALSE(static_cast<bool>(service->sendFusionTransaction(TEST_THRESHOLD, TEST_MIXIN, sourceAddresses, testAddress2, transactionHash)));
+
+  ASSERT_EQ(TEST_THRESHOLD, wallet.lastThreshold);
+  ASSERT_EQ(TEST_MIXIN, wallet.lastMixin);
+  ASSERT_EQ(sourceAddresses, wallet.lastSourceAddresses);
+  ASSERT_EQ(testAddress2, wallet.lastDestinationAddress);
+}
+
+TEST_F(WalletServiceTest_sendFusionTransaction, returnsCorrectFustionTransactoinHash) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  std::string transactionHash;
+  ASSERT_FALSE(static_cast<bool>(service->sendFusionTransaction(TEST_THRESHOLD, TEST_MIXIN, { testAddress1 }, testAddress2, transactionHash)));
+
+  ASSERT_EQ(Common::podToHex(wallet.testTransactionHash), transactionHash);
+}
+
+class WalletServiceTest_estimateFusion : public WalletServiceTest_sendFusionTransaction {
+};
+
+TEST_F(WalletServiceTest_estimateFusion, failsOnWrongSourceAddress) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  uint32_t fusionReadyCount;
+  uint32_t totalOutputCount;
+  auto ec = service->estimateFusion(TEST_THRESHOLD, { testAddress1, "WRONG ADDRESS" }, fusionReadyCount, totalOutputCount);
+  ASSERT_EQ(make_error_code(CryptoNote::error::BAD_ADDRESS), ec);
+}
+
+TEST_F(WalletServiceTest_estimateFusion, acceptsEmptySourceAddresses) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  uint32_t fusionReadyCount;
+  uint32_t totalOutputCount;
+  ASSERT_FALSE(static_cast<bool>(service->estimateFusion(TEST_THRESHOLD, { }, fusionReadyCount, totalOutputCount)));
+}
+
+TEST_F(WalletServiceTest_estimateFusion, correctlyPassAgrumentsToWallet) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  uint32_t fusionReadyCount;
+  uint32_t totalOutputCount;
+  std::vector<std::string> sourceAddresses = { testAddress1, testAddress2 };
+  ASSERT_FALSE(static_cast<bool>(service->estimateFusion(TEST_THRESHOLD, sourceAddresses, fusionReadyCount, totalOutputCount)));
+
+  ASSERT_EQ(TEST_THRESHOLD, wallet.lastThreshold);
+  ASSERT_EQ(sourceAddresses, wallet.lastSourceAddresses);
+}
+
+TEST_F(WalletServiceTest_estimateFusion, returnsDataReceivedFromWallet) {
+  FusionManagerStub wallet(dispatcher);
+  auto service = createWalletService(wallet);
+
+  uint32_t fusionReadyCount;
+  uint32_t totalOutputCount;
+  ASSERT_FALSE(static_cast<bool>(service->estimateFusion(TEST_THRESHOLD, { testAddress1 }, fusionReadyCount, totalOutputCount)));
+
+  ASSERT_EQ(wallet.TEST_FUSION_READY_COUNT, fusionReadyCount);
+  ASSERT_EQ(wallet.TEST_TOTAL_OUTPUT_COUNT, totalOutputCount);
 }

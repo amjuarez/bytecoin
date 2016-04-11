@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -41,11 +41,11 @@ ICoreStub::ICoreStub(const CryptoNote::Block& genesisBlock) :
 }
 
 bool ICoreStub::addObserver(CryptoNote::ICoreObserver* observer) {
-  return true;
+  return m_observerManager.add(observer);
 }
 
 bool ICoreStub::removeObserver(CryptoNote::ICoreObserver* observer) {
-  return true;
+  return m_observerManager.remove(observer);
 }
 
 void ICoreStub::get_blockchain_top(uint32_t& height, Crypto::Hash& top_id) {
@@ -90,6 +90,7 @@ bool ICoreStub::handle_incoming_tx(CryptoNote::BinaryArray const& tx_blob, Crypt
 void ICoreStub::set_blockchain_top(uint32_t height, const Crypto::Hash& top_id) {
   topHeight = height;
   topId = top_id;
+  m_observerManager.notify(&CryptoNote::ICoreObserver::blockchainUpdated);
 }
 
 void ICoreStub::set_outputs_gindexs(const std::vector<uint32_t>& indexs, bool result) {
@@ -257,8 +258,8 @@ bool ICoreStub::getAlreadyGeneratedCoins(const Crypto::Hash& hash, uint64_t& gen
   return true;
 }
 
-bool ICoreStub::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee,
-    bool penalizeFee, uint64_t& reward, int64_t& emissionChange) {
+bool ICoreStub::getBlockReward(uint8_t blockMajorVersion, size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee,
+    uint64_t& reward, int64_t& emissionChange) {
   return true;
 }
 
@@ -291,7 +292,7 @@ bool ICoreStub::getMultisigOutputReference(const CryptoNote::MultisignatureInput
 void ICoreStub::addBlock(const CryptoNote::Block& block) {
   uint32_t height = boost::get<CryptoNote::BaseInput>(block.baseTransaction.inputs.front()).blockIndex;
   Crypto::Hash hash = CryptoNote::get_block_hash(block);
-  if (height > topHeight) {
+  if (height > topHeight || blocks.empty()) {
     topHeight = height;
     topId = hash;
   }
@@ -302,6 +303,8 @@ void ICoreStub::addBlock(const CryptoNote::Block& block) {
   for (auto txHash : block.transactionHashes) {
     blockHashByTxHashIndex.emplace(std::make_pair(txHash, hash));
   }
+
+  m_observerManager.notify(&CryptoNote::ICoreObserver::blockchainUpdated);
 }
 
 void ICoreStub::addTransaction(const CryptoNote::Transaction& tx) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -63,6 +63,7 @@ public:
   virtual uint32_t getLocalBlockCount() const override;
   virtual uint32_t getKnownBlockCount() const override;
   virtual uint64_t getLastLocalBlockTimestamp() const override;
+  virtual BlockHeaderInfo getLastLocalBlockHeaderInfo() const override;
 
   virtual void relayTransaction(const CryptoNote::Transaction& transaction, const Callback& callback) override;
   virtual void getRandomOutsByAmounts(std::vector<uint64_t>&& amounts, uint64_t outsCount, std::vector<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& result, const Callback& callback) override;
@@ -123,7 +124,7 @@ private:
 
 private:
   State m_state = STATE_NOT_INITIALIZED;
-  std::mutex m_mutex;
+  mutable std::mutex m_mutex;
   std::condition_variable m_cv_initialized;
   std::thread m_workerThread;
   System::Dispatcher* m_dispatcher = nullptr;
@@ -142,12 +143,10 @@ private:
   // Internal state
   bool m_stop = false;
   std::atomic<size_t> m_peerCount;
-  std::atomic<uint32_t> m_nodeHeight;
   std::atomic<uint32_t> m_networkHeight;
 
+  BlockHeaderInfo lastLocalBlockHeaderInfo;
   //protect it with mutex if decided to add worker threads
-  Crypto::Hash m_lastKnowHash;
-  std::atomic<uint64_t> m_lastLocalBlockTimestamp;
   std::unordered_set<Crypto::Hash> m_knownTxs;
 
   bool m_connected;
