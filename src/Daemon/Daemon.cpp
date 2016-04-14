@@ -314,8 +314,8 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
         std::cout << "Configuration error: Cannot open configuration file" << std::endl;
         std::cout << "" << std::endl;
         std::cout << "Usage:" << std::endl;
-        std::cout << "Windows:   forknote.exe --config-file configs/dashcoin.conf" << std::endl;
-        std::cout << "Linux/Mac:   ./forknote --config-file configs/dashcoin.conf" << std::endl;
+        std::cout << "Windows:   forknoted.exe --config-file configs/dashcoin.conf" << std::endl;
+        std::cout << "Linux/Mac:   ./forknoted --config-file configs/dashcoin.conf" << std::endl;
         return false;
       }
       po::notify(vm);
