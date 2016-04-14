@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -33,7 +33,7 @@ public:
     Currency currency = CurrencyBuilder(m_nullLog).currency();
     m_bob.generate();
 
-    if (!currency.constructMinerTx(0, 0, 0, 2, 0, m_bob.getAccountKeys().address, m_tx))
+    if (!currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 2, 0, m_bob.getAccountKeys().address, m_tx))
       return false;
 
     m_tx_pub_key = getTransactionPublicKeyFromExtra(m_tx.extra);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -193,7 +193,7 @@ TEST_F(NodeTest, generateBlockchain) {
     ASSERT_TRUE(daemon.makeINode(mainNode));
 
     std::string password = "pass";
-    CryptoNote::WalletGreen wallet(dispatcher, currency, *mainNode);
+    CryptoNote::WalletGreen wallet(dispatcher, currency, *mainNode, logger);
 
     wallet.initialize(password);
 
@@ -241,7 +241,7 @@ TEST_F(NodeTest, addMoreBlocks) {
     auto startHeight = daemon.getLocalHeight();
 
     std::string password = "pass";
-    CryptoNote::WalletGreen wallet(dispatcher, currency, *mainNode);
+    CryptoNote::WalletGreen wallet(dispatcher, currency, *mainNode, logger);
 
     {
       std::ifstream walletFile("wallet.bin", std::ios::binary);

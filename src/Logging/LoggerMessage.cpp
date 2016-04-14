@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -102,6 +102,12 @@ int LoggerMessage::sync() {
   gotText = false;
   message = DEFAULT;
   return 0;
+}
+
+std::streamsize LoggerMessage::xsputn(const char* s, std::streamsize n) {
+  gotText = true;
+  message.append(s, n);
+  return n;
 }
 
 int LoggerMessage::overflow(int c) {

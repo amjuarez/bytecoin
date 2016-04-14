@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -332,7 +332,7 @@ bool BaseFunctionalTests::prepareAndSubmitBlock(TestNode& node, CryptoNote::Bloc
   blockTemplate.timestamp = m_nextTimestamp;
   m_nextTimestamp += 2 * m_currency.difficultyTarget();
 
-  if (blockTemplate.majorVersion == BLOCK_MAJOR_VERSION_2) {
+  if (blockTemplate.majorVersion >= BLOCK_MAJOR_VERSION_2) {
     blockTemplate.parentBlock.majorVersion = BLOCK_MAJOR_VERSION_1;
     blockTemplate.parentBlock.minorVersion = BLOCK_MINOR_VERSION_0;
     blockTemplate.parentBlock.transactionCount = 1;

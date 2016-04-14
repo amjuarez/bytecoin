@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,6 +23,7 @@
 
 #include "Common/CommandLine.h"
 #include "Common/Util.h"
+#include "version.h"
 
 namespace PaymentService {
 
@@ -36,7 +37,7 @@ bool ConfigurationManager::init(int argc, char** argv) {
   po::options_description cmdGeneralOptions("Common Options");
 
   cmdGeneralOptions.add_options()
-  ("config,c", po::value<std::string>()->default_value("./configs/-.conf"), "configuration file");
+  ("config,c", po::value<std::string>()->default_value(""), "configuration file");
 
   po::options_description confGeneralOptions;
   confGeneralOptions.add(cmdGeneralOptions).add_options()
@@ -46,7 +47,8 @@ bool ConfigurationManager::init(int argc, char** argv) {
   cmdGeneralOptions.add_options()
       ("help,h", "produce this help message and exit")
       ("local", po::bool_switch(), "start with local node (remote is default)")
-      ("testnet", po::bool_switch(), "testnet mode");
+      ("testnet", po::bool_switch(), "testnet mode")
+      ("version", "Output version information");
 
   command_line::add_arg(cmdGeneralOptions, command_line::arg_data_dir, Tools::getDefaultDataDirectory());
   command_line::add_arg(confGeneralOptions, command_line::arg_data_dir, Tools::getDefaultDataDirectory());
@@ -75,6 +77,11 @@ bool ConfigurationManager::init(int argc, char** argv) {
 
   if (cmdOptions.count("help")) {
     std::cout << cmdOptionsDesc << std::endl;
+    return false;
+  }
+
+  if (cmdOptions.count("version") > 0) {
+    std::cout << "walletd v" << PROJECT_VERSION_LONG;
     return false;
   }
 

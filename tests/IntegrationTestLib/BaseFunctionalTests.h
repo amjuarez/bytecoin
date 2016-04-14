@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -166,11 +166,9 @@ namespace Tests {
 
       bool prepareAndSubmitBlock(TestNode& node, CryptoNote::Block&& blockTemplate);
 
-    private:
 #ifdef __linux__
       std::vector<__pid_t> pids;
 #endif
-
 
       Logging::ConsoleLogger logger;
       std::unique_ptr<CryptoNote::INode> mainNode;

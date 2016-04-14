@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -28,8 +28,8 @@
 #include "CryptoNoteCore/Core.h"
 #include "CryptoNoteProtocol/CryptoNoteProtocolHandler.h"
 #include "P2p/NetNode.h"
-#include "PaymentGate/WalletFactory.h"
 #include <System/Context.h>
+#include "Wallet/WalletGreen.h"
 
 #ifdef ERROR
 #undef ERROR
@@ -53,12 +53,26 @@ void stopSignalHandler(PaymentGateService* pg) {
   pg->stop();
 }
 
+PaymentGateService::PaymentGateService() :
+  dispatcher(nullptr),
+  stopEvent(nullptr),
+  config(),
+  service(nullptr),
+  logger(),
+  currencyBuilder(logger),
+  fileLogger(Logging::TRACE),
+  consoleLogger(Logging::INFO) {
+  consoleLogger.setPattern("%D %T %L ");
+  fileLogger.setPattern("%D %T %L ");
+}
+
 bool PaymentGateService::init(int argc, char** argv) {
   if (!config.init(argc, argv)) {
     return false;
   }
 
   logger.setMaxLevel(static_cast<Logging::Level>(config.gateConfiguration.logLevel));
+  logger.setPattern("%D %T %L ");
   logger.addLogger(consoleLogger);
 
   Logging::LoggerRef log(logger, "main");
@@ -70,6 +84,7 @@ bool PaymentGateService::init(int argc, char** argv) {
   currencyBuilder.emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
   currencyBuilder.blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
   currencyBuilder.blockGrantedFullRewardZoneV1(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1);
+  currencyBuilder.blockGrantedFullRewardZoneV2(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2);
   currencyBuilder.numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
   currencyBuilder.mininumFee(config.coinBaseConfig.MINIMUM_FEE);
   currencyBuilder.defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
@@ -86,9 +101,9 @@ bool PaymentGateService::init(int argc, char** argv) {
   }
   currencyBuilder.maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
   currencyBuilder.lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
-  if (config.coinBaseConfig.UPGRADE_HEIGHT && config.coinBaseConfig.UPGRADE_HEIGHT != 0)
+  if (config.coinBaseConfig.UPGRADE_HEIGHT_V2 && config.coinBaseConfig.UPGRADE_HEIGHT_V2 != 0)
   {
-    currencyBuilder.upgradeHeight(config.coinBaseConfig.UPGRADE_HEIGHT);
+    currencyBuilder.upgradeHeightV2(config.coinBaseConfig.UPGRADE_HEIGHT_V2);
   }
   currencyBuilder.difficultyLag(config.coinBaseConfig.DIFFICULTY_LAG);
   currencyBuilder.maxTransactionSizeLimit(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT);
@@ -152,7 +167,7 @@ void PaymentGateService::run() {
 void PaymentGateService::stop() {
   Logging::LoggerRef log(logger, "stop");
 
-  log(Logging::INFO) << "Stop signal caught";
+  log(Logging::INFO, Logging::BRIGHT_WHITE) << "Stop signal caught";
 
   if (dispatcher != nullptr) {
     dispatcher->remoteSpawn([&]() {
@@ -253,9 +268,9 @@ void PaymentGateService::runWalletService(const CryptoNote::Currency& currency, 
     config.gateConfiguration.syncFromZero
   };
 
-  std::unique_ptr<CryptoNote::IWallet> wallet (WalletFactory::createWallet(currency, node, *dispatcher));
+  std::unique_ptr<CryptoNote::WalletGreen> wallet(new CryptoNote::WalletGreen(*dispatcher, currency, node, logger));
 
-  service = new PaymentService::WalletService(currency, *dispatcher, node, *wallet, walletConfiguration, logger);
+  service = new PaymentService::WalletService(currency, *dispatcher, node, *wallet, *wallet, walletConfiguration, logger);
   std::unique_ptr<PaymentService::WalletService> serviceGuard(service);
   try {
     service->init();
@@ -274,6 +289,8 @@ void PaymentGateService::runWalletService(const CryptoNote::Currency& currency, 
   } else {
     PaymentService::PaymentServiceJsonRpcServer rpcServer(*dispatcher, *stopEvent, *service, logger);
     rpcServer.start(config.gateConfiguration.bindAddress, config.gateConfiguration.bindPort);
+
+    Logging::LoggerRef(logger, "PaymentGateService")(Logging::INFO, Logging::BRIGHT_WHITE) << "JSON-RPC server stopped, stopping wallet service...";
 
     try {
       service->saveWallet();

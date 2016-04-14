@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -53,6 +53,10 @@ public:
     }
 
     return value;
+  }
+
+  bool empty() const {
+    return count == 0;
   }
 
   void reset() {

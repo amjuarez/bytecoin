@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -589,7 +589,12 @@ void WalletSerializer::loadWalletV1(Common::IInputStream& source, const std::str
 
 void WalletSerializer::loadWalletV1Keys(CryptoNote::BinaryInputStreamSerializer& serializer) {
   CryptoNote::KeysStorage keys;
-  keys.serialize(serializer, "keys");
+
+  try {
+    keys.serialize(serializer, "keys");
+  } catch (const std::runtime_error&) {
+    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
+  }
 
   m_viewPublicKey = keys.viewPublicKey;
   m_viewSecretKey = keys.viewSecretKey;
@@ -635,8 +640,12 @@ void WalletSerializer::generateKey(const std::string& password, Crypto::chacha8_
 }
 
 void WalletSerializer::loadKeys(Common::IInputStream& source, CryptoContext& cryptoContext) {
-  loadPublicKey(source, cryptoContext);
-  loadSecretKey(source, cryptoContext);
+  try {
+    loadPublicKey(source, cryptoContext);
+    loadSecretKey(source, cryptoContext);
+  } catch (const std::runtime_error&) {
+    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
+  }
 }
 
 void WalletSerializer::loadPublicKey(Common::IInputStream& source, CryptoContext& cryptoContext) {

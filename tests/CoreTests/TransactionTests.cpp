@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -52,17 +52,17 @@ bool test_transaction_generation_and_ring_signature()
   AccountBase rv_acc2;
   rv_acc2.generate();
   Transaction tx_mine_1;
-  currency.constructMinerTx(0, 0, 0, 10, 0, miner_acc1.getAccountKeys().address, tx_mine_1);
+  currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 10, 0, miner_acc1.getAccountKeys().address, tx_mine_1);
   Transaction tx_mine_2;
-  currency.constructMinerTx(0, 0, 0, 0, 0, miner_acc2.getAccountKeys().address, tx_mine_2);
+  currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 0, 0, miner_acc2.getAccountKeys().address, tx_mine_2);
   Transaction tx_mine_3;
-  currency.constructMinerTx(0, 0, 0, 0, 0, miner_acc3.getAccountKeys().address, tx_mine_3);
+  currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 0, 0, miner_acc3.getAccountKeys().address, tx_mine_3);
   Transaction tx_mine_4;
-  currency.constructMinerTx(0, 0, 0, 0, 0, miner_acc4.getAccountKeys().address, tx_mine_4);
+  currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 0, 0, miner_acc4.getAccountKeys().address, tx_mine_4);
   Transaction tx_mine_5;
-  currency.constructMinerTx(0, 0, 0, 0, 0, miner_acc5.getAccountKeys().address, tx_mine_5);
+  currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 0, 0, miner_acc5.getAccountKeys().address, tx_mine_5);
   Transaction tx_mine_6;
-  currency.constructMinerTx(0, 0, 0, 0, 0, miner_acc6.getAccountKeys().address, tx_mine_6);
+  currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 0, 0, miner_acc6.getAccountKeys().address, tx_mine_6);
 
   //fill inputs entry
   typedef TransactionSourceEntry::OutputEntry tx_output_entry;
@@ -148,7 +148,7 @@ bool test_block_creation()
   bool r = currency.parseAccountAddressString("272xWzbWsP4cfNFfxY5ETN5moU8x81PKfWPwynrrqsNGDBQGLmD1kCkKCvPeDUXu5XfmZkCrQ53wsWmdfvHBGLNjGcRiDcK", adr);
   CHECK_AND_ASSERT_MES(r, false, "failed to import");
   Block b;
-  r = currency.constructMinerTx(90, Common::medianValue(szs), 3553616528562147, 33094, 10000000, adr, b.baseTransaction, BinaryArray(), 11);
+  r = currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 90, Common::medianValue(szs), 3553616528562147, 33094, 10000000, adr, b.baseTransaction, BinaryArray(), 11);
   return r;
 }
 

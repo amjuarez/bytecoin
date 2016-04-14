@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -29,7 +29,7 @@ public:
     assert(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_2);
 
     CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
-    currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     m_currency = currencyBuilder.currency();
 
     REGISTER_CALLBACK("check_block_purged", CheckBlockPurged::check_block_purged);
@@ -72,7 +72,7 @@ struct CheckBlockAccepted : public test_chain_unit_base {
     assert(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_2);
 
     CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
-    currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     m_currency = currencyBuilder.currency();
 
     REGISTER_CALLBACK("check_block_accepted", CheckBlockAccepted::check_block_accepted);
@@ -299,7 +299,7 @@ struct gen_block_is_too_big : public CheckBlockPurged
   gen_block_is_too_big(uint8_t blockMajorVersion)
       : CheckBlockPurged(1, blockMajorVersion) {
     CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
-    currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
     currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
     m_currency = currencyBuilder.currency();
   }

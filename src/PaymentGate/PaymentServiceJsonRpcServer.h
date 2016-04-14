@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -71,6 +71,7 @@ private:
 
   std::unordered_map<std::string, HandlerFunction> handlers;
 
+  std::error_code handleSave(const Save::Request& request, Save::Response& response);
   std::error_code handleReset(const Reset::Request& request, Reset::Response& response);
   std::error_code handleCreateAddress(const CreateAddress::Request& request, CreateAddress::Response& response);
   std::error_code handleDeleteAddress(const DeleteAddress::Request& request, DeleteAddress::Response& response);
@@ -90,6 +91,8 @@ private:
   std::error_code handleGetStatus(const GetStatus::Request& request, GetStatus::Response& response);
   std::error_code handleGetAddresses(const GetAddresses::Request& request, GetAddresses::Response& response);
 
+  std::error_code handleSendFusionTransaction(const SendFusionTransaction::Request& request, SendFusionTransaction::Response& response);
+  std::error_code handleEstimateFusion(const EstimateFusion::Request& request, EstimateFusion::Response& response);
 };
 
 }//namespace PaymentService

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -345,6 +345,9 @@ namespace CryptoNote {
         << "max_used_block_id: " << txd.maxUsedBlock.id << std::endl
         << "last_failed_height: " << txd.lastFailedBlock.height << std::endl
         << "last_failed_id: " << txd.lastFailedBlock.id << std::endl
+        << "amount_out: " << get_outs_money_amount(txd.tx) << std::endl
+        << "fee_atomic_units: " << txd.fee << std::endl
+        << "received_timestamp: " << txd.receiveTime << std::endl
         << "received: " << std::ctime(&txd.receiveTime) << std::endl;
     }
 
@@ -373,6 +376,7 @@ namespace CryptoNote {
       TransactionCheckInfo checkInfo(txd);
       if (is_transaction_ready_to_go(txd.tx, checkInfo) && blockTemplate.addTransaction(txd.id, txd.tx)) {
         total_size += txd.blobSize;
+        logger(DEBUGGING) << "Fusion transaction " << txd.id << " included to block template";
       }
     }
 
@@ -395,6 +399,9 @@ namespace CryptoNote {
       if (ready && blockTemplate.addTransaction(txd.id, txd.tx)) {
         total_size += txd.blobSize;
         fee += txd.fee;
+        logger(DEBUGGING) << "Transaction " << txd.id << " included to block template";
+      } else {
+        logger(DEBUGGING) << "Transaction " << txd.id << " is failed to include to block template";
       }
     }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -518,7 +518,7 @@ struct currency_base_coin {
 
 struct currency_core {
   std::vector<std::string> SEED_NODES;
-  uint64_t EMISSION_SPEED_FACTOR;
+  unsigned EMISSION_SPEED_FACTOR;
   uint64_t DIFFICULTY_TARGET;
   uint64_t CRYPTONOTE_DISPLAY_DECIMAL_POINT;
   std::string MONEY_SUPPLY;
@@ -528,12 +528,13 @@ struct currency_core {
   uint64_t CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
   uint64_t CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
   uint64_t CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
+  uint64_t CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2;
   uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
   uint64_t P2P_DEFAULT_PORT;
   uint64_t RPC_DEFAULT_PORT;
   uint64_t MAX_BLOCK_SIZE_INITIAL;
   uint64_t EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;
-  uint64_t UPGRADE_HEIGHT;
+  uint64_t UPGRADE_HEIGHT_V2;
   uint64_t DIFFICULTY_CUT;
   uint64_t DIFFICULTY_LAG;
   std::string BYTECOIN_NETWORK;
@@ -553,12 +554,13 @@ struct currency_core {
     KV_MEMBER(CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW)
     KV_MEMBER(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE)
     KV_MEMBER(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1)
+    KV_MEMBER(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2)
     KV_MEMBER(CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX)
     KV_MEMBER(P2P_DEFAULT_PORT)
     KV_MEMBER(RPC_DEFAULT_PORT)
     KV_MEMBER(MAX_BLOCK_SIZE_INITIAL)
     KV_MEMBER(EXPECTED_NUMBER_OF_BLOCKS_PER_DAY)
-    KV_MEMBER(UPGRADE_HEIGHT)
+    KV_MEMBER(UPGRADE_HEIGHT_V2)
     KV_MEMBER(DIFFICULTY_CUT)
     KV_MEMBER(DIFFICULTY_LAG)
     KV_MEMBER(BYTECOIN_NETWORK)
@@ -655,6 +657,20 @@ struct F_COMMAND_RPC_GET_TRANSACTION_DETAILS {
       KV_MEMBER(tx)
       KV_MEMBER(txDetails)
       KV_MEMBER(block)
+      KV_MEMBER(status)
+    }
+  };
+};
+
+struct F_COMMAND_RPC_GET_POOL {
+  typedef std::vector<std::string> request;
+
+  struct response {
+    std::string transactions;
+    std::string status;
+
+    void serialize(ISerializer &s) {
+      KV_MEMBER(transactions)
       KV_MEMBER(status)
     }
   };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -40,7 +40,7 @@ std::string formatPattern(const std::string& pattern, const std::string& categor
         s << time.time_of_day();
         break;
       case 'L':
-        s << ILogger::LEVEL_NAMES[level];
+        s << std::setw(7) << std::left << ILogger::LEVEL_NAMES[level];
         break;
       default:
         s << *p;

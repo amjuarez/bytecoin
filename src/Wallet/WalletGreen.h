@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -25,6 +25,7 @@
 #include "IFusionManager.h"
 #include "WalletIndices.h"
 
+#include "Logging/LoggerRef.h"
 #include <System/Dispatcher.h>
 #include <System/Event.h>
 #include "Transfers/TransfersSynchronizer.h"
@@ -36,9 +37,9 @@ class WalletGreen : public IWallet,
                     ITransfersObserver,
                     IBlockchainSynchronizerObserver,
                     ITransfersSynchronizerObserver,
-                    IFusionManager {
+                    public IFusionManager {
 public:
-  WalletGreen(System::Dispatcher& dispatcher, const Currency& currency, INode& node, uint32_t transactionSoftLockTime = 1);
+  WalletGreen(System::Dispatcher& dispatcher, const Currency& currency, INode& node, Logging::ILogger& logger, uint32_t transactionSoftLockTime = 1);
   virtual ~WalletGreen();
 
   virtual void initialize(const std::string& password) override;
@@ -47,7 +48,7 @@ public:
   virtual void shutdown() override;
 
   virtual void changePassword(const std::string& oldPassword, const std::string& newPassword) override;
-  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true) override;
+  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true, bool encrypt = true) override;
 
   virtual size_t getAddressCount() const override;
   virtual std::string getAddress(size_t index) const override;
@@ -87,9 +88,10 @@ public:
   virtual void stop() override;
   virtual WalletEvent getEvent() override;
 
-  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin) override;
+  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin,
+    const std::vector<std::string>& sourceAddresses = {}, const std::string& destinationAddress = "") override;
   virtual bool isFusionTransaction(size_t transactionId) const override;
-  virtual IFusionManager::EstimateResult estimate(uint64_t threshold) const override;
+  virtual IFusionManager::EstimateResult estimate(uint64_t threshold, const std::vector<std::string>& sourceAddresses = {}) const override;
 
 protected:
   void throwIfNotInitialized() const;
@@ -164,8 +166,8 @@ protected:
   void transactionDeleteEnd(Crypto::Hash transactionHash);
 
   std::vector<WalletOuts> pickWalletsWithMoney() const;
-  WalletOuts pickWallet(const std::string& address);
-  std::vector<WalletOuts> pickWallets(const std::vector<std::string>& addresses);
+  WalletOuts pickWallet(const std::string& address) const;
+  std::vector<WalletOuts> pickWallets(const std::vector<std::string>& addresses) const;
 
   void updateBalance(CryptoNote::ITransfersContainer* container);
   void unlockBalances(uint32_t height);
@@ -198,8 +200,18 @@ protected:
     const CryptoNote::AccountPublicAddress& changeDestinationAddress,
     PreparedTransaction& preparedTransaction);
 
-  void validateTransactionParameters(const TransactionParameters& transactionParameters);
   size_t doTransfer(const TransactionParameters& transactionParameters);
+
+  void checkIfEnoughMixins(std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& mixinResult, uint64_t mixIn) const;
+  std::vector<WalletTransfer> convertOrdersToTransfers(const std::vector<WalletOrder>& orders) const;
+  uint64_t countNeededMoney(const std::vector<CryptoNote::WalletTransfer>& destinations, uint64_t fee) const;
+  CryptoNote::AccountPublicAddress parseAccountAddressString(const std::string& addressString) const;
+  uint64_t pushDonationTransferIfPossible(const DonationSettings& donation, uint64_t freeAmount, uint64_t dustThreshold, std::vector<WalletTransfer>& destinations) const;
+  void validateAddresses(const std::vector<std::string>& addresses) const;
+  void validateOrders(const std::vector<WalletOrder>& orders) const;
+  void validateChangeDestination(const std::vector<std::string>& sourceAddresses, const std::string& changeDestination, bool isFusion) const;
+  void validateSourceAddresses(const std::vector<std::string>& sourceAddresses) const;
+  void validateTransactionParameters(const TransactionParameters& transactionParameters) const;
 
   void requestMixinOuts(const std::vector<OutputToTransfer>& selectedTransfers,
     uint64_t mixIn,
@@ -250,10 +262,11 @@ protected:
   void removeUnconfirmedTransaction(const Crypto::Hash& transactionHash);
 
   void unsafeLoad(std::istream& source, const std::string& password);
-  void unsafeSave(std::ostream& destination, bool saveDetails, bool saveCache);
+  void unsafeSave(std::ostream& destination, bool saveDetails, bool saveCache, bool encrypt);
 
-  std::vector<OutputToTransfer> pickRandomFusionInputs(uint64_t threshold, size_t minInputCount, size_t maxInputCount);
-  ReceiverAmounts decomposeFusionOutputs(uint64_t inputsAmount);
+  std::vector<OutputToTransfer> pickRandomFusionInputs(const std::vector<std::string>& addresses,
+    uint64_t threshold, size_t minInputCount, size_t maxInputCount);
+  static ReceiverAmounts decomposeFusionOutputs(const AccountPublicAddress& address, uint64_t inputsAmount);
 
   enum class WalletState {
     INITIALIZED,
@@ -285,6 +298,7 @@ protected:
   System::Dispatcher& m_dispatcher;
   const Currency& m_currency;
   INode& m_node;
+  mutable Logging::LoggerRef m_logger;
   bool m_stopped;
 
   WalletsContainer m_walletsContainer;
@@ -316,6 +330,10 @@ protected:
   uint32_t m_transactionSoftLockTime;
 
   BlockHashesContainer m_blockchain;
+
+  friend std::ostream& operator<<(std::ostream& os, CryptoNote::WalletGreen::WalletState state);
+  friend std::ostream& operator<<(std::ostream& os, CryptoNote::WalletGreen::WalletTrackingMode mode);
+  friend class TransferListFormatter;
 };
 
 } //namespace CryptoNote

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 
+#include "Logging/ConsoleLogger.h"
 #include "WalletLegacy/WalletHelper.h"
 #include "WalletLegacy/WalletLegacySerialization.h"
 #include "WalletLegacy/WalletLegacySerializer.h"
@@ -107,11 +108,12 @@ WalletLegacy::WalletLegacy(const CryptoNote::Currency& currency, INode& node) :
   m_state(NOT_INITIALIZED),
   m_currency(currency),
   m_node(node),
+  m_consoleLogger(Logging::ERROR),
   m_isStopping(false),
   m_lastNotifiedActualBalance(0),
   m_lastNotifiedPendingBalance(0),
-  m_blockchainSync(node, currency.genesisBlockHash()),
-  m_transfersSync(currency, m_blockchainSync, node),
+  m_blockchainSync(node, m_consoleLogger, currency.genesisBlockHash()),
+  m_transfersSync(currency, m_consoleLogger, m_blockchainSync, node),
   m_transferDetails(nullptr),
   m_transactionsCache(m_currency.mempoolTxLiveTime()),
   m_sender(nullptr),

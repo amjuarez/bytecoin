@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -26,6 +26,8 @@
 #include <memory>
 #include <cstring>
 
+#include "Logging/LoggerRef.h"
+
 namespace CryptoNote {
 class Currency;
 }
@@ -37,7 +39,7 @@ class INode;
 
 class TransfersSyncronizer : public ITransfersSynchronizer, public IBlockchainConsumerObserver {
 public:
-  TransfersSyncronizer(const CryptoNote::Currency& currency, IBlockchainSynchronizer& sync, INode& node);
+  TransfersSyncronizer(const CryptoNote::Currency& currency, Logging::ILogger& logger, IBlockchainSynchronizer& sync, INode& node);
   virtual ~TransfersSyncronizer();
 
   void initTransactionPool(const std::unordered_set<Crypto::Hash>& uncommitedTransactions);
@@ -57,6 +59,8 @@ public:
   virtual void load(std::istream& in) override;
 
 private:
+  Logging::LoggerRef m_logger;
+
   // map { view public key -> consumer }
   typedef std::unordered_map<Crypto::PublicKey, std::unique_ptr<TransfersConsumer>> ConsumersContainer;
   ConsumersContainer m_consumers;

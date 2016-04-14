@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -107,8 +107,8 @@ std::vector<Crypto::Hash> getBlockHashes(const CryptoNote::CompleteBlock* blocks
 
 namespace CryptoNote {
 
-TransfersConsumer::TransfersConsumer(const CryptoNote::Currency& currency, INode& node, const SecretKey& viewSecret) :
-  m_node(node), m_viewSecret(viewSecret), m_currency(currency) {
+TransfersConsumer::TransfersConsumer(const CryptoNote::Currency& currency, INode& node, Logging::ILogger& logger, const SecretKey& viewSecret) :
+  m_node(node), m_viewSecret(viewSecret), m_currency(currency), m_logger(logger, "TransfersConsumer") {
   updateSyncStart();
 }
 
@@ -120,7 +120,7 @@ ITransfersSubscription& TransfersConsumer::addSubscription(const AccountSubscrip
   auto& res = m_subscriptions[subscription.keys.address.spendPublicKey];
 
   if (res.get() == nullptr) {
-    res.reset(new TransfersSubscription(m_currency, subscription));
+    res.reset(new TransfersSubscription(m_currency, m_logger.getLogger(), subscription));
     m_spendKeys.insert(subscription.keys.address.spendPublicKey);
     updateSyncStart();
   }

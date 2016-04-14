@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -83,7 +83,8 @@ WalletTransactionSender::WalletTransactionSender(const Currency& currency, Walle
   m_isStoping(false),
   m_keys(keys),
   m_transferDetails(transfersContainer),
-  m_upperTransactionSizeLimit(m_currency.maxTransactionSizeLimit()) {}
+  m_upperTransactionSizeLimit(m_currency.maxTransactionSizeLimit()) {
+}
 
 void WalletTransactionSender::stop() {
   m_isStoping = true;

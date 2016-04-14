@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -497,7 +497,7 @@ bool get_block_longhash(cn_context &context, const Block& b, Hash& res) {
     if (!get_block_hashing_blob(b, bd)) {
       return false;
     }
-  } else if (b.majorVersion == BLOCK_MAJOR_VERSION_2) {
+  } else if (b.majorVersion >= BLOCK_MAJOR_VERSION_2) {
     if (!get_parent_block_hashing_blob(b, bd)) {
       return false;
     }

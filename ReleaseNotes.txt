@@ -1,3 +1,9 @@
+Release notes 1.0.10
+
+- Blocksize increase
+- Fusion transactions for Bytecoin RPC Wallet
+- Bytecoin RPC Wallet API improvements
+
 Release notes 1.0.9
 
 - New API for Bytecoin RPC Wallet

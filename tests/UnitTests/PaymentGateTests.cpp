@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -23,7 +23,7 @@
 #include <Logging/ConsoleLogger.h>
 
 #include "PaymentGate/WalletService.h"
-#include "PaymentGate/WalletFactory.h"
+#include "Wallet/WalletGreen.h"
 
 // test helpers
 #include "INodeStubs.h"
@@ -35,8 +35,9 @@ using namespace CryptoNote;
 class PaymentGateTest : public testing::Test {
 public:
 
-  PaymentGateTest() : 
-    currency(CryptoNote::CurrencyBuilder(logger).currency()), 
+  PaymentGateTest() :
+    logger(Logging::ERROR),
+    currency(CryptoNote::CurrencyBuilder(logger).currency()),
     generator(currency),
     nodeStub(generator) 
   {}
@@ -46,8 +47,9 @@ public:
   }
 
   std::unique_ptr<WalletService> createWalletService(const WalletConfiguration& cfg) {
-    wallet.reset(WalletFactory::createWallet(currency, nodeStub, dispatcher));
-    std::unique_ptr<WalletService> service(new WalletService(currency, dispatcher, nodeStub, *wallet, cfg, logger));
+    WalletGreen* walletGreen = new CryptoNote::WalletGreen(dispatcher, currency, nodeStub, logger);
+    wallet.reset(walletGreen);
+    std::unique_ptr<WalletService> service(new WalletService(currency, dispatcher, nodeStub, *walletGreen, *walletGreen, cfg, logger));
     service->init();
     return service;
   }

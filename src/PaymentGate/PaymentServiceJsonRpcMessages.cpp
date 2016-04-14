@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -19,6 +19,12 @@
 #include "Serialization/SerializationOverloads.h"
 
 namespace PaymentService {
+
+void Save::Request::serialize(CryptoNote::ISerializer& /*serializer*/) {
+}
+
+void Save::Response::serialize(CryptoNote::ISerializer& /*serializer*/) {
+}
 
 void Reset::Request::serialize(CryptoNote::ISerializer& serializer) {
   serializer(viewSecretKey, "viewSecretKey");
@@ -285,6 +291,36 @@ void SendDelayedTransaction::Request::serialize(CryptoNote::ISerializer& seriali
 }
 
 void SendDelayedTransaction::Response::serialize(CryptoNote::ISerializer& serializer) {
+}
+
+void SendFusionTransaction::Request::serialize(CryptoNote::ISerializer& serializer) {
+  if (!serializer(threshold, "threshold")) {
+    throw RequestSerializationError();
+  }
+
+  if (!serializer(anonymity, "anonymity")) {
+    throw RequestSerializationError();
+  }
+
+  serializer(addresses, "addresses");
+  serializer(destinationAddress, "destinationAddress");
+}
+
+void SendFusionTransaction::Response::serialize(CryptoNote::ISerializer& serializer) {
+  serializer(transactionHash, "transactionHash");
+}
+
+void EstimateFusion::Request::serialize(CryptoNote::ISerializer& serializer) {
+  if (!serializer(threshold, "threshold")) {
+    throw RequestSerializationError();
+  }
+
+  serializer(addresses, "addresses");
+}
+
+void EstimateFusion::Response::serialize(CryptoNote::ISerializer& serializer) {
+  serializer(fusionReadyCount, "fusionReadyCount");
+  serializer(totalOutputCount, "totalOutputCount");
 }
 
 }

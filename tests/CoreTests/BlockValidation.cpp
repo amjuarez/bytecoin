@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -649,7 +649,7 @@ gen_block_invalid_binary_format::gen_block_invalid_binary_format(uint8_t blockMa
     m_corrupt_blocks_begin_idx(0),
     m_blockMajorVersion(blockMajorVersion) {
   CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
-  currencyBuilder.upgradeHeight(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : 0);
+  currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : 0);
   m_currency = currencyBuilder.currency();
 
   REGISTER_CALLBACK("check_all_blocks_purged", gen_block_invalid_binary_format::check_all_blocks_purged);

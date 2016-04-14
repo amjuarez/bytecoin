@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -137,7 +137,7 @@ bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
     size_t median = Common::medianValue(block_sizes);
 
     Transaction miner_tx;
-    bool r = constructMinerTxBySize(m_currency, miner_tx, get_block_height(blk_7) + 1, generator.getAlreadyGeneratedCoins(blk_7),
+    bool r = constructMinerTxBySize(m_currency, miner_tx, BLOCK_MAJOR_VERSION_1, get_block_height(blk_7) + 1, generator.getAlreadyGeneratedCoins(blk_7),
       miner_account.getAccountKeys().address, block_sizes, 2 * median - txs_1_size, 2 * median, txs_fee);
     if (!r)
       return false;

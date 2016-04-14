@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ostream>
 #include <vector>
 #include <string>
 
@@ -71,6 +72,37 @@ template<typename T> T readVarint(IInputStream& in) {
   T value;
   readVarint(in, value);
   return value;
+}
+
+template<typename T>
+class ContainerFormatter {
+public:
+  explicit ContainerFormatter(const T& container) :
+    m_container(container) {
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const ContainerFormatter<T>& formatter) {
+    os << '{';
+
+    if (!formatter.m_container.empty()) {
+      os << formatter.m_container.front();
+      for (auto it = std::next(formatter.m_container.begin()); it != formatter.m_container.end(); ++it) {
+        os << ", " << *it;
+      }
+    }
+
+    os << '}';
+
+    return os;
+  }
+
+private:
+  const T& m_container;
+};
+
+template<typename T>
+ContainerFormatter<T> makeContainerFormatter(const T& container) {
+  return ContainerFormatter<T>(container);
 }
 
 };

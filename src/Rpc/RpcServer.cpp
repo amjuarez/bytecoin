@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -110,6 +110,8 @@ RpcServer::RpcServer(System::Dispatcher& dispatcher, Logging::ILogger& log, core
 }
 
 void RpcServer::processRequest(const HttpRequest& request, HttpResponse& response) {
+  logger(TRACE) << "RPC request came: \n" << request << std::endl;
+
   auto url = request.getUrl();
 
   auto it = s_handlers.find(url);
@@ -145,6 +147,7 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
       { "f_blocks_list_json", { makeMemberMethod(&RpcServer::f_on_blocks_list_json), false } },
       { "f_block_json", { makeMemberMethod(&RpcServer::f_on_block_json), false } },
       { "f_transaction_json", { makeMemberMethod(&RpcServer::f_on_transaction_json), false } },
+      { "f_pool_json", { makeMemberMethod(&RpcServer::f_on_pool_json), false } },
       { "f_get_blockchain_settings", { makeMemberMethod(&RpcServer::f_on_get_blockchain_settings), true } },
       { "getblockcount", { makeMemberMethod(&RpcServer::on_getblockcount), true } },
       { "on_getblockhash", { makeMemberMethod(&RpcServer::on_getblockhash), false } },
@@ -388,6 +391,9 @@ bool RpcServer::on_send_raw_tx(const COMMAND_RPC_SEND_RAW_TX::request& req, COMM
     return true;
   }
 
+  Crypto::Hash transactionHash = Crypto::cn_fast_hash(tx_blob.data(), tx_blob.size());
+  logger(DEBUGGING) << "transaction " << transactionHash << " came in on_send_raw_tx";
+
   tx_verification_context tvc = boost::value_initialized<tx_verification_context>();
   if (!m_core.handle_incoming_tx(tx_blob, tvc, false))
   {
@@ -504,10 +510,15 @@ bool RpcServer::f_on_blocks_list_json(const F_COMMAND_RPC_GET_BLOCKS_LIST::reque
 bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& req, F_COMMAND_RPC_GET_BLOCK_DETAILS::response& res) {
   Hash hash;
 
-  if (!parse_hash256(req.hash, hash)) {
-    throw JsonRpc::JsonRpcError{
-      CORE_RPC_ERROR_CODE_WRONG_PARAM,
-      "Failed to parse hex representation of block hash. Hex = " + req.hash + '.' };
+  try {
+    uint32_t height = boost::lexical_cast<uint32_t>(req.hash);
+    hash = m_core.getBlockIdByHeight(height);
+  } catch (boost::bad_lexical_cast &) {
+    if (!parse_hash256(req.hash, hash)) {
+      throw JsonRpc::JsonRpcError{
+        CORE_RPC_ERROR_CODE_WRONG_PARAM,
+        "Failed to parse hex representation of block hash. Hex = " + req.hash + '.' };
+    }
   }
 
   Block blk;
@@ -574,9 +585,7 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   uint64_t currentReward = 0;
   int64_t emissionChange = 0;
   bool penalizeFee = blk.majorVersion >= 2;
-  size_t blockGrantedFullRewardZone = penalizeFee ?
-  m_core.currency().blockGrantedFullRewardZone() :
-   m_core.currency().blockGrantedFullRewardZoneV1();
+  size_t blockGrantedFullRewardZone = m_core.currency().blockGrantedFullRewardZoneByBlockVersion(block_header.major_version);
   res.block.effectiveSizeMedian = std::max(res.block.sizeMedian, blockGrantedFullRewardZone);
 
   if (!m_core.getBlockReward(res.block.sizeMedian, 0, prevBlockGeneratedCoins, 0, penalizeFee, maxReward, emissionChange)) {
@@ -644,7 +653,7 @@ bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAIL
 
   std::list<Crypto::Hash> missed_txs;
   std::list<Transaction> txs;
-  m_core.getTransactions(tx_ids, txs, missed_txs);
+  m_core.getTransactions(tx_ids, txs, missed_txs, true);
 
   if (1 == txs.size()) {
     res.tx = txs.front();
@@ -703,6 +712,13 @@ bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAIL
   return true;
 }
 
+bool RpcServer::f_on_pool_json(const F_COMMAND_RPC_GET_POOL::request& req, F_COMMAND_RPC_GET_POOL::response& res) {
+  
+  res.transactions = m_core.print_pool(true);
+  res.status = CORE_RPC_STATUS_OK;
+  return true;
+}
+
 bool RpcServer::f_getMixin(const Transaction& transaction, uint64_t& mixin) {
   mixin = 0;
   for (const TransactionInput& txin : transaction.inputs) {
@@ -740,9 +756,10 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   res.core.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW = m_core.currency().minedMoneyUnlockWindow();
   res.core.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE = m_core.currency().blockGrantedFullRewardZone();
   res.core.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 = m_core.currency().blockGrantedFullRewardZoneV1();
+  res.core.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2 = m_core.currency().blockGrantedFullRewardZoneV2();
   res.core.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = m_core.currency().publicAddressBase58Prefix();
   res.core.MAX_BLOCK_SIZE_INITIAL = m_core.currency().maxBlockSizeInitial();
-  res.core.UPGRADE_HEIGHT = m_core.currency().upgradeHeight();
+  res.core.UPGRADE_HEIGHT_V2 = m_core.currency().upgradeHeight(2);
   res.core.DIFFICULTY_CUT = m_core.currency().difficultyCut();
   res.core.DIFFICULTY_LAG = m_core.currency().difficultyLag();
 

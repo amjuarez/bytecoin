@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -75,13 +75,14 @@ const command_line::arg_descriptor<uint16_t> arg_daemon_port = { "daemon-port", 
 const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", INFO, true };
   const command_line::arg_descriptor<uint64_t> arg_DEFAULT_FEE  = {"DEFAULT_FEE", "Default fee", CryptoNote::parameters::DEFAULT_FEE};  
   const command_line::arg_descriptor<bool>      arg_SYNC_FROM_ZERO  = {"SYNC_FROM_ZERO", "Sync from block 0. Use for premine wallet or brainwallet", false};
-  const command_line::arg_descriptor<std::string> arg_config_file = {"config-file", "Specify configuration file", "./configs/-.conf"};  
+  const command_line::arg_descriptor<std::string> arg_config_file = {"config-file", "Specify configuration file", ""};  
   const command_line::arg_descriptor<std::string> arg_GENESIS_COINBASE_TX_HEX  = {"GENESIS_COINBASE_TX_HEX", "Genesis transaction hex", CryptoNote::parameters::GENESIS_COINBASE_TX_HEX};  
   const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX  = {"CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX", "uint64_t", CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX};
   const command_line::arg_descriptor<uint64_t>    arg_MONEY_SUPPLY  = {"MONEY_SUPPLY", "uint64_t", CryptoNote::parameters::MONEY_SUPPLY};
-  const command_line::arg_descriptor<unsigned int>    arg_EMISSION_SPEED_FACTOR  = {"EMISSION_SPEED_FACTOR", "unsigned int", CryptoNote::parameters::EMISSION_SPEED_FACTOR};
+  const command_line::arg_descriptor<unsigned>    arg_EMISSION_SPEED_FACTOR  = {"EMISSION_SPEED_FACTOR", "unsigned", CryptoNote::parameters::EMISSION_SPEED_FACTOR};
   const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE", "uint64_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE};
   const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1", "uint64_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1};
+  const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2", "uint64_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2};
   const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_DISPLAY_DECIMAL_POINT  = {"CRYPTONOTE_DISPLAY_DECIMAL_POINT", "size_t", CryptoNote::parameters::CRYPTONOTE_DISPLAY_DECIMAL_POINT};
   const command_line::arg_descriptor<uint64_t>    arg_MINIMUM_FEE  = {"MINIMUM_FEE", "uint64_t", CryptoNote::parameters::MINIMUM_FEE};
   const command_line::arg_descriptor<uint64_t>    arg_DEFAULT_DUST_THRESHOLD  = {"DEFAULT_DUST_THRESHOLD", "uint64_t", CryptoNote::parameters::DEFAULT_DUST_THRESHOLD};
@@ -89,7 +90,7 @@ const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", IN
   const command_line::arg_descriptor<size_t>      arg_CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW  = {"CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW", "size_t", CryptoNote::parameters::CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW};
   const command_line::arg_descriptor<uint64_t>    arg_MAX_BLOCK_SIZE_INITIAL  = {"MAX_BLOCK_SIZE_INITIAL", "uint64_t", CryptoNote::parameters::MAX_BLOCK_SIZE_INITIAL};
   const command_line::arg_descriptor<uint64_t>    arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY  = {"EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", "uint64_t"};
-  const command_line::arg_descriptor<uint64_t>    arg_UPGRADE_HEIGHT  = {"UPGRADE_HEIGHT", "uint64_t", 0};
+  const command_line::arg_descriptor<uint64_t>    arg_UPGRADE_HEIGHT_V2  = {"UPGRADE_HEIGHT_V2", "uint64_t", 0};
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT  = {"DIFFICULTY_CUT", "uint64_t", CryptoNote::parameters::DIFFICULTY_CUT};
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "uint64_t", CryptoNote::parameters::DIFFICULTY_LAG};
   const command_line::arg_descriptor<std::string> arg_rpc_bind_port = {"rpc-bind-port", "", std::to_string(RPC_DEFAULT_PORT)};
@@ -263,7 +264,7 @@ JsonValue buildLoggerConfiguration(Level level, const std::string& logfile) {
   JsonValue& consoleLogger = cfgLoggers.pushBack(JsonValue::OBJECT);
   consoleLogger.insert("type", "console");
   consoleLogger.insert("level", static_cast<int64_t>(TRACE));
-  consoleLogger.insert("pattern", "");
+  consoleLogger.insert("pattern", "%D %T %L ");
 
   JsonValue& fileLogger = cfgLoggers.pushBack(JsonValue::OBJECT);
   fileLogger.insert("type", "file");
@@ -1123,6 +1124,7 @@ int main(int argc, char* argv[]) {
   command_line::add_arg(desc_params, arg_EMISSION_SPEED_FACTOR);
   command_line::add_arg(desc_params, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
   command_line::add_arg(desc_params, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1);
+  command_line::add_arg(desc_params, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2);
   command_line::add_arg(desc_params, arg_CRYPTONOTE_DISPLAY_DECIMAL_POINT);
   command_line::add_arg(desc_params, arg_MINIMUM_FEE);
   command_line::add_arg(desc_params, arg_DEFAULT_DUST_THRESHOLD);
@@ -1130,7 +1132,7 @@ int main(int argc, char* argv[]) {
   command_line::add_arg(desc_params, arg_CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
   command_line::add_arg(desc_params, arg_MAX_BLOCK_SIZE_INITIAL);
   command_line::add_arg(desc_params, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  command_line::add_arg(desc_params, arg_UPGRADE_HEIGHT);
+  command_line::add_arg(desc_params, arg_UPGRADE_HEIGHT_V2);
   command_line::add_arg(desc_params, arg_DIFFICULTY_CUT);
   command_line::add_arg(desc_params, arg_DIFFICULTY_LAG);
   command_line::add_arg(desc_params, arg_rpc_bind_port);
@@ -1178,12 +1180,16 @@ int main(int argc, char* argv[]) {
     boost::system::error_code ec;
     if (boost::filesystem::exists(config_path, ec))
     {
-      std::cout << "config path exist" << std::endl;
+      std::cout << "Success: Configuration file openned" << std::endl;
       po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), desc_params, true), vm);
     }
     else
     {
-      std::cout << "config path does not exist" << std::endl;
+      std::cout << "Configuration error: Cannot open configuration file" << std::endl;
+      std::cout << "" << std::endl;
+      std::cout << "Usage:" << std::endl;
+      std::cout << "Windows:   simplewallet.exe --config-file configs/dashcoin.conf" << std::endl;
+      std::cout << "Linux/Mac:   ./simplewallet --config-file configs/dashcoin.conf" << std::endl;
       return false;
     }
     po::notify(vm);
@@ -1211,6 +1217,7 @@ int main(int argc, char* argv[]) {
   currencyBuilder.emissionSpeedFactor(command_line::get_arg(vm, arg_EMISSION_SPEED_FACTOR));
   currencyBuilder.blockGrantedFullRewardZone(command_line::get_arg(vm, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE));
   currencyBuilder.blockGrantedFullRewardZoneV1(command_line::get_arg(vm, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1));
+  currencyBuilder.blockGrantedFullRewardZoneV2(command_line::get_arg(vm, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2));
   currencyBuilder.numberOfDecimalPlaces(command_line::get_arg(vm, arg_CRYPTONOTE_DISPLAY_DECIMAL_POINT));
   currencyBuilder.mininumFee(command_line::get_arg(vm, arg_MINIMUM_FEE));
   currencyBuilder.defaultDustThreshold(command_line::get_arg(vm, arg_DEFAULT_DUST_THRESHOLD));
@@ -1227,9 +1234,9 @@ int main(int argc, char* argv[]) {
   }
   currencyBuilder.maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / command_line::get_arg(vm, arg_DIFFICULTY_TARGET));
   currencyBuilder.lockedTxAllowedDeltaSeconds(command_line::get_arg(vm, arg_DIFFICULTY_TARGET) * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);  
-  if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT) && command_line::get_arg(vm, arg_UPGRADE_HEIGHT) != 0)
+  if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT_V2) && command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V2) != 0)
   {
-    currencyBuilder.upgradeHeight(command_line::get_arg(vm, arg_UPGRADE_HEIGHT));
+    currencyBuilder.upgradeHeightV2(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V2));
   }
   currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
