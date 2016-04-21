@@ -584,14 +584,13 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   uint64_t maxReward = 0;
   uint64_t currentReward = 0;
   int64_t emissionChange = 0;
-  bool penalizeFee = blk.majorVersion >= 2;
   size_t blockGrantedFullRewardZone = m_core.currency().blockGrantedFullRewardZoneByBlockVersion(block_header.major_version);
   res.block.effectiveSizeMedian = std::max(res.block.sizeMedian, blockGrantedFullRewardZone);
 
-  if (!m_core.getBlockReward(res.block.sizeMedian, 0, prevBlockGeneratedCoins, 0, penalizeFee, maxReward, emissionChange)) {
+  if (!m_core.getBlockReward(res.block.major_version, res.block.sizeMedian, 0, prevBlockGeneratedCoins, 0, maxReward, emissionChange)) {
     return false;
   }
-  if (!m_core.getBlockReward(res.block.sizeMedian, res.block.transactionsCumulativeSize, prevBlockGeneratedCoins, 0, penalizeFee, currentReward, emissionChange)) {
+  if (!m_core.getBlockReward(res.block.major_version, res.block.sizeMedian, res.block.transactionsCumulativeSize, prevBlockGeneratedCoins, 0, currentReward, emissionChange)) {
     return false;
   }
 
@@ -760,6 +759,7 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   res.core.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = m_core.currency().publicAddressBase58Prefix();
   res.core.MAX_BLOCK_SIZE_INITIAL = m_core.currency().maxBlockSizeInitial();
   res.core.UPGRADE_HEIGHT_V2 = m_core.currency().upgradeHeight(2);
+  res.core.UPGRADE_HEIGHT_V3 = m_core.currency().upgradeHeight(3);
   res.core.DIFFICULTY_CUT = m_core.currency().difficultyCut();
   res.core.DIFFICULTY_LAG = m_core.currency().difficultyLag();
 

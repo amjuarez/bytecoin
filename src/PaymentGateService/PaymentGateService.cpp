@@ -105,6 +105,10 @@ bool PaymentGateService::init(int argc, char** argv) {
   {
     currencyBuilder.upgradeHeightV2(config.coinBaseConfig.UPGRADE_HEIGHT_V2);
   }
+  if (config.coinBaseConfig.UPGRADE_HEIGHT_V3 && config.coinBaseConfig.UPGRADE_HEIGHT_V3 != 0)
+  {
+    currencyBuilder.upgradeHeightV3(config.coinBaseConfig.UPGRADE_HEIGHT_V3);
+  }
   currencyBuilder.difficultyLag(config.coinBaseConfig.DIFFICULTY_LAG);
   currencyBuilder.maxTransactionSizeLimit(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT);
   currencyBuilder.difficultyCut(config.coinBaseConfig.DIFFICULTY_CUT);
