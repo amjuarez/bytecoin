@@ -53,7 +53,7 @@ namespace CryptoNote {
   using CryptoNote::BlockInfo;
   class Blockchain : public CryptoNote::ITransactionValidator {
   public:
-    Blockchain(const Currency& currency, tx_memory_pool& tx_pool, Logging::ILogger& logger);
+    Blockchain(const Currency& currency, tx_memory_pool& tx_pool, Logging::ILogger& logger, bool blockchainIndexesEnabled);
 
     bool addObserver(IBlockchainStorageObserver* observer);
     bool removeObserver(IBlockchainStorageObserver* observer);
@@ -267,6 +267,7 @@ namespace CryptoNote {
     TimestampBlocksIndex m_timestampIndex;
     GeneratedTransactionsIndex m_generatedTransactionsIndex;
     OrphanBlocksIndex m_orthanBlocksIndex;
+    bool m_blockchainIndexesEnabled;
 
     IntrusiveLinkedList<MessageQueue<BlockchainMessage>> m_messageQueueList;
 

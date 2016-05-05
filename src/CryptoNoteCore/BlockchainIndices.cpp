@@ -25,7 +25,14 @@
 
 namespace CryptoNote {
 
+PaymentIdIndex::PaymentIdIndex(bool _enabled) : enabled(_enabled) {
+}
+
 bool PaymentIdIndex::add(const Transaction& transaction) {
+  if (!enabled) {
+    return false;
+  }
+
   Crypto::Hash paymentId;
   Crypto::Hash transactionHash = getObjectHash(transaction);
   if (!BlockchainExplorerDataBuilder::getPaymentId(transaction, paymentId)) {
@@ -38,6 +45,10 @@ bool PaymentIdIndex::add(const Transaction& transaction) {
 }
 
 bool PaymentIdIndex::remove(const Transaction& transaction) {
+  if (!enabled) {
+    return false;
+  }
+
   Crypto::Hash paymentId;
   Crypto::Hash transactionHash = getObjectHash(transaction);
   if (!BlockchainExplorerDataBuilder::getPaymentId(transaction, paymentId)) {
@@ -56,6 +67,10 @@ bool PaymentIdIndex::remove(const Transaction& transaction) {
 }
 
 bool PaymentIdIndex::find(const Crypto::Hash& paymentId, std::vector<Crypto::Hash>& transactionHashes) {
+  if (!enabled) {
+    throw std::runtime_error("Payment id index disabled.");
+  }
+
   bool found = false;
   auto range = index.equal_range(paymentId);
   for (auto iter = range.first; iter != range.second; ++iter){
@@ -66,20 +81,37 @@ bool PaymentIdIndex::find(const Crypto::Hash& paymentId, std::vector<Crypto::Has
 }
 
 void PaymentIdIndex::clear() {
-  index.clear();
+  if (enabled) {
+    index.clear();
+  }
 }
 
 
 void PaymentIdIndex::serialize(ISerializer& s) {
+  if (!enabled) {
+    throw std::runtime_error("Payment id index disabled.");
+  }
+
   s(index, "index");
 }
 
+TimestampBlocksIndex::TimestampBlocksIndex(bool _enabled) : enabled(_enabled) {
+}
+
 bool TimestampBlocksIndex::add(uint64_t timestamp, const Crypto::Hash& hash) {
+  if (!enabled) {
+    return false;
+  }
+
   index.emplace(timestamp, hash);
   return true;
 }
 
 bool TimestampBlocksIndex::remove(uint64_t timestamp, const Crypto::Hash& hash) {
+  if (!enabled) {
+    return false;
+  }
+
   auto range = index.equal_range(timestamp);
   for (auto iter = range.first; iter != range.second; ++iter) {
     if (iter->second == hash) {
@@ -92,6 +124,10 @@ bool TimestampBlocksIndex::remove(uint64_t timestamp, const Crypto::Hash& hash) 
 }
 
 bool TimestampBlocksIndex::find(uint64_t timestampBegin, uint64_t timestampEnd, uint32_t hashesNumberLimit, std::vector<Crypto::Hash>& hashes, uint32_t& hashesNumberWithinTimestamps) {
+  if (!enabled) {
+    throw std::runtime_error("Timestamp block index disabled.");
+  }
+
   uint32_t hashesNumber = 0;
   if (timestampBegin > timestampEnd) {
     //std::swap(timestampBegin, timestampEnd);
@@ -110,19 +146,36 @@ bool TimestampBlocksIndex::find(uint64_t timestampBegin, uint64_t timestampEnd, 
 }
 
 void TimestampBlocksIndex::clear() {
-  index.clear();
+  if (enabled) {
+    index.clear();
+  }
 }
 
 void TimestampBlocksIndex::serialize(ISerializer& s) {
+  if (!enabled) {
+    throw std::runtime_error("Timestamp block index disabled.");
+  }
+
   s(index, "index");
 }
 
+TimestampTransactionsIndex::TimestampTransactionsIndex(bool _enabled) : enabled(_enabled) {
+}
+
 bool TimestampTransactionsIndex::add(uint64_t timestamp, const Crypto::Hash& hash) {
+  if (!enabled) {
+    return false;
+  }
+
   index.emplace(timestamp, hash);
   return true;
 }
 
 bool TimestampTransactionsIndex::remove(uint64_t timestamp, const Crypto::Hash& hash) {
+  if (!enabled) {
+    return false;
+  }
+
   auto range = index.equal_range(timestamp);
   for (auto iter = range.first; iter != range.second; ++iter) {
     if (iter->second == hash) {
@@ -135,6 +188,10 @@ bool TimestampTransactionsIndex::remove(uint64_t timestamp, const Crypto::Hash& 
 }
 
 bool TimestampTransactionsIndex::find(uint64_t timestampBegin, uint64_t timestampEnd, uint64_t hashesNumberLimit, std::vector<Crypto::Hash>& hashes, uint64_t& hashesNumberWithinTimestamps) {
+  if (!enabled) {
+    throw std::runtime_error("Timestamp transactions index disabled.");
+  }
+  
   uint32_t hashesNumber = 0;
   if (timestampBegin > timestampEnd) {
     //std::swap(timestampBegin, timestampEnd);
@@ -153,18 +210,27 @@ bool TimestampTransactionsIndex::find(uint64_t timestampBegin, uint64_t timestam
 }
 
 void TimestampTransactionsIndex::clear() {
-  index.clear();
+  if (enabled) {
+    index.clear();
+  }
 }
 
 void TimestampTransactionsIndex::serialize(ISerializer& s) {
+  if (!enabled) {
+    throw std::runtime_error("Timestamp transactions index disabled.");
+  }
+
   s(index, "index");
 }
 
-GeneratedTransactionsIndex::GeneratedTransactionsIndex() : lastGeneratedTxNumber(0) {
-
+GeneratedTransactionsIndex::GeneratedTransactionsIndex(bool _enabled) : lastGeneratedTxNumber(0), enabled(_enabled) {
 }
 
 bool GeneratedTransactionsIndex::add(const Block& block) {
+  if (!enabled) {
+    return false;
+  }
+
   uint32_t blockHeight = boost::get<BaseInput>(block.baseTransaction.inputs.front()).blockIndex;
 
   if (index.size() != blockHeight) {
@@ -179,6 +245,10 @@ bool GeneratedTransactionsIndex::add(const Block& block) {
 }
 
 bool GeneratedTransactionsIndex::remove(const Block& block) {
+  if (!enabled) {
+    return false;
+  }
+
   uint32_t blockHeight = boost::get<BaseInput>(block.baseTransaction.inputs.front()).blockIndex;
 
   if (blockHeight != index.size() - 1) {
@@ -201,6 +271,10 @@ bool GeneratedTransactionsIndex::remove(const Block& block) {
 }
 
 bool GeneratedTransactionsIndex::find(uint32_t height, uint64_t& generatedTransactions) {
+  if (!enabled) {
+    throw std::runtime_error("Generated transactions index disabled.");
+  }
+
   if (height > std::numeric_limits<uint32_t>::max()) {
     return false;
   }
@@ -213,15 +287,28 @@ bool GeneratedTransactionsIndex::find(uint32_t height, uint64_t& generatedTransa
 }
 
 void GeneratedTransactionsIndex::clear() {
-  index.clear();
+  if (enabled) {
+    index.clear();
+  }
 }
 
 void GeneratedTransactionsIndex::serialize(ISerializer& s) {
+  if (!enabled) {
+    throw std::runtime_error("Generated transactions index disabled.");
+  }
+
   s(index, "index");
   s(lastGeneratedTxNumber, "lastGeneratedTxNumber");
 }
 
+OrphanBlocksIndex::OrphanBlocksIndex(bool _enabled) : enabled(_enabled) {
+}
+
 bool OrphanBlocksIndex::add(const Block& block) {
+  if (!enabled) {
+    return false;
+  }
+
   Crypto::Hash blockHash = get_block_hash(block);
   uint32_t blockHeight = boost::get<BaseInput>(block.baseTransaction.inputs.front()).blockIndex;
   index.emplace(blockHeight, blockHash);
@@ -229,6 +316,10 @@ bool OrphanBlocksIndex::add(const Block& block) {
 }
 
 bool OrphanBlocksIndex::remove(const Block& block) {
+  if (!enabled) {
+    return false;
+  }
+
   Crypto::Hash blockHash = get_block_hash(block);
   uint32_t blockHeight = boost::get<BaseInput>(block.baseTransaction.inputs.front()).blockIndex;
   auto range = index.equal_range(blockHeight);
@@ -243,6 +334,10 @@ bool OrphanBlocksIndex::remove(const Block& block) {
 }
 
 bool OrphanBlocksIndex::find(uint32_t height, std::vector<Crypto::Hash>& blockHashes) {
+  if (!enabled) {
+    throw std::runtime_error("Orphan blocks index disabled.");
+  }
+
   if (height > std::numeric_limits<uint32_t>::max()) {
     return false;
   }
@@ -256,7 +351,9 @@ bool OrphanBlocksIndex::find(uint32_t height, std::vector<Crypto::Hash>& blockHa
 }
 
 void OrphanBlocksIndex::clear() {
-  index.clear();
+  if (enabled) {
+    index.clear();
+  }
 }
 
 }

@@ -46,6 +46,7 @@ namespace {
       currencyBuilder.upgradeVotingWindow(720);
       currencyBuilder.upgradeWindow(720);
       currencyBuilder.upgradeHeightV2(upgradeHeight);
+      currencyBuilder.upgradeHeightV3(UpgradeDetector::UNDEF_HEIGHT);
       return currencyBuilder.currency();
     }
 

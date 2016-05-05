@@ -17,6 +17,7 @@
 
 #include "StringTools.h"
 #include <fstream>
+#include <iomanip>
 
 namespace Common {
 
@@ -342,12 +343,14 @@ std::string timeIntervalToString(uint64_t intervalInSeconds) {
   tail = tail % (60);
   auto seconds = tail;
 
-  return 
-    "d" + std::to_string(days) + 
-    ".h" + std::to_string(hours) + 
-    ".m" + std::to_string(minutes) +
-    ".s" + std::to_string(seconds);
-}
+  std::stringstream ss;
+  ss << "d" << days <<
+    std::setfill('0') <<
+    ".h" << std::setw(2) << hours <<
+    ".m" << std::setw(2) << minutes <<
+    ".s" << std::setw(2) << seconds;
 
+  return ss.str();
+}
 
 }

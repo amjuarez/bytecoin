@@ -64,11 +64,11 @@ private:
   friend class core;
 };
 
-core::core(const Currency& currency, i_cryptonote_protocol* pprotocol, Logging::ILogger& logger) :
+core::core(const Currency& currency, i_cryptonote_protocol* pprotocol, Logging::ILogger& logger, bool blockchainIndexesEnabled) :
 m_currency(currency),
 logger(logger, "core"),
-m_mempool(currency, m_blockchain, m_timeProvider, logger),
-m_blockchain(currency, m_mempool, logger),
+m_mempool(currency, m_blockchain, m_timeProvider, logger, blockchainIndexesEnabled),
+m_blockchain(currency, m_mempool, logger, blockchainIndexesEnabled),
 m_miner(new miner(currency, *this, logger)),
 m_starter_message_showed(false) {
   set_cryptonote_protocol(pprotocol);
@@ -127,7 +127,7 @@ size_t core::get_alternative_blocks_count() {
   return m_blockchain.getAlternativeBlocksCount();
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::init(const CoreConfig& config, const MinerConfig& minerConfig, bool load_existing) {
+bool core::init(const CoreConfig& config, const MinerConfig& minerConfig, bool load_existing) {
     m_config_folder = config.configFolder;
     bool r = m_mempool.init(m_config_folder);
   if (!(r)) { logger(ERROR, BRIGHT_RED) << "Failed to initialize memory pool"; return false; }
@@ -404,6 +404,7 @@ bool core::get_block_template(Block& b, const AccountPublicAddress& adr, difficu
       }
     }
     if (!(cumulative_size == txs_size + getObjectBinarySize(b.baseTransaction))) { logger(ERROR, BRIGHT_RED) << "unexpected case: cumulative_size=" << cumulative_size << " is not equal txs_cumulative_size=" << txs_size << " + get_object_blobsize(b.baseTransaction)=" << getObjectBinarySize(b.baseTransaction); return false; }
+
     return true;
   }
 

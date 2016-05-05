@@ -40,7 +40,7 @@ const size_t   CRYPTONOTE_REWARD_BLOCKS_WINDOW               = 100;
 const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE     = 100000; //size of block (bytes) after which reward for block calculated using block size
 const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2  = 20000;
 const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1  = 10000;
-const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_CURRENT = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2;
+const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_CURRENT = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
 const size_t   CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE        = 600;
 const size_t   CRYPTONOTE_DISPLAY_DECIMAL_POINT              = 8;
 const uint64_t MINIMUM_FEE                                   = UINT64_C(1000000);    // pow(10, 6)
@@ -69,7 +69,7 @@ const size_t   FUSION_TX_MIN_INPUT_COUNT                     = 12;
 const size_t   FUSION_TX_MIN_IN_OUT_COUNT_RATIO              = 4;
 
 const uint64_t UPGRADE_HEIGHT_V2                             = 546602;
-const uint64_t UPGRADE_HEIGHT_V3                             = static_cast<uint64_t>(-1);
+const uint64_t UPGRADE_HEIGHT_V3                             = 985548;
 const unsigned UPGRADE_VOTING_THRESHOLD = 90;               // percent
 const size_t   UPGRADE_VOTING_WINDOW                         = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
 const size_t   UPGRADE_WINDOW                                = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
@@ -172,7 +172,10 @@ const CheckpointData CHECKPOINTS[] = {
   {841000, "2cffb6504ee38f708a6256a63585f9382b3b426e64b4504236c70678bd160dce"},
   {890000, "a7132932ea31236ce6b8775cd1380edf90b5e536ee4202c77b69a3d62445fcd2"},
   {894000, "ae2624ea1472ecc36de0d812f21a32da2d4afc7d5770830083cbaf652209d316"},
-  {979000, "d8290eb4eedbe638f5dbadebcaf3ea434857ce96168185dc04f75b6cc1f4fda6"}
+  {979000, "d8290eb4eedbe638f5dbadebcaf3ea434857ce96168185dc04f75b6cc1f4fda6"},
+  {985548, "8d53e0d97594755a621feaee0978c0431fc01f42b85ff76a03af8641e2009d57"},
+  {985549, "dc6f8d9319282475c981896b98ff9772ae2499533c2302c32faf65115aaf2554"},
+  {996000, "c9a9243049acc7773a3e58ae354d66f8ea83996ece93ffbaad0b8b42b5fb7223"}
 };
 } // CryptoNote
 
