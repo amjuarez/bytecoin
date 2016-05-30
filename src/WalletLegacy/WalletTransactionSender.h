@@ -32,7 +32,8 @@ public:
                                                  const std::string& extra = "",
                                                  uint64_t mixIn = 0,
                                                  uint64_t unlockTimestamp = 0,
-                                                 const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>());
+                                                 const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>(),
+                                                 uint64_t ttl = 0);
 
   std::unique_ptr<WalletRequest> makeDepositRequest(TransactionId& transactionId,
                                                     std::deque<std::unique_ptr<WalletLegacyEvent>>& events,

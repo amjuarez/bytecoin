@@ -51,13 +51,13 @@ void createChangeDestinations(const AccountPublicAddress& address, uint64_t need
 }
 
 void constructTx(const AccountKeys keys, const std::vector<TransactionSourceEntry>& sources, const std::vector<TransactionDestinationEntry>& splittedDests,
-    const std::string& extra, uint64_t unlockTimestamp, uint64_t sizeLimit, Transaction& tx, const std::vector<tx_message_entry>& messages) {
+    const std::string& extra, uint64_t unlockTimestamp, uint64_t sizeLimit, Transaction& tx, const std::vector<tx_message_entry>& messages, uint64_t ttl) {
   std::vector<uint8_t> extraVec;
   extraVec.reserve(extra.size());
   std::for_each(extra.begin(), extra.end(), [&extraVec] (const char el) { extraVec.push_back(el);});
 
   Logging::LoggerGroup nullLog;
-  bool r = constructTransaction(keys, sources, splittedDests, messages, extraVec, tx, unlockTimestamp, nullLog);
+  bool r = constructTransaction(keys, sources, splittedDests, messages, ttl, extraVec, tx, unlockTimestamp, nullLog);
 
   throwIf(!r, error::INTERNAL_WALLET_ERROR);
   throwIf(getObjectBinarySize(tx) >= sizeLimit, error::TRANSACTION_SIZE_TOO_BIG);
@@ -181,7 +181,8 @@ std::unique_ptr<WalletRequest> WalletTransactionSender::makeSendRequest(Transact
                                                                         const std::string& extra,
                                                                         uint64_t mixIn,
                                                                         uint64_t unlockTimestamp,
-                                                                        const std::vector<TransactionMessage>& messages) {
+                                                                        const std::vector<TransactionMessage>& messages,
+                                                                        uint64_t ttl) {
   throwIf(transfers.empty(), error::ZERO_DESTINATION);
   validateTransfersAddresses(transfers);
   uint64_t neededMoney = countNeededMoney(fee, transfers);
@@ -194,6 +195,7 @@ std::unique_ptr<WalletRequest> WalletTransactionSender::makeSendRequest(Transact
   transactionId = m_transactionsCache.addNewTransaction(neededMoney, fee, extra, transfers, unlockTimestamp, messages);
   context->transactionId = transactionId;
   context->mixIn = mixIn;
+  context->ttl = ttl;
 
   for (const TransactionMessage& message : messages) {
     AccountPublicAddress address;
@@ -331,7 +333,7 @@ std::unique_ptr<WalletRequest> WalletTransactionSender::doSendTransaction(std::s
     splitDestinations(transaction.firstTransferId, transaction.transferCount, changeDts, context->dustPolicy, splittedDests);
 
     Transaction tx;
-    constructTx(m_keys, sources, splittedDests, transaction.extra, transaction.unlockTime, m_upperTransactionSizeLimit, tx, context->messages);
+    constructTx(m_keys, sources, splittedDests, transaction.extra, transaction.unlockTime, m_upperTransactionSizeLimit, tx, context->messages, context->ttl);
 
     getObjectHash(tx, transaction.hash);
 

@@ -638,9 +638,8 @@ std::ostream& operator<<(std::ostream& out, const JsonValue& jsonValue) {
 namespace {
 
 char readChar(std::istream& in) {
-  char c;
-
-  if (!(in >> c)) {
+  char c = static_cast<char>(in.get());
+  if (!in) {
     throw std::runtime_error("Unable to parse: unexpected end of stream");
   }
 

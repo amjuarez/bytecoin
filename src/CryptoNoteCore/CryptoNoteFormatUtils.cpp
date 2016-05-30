@@ -75,6 +75,7 @@ bool constructTransaction(
   const std::vector<TransactionSourceEntry>& sources,
   const std::vector<TransactionDestinationEntry>& destinations,
   const std::vector<tx_message_entry>& messages,
+  uint64_t ttl,
   std::vector<uint8_t> extra,
   Transaction& tx,
   uint64_t unlock_time,
@@ -195,6 +196,10 @@ bool constructTransaction(
     if (!append_message_to_extra(tx.extra, tag)) {
       return false;
     }
+  }
+
+  if (ttl != 0) {
+    appendTTLToExtra(tx.extra, ttl);
   }
 
   //generate ring signatures

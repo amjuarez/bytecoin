@@ -41,6 +41,8 @@ namespace Tools
 
     static const command_line::arg_descriptor<uint16_t> arg_rpc_bind_port;
     static const command_line::arg_descriptor<std::string> arg_rpc_bind_ip;
+    static const command_line::arg_descriptor<std::string> arg_rpc_user;
+    static const command_line::arg_descriptor<std::string> arg_rpc_password;
 
   private:
 
@@ -50,6 +52,7 @@ namespace Tools
     bool on_getbalance(const wallet_rpc::COMMAND_RPC_GET_BALANCE::request& req, wallet_rpc::COMMAND_RPC_GET_BALANCE::response& res);
     bool on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res);
     bool on_store(const wallet_rpc::COMMAND_RPC_STORE::request& req, wallet_rpc::COMMAND_RPC_STORE::response& res);
+    bool on_get_messages(const wallet_rpc::COMMAND_RPC_GET_MESSAGES::request& req, wallet_rpc::COMMAND_RPC_GET_MESSAGES::response& res);
     bool on_get_payments(const wallet_rpc::COMMAND_RPC_GET_PAYMENTS::request& req, wallet_rpc::COMMAND_RPC_GET_PAYMENTS::response& res);
     bool on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANSFERS::request& req, wallet_rpc::COMMAND_RPC_GET_TRANSFERS::response& res);
     bool on_get_height(const wallet_rpc::COMMAND_RPC_GET_HEIGHT::request& req, wallet_rpc::COMMAND_RPC_GET_HEIGHT::response& res);
@@ -62,6 +65,8 @@ namespace Tools
     CryptoNote::INode& m_node;
     uint16_t m_port;
     std::string m_bind_ip;
+    std::string m_rpcUser;
+    std::string m_rpcPassword;
     CryptoNote::Currency& m_currency;
     const std::string m_walletFilename;
 

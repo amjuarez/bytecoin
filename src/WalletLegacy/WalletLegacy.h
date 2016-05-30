@@ -77,13 +77,15 @@ public:
                                         const std::string& extra = "",
                                         uint64_t mixIn = 0,
                                         uint64_t unlockTimestamp = 0,
-                                        const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) override;
+                                        const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>(),
+                                        uint64_t ttl = 0) override;
   virtual TransactionId sendTransaction(const std::vector<WalletLegacyTransfer>& transfers,
                                         uint64_t fee,
                                         const std::string& extra = "",
                                         uint64_t mixIn = 0,
                                         uint64_t unlockTimestamp = 0,
-                                        const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>()) override;
+                                        const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>(),
+                                        uint64_t ttl = 0) override;
   virtual TransactionId deposit(uint32_t term, uint64_t amount, uint64_t fee, uint64_t mixIn = 0) override;
   virtual TransactionId withdrawDeposits(const std::vector<DepositId>& depositIds, uint64_t fee) override;
   virtual std::error_code cancelTransaction(size_t transactionId) override;
