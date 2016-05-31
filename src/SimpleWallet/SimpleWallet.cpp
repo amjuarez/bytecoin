@@ -137,9 +137,11 @@ struct TransferCommand {
   std::vector<uint8_t> extra;
   uint64_t fee;
   std::map<std::string, std::vector<WalletLegacyTransfer>> aliases;
+  std::vector<std::string> messages;
+  uint64_t ttl;
 
   TransferCommand(const CryptoNote::Currency& currency) :
-    m_currency(currency), fake_outs_count(0), fee(currency.minimumFee()) {
+    m_currency(currency), fake_outs_count(0), fee(currency.minimumFee()), ttl(0) {
   }
 
   bool parseArguments(LoggerRef& logger, const std::vector<std::string> &args) {
@@ -155,6 +157,8 @@ struct TransferCommand {
         return false;
       }
 
+      bool feeFound = false;
+      bool ttlFound = false;
       while (!ar.eof()) {
 
         auto arg = ar.next();
@@ -169,6 +173,13 @@ struct TransferCommand {
               return false;
             }
           } else if (arg == "-f") {
+            feeFound = true;
+
+            if (ttlFound) {
+              logger(ERROR, BRIGHT_RED) << "Transaction with TTL can not have fee";
+              return false;
+            }
+
             bool ok = m_currency.parseAmount(value, fee);
             if (!ok) {
               logger(ERROR, BRIGHT_RED) << "Fee value is invalid: " << value;
@@ -177,6 +188,23 @@ struct TransferCommand {
 
             if (fee < m_currency.minimumFee()) {
               logger(ERROR, BRIGHT_RED) << "Fee value is less than minimum: " << m_currency.minimumFee();
+              return false;
+            }
+          } else if (arg == "-m") {
+            messages.emplace_back(value);
+          } else if (arg == "-ttl") {
+            ttlFound = true;
+
+            if (feeFound) {
+              logger(ERROR, BRIGHT_RED) << "Transaction with fee can not have TTL";
+              return false;
+            } else {
+              fee = 0;
+            }
+
+            if (!Common::fromString(value, ttl) || ttl < 1 || ttl * 60 > m_currency.mempoolTxLiveTime()) {
+              logger(ERROR, BRIGHT_RED) << "TTL has invalid format: \"" << value << "\", " <<
+                "enter time from 1 to " << (m_currency.mempoolTxLiveTime() / 60) << " minutes";
               return false;
             }
           }
@@ -1113,6 +1141,18 @@ bool simple_wallet::transfer(const std::vector<std::string> &args) {
       }
     }
 
+    std::vector<TransactionMessage> messages;
+    for (auto dst : cmd.dsts) {
+      for (auto msg : cmd.messages) {
+        messages.emplace_back(TransactionMessage{ msg, dst.address });
+      }
+    }
+
+    uint64_t ttl = 0;
+    if (cmd.ttl != 0) {
+      ttl = static_cast<uint64_t>(time(nullptr)) + cmd.ttl;
+    }
+
     CryptoNote::WalletHelper::SendCompleteResultObserver sent;
 
     std::string extraString;
@@ -1120,7 +1160,7 @@ bool simple_wallet::transfer(const std::vector<std::string> &args) {
 
     WalletHelper::IWalletRemoveObserverGuard removeGuard(*m_wallet, sent);
 
-    CryptoNote::TransactionId tx = m_wallet->sendTransaction(cmd.dsts, cmd.fee, extraString, cmd.fake_outs_count, 0);
+    CryptoNote::TransactionId tx = m_wallet->sendTransaction(cmd.dsts, cmd.fee, extraString, cmd.fake_outs_count, 0, messages, ttl);
     if (tx == WALLET_LEGACY_INVALID_TRANSACTION_ID) {
       fail_msg_writer() << "Can't send money";
       return true;

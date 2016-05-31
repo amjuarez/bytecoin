@@ -192,9 +192,40 @@ bool ConsoleHandler::runCommand(const std::vector<std::string>& cmdAndArgs) {
 }
 
 void ConsoleHandler::handleCommand(const std::string& cmd) {
-  std::vector<std::string> args;
-  boost::split(args, cmd, boost::is_any_of(" "), boost::token_compress_on);
-  runCommand(args);
+  bool parseString = false;
+  std::string arg;
+  std::vector<std::string> argList;
+
+  for (auto ch : cmd) {
+    switch (ch) {
+    case ' ':
+      if (parseString) {
+        arg += ch;
+      } else if (!arg.empty()) {
+        argList.emplace_back(std::move(arg));
+        arg.clear();
+      }
+      break;
+
+    case '"':
+      if (!arg.empty()) {
+        argList.emplace_back(std::move(arg));
+        arg.clear();
+      }
+
+      parseString = !parseString;
+      break;
+
+    default:
+      arg += ch;
+    }
+  }
+
+  if (!arg.empty()) {
+    argList.emplace_back(std::move(arg));
+  }
+
+  runCommand(argList);
 }
 
 void ConsoleHandler::handlerThread() {

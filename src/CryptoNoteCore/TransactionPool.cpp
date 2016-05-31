@@ -123,19 +123,6 @@ namespace CryptoNote {
       ttl.ttl = 0;
     }
 
-    uint64_t now = static_cast<uint64_t>(time(nullptr));
-    if (ttl.ttl != 0) {
-      if (ttl.ttl <= now) {
-        logger(INFO, BRIGHT_WHITE) << "Transaction TTL has already expired: tx = " << id << ", ttl = " << ttl.ttl;
-        tvc.m_verifivation_failed = true;
-        return false;
-      } else if (ttl.ttl - now > m_currency.mempoolTxLiveTime() + m_currency.blockFutureTimeLimit()) {
-        logger(INFO, BRIGHT_WHITE) << "Transaction TTL is out of range: tx = " << id << ", ttl = " << ttl.ttl;
-        tvc.m_verifivation_failed = true;
-        return false;
-      }
-    }
-
     const uint64_t fee = inputs_amount - outputs_amount;
     bool isFusionTransaction = fee == 0 && m_currency.isFusionTransaction(tx, blobSize);
     if (!keptByBlock && !isFusionTransaction && ttl.ttl == 0 && fee < m_currency.minimumFee()) {
@@ -144,6 +131,25 @@ namespace CryptoNote {
       tvc.m_verifivation_failed = true;
       tvc.m_tx_fee_too_small = true;
       return false;
+    }
+
+    if (ttl.ttl != 0 && !keptByBlock) {
+      uint64_t now = static_cast<uint64_t>(time(nullptr));
+      if (ttl.ttl <= now) {
+        logger(WARNING, BRIGHT_YELLOW) << "Transaction TTL has already expired: tx = " << id << ", ttl = " << ttl.ttl;
+        tvc.m_verifivation_failed = true;
+        return false;
+      } else if (ttl.ttl - now > m_currency.mempoolTxLiveTime() + m_currency.blockFutureTimeLimit()) {
+        logger(WARNING, BRIGHT_YELLOW) << "Transaction TTL is out of range: tx = " << id << ", ttl = " << ttl.ttl;
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
+
+      if (fee != 0) {
+        logger(WARNING, BRIGHT_YELLOW) << "Transaction with TTL has non-zero fee: tx = " << id << ", fee = " << m_currency.formatAmount(fee);
+        tvc.m_verifivation_failed = true;
+        return false;
+      }
     }
 
     //check key images for transaction if it is not kept by block
