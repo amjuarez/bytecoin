@@ -40,13 +40,13 @@ namespace {
   class UpgradeTest : public ::testing::Test {
   public:
 
-    CryptoNote::Currency createCurrency(uint64_t upgradeHeight = UpgradeDetector::UNDEF_HEIGHT) {
+    CryptoNote::Currency createCurrency(uint32_t upgradeHeight = UpgradeDetector::UNDEF_HEIGHT) {
       CryptoNote::CurrencyBuilder currencyBuilder(logger);
       currencyBuilder.upgradeVotingThreshold(90);
       currencyBuilder.upgradeVotingWindow(720);
       currencyBuilder.upgradeWindow(720);
       currencyBuilder.upgradeHeightV2(upgradeHeight);
-      currencyBuilder.upgradeHeightV3(UpgradeDetector::UNDEF_HEIGHT);
+      currencyBuilder.upgradeHeightV3(CryptoNote::UpgradeDetectorBase::UNDEF_HEIGHT);
       return currencyBuilder.currency();
     }
 
@@ -160,22 +160,22 @@ namespace {
     BlockVector blocks;
 
     createBlocks(blocks, currency.upgradeVotingWindow(), BLOCK_MAJOR_VERSION_1, BLOCK_MINOR_VERSION_1);
-    uint64_t votingCompleteHeigntV2 = blocks.size() - 1;
-    uint64_t upgradeHeightV2 = currency.calculateUpgradeHeight(votingCompleteHeigntV2);
+    uint32_t votingCompleteHeigntV2 = blocks.size() - 1;
+    uint32_t upgradeHeightV2 = currency.calculateUpgradeHeight(votingCompleteHeigntV2);
     createBlocks(blocks, upgradeHeightV2 - blocks.size(), BLOCK_MAJOR_VERSION_1, BLOCK_MINOR_VERSION_0);
     // Upgrade to v2 is here
     createBlocks(blocks, 1, BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_0);
 
-    createBlocks(blocks, currency.upgradeVotingWindow(), BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_1);
-    uint64_t votingCompleteHeigntV3 = blocks.size() - 1;
-    uint64_t upgradeHeightV3 = currency.calculateUpgradeHeight(votingCompleteHeigntV3);
+    createBlocks(blocks, currency.upgradeVotingWindow() * currency.upgradeVotingThreshold() / 100, BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_1);
+    uint32_t votingCompleteHeigntV3 = blocks.size() - 1;
+    uint32_t upgradeHeightV3 = currency.calculateUpgradeHeight(votingCompleteHeigntV3);
     createBlocks(blocks, upgradeHeightV3 - blocks.size(), BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_0);
     // Upgrade to v3 is here
     createBlocks(blocks, 1, BLOCK_V3, BLOCK_MINOR_VERSION_0);
 
-    createBlocks(blocks, currency.upgradeVotingWindow(), BLOCK_V3, BLOCK_MINOR_VERSION_1);
-    uint64_t votingCompleteHeigntV4 = blocks.size() - 1;
-    uint64_t upgradeHeightV4 = currency.calculateUpgradeHeight(votingCompleteHeigntV4);
+    createBlocks(blocks, currency.upgradeVotingWindow() * currency.upgradeVotingThreshold() / 100, BLOCK_V3, BLOCK_MINOR_VERSION_1);
+    uint32_t votingCompleteHeigntV4 = blocks.size() - 1;
+    uint32_t upgradeHeightV4 = currency.calculateUpgradeHeight(votingCompleteHeigntV4);
     createBlocks(blocks, upgradeHeightV4 - blocks.size(), BLOCK_V3, BLOCK_MINOR_VERSION_0);
     // Upgrade to v4 is here
     createBlocks(blocks, 1, BLOCK_V4, BLOCK_MINOR_VERSION_0);

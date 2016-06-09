@@ -77,13 +77,13 @@ public:
   size_t fusionTxMinInputCount() const { return m_fusionTxMinInputCount; }
   size_t fusionTxMinInOutCountRatio() const { return m_fusionTxMinInOutCountRatio; }
 
-  uint64_t upgradeHeight(uint8_t majorVersion) const;
+  uint32_t upgradeHeight(uint8_t majorVersion) const;
   unsigned int upgradeVotingThreshold() const { return m_upgradeVotingThreshold; }
-  size_t upgradeVotingWindow() const { return m_upgradeVotingWindow; }
-  size_t upgradeWindow() const { return m_upgradeWindow; }
-  size_t minNumberVotingBlocks() const { return (m_upgradeVotingWindow * m_upgradeVotingThreshold + 99) / 100; }
-  uint64_t maxUpgradeDistance() const { return static_cast<uint64_t>(m_upgradeWindow); }
-  uint64_t calculateUpgradeHeight(uint64_t voteCompleteHeight) const { return voteCompleteHeight + m_upgradeWindow; }
+  uint32_t upgradeVotingWindow() const { return m_upgradeVotingWindow; }
+  uint32_t upgradeWindow() const { return m_upgradeWindow; }
+  uint32_t minNumberVotingBlocks() const { return (m_upgradeVotingWindow * m_upgradeVotingThreshold + 99) / 100; }
+  uint32_t maxUpgradeDistance() const { return 7 * m_upgradeWindow; }
+  uint32_t calculateUpgradeHeight(uint32_t voteCompleteHeight) const { return voteCompleteHeight + m_upgradeWindow; }
 
   const std::string& blocksFileName() const { return m_blocksFileName; }
   const std::string& blocksCacheFileName() const { return m_blocksCacheFileName; }
@@ -176,11 +176,11 @@ private:
   size_t m_fusionTxMinInputCount;
   size_t m_fusionTxMinInOutCountRatio;
 
-  uint64_t m_upgradeHeightV2;
-  uint64_t m_upgradeHeightV3;
+  uint32_t m_upgradeHeightV2;
+  uint32_t m_upgradeHeightV3;
   unsigned int m_upgradeVotingThreshold;
-  size_t m_upgradeVotingWindow;
-  size_t m_upgradeWindow;
+  uint32_t m_upgradeVotingWindow;
+  uint32_t m_upgradeWindow;
 
   std::string m_blocksFileName;
   std::string m_blocksCacheFileName;

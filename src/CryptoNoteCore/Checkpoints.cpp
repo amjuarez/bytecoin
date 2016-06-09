@@ -83,4 +83,15 @@ bool Checkpoints::is_alternative_block_allowed(uint32_t  blockchain_height,
   uint32_t  checkpoint_height = it->first;
   return checkpoint_height < block_height;
 }
+
+std::vector<uint32_t> Checkpoints::getCheckpointHeights() const {
+  std::vector<uint32_t> checkpointHeights;
+  checkpointHeights.reserve(m_points.size());
+  for (const auto& it : m_points) {
+    checkpointHeights.push_back(it.first);
+  }
+
+  return checkpointHeights;
+}
+
 }

@@ -42,13 +42,15 @@ public:
   WalletGreen(System::Dispatcher& dispatcher, const Currency& currency, INode& node, Logging::ILogger& logger, uint32_t transactionSoftLockTime = 1);
   virtual ~WalletGreen();
 
-  virtual void initialize(const std::string& password) override;
-  virtual void initializeWithViewKey(const Crypto::SecretKey& viewSecretKey, const std::string& password) override;
-  virtual void load(std::istream& source, const std::string& password) override;
+  virtual void initialize(const std::string& path, const std::string& password) override;
+  virtual void initializeWithViewKey(const std::string& path, const std::string& password, const Crypto::SecretKey& viewSecretKey) override;
+  virtual void load(const std::string& path, const std::string& password, std::string& extra) override;
+  virtual void load(const std::string& path, const std::string& password) override;
   virtual void shutdown() override;
 
   virtual void changePassword(const std::string& oldPassword, const std::string& newPassword) override;
-  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true, bool encrypt = true) override;
+  virtual void save(WalletSaveLevel saveLevel = WalletSaveLevel::SAVE_ALL, const std::string& extra = "") override;
+  virtual void exportWallet(const std::string& path, bool encrypt = true, WalletSaveLevel saveLevel = WalletSaveLevel::SAVE_ALL, const std::string& extra = "") override;
 
   virtual size_t getAddressCount() const override;
   virtual std::string getAddress(size_t index) const override;
@@ -98,8 +100,18 @@ protected:
   void throwIfStopped() const;
   void throwIfTrackingMode() const;
   void doShutdown();
-  void clearCaches();
-  void initWithKeys(const Crypto::PublicKey& viewPublicKey, const Crypto::SecretKey& viewSecretKey, const std::string& password);
+  void clearCaches(bool clearTransactions, bool clearCachedData);
+  void convertAndLoadWalletFile(const std::string& path, std::ifstream&& walletFileStream);
+  static void decryptKeyPair(const EncryptedWalletRecord& cipher, Crypto::PublicKey& publicKey, Crypto::SecretKey& secretKey,
+    uint64_t& creationTimestamp, const Crypto::chacha8_key& key);
+  void decryptKeyPair(const EncryptedWalletRecord& cipher, Crypto::PublicKey& publicKey, Crypto::SecretKey& secretKey, uint64_t& creationTimestamp) const;
+  static EncryptedWalletRecord encryptKeyPair(const Crypto::PublicKey& publicKey, const Crypto::SecretKey& secretKey, uint64_t creationTimestamp,
+    const Crypto::chacha8_key& key, const Crypto::chacha8_iv& iv);
+  EncryptedWalletRecord encryptKeyPair(const Crypto::PublicKey& publicKey, const Crypto::SecretKey& secretKey, uint64_t creationTimestamp) const;
+  Crypto::chacha8_iv getNextIv() const;
+  static void incIv(Crypto::chacha8_iv& iv);
+  void incNextIv();
+  void initWithKeys(const std::string& path, const std::string& password, const Crypto::PublicKey& viewPublicKey, const Crypto::SecretKey& viewSecretKey);
   std::string doCreateAddress(const Crypto::PublicKey& spendPublicKey, const Crypto::SecretKey& spendSecretKey, uint64_t creationTimestamp);
 
   struct InputInfo {
@@ -134,6 +146,14 @@ protected:
     ITransfersContainer* container;
     AddressAmounts amounts;
   };
+
+#pragma pack(push, 1)
+  struct ContainerStoragePrefix {
+    uint8_t version;
+    Crypto::chacha8_iv nextIv;
+    EncryptedWalletRecord encryptedViewKeys;
+  };
+#pragma pack(pop)
 
   typedef std::unordered_map<std::string, AddressAmounts> TransfersMap;
 
@@ -261,8 +281,17 @@ protected:
   void addUnconfirmedTransaction(const ITransactionReader& transaction);
   void removeUnconfirmedTransaction(const Crypto::Hash& transactionHash);
 
-  void unsafeLoad(std::istream& source, const std::string& password);
-  void unsafeSave(std::ostream& destination, bool saveDetails, bool saveCache, bool encrypt);
+  static void copyContainerStorageKeys(ContainerStorage& src, const Crypto::chacha8_key& srcKey, ContainerStorage& dst, const Crypto::chacha8_key& dstKey);
+  static void copyContainerStoragePrefix(ContainerStorage& src, const Crypto::chacha8_key& srcKey, ContainerStorage& dst, const Crypto::chacha8_key& dstKey);
+  void deleteOrphanTransactions(const std::unordered_set<Crypto::PublicKey>& deletedKeys);
+  static void encryptAndSaveContainerData(ContainerStorage& storage, const Crypto::chacha8_key& key, const void* containerData, size_t containerDataSize);
+  static void loadAndDecryptContainerData(ContainerStorage& storage, const Crypto::chacha8_key& key, BinaryArray& containerData);
+  void initTransactionPool();
+  void loadSpendKeys();
+  void loadContainerStorage(const std::string& path);
+  void loadWalletCache(std::unordered_set<Crypto::PublicKey>& addedKeys, std::unordered_set<Crypto::PublicKey>& deletedKeys, std::string& extra);
+  void saveWalletCache(ContainerStorage& storage, const Crypto::chacha8_key& key, WalletSaveLevel saveLevel, const std::string& extra);
+  void subscribeWallets();
 
   std::vector<OutputToTransfer> pickRandomFusionInputs(const std::vector<std::string>& addresses,
     uint64_t threshold, size_t minInputCount, size_t maxInputCount);
@@ -287,7 +316,7 @@ protected:
 
   std::vector<WalletTransfer> getTransactionTransfers(const WalletTransaction& transaction) const;
   void filterOutTransactions(WalletTransactions& transactions, WalletTransfers& transfers, std::function<bool (const WalletTransaction&)>&& pred) const;
-  void getViewKeyKnownBlocks(const Crypto::PublicKey& viewPublicKey);
+  void initBlockchain(const Crypto::PublicKey& viewPublicKey);
   CryptoNote::AccountPublicAddress getChangeDestination(const std::string& changeDestinationAddress, const std::vector<std::string>& sourceAddresses) const;
   bool isMyAddress(const std::string& address) const;
 
@@ -302,6 +331,7 @@ protected:
   bool m_stopped;
 
   WalletsContainer m_walletsContainer;
+  ContainerStorage m_containerStorage;
   UnlockTransactionJobs m_unlockTransactionsJob;
   WalletTransactions m_transactions;
   WalletTransfers m_transfers; //sorted
@@ -319,6 +349,9 @@ protected:
   WalletState m_state;
 
   std::string m_password;
+  Crypto::chacha8_key m_key;
+  std::string m_path;
+  std::string m_extra; // workaround for wallet reset
 
   Crypto::PublicKey m_viewPublicKey;
   Crypto::SecretKey m_viewSecretKey;

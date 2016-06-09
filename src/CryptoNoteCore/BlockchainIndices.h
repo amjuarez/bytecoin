@@ -17,9 +17,10 @@
 
 #pragma once
 
+#include <boost/functional/hash.hpp>
+#include <map>
 #include <string>
 #include <unordered_map>
-#include <map>
 
 #include "crypto/hash.h"
 #include "CryptoNoteBasic.h"
@@ -27,6 +28,10 @@
 namespace CryptoNote {
 
 class ISerializer;
+
+inline size_t paymentIdHash(const Crypto::Hash& paymentId) {
+  return boost::hash_range(std::begin(paymentId.data), std::end(paymentId.data));
+}
 
 class PaymentIdIndex {
 public:
@@ -44,7 +49,7 @@ public:
     archive & index;
   }
 private:
-  std::unordered_multimap<Crypto::Hash, Crypto::Hash> index;
+  std::unordered_multimap<Crypto::Hash, Crypto::Hash, std::function<decltype(paymentIdHash)>> index;
   bool enabled = false;
 };
 

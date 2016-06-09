@@ -52,13 +52,15 @@ struct IWalletBaseStub : public CryptoNote::IWallet, public CryptoNote::IFusionM
   IWalletBaseStub(System::Dispatcher& dispatcher) : m_eventOccurred(dispatcher) {}
   virtual ~IWalletBaseStub() {}
 
-  virtual void initialize(const std::string& password) override { }
-  virtual void initializeWithViewKey(const Crypto::SecretKey& viewSecretKey, const std::string& password) override { }
-  virtual void load(std::istream& source, const std::string& password) override { }
+  virtual void initialize(const std::string& path, const std::string& password) override { }
+  virtual void initializeWithViewKey(const std::string& path, const std::string& password, const Crypto::SecretKey& viewSecretKey) override { }
+  virtual void load(const std::string& path, const std::string& password, std::string& extra) override { }
+  virtual void load(const std::string& path, const std::string& password) override { }
   virtual void shutdown() override { }
 
   virtual void changePassword(const std::string& oldPassword, const std::string& newPassword) override { }
-  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true, bool encrypt = true) override { }
+  virtual void save(WalletSaveLevel saveLevel = WalletSaveLevel::SAVE_ALL, const std::string& extra = "") override { }
+  virtual void exportWallet(const std::string& path, bool encrypt = true, WalletSaveLevel saveLevel = WalletSaveLevel::SAVE_ALL, const std::string& extra = "") override { }
 
   virtual size_t getAddressCount() const override { return 0; }
   virtual std::string getAddress(size_t index) const override { return ""; }

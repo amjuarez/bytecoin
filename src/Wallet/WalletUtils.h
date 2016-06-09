@@ -25,6 +25,7 @@
 
 namespace CryptoNote {
 
+void throwIfKeysMissmatch(const Crypto::SecretKey& secretKey, const Crypto::PublicKey& expectedPublicKey, const std::string& message = "");
 bool validateAddress(const std::string& address, const CryptoNote::Currency& currency);
 
 std::ostream& operator<<(std::ostream& os, CryptoNote::WalletTransactionState state);

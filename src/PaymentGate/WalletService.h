@@ -44,7 +44,7 @@ struct WalletConfiguration {
   std::string walletPassword;
 };
 
-void generateNewWallet(const CryptoNote::Currency &currency, const WalletConfiguration &conf, Logging::ILogger &logger, System::Dispatcher& dispatcher);
+void generateNewWallet(const CryptoNote::Currency& currency, const WalletConfiguration& conf, Logging::ILogger& logger, System::Dispatcher& dispatcher);
 
 struct TransactionsInBlockInfoFilter;
 

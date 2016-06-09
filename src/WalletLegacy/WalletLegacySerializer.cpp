@@ -28,24 +28,10 @@
 #include "CryptoNoteCore/CryptoNoteSerialization.h"
 #include "WalletLegacy/WalletUserTransactionsCache.h"
 #include "Wallet/WalletErrors.h"
+#include "Wallet/WalletUtils.h"
 #include "WalletLegacy/KeysStorage.h"
 
 using namespace Common;
-
-namespace {
-
-bool verifyKeys(const Crypto::SecretKey& sec, const Crypto::PublicKey& expected_pub) {
-  Crypto::PublicKey pub;
-  bool r = Crypto::secret_key_to_public_key(sec, pub);
-  return r && expected_pub == pub;
-}
-
-void throwIfKeysMissmatch(const Crypto::SecretKey& sec, const Crypto::PublicKey& expected_pub) {
-  if (!verifyKeys(sec, expected_pub))
-    throw std::system_error(make_error_code(CryptoNote::error::WRONG_PASSWORD));
-}
-
-}
 
 namespace CryptoNote {
 
