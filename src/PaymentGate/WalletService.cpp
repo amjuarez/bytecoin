@@ -162,47 +162,6 @@ void validatePaymentId(const std::string& paymentId, Logging::LoggerRef logger) 
   }
 }
 
-bool createOutputBinaryFile(const std::string& filename, std::fstream& file) {
-  file.open(filename.c_str(), std::fstream::in | std::fstream::out | std::ofstream::binary);
-  if (file) {
-    file.close();
-    return false;
-  }
-
-  file.open(filename.c_str(), std::fstream::out | std::fstream::binary);
-  return true;
-}
-
-std::string createTemporaryFile(const std::string& path, std::fstream& tempFile) {
-  bool created = false;
-  std::string temporaryName;
-
-  for (size_t i = 1; i < 100; i++) {
-    temporaryName = path + "." + std::to_string(i++);
-
-    if (createOutputBinaryFile(temporaryName, tempFile)) {
-      created = true;
-      break;
-    }
-  }
-
-  if (!created) {
-    throw std::runtime_error("Couldn't create temporary file: " + temporaryName);
-  }
-
-  return temporaryName;
-}
-
-//returns true on success
-bool deleteFile(const std::string& filename) {
-  boost::system::error_code err;
-  return boost::filesystem::remove(filename, err) && !err;
-}
-
-void replaceWalletFiles(const std::string &path, const std::string &tempFilePath) {
-  Tools::replace_file(tempFilePath, path);
-}
-
 Crypto::Hash parseHash(const std::string& hashString, Logging::LoggerRef logger) {
   Crypto::Hash hash;
 
@@ -345,47 +304,7 @@ std::vector<CryptoNote::WalletOrder> convertWalletRpcOrdersToWalletOrders(const 
 
 }
 
-void createWalletFile(std::fstream& walletFile, const std::string& filename) {
-  boost::filesystem::path pathToWalletFile(filename);
-  boost::filesystem::path directory = pathToWalletFile.parent_path();
-  if (!directory.empty() && !Tools::directoryExists(directory.string())) {
-    throw std::runtime_error("Directory does not exist: " + directory.string());
-  }
-
-  walletFile.open(filename.c_str(), std::fstream::in | std::fstream::out | std::fstream::binary);
-  if (walletFile) {
-    walletFile.close();
-    throw std::runtime_error("Wallet file already exists");
-  }
-
-  walletFile.open(filename.c_str(), std::fstream::out);
-  walletFile.close();
-
-  walletFile.open(filename.c_str(), std::fstream::in | std::fstream::out | std::fstream::binary);
-}
-
-void saveWallet(CryptoNote::IWallet& wallet, std::fstream& walletFile, bool saveDetailed = true, bool saveCache = true) {
-  wallet.save(walletFile, saveDetailed, saveCache);
-  walletFile.flush();
-}
-
-void secureSaveWallet(CryptoNote::IWallet& wallet, const std::string& path, bool saveDetailed = true, bool saveCache = true) {
-  std::fstream tempFile;
-  std::string tempFilePath = createTemporaryFile(path, tempFile);
-
-  try {
-    saveWallet(wallet, tempFile, saveDetailed, saveCache);
-  } catch (std::exception&) {
-    deleteFile(tempFilePath);
-    tempFile.close();
-    throw;
-  }
-  tempFile.close();
-
-  replaceWalletFiles(path, tempFilePath);
-}
-
-void generateNewWallet(const CryptoNote::Currency &currency, const WalletConfiguration &conf, Logging::ILogger& logger, System::Dispatcher& dispatcher) {
+void generateNewWallet(const CryptoNote::Currency& currency, const WalletConfiguration& conf, Logging::ILogger& logger, System::Dispatcher& dispatcher) {
   Logging::LoggerRef log(logger, "generateNewWallet");
 
   CryptoNote::INode* nodeStub = NodeFactory::createNodeStub();
@@ -396,10 +315,7 @@ void generateNewWallet(const CryptoNote::Currency &currency, const WalletConfigu
 
   log(Logging::INFO, Logging::BRIGHT_WHITE) << "Generating new wallet";
 
-  std::fstream walletFile;
-  createWalletFile(walletFile, conf.walletFile);
-
-  wallet->initialize(conf.walletPassword);
+  wallet->initialize(conf.walletFile, conf.walletPassword);
   std::string address;
   if (conf.syncFromZero) {
     CryptoNote::KeyPair spendKey;
@@ -410,21 +326,8 @@ void generateNewWallet(const CryptoNote::Currency &currency, const WalletConfigu
 
   log(Logging::INFO, Logging::BRIGHT_WHITE) << "New wallet is generated. Address: " << address;
 
-  saveWallet(*wallet, walletFile, false, false);
+  wallet->save(CryptoNote::WalletSaveLevel::SAVE_KEYS_ONLY);
   log(Logging::INFO, Logging::BRIGHT_WHITE) << "Wallet is saved";
-}
-
-void importLegacyKeys(const std::string &legacyKeysFile, const WalletConfiguration &conf) {
-  std::stringstream archive;
-
-  CryptoNote::importLegacyKeys(legacyKeysFile, conf.walletPassword, archive);
-
-  std::fstream walletFile;
-  createWalletFile(walletFile, conf.walletFile);
-
-  archive.flush();
-  walletFile << archive.rdbuf();
-  walletFile.flush();
 }
 
 WalletService::WalletService(const CryptoNote::Currency& currency, System::Dispatcher& sys, CryptoNote::INode& node,
@@ -461,21 +364,13 @@ void WalletService::init() {
 }
 
 void WalletService::saveWallet() {
-  PaymentService::secureSaveWallet(wallet, config.walletFile, true, true);
+  wallet.save();
   logger(Logging::INFO, Logging::BRIGHT_WHITE) << "Wallet is saved";
 }
 
 void WalletService::loadWallet() {
-  std::ifstream inputWalletFile;
-  inputWalletFile.open(config.walletFile.c_str(), std::fstream::in | std::fstream::binary);
-  if (!inputWalletFile) {
-    throw std::runtime_error("Couldn't open wallet file");
-  }
-
   logger(Logging::INFO, Logging::BRIGHT_WHITE) << "Loading wallet";
-
-  wallet.load(inputWalletFile, config.walletPassword);
-
+  wallet.load(config.walletFile, config.walletPassword);
   logger(Logging::INFO, Logging::BRIGHT_WHITE) << "Wallet loading is finished.";
 }
 
@@ -1125,7 +1020,7 @@ void WalletService::refresh() {
 }
 
 void WalletService::reset() {
-  PaymentService::secureSaveWallet(wallet, config.walletFile, false, false);
+  wallet.save(CryptoNote::WalletSaveLevel::SAVE_KEYS_ONLY);
   wallet.stop();
   wallet.shutdown();
   inited = false;
@@ -1143,8 +1038,23 @@ void WalletService::replaceWithNewWallet(const Crypto::SecretKey& viewSecretKey)
 
   transactionIdIndex.clear();
 
+  size_t i = 0;
+  for (;;) {
+    boost::system::error_code ec;
+    std::string backup = config.walletFile + ".backup";
+    if (i != 0) {
+      backup += "." + std::to_string(i);
+    }
+
+    if (!boost::filesystem::exists(backup)) {
+      boost::filesystem::rename(config.walletFile, backup);
+      logger(Logging::DEBUGGING) << "Walled file '" << config.walletFile  << "' backed up to '" << backup << '\'';
+      break;
+    }
+  }
+
   wallet.start();
-  wallet.initializeWithViewKey(viewSecretKey, config.walletPassword);
+  wallet.initializeWithViewKey(config.walletFile, config.walletPassword, viewSecretKey);
   inited = true;
 }
 

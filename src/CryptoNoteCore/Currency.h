@@ -46,8 +46,11 @@ public:
   uint64_t moneySupply() const { return m_moneySupply; }
   unsigned int emissionSpeedFactor() const { return m_emissionSpeedFactor; }
   uint64_t genesisBlockReward() const { return m_genesisBlockReward; }
+  size_t cryptonoteCoinVersion() const { return m_cryptonoteCoinVersion; }
 
   size_t rewardBlocksWindow() const { return m_rewardBlocksWindow; }
+  size_t mandatoryTransaction() const { return m_mandatoryTransaction; }
+  uint32_t killHeight() const { return m_killHeight; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
   size_t blockGrantedFullRewardZoneV1() const { return m_blockGrantedFullRewardZoneV1; }
   size_t blockGrantedFullRewardZoneV2() const { return m_blockGrantedFullRewardZoneV2; }
@@ -82,13 +85,13 @@ public:
   size_t fusionTxMinInputCount() const { return m_fusionTxMinInputCount; }
   size_t fusionTxMinInOutCountRatio() const { return m_fusionTxMinInOutCountRatio; }
 
-  uint64_t upgradeHeight(uint8_t majorVersion) const;
+  uint32_t upgradeHeight(uint8_t majorVersion) const;
   unsigned int upgradeVotingThreshold() const { return m_upgradeVotingThreshold; }
-  size_t upgradeVotingWindow() const { return m_upgradeVotingWindow; }
-  size_t upgradeWindow() const { return m_upgradeWindow; }
-  size_t minNumberVotingBlocks() const { return (m_upgradeVotingWindow * m_upgradeVotingThreshold + 99) / 100; }
-  uint64_t maxUpgradeDistance() const { return static_cast<uint64_t>(m_upgradeWindow); }
-  uint64_t calculateUpgradeHeight(uint64_t voteCompleteHeight) const { return voteCompleteHeight + m_upgradeWindow; }
+  uint32_t upgradeVotingWindow() const { return m_upgradeVotingWindow; }
+  uint32_t upgradeWindow() const { return m_upgradeWindow; }
+  uint32_t minNumberVotingBlocks() const { return (m_upgradeVotingWindow * m_upgradeVotingThreshold + 99) / 100; }
+  uint32_t maxUpgradeDistance() const { return 7 * m_upgradeWindow; }
+  uint32_t calculateUpgradeHeight(uint32_t voteCompleteHeight) const { return voteCompleteHeight + m_upgradeWindow; }
 
   const std::string& blocksFileName() const { return m_blocksFileName; }
   const std::string& blocksCacheFileName() const { return m_blocksCacheFileName; }
@@ -152,8 +155,11 @@ private:
   uint64_t m_moneySupply;
   unsigned int m_emissionSpeedFactor;
   uint64_t m_genesisBlockReward;
+  size_t m_cryptonoteCoinVersion;
 
   size_t m_rewardBlocksWindow;
+  size_t m_mandatoryTransaction;
+  uint32_t m_killHeight;
   size_t m_blockGrantedFullRewardZone;
   size_t m_blockGrantedFullRewardZoneV1;
   size_t m_blockGrantedFullRewardZoneV2;
@@ -186,11 +192,11 @@ private:
   size_t m_fusionTxMinInputCount;
   size_t m_fusionTxMinInOutCountRatio;
 
-  uint64_t m_upgradeHeightV2;
-  uint64_t m_upgradeHeightV3;
+  uint32_t m_upgradeHeightV2;
+  uint32_t m_upgradeHeightV3;
   unsigned int m_upgradeVotingThreshold;
-  size_t m_upgradeVotingWindow;
-  size_t m_upgradeWindow;
+  uint32_t m_upgradeVotingWindow;
+  uint32_t m_upgradeWindow;
 
   std::string m_blocksFileName;
   std::string m_blocksCacheFileName;
@@ -237,8 +243,11 @@ public:
   CurrencyBuilder& moneySupply(uint64_t val) { m_currency.m_moneySupply = val; return *this; }
   CurrencyBuilder& emissionSpeedFactor(unsigned int val);
   CurrencyBuilder& genesisBlockReward(uint64_t val) { m_currency.m_genesisBlockReward = val; return *this; }
+  CurrencyBuilder& cryptonoteCoinVersion(size_t val) { m_currency.m_cryptonoteCoinVersion = val; return *this; }
 
   CurrencyBuilder& rewardBlocksWindow(size_t val) { m_currency.m_rewardBlocksWindow = val; return *this; }
+  CurrencyBuilder& mandatoryTransaction(size_t val) { m_currency.m_mandatoryTransaction = val; return *this; }
+  CurrencyBuilder& killHeight(uint32_t val) { m_currency.m_killHeight = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV1(size_t val) { m_currency.m_blockGrantedFullRewardZoneV1 = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV2(size_t val) { m_currency.m_blockGrantedFullRewardZoneV2 = val; return *this; }

@@ -102,13 +102,16 @@ namespace CryptoNote {
     const CryptoNote::Currency& currency, 
     CryptoNote::ITransactionValidator& validator, 
     CryptoNote::ITimeProvider& timeProvider,
-    Logging::ILogger& log) :
+    Logging::ILogger& log,
+    bool blockchainIndexesEnabled) :
     m_currency(currency),
     m_validator(validator), 
     m_timeProvider(timeProvider), 
     m_txCheckInterval(60, timeProvider),
     m_fee_index(boost::get<1>(m_transactions)),
-    logger(log, "txpool") {
+    logger(log, "txpool"),
+    m_paymentIdIndex(blockchainIndexesEnabled),
+    m_timestampIndex(blockchainIndexesEnabled) {
   }
   //---------------------------------------------------------------------------------
   bool tx_memory_pool::add_tx(const Transaction &tx, /*const Crypto::Hash& tx_prefix_hash,*/ const Crypto::Hash &id, size_t blobSize, tx_verification_context& tvc, bool keptByBlock) {
@@ -361,8 +364,8 @@ namespace CryptoNote {
     total_size = 0;
     fee = 0;
 
-    size_t max_total_size = (125 * median_size) / 100 - m_currency.minerTxBlobReservedSize();
-    max_total_size = std::min(max_total_size, maxCumulativeSize);
+    size_t max_total_size = (125 * median_size) / 100;
+    max_total_size = std::min(max_total_size, maxCumulativeSize) - m_currency.minerTxBlobReservedSize();
 
     BlockTemplate blockTemplate;
 

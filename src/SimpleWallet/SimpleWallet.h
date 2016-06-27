@@ -159,6 +159,7 @@ namespace CryptoNote
     std::string m_daemon_address;
     std::string m_daemon_host;
     uint16_t m_daemon_port;
+uint64_t m_mandatoryTransaction;
 uint64_t m_maxTransactionSizeLimit;
 uint64_t m_default_fee;
 

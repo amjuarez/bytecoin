@@ -45,7 +45,7 @@ struct WalletConfiguration {
   bool syncFromZero;
 };
 
-void generateNewWallet(const CryptoNote::Currency &currency, const WalletConfiguration &conf, Logging::ILogger &logger, System::Dispatcher& dispatcher);
+void generateNewWallet(const CryptoNote::Currency& currency, const WalletConfiguration& conf, Logging::ILogger& logger, System::Dispatcher& dispatcher);
 
 struct TransactionsInBlockInfoFilter;
 

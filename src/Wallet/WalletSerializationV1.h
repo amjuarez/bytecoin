@@ -17,27 +17,19 @@
 
 #pragma once
 
-#include "IWallet.h"
-#include "WalletIndices.h"
-#include "Common/IInputStream.h"
-#include "Common/IOutputStream.h"
-#include "Transfers/TransfersSynchronizer.h"
-#include "Serialization/BinaryInputStreamSerializer.h"
+#include "IWalletLegacy.h"
 
+#include "Common/IInputStream.h"
 #include "crypto/chacha8.h"
+#include "Serialization/BinaryInputStreamSerializer.h"
+#include "Transfers/TransfersSynchronizer.h"
+#include "Wallet/WalletIndices.h"
 
 namespace CryptoNote {
 
-struct CryptoContext {
-  Crypto::chacha8_key key;
-  Crypto::chacha8_iv iv;
-
-  void incIv();
-};
-
-class WalletSerializer {
+class WalletSerializerV1 {
 public:
-  WalletSerializer(
+  WalletSerializerV1(
     ITransfersObserver& transfersObserver,
     Crypto::PublicKey& viewPublicKey,
     Crypto::SecretKey& viewSecretKey,
@@ -48,38 +40,27 @@ public:
     UnlockTransactionJobs& unlockTransactions,
     WalletTransactions& transactions,
     WalletTransfers& transfers,
-    uint32_t transactionSoftLockTime,
-    UncommitedTransactions& uncommitedTransactions
+    UncommitedTransactions& uncommitedTransactions,
+    uint32_t transactionSoftLockTime
   );
   
-  void save(const std::string& password, Common::IOutputStream& destination, bool saveDetails, bool saveCache);
-  void load(const std::string& password, Common::IInputStream& source);
+  void load(const Crypto::chacha8_key& key, Common::IInputStream& source);
+
+  struct CryptoContext {
+    Crypto::chacha8_key key;
+    Crypto::chacha8_iv iv;
+
+    void incIv();
+  };
 
 private:
   static const uint32_t SERIALIZATION_VERSION;
 
-  void loadWallet(Common::IInputStream& source, const std::string& password, uint32_t version);
-  void loadWalletV1(Common::IInputStream& source, const std::string& password);
-
-  CryptoContext generateCryptoContext(const std::string& password);
-
-  void saveVersion(Common::IOutputStream& destination);
-  void saveIv(Common::IOutputStream& destination, Crypto::chacha8_iv& iv);
-  void saveKeys(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void savePublicKey(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveSecretKey(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveFlags(bool saveDetails, bool saveCache, Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveWallets(Common::IOutputStream& destination, bool saveCache, CryptoContext& cryptoContext);
-  void saveBalances(Common::IOutputStream& destination, bool saveCache, CryptoContext& cryptoContext);
-  void saveTransfersSynchronizer(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveUnlockTransactionsJobs(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveUncommitedTransactions(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveTransactions(Common::IOutputStream& destination, CryptoContext& cryptoContext);
-  void saveTransfers(Common::IOutputStream& destination, CryptoContext& cryptoContext);
+  void loadWallet(Common::IInputStream& source, const Crypto::chacha8_key& key, uint32_t version);
+  void loadWalletV1(Common::IInputStream& source, const Crypto::chacha8_key& key);
 
   uint32_t loadVersion(Common::IInputStream& source);
   void loadIv(Common::IInputStream& source, Crypto::chacha8_iv& iv);
-  void generateKey(const std::string& password, Crypto::chacha8_key& key);
   void loadKeys(Common::IInputStream& source, CryptoContext& cryptoContext);
   void loadPublicKey(Common::IInputStream& source, CryptoContext& cryptoContext);
   void loadSecretKey(Common::IInputStream& source, CryptoContext& cryptoContext);
@@ -99,7 +80,6 @@ private:
   void loadWalletV1Keys(CryptoNote::BinaryInputStreamSerializer& serializer);
   void loadWalletV1Details(CryptoNote::BinaryInputStreamSerializer& serializer);
   void addWalletV1Details(const std::vector<WalletLegacyTransaction>& txs, const std::vector<WalletLegacyTransfer>& trs);
-  void initTransactionPool();
   void resetCachedBalance();
   void updateTransactionsBaseStatus();
   void updateTransfersSign();
@@ -114,8 +94,8 @@ private:
   UnlockTransactionJobs& m_unlockTransactions;
   WalletTransactions& m_transactions;
   WalletTransfers& m_transfers;
+  UncommitedTransactions& m_uncommitedTransactions;
   uint32_t m_transactionSoftLockTime;
-  UncommitedTransactions& uncommitedTransactions;
 };
 
 } //namespace CryptoNote

@@ -81,7 +81,10 @@ template <typename Cont>
 bool serializeContainer(Cont& value, Common::StringView name, CryptoNote::ISerializer& serializer) {
   size_t size = value.size();
   if (!serializer.beginArray(size, name)) {
-    value.clear();
+    if (serializer.type() == ISerializer::INPUT) {
+      value.clear();
+    }
+
     return false;
   }
 
@@ -128,7 +131,10 @@ bool serializeMap(MapT& value, Common::StringView name, CryptoNote::ISerializer&
   size_t size = value.size();
 
   if (!serializer.beginArray(size, name)) {
-    value.clear();
+    if (serializer.type() == ISerializer::INPUT) {
+      value.clear();
+    }
+
     return false;
   }
 
@@ -164,7 +170,10 @@ bool serializeSet(SetT& value, Common::StringView name, CryptoNote::ISerializer&
   size_t size = value.size();
 
   if (!serializer.beginArray(size, name)) {
-    value.clear();
+    if (serializer.type() == ISerializer::INPUT) {
+      value.clear();
+    }
+
     return false;
   }
 

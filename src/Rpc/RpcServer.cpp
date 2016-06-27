@@ -133,6 +133,9 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
 
   using namespace JsonRpc;
 
+if (m_cors_enabled) {
+  response.addHeader("Access-Control-Allow-Origin", "*");
+}
   response.addHeader("Content-Type", "application/json");
 
   JsonRpcRequest jsonRequest;
@@ -178,6 +181,11 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
 
   response.setBody(jsonResponse.getBody());
   logger(TRACE) << "JSON-RPC response: " << jsonResponse.getBody();
+  return true;
+}
+
+bool RpcServer::enableCors(const bool is_enabled) {
+  m_cors_enabled = is_enabled;
   return true;
 }
 
@@ -738,9 +746,18 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   // Hardcoded plugins, refactor this
   res.extensions.push_back("core/bytecoin.json");
   res.extensions.push_back("print-genesis-tx.json");
-  res.extensions.push_back("simplewallet-default-fee.json");
-  res.extensions.push_back("max-transaction-size-limit.json");
-  res.extensions.push_back("genesis-block-reward.json");
+  if (m_core.currency().genesisBlockReward() != 0) {
+    res.extensions.push_back("genesis-block-reward.json");
+  }
+  if (m_core.currency().killHeight() != 0) {
+    res.extensions.push_back("kill-height.json");
+  }
+  if (m_core.currency().mandatoryTransaction() == 1) {
+    res.extensions.push_back("mandatory-transaction-in-block.json");
+  }
+  if (m_core.currency().cryptonoteCoinVersion() != 0) {
+    res.extensions.push_back("cryptonote-coin-clones-support.json");
+  }
 
   res.core.CRYPTONOTE_NAME = m_core.currency().cryptonoteName();
 
@@ -749,7 +766,7 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   res.core.CRYPTONOTE_DISPLAY_DECIMAL_POINT = m_core.currency().numberOfDecimalPlaces();
   res.core.MONEY_SUPPLY = std::to_string(m_core.currency().moneySupply());
   res.core.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY = m_core.currency().difficultyWindow();
-  res.core.GENESIS_BLOCK_REWARD = m_core.currency().genesisBlockReward();
+  res.core.GENESIS_BLOCK_REWARD = std::to_string(m_core.currency().genesisBlockReward());
   res.core.DEFAULT_DUST_THRESHOLD = m_core.currency().defaultDustThreshold();
   res.core.MINIMUM_FEE = m_core.currency().minimumFee();
   res.core.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW = m_core.currency().minedMoneyUnlockWindow();
@@ -762,6 +779,9 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   res.core.UPGRADE_HEIGHT_V3 = m_core.currency().upgradeHeight(3);
   res.core.DIFFICULTY_CUT = m_core.currency().difficultyCut();
   res.core.DIFFICULTY_LAG = m_core.currency().difficultyLag();
+  res.core.KILL_HEIGHT = m_core.currency().killHeight();
+  res.core.MANDATORY_TRANSACTION = m_core.currency().mandatoryTransaction();
+  res.core.CRYPTONOTE_COIN_VERSION = m_core.currency().cryptonoteCoinVersion();
 
   res.core.P2P_DEFAULT_PORT = m_p2p.get_this_peer_port();
   // Not real. Change

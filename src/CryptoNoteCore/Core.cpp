@@ -64,11 +64,11 @@ private:
   friend class core;
 };
 
-core::core(const Currency& currency, i_cryptonote_protocol* pprotocol, Logging::ILogger& logger) :
+core::core(const Currency& currency, i_cryptonote_protocol* pprotocol, Logging::ILogger& logger, bool blockchainIndexesEnabled) :
 m_currency(currency),
 logger(logger, "core"),
-m_mempool(currency, m_blockchain, m_timeProvider, logger),
-m_blockchain(currency, m_mempool, logger),
+m_mempool(currency, m_blockchain, m_timeProvider, logger, blockchainIndexesEnabled),
+m_blockchain(currency, m_mempool, logger, blockchainIndexesEnabled),
 m_miner(new miner(currency, *this, logger)),
 m_starter_message_showed(false) {
   set_cryptonote_protocol(pprotocol);
@@ -130,7 +130,7 @@ size_t core::get_alternative_blocks_count() {
   return m_blockchain.getAlternativeBlocksCount();
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::init(const CoreConfig& config, const MinerConfig& minerConfig, bool load_existing) {
+bool core::init(const CoreConfig& config, const MinerConfig& minerConfig, bool load_existing) {
     m_config_folder = config.configFolder;
     bool r = m_mempool.init(m_config_folder);
   if (!(r)) { logger(ERROR, BRIGHT_RED) << "Failed to initialize memory pool"; return false; }
@@ -377,6 +377,12 @@ bool core::get_block_template(Block& b, const AccountPublicAddress& adr, difficu
     return false; 
   }
 
+  if (m_currency.mandatoryTransaction()) {
+    if (txs_size == 0 && get_block_height(b) > parameters::CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW) { 
+      logger(ERROR, BRIGHT_RED) << "Need at least one transaction beside base transaction";
+      return false;
+    }
+  }
   size_t cumulative_size = txs_size + getObjectBinarySize(b.baseTransaction);
   for (size_t try_count = 0; try_count != 10; ++try_count) {
     r = m_currency.constructMinerTx(b.majorVersion, height, median_size, already_generated_coins, cumulative_size, fee, adr, b.baseTransaction, ex_nonce, 11);
@@ -407,6 +413,7 @@ bool core::get_block_template(Block& b, const AccountPublicAddress& adr, difficu
       }
     }
     if (!(cumulative_size == txs_size + getObjectBinarySize(b.baseTransaction))) { logger(ERROR, BRIGHT_RED) << "unexpected case: cumulative_size=" << cumulative_size << " is not equal txs_cumulative_size=" << txs_size << " + get_object_blobsize(b.baseTransaction)=" << getObjectBinarySize(b.baseTransaction); return false; }
+
     return true;
   }
 
@@ -499,6 +506,13 @@ void core::getPoolChanges(const std::vector<Crypto::Hash>& knownTxsIds, std::vec
   std::vector<Crypto::Hash> addedTxsIds;
   auto guard = m_mempool.obtainGuard();
   m_mempool.get_difference(knownTxsIds, addedTxsIds, deletedTxsIds);
+    if (m_currency.mandatoryTransaction()) {
+      if (knownTxsIds.size() == 0 && addedTxsIds.size() == 0 && get_current_blockchain_height() > parameters::CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW) {
+        if (get_miner().is_mining()) {
+          get_miner().stop();
+        }
+      }
+    }
   std::vector<Crypto::Hash> misses;
   m_mempool.getTransactions(addedTxsIds, addedTxs, misses);
   assert(misses.empty());
@@ -524,6 +538,20 @@ bool core::handle_incoming_block_blob(const BinaryArray& block_blob, block_verif
 bool core::handle_incoming_block(const Block& b, block_verification_context& bvc, bool control_miner, bool relay_block) {
   if (control_miner) {
     pause_mining();
+  }
+
+  if (m_currency.mandatoryTransaction()) {
+    if (b.transactionHashes.size() < 1 && get_block_height(b) > parameters::CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW) {
+      logger(INFO) << "New block must have at least one transaction";
+      bvc.m_verifivation_failed = true;
+      return false;
+    }
+  }
+
+  if (m_currency.killHeight() != 0 && get_block_height(b) > m_currency.killHeight()) {
+    logger(ERROR, BRIGHT_RED) << "Cannot add more blocks. Block " << m_currency.killHeight() << " is the kill block";
+    bvc.m_verifivation_failed = true;
+    return false;
   }
 
   m_blockchain.addNewBlock(b, bvc);

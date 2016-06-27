@@ -73,7 +73,7 @@ void InProcTestNode::workerThread(std::promise<std::string>& initPromise) {
 
   try {
 
-    core.reset(new CryptoNote::core(m_currency, NULL, log));
+    core.reset(new CryptoNote::core(m_currency, NULL, log, false));
     protocol.reset(new CryptoNote::CryptoNoteProtocolHandler(m_currency, dispatcher, *core, NULL, log));
     p2pNode.reset(new CryptoNote::NodeServer(dispatcher, *protocol, log));
     protocol->set_p2p_endpoint(p2pNode.get());
