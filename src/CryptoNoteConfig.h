@@ -33,7 +33,7 @@ const size_t   BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW             = 60;
 
 // MONEY_SUPPLY - total number coins to be generated
 const uint64_t MONEY_SUPPLY                                  = static_cast<uint64_t>(-1);
-const bool MANDATORY_TRANSACTION                          = 0;
+const uint32_t MANDATORY_TRANSACTION                          = 0;
 const uint32_t KILL_HEIGHT                          = 0;
 const size_t CRYPTONOTE_COIN_VERSION                          = 0;
 const unsigned EMISSION_SPEED_FACTOR                         = 18;

@@ -74,7 +74,7 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("GENESIS_BLOCK_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("CRYPTONOTE_COIN_VERSION", po::value<size_t>()->default_value(0), "size_t")
     ("KILL_HEIGHT", po::value<uint32_t>()->default_value(0), "uint32_t")
-    ("MANDATORY_TRANSACTION", po::value<bool>()->default_value(0), "bool")
+    ("MANDATORY_TRANSACTION", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("EMISSION_SPEED_FACTOR", po::value<unsigned>()->default_value(CryptoNote::parameters::EMISSION_SPEED_FACTOR), "unsigned")
     ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE), "uint64_t")
     ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1), "uint64_t")
@@ -109,7 +109,7 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
     MONEY_SUPPLY = options["MONEY_SUPPLY"].as<uint64_t>();
   }
   if (options.count("MANDATORY_TRANSACTION")) {
-    MANDATORY_TRANSACTION = options["MANDATORY_TRANSACTION"].as<bool>();
+    MANDATORY_TRANSACTION = options["MANDATORY_TRANSACTION"].as<uint32_t>();
   }
   if (options.count("KILL_HEIGHT")) {
     KILL_HEIGHT = options["KILL_HEIGHT"].as<uint32_t>();

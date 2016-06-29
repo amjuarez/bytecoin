@@ -84,7 +84,7 @@ namespace
   const command_line::arg_descriptor<uint64_t>    arg_GENESIS_BLOCK_REWARD  = {"GENESIS_BLOCK_REWARD", "uint64_t", 0};
   const command_line::arg_descriptor<size_t>    arg_CRYPTONOTE_COIN_VERSION  = {"CRYPTONOTE_COIN_VERSION", "size_t", 0};
   const command_line::arg_descriptor<uint32_t>    arg_KILL_HEIGHT  = {"KILL_HEIGHT", "uint32_t", 0};
-  const command_line::arg_descriptor<bool>    arg_MANDATORY_TRANSACTION  = {"MANDATORY_TRANSACTION", "bool", CryptoNote::parameters::MANDATORY_TRANSACTION};
+  const command_line::arg_descriptor<uint32_t>    arg_MANDATORY_TRANSACTION  = {"MANDATORY_TRANSACTION", "uint32_t", CryptoNote::parameters::MANDATORY_TRANSACTION};
   const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
     "network id is changed. Use it with --data-dir flag. The wallet must be launched with --testnet flag.", false};
 }

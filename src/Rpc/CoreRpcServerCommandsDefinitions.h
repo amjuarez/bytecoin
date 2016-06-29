@@ -539,7 +539,7 @@ struct currency_core {
   uint64_t DIFFICULTY_CUT;
   uint64_t DIFFICULTY_LAG;
   uint32_t KILL_HEIGHT;
-  uint8_t MANDATORY_TRANSACTION;
+  uint32_t MANDATORY_TRANSACTION;
   uint8_t CRYPTONOTE_COIN_VERSION;
   std::string BYTECOIN_NETWORK;
   std::string CRYPTONOTE_NAME;

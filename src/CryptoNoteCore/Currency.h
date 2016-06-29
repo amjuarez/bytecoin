@@ -49,7 +49,7 @@ public:
   size_t cryptonoteCoinVersion() const { return m_cryptonoteCoinVersion; }
 
   size_t rewardBlocksWindow() const { return m_rewardBlocksWindow; }
-  size_t mandatoryTransaction() const { return m_mandatoryTransaction; }
+  uint32_t mandatoryTransaction() const { return m_mandatoryTransaction; }
   uint32_t killHeight() const { return m_killHeight; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
   size_t blockGrantedFullRewardZoneV1() const { return m_blockGrantedFullRewardZoneV1; }
@@ -158,7 +158,7 @@ private:
   size_t m_cryptonoteCoinVersion;
 
   size_t m_rewardBlocksWindow;
-  size_t m_mandatoryTransaction;
+  uint32_t m_mandatoryTransaction;
   uint32_t m_killHeight;
   size_t m_blockGrantedFullRewardZone;
   size_t m_blockGrantedFullRewardZoneV1;
@@ -246,7 +246,7 @@ public:
   CurrencyBuilder& cryptonoteCoinVersion(size_t val) { m_currency.m_cryptonoteCoinVersion = val; return *this; }
 
   CurrencyBuilder& rewardBlocksWindow(size_t val) { m_currency.m_rewardBlocksWindow = val; return *this; }
-  CurrencyBuilder& mandatoryTransaction(size_t val) { m_currency.m_mandatoryTransaction = val; return *this; }
+  CurrencyBuilder& mandatoryTransaction(uint8_t val) { m_currency.m_mandatoryTransaction = val; return *this; }
   CurrencyBuilder& killHeight(uint32_t val) { m_currency.m_killHeight = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV1(size_t val) { m_currency.m_blockGrantedFullRewardZoneV1 = val; return *this; }

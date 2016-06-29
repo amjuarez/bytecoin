@@ -96,7 +96,7 @@ const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", IN
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "uint64_t", CryptoNote::parameters::DIFFICULTY_LAG};
   const command_line::arg_descriptor<std::string> arg_rpc_bind_port = {"rpc-bind-port", "", std::to_string(RPC_DEFAULT_PORT)};
   const command_line::arg_descriptor<uint64_t> arg_MAX_TRANSACTION_SIZE_LIMIT  = {"MAX_TRANSACTION_SIZE_LIMIT", "Max transaction limit size", CryptoNote::parameters::MAX_TRANSACTION_SIZE_LIMIT};  
-  const command_line::arg_descriptor<uint64_t> arg_MANDATORY_TRANSACTION  = {"MANDATORY_TRANSACTION", "Max transaction limit size", false};  
+  const command_line::arg_descriptor<uint32_t> arg_MANDATORY_TRANSACTION  = {"MANDATORY_TRANSACTION", "Max transaction limit size", false};  
 const command_line::arg_descriptor<bool> arg_testnet = { "testnet", "Used to deploy test nets. The daemon must be launched with --testnet flag", false };
 const command_line::arg_descriptor< std::vector<std::string> > arg_command = { "command", "" };
 
@@ -1047,8 +1047,7 @@ bool simple_wallet::transfer(const std::vector<std::string> &args) {
     m_wallet->getTransaction(tx, txInfo);
     success_msg_writer(true) << "Money successfully sent, transaction " << Common::podToHex(txInfo.hash);
 if (m_currency.mandatoryTransaction()) {
-  const char* args_mining_chars[] = {};
-  std::vector<std::string> args_mining(args_mining_chars, args_mining_chars);
+  std::vector<std::string> args_mining(2);
   start_mining(args_mining);
 }
 
