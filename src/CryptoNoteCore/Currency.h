@@ -24,6 +24,7 @@
 #include "../CryptoNoteConfig.h"
 #include "../crypto/hash.h"
 #include "../Logging/LoggerRef.h"
+#include "CachedBlock.h"
 #include "CryptoNoteBasic.h"
 #include "Difficulty.h"
 
@@ -33,11 +34,11 @@ class AccountBase;
 
 class Currency {
 public:
-  uint64_t maxBlockHeight() const { return m_maxBlockHeight; }
+  uint32_t maxBlockHeight() const { return m_maxBlockHeight; }
   size_t maxBlockBlobSize() const { return m_maxBlockBlobSize; }
   size_t maxTxSize() const { return m_maxTxSize; }
   uint64_t publicAddressBase58Prefix() const { return m_publicAddressBase58Prefix; }
-  size_t minedMoneyUnlockWindow() const { return m_minedMoneyUnlockWindow; }
+  uint32_t minedMoneyUnlockWindow() const { return m_minedMoneyUnlockWindow; }
 
   size_t timestampCheckWindow() const { return m_timestampCheckWindow; }
   uint64_t blockFutureTimeLimit() const { return m_blockFutureTimeLimit; }
@@ -86,15 +87,13 @@ public:
   uint32_t calculateUpgradeHeight(uint32_t voteCompleteHeight) const { return voteCompleteHeight + m_upgradeWindow; }
 
   const std::string& blocksFileName() const { return m_blocksFileName; }
-  const std::string& blocksCacheFileName() const { return m_blocksCacheFileName; }
   const std::string& blockIndexesFileName() const { return m_blockIndexesFileName; }
   const std::string& txPoolFileName() const { return m_txPoolFileName; }
-  const std::string& blockchinIndicesFileName() const { return m_blockchinIndicesFileName; }
 
   bool isTestnet() const { return m_testnet; }
 
-  const Block& genesisBlock() const { return m_genesisBlock; }
-  const Crypto::Hash& genesisBlockHash() const { return m_genesisBlockHash; }
+  const BlockTemplate& genesisBlock() const { return cachedGenesisBlock->getBlock(); }
+  const Crypto::Hash& genesisBlockHash() const { return cachedGenesisBlock->getBlockHash(); }
 
   bool getBlockReward(uint8_t blockMajorVersion, size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins, uint64_t fee,
     uint64_t& reward, int64_t& emissionChange) const;
@@ -117,11 +116,13 @@ public:
   std::string formatAmount(int64_t amount) const;
   bool parseAmount(const std::string& str, uint64_t& amount) const;
 
-  difficulty_type nextDifficulty(std::vector<uint64_t> timestamps, std::vector<difficulty_type> cumulativeDifficulties) const;
+  Difficulty nextDifficulty(std::vector<uint64_t> timestamps, std::vector<Difficulty> cumulativeDifficulties) const;
 
-  bool checkProofOfWorkV1(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic, Crypto::Hash& proofOfWork) const;
-  bool checkProofOfWorkV2(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic, Crypto::Hash& proofOfWork) const;
-  bool checkProofOfWork(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic, Crypto::Hash& proofOfWork) const;
+  bool checkProofOfWorkV1(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDifficulty) const;
+  bool checkProofOfWorkV2(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDifficulty) const;
+  bool checkProofOfWork(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDifficulty) const;
+
+  Currency(Currency&& currency);
 
   size_t getApproximateMaximumInputCount(size_t transactionSize, size_t outputCount, size_t mixinCount) const;
 
@@ -134,11 +135,11 @@ private:
   bool generateGenesisBlock();
 
 private:
-  uint64_t m_maxBlockHeight;
+  uint32_t m_maxBlockHeight;
   size_t m_maxBlockBlobSize;
   size_t m_maxTxSize;
   uint64_t m_publicAddressBase58Prefix;
-  size_t m_minedMoneyUnlockWindow;
+  uint32_t m_minedMoneyUnlockWindow;
 
   size_t m_timestampCheckWindow;
   uint64_t m_blockFutureTimeLimit;
@@ -183,17 +184,15 @@ private:
   uint32_t m_upgradeWindow;
 
   std::string m_blocksFileName;
-  std::string m_blocksCacheFileName;
   std::string m_blockIndexesFileName;
   std::string m_txPoolFileName;
-  std::string m_blockchinIndicesFileName;
 
   static const std::vector<uint64_t> PRETTY_AMOUNTS;
 
   bool m_testnet;
 
-  Block m_genesisBlock;
-  Crypto::Hash m_genesisBlockHash;
+  BlockTemplate genesisBlockTemplate;
+  std::unique_ptr<CachedBlock> cachedGenesisBlock;
 
   Logging::LoggerRef logger;
 
@@ -208,14 +207,15 @@ public:
     if (!m_currency.init()) {
       throw std::runtime_error("Failed to initialize currency object");
     }
-    return m_currency;
+
+    return std::move(m_currency);
   }
 
-  CurrencyBuilder& maxBlockNumber(uint64_t val) { m_currency.m_maxBlockHeight = val; return *this; }
+  CurrencyBuilder& maxBlockNumber(uint32_t val) { m_currency.m_maxBlockHeight = val; return *this; }
   CurrencyBuilder& maxBlockBlobSize(size_t val) { m_currency.m_maxBlockBlobSize = val; return *this; }
   CurrencyBuilder& maxTxSize(size_t val) { m_currency.m_maxTxSize = val; return *this; }
   CurrencyBuilder& publicAddressBase58Prefix(uint64_t val) { m_currency.m_publicAddressBase58Prefix = val; return *this; }
-  CurrencyBuilder& minedMoneyUnlockWindow(size_t val) { m_currency.m_minedMoneyUnlockWindow = val; return *this; }
+  CurrencyBuilder& minedMoneyUnlockWindow(uint32_t val) { m_currency.m_minedMoneyUnlockWindow = val; return *this; }
 
   CurrencyBuilder& timestampCheckWindow(size_t val) { m_currency.m_timestampCheckWindow = val; return *this; }
   CurrencyBuilder& blockFutureTimeLimit(uint64_t val) { m_currency.m_blockFutureTimeLimit = val; return *this; }
@@ -252,17 +252,15 @@ public:
   CurrencyBuilder& fusionTxMinInputCount(size_t val) { m_currency.m_fusionTxMinInputCount = val; return *this; }
   CurrencyBuilder& fusionTxMinInOutCountRatio(size_t val) { m_currency.m_fusionTxMinInOutCountRatio = val; return *this; }
 
-  CurrencyBuilder& upgradeHeightV2(uint64_t val) { m_currency.m_upgradeHeightV2 = val; return *this; }
-  CurrencyBuilder& upgradeHeightV3(uint64_t val) { m_currency.m_upgradeHeightV3 = val; return *this; }
+  CurrencyBuilder& upgradeHeightV2(uint32_t val) { m_currency.m_upgradeHeightV2 = val; return *this; }
+  CurrencyBuilder& upgradeHeightV3(uint32_t val) { m_currency.m_upgradeHeightV3 = val; return *this; }
   CurrencyBuilder& upgradeVotingThreshold(unsigned int val);
-  CurrencyBuilder& upgradeVotingWindow(size_t val) { m_currency.m_upgradeVotingWindow = val; return *this; }
-  CurrencyBuilder& upgradeWindow(size_t val);
+  CurrencyBuilder& upgradeVotingWindow(uint32_t val) { m_currency.m_upgradeVotingWindow = val; return *this; }
+  CurrencyBuilder& upgradeWindow(uint32_t val);
 
   CurrencyBuilder& blocksFileName(const std::string& val) { m_currency.m_blocksFileName = val; return *this; }
-  CurrencyBuilder& blocksCacheFileName(const std::string& val) { m_currency.m_blocksCacheFileName = val; return *this; }
   CurrencyBuilder& blockIndexesFileName(const std::string& val) { m_currency.m_blockIndexesFileName = val; return *this; }
   CurrencyBuilder& txPoolFileName(const std::string& val) { m_currency.m_txPoolFileName = val; return *this; }
-  CurrencyBuilder& blockchinIndicesFileName(const std::string& val) { m_currency.m_blockchinIndicesFileName = val; return *this; }
   
   CurrencyBuilder& testnet(bool val) { m_currency.m_testnet = val; return *this; }
 

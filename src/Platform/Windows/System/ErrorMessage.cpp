@@ -17,6 +17,10 @@
 
 #include "ErrorMessage.h"
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <cstddef>
 #include <windows.h>
 

@@ -23,6 +23,7 @@
 
 #include "Common/StringTools.h"
 #include "CryptoNoteConfig.h"
+#include "CryptoNoteCore/CachedBlock.h"
 #include "CryptoNoteCore/CryptoNoteTools.h"
 #include "CryptoNoteCore/CryptoNoteFormatUtils.h"
 #include "CryptoNoteCore/TransactionExtra.h"
@@ -48,13 +49,12 @@ MinerEvent BlockchainUpdatedEvent() {
   return event;
 }
 
-void adjustMergeMiningTag(Block& blockTemplate) {
+void adjustMergeMiningTag(BlockTemplate& blockTemplate) {
+  CachedBlock cachedBlock(blockTemplate);
   if (blockTemplate.majorVersion >= BLOCK_MAJOR_VERSION_2) {
     CryptoNote::TransactionExtraMergeMiningTag mmTag;
     mmTag.depth = 0;
-    if (!CryptoNote::get_aux_block_header_hash(blockTemplate, mmTag.merkleRoot)) {
-      throw std::runtime_error("Couldn't get block header hash");
-    }
+    mmTag.merkleRoot = cachedBlock.getAuxiliaryBlockHeaderHash();
 
     blockTemplate.parentBlock.baseTransaction.extra.clear();
     if (!CryptoNote::appendMergeMiningTagToExtra(blockTemplate.parentBlock.baseTransaction.extra, mmTag)) {
@@ -205,7 +205,9 @@ void MinerManager::stopBlockchainMonitoring() {
   m_blockchainMonitor.stop();
 }
 
-bool MinerManager::submitBlock(const Block& minedBlock, const std::string& daemonHost, uint16_t daemonPort) {
+bool MinerManager::submitBlock(const BlockTemplate& minedBlock, const std::string& daemonHost, uint16_t daemonPort) {
+  CachedBlock cachedBlock(minedBlock);
+
   try {
     HttpClient client(m_dispatcher, daemonHost, daemonPort);
 
@@ -217,10 +219,10 @@ bool MinerManager::submitBlock(const Block& minedBlock, const std::string& daemo
     System::EventLock lk(m_httpEvent);
     JsonRpc::invokeJsonRpcCommand(client, "submitblock", request, response);
 
-    m_logger(Logging::INFO) << "Block has been successfully submitted. Block hash: " << Common::podToHex(get_block_hash(minedBlock));
+    m_logger(Logging::INFO) << "Block has been successfully submitted. Block hash: " << Common::podToHex(cachedBlock.getBlockHash());
     return true;
   } catch (std::exception& e) {
-    m_logger(Logging::WARNING) << "Couldn't submit block: " << Common::podToHex(get_block_hash(minedBlock)) << ", reason: " << e.what();
+    m_logger(Logging::WARNING) << "Couldn't submit block: " << Common::podToHex(cachedBlock.getBlockHash()) << ", reason: " << e.what();
     return false;
   }
 }
@@ -258,7 +260,7 @@ BlockMiningParameters MinerManager::requestMiningParameters(System::Dispatcher& 
 }
 
 
-void MinerManager::adjustBlockTemplate(CryptoNote::Block& blockTemplate) const {
+void MinerManager::adjustBlockTemplate(CryptoNote::BlockTemplate& blockTemplate) const {
   adjustMergeMiningTag(blockTemplate);
 
   if (m_config.firstBlockTimestamp == 0) {

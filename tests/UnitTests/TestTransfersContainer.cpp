@@ -71,7 +71,7 @@ namespace {
       return tx;
     }
 
-    std::unique_ptr<ITransactionReader> addSpendingTransaction(const Hash& sourceTx, uint64_t height, uint32_t outputIndex, uint64_t amount = TEST_OUTPUT_AMOUNT) {
+    std::unique_ptr<ITransactionReader> addSpendingTransaction(const Hash& sourceTx, uint32_t height, uint32_t outputIndex, uint64_t amount = TEST_OUTPUT_AMOUNT) {
       auto outputs = container.getTransactionOutputs(sourceTx, ITransfersContainer::IncludeTypeAll |
         ITransfersContainer::IncludeStateUnlocked | ITransfersContainer::IncludeStateSoftLocked);
 
@@ -589,7 +589,7 @@ TEST_F(TransfersContainer_deleteUnconfirmedTransaction, deleteTx) {
 //--------------------------------------------------------------------------- 
 class TransfersContainer_markTransactionConfirmed : public TransfersContainerTest {
 public:
-  bool markConfirmed(const Hash& txHash, uint64_t height = TEST_BLOCK_HEIGHT, 
+  bool markConfirmed(const Hash& txHash, uint32_t height = TEST_BLOCK_HEIGHT, 
     const std::vector<uint32_t>& globalIndices = { TEST_TRANSACTION_OUTPUT_GLOBAL_INDEX }) {
     return container.markTransactionConfirmed(blockInfo(height), txHash, globalIndices);
   }

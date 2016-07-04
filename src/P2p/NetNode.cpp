@@ -107,32 +107,32 @@ bool parse_peer_from_string(NetworkAddress& pe, const std::string& node_addr) {
 }
 
 
-namespace CryptoNote
-{
-  namespace
-  {
-    const command_line::arg_descriptor<std::string> arg_p2p_bind_ip        = {"p2p-bind-ip", "Interface for p2p network protocol", "0.0.0.0"};
-    const command_line::arg_descriptor<std::string> arg_p2p_bind_port      = {"p2p-bind-port", "Port for p2p network protocol", std::to_string(CryptoNote::P2P_DEFAULT_PORT)};
-    const command_line::arg_descriptor<uint32_t>    arg_p2p_external_port  = {"p2p-external-port", "External port for p2p network protocol (if port forwarding used with NAT)", 0};
-    const command_line::arg_descriptor<bool>        arg_p2p_allow_local_ip = {"allow-local-ip", "Allow local ip add to peer list, mostly in debug purposes"};
-    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer   = {"add-peer", "Manually add peer to local peerlist"};
-    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_priority_node   = {"add-priority-node", "Specify list of peers to connect to and attempt to keep the connection open"};
-    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_exclusive_node   = {"add-exclusive-node", "Specify list of peers to connect to only."
-                                                                                                  " If this option is given the options add-priority-node and seed-node are ignored"};
-    const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_seed_node   = {"seed-node", "Connect to a node to retrieve peer addresses, and disconnect"};
-    const command_line::arg_descriptor<bool> arg_p2p_hide_my_port   =    {"hide-my-port", "Do not announce yourself as peerlist candidate", false, true};
+namespace CryptoNote {
+namespace {
 
-    std::string print_peerlist_to_string(const std::list<PeerlistEntry>& pl) {
-      time_t now_time = 0;
-      time(&now_time);
-      std::stringstream ss;
-      ss << std::setfill('0') << std::setw(8) << std::hex << std::noshowbase;
-      for (const auto& pe : pl) {
-        ss << pe.id << "\t" << pe.adr << " \tlast_seen: " << Common::timeIntervalToString(now_time - pe.last_seen) << std::endl;
-      }
-      return ss.str();
-    }
+const command_line::arg_descriptor<std::string> arg_p2p_bind_ip        = {"p2p-bind-ip", "Interface for p2p network protocol", "0.0.0.0"};
+const command_line::arg_descriptor<std::string> arg_p2p_bind_port      = {"p2p-bind-port", "Port for p2p network protocol", std::to_string(CryptoNote::P2P_DEFAULT_PORT)};
+const command_line::arg_descriptor<uint32_t>    arg_p2p_external_port  = {"p2p-external-port", "External port for p2p network protocol (if port forwarding used with NAT)", 0};
+const command_line::arg_descriptor<bool>        arg_p2p_allow_local_ip = {"allow-local-ip", "Allow local ip add to peer list, mostly in debug purposes"};
+const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer   = {"add-peer", "Manually add peer to local peerlist"};
+const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_priority_node   = {"add-priority-node", "Specify list of peers to connect to and attempt to keep the connection open"};
+const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_exclusive_node   = {"add-exclusive-node", "Specify list of peers to connect to only."
+                                                                                              " If this option is given the options add-priority-node and seed-node are ignored"};
+const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_seed_node   = {"seed-node", "Connect to a node to retrieve peer addresses, and disconnect"};
+const command_line::arg_descriptor<bool> arg_p2p_hide_my_port   =    {"hide-my-port", "Do not announce yourself as peerlist candidate", false, true};
+
+std::string print_peerlist_to_string(const std::list<PeerlistEntry>& pl) {
+  time_t now_time = 0;
+  time(&now_time);
+  std::stringstream ss;
+  ss << std::setfill('0') << std::setw(8) << std::hex << std::noshowbase;
+  for (const auto& pe : pl) {
+    ss << pe.id << "\t" << pe.adr << " \tlast_seen: " << Common::timeIntervalToString(now_time - pe.last_seen) << std::endl;
   }
+  return ss.str();
+}
+
+}
 
 
   //-----------------------------------------------------------------------------------
@@ -1014,7 +1014,7 @@ namespace CryptoNote
     rsp.incoming_connections_count = rsp.connections_count - get_outgoing_connections_count();
     rsp.version = PROJECT_VERSION_LONG;
     rsp.os_version = Tools::get_os_version_string();
-    m_payload_handler.get_stat_info(rsp.payload_info);
+    rsp.payload_info = m_payload_handler.getStatistics();
     return 1;
   }
   //-----------------------------------------------------------------------------------
@@ -1317,7 +1317,6 @@ namespace CryptoNote
     try {
       while (!m_stop) {
         idle_worker();
-        m_payload_handler.on_idle();
         m_idleTimer.sleep(std::chrono::seconds(1));
       }
     } catch (System::InterruptedException&) {

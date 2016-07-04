@@ -58,6 +58,7 @@ struct TestStruct {
   uint64_t u64;
   std::vector<TestElement> vec1;
   std::vector<TestElement> vec2;
+  std::vector<std::vector<TestElement>> vecOfVec;
   TestElement root;
 
   bool operator == (const TestStruct& other) const {
@@ -67,13 +68,15 @@ struct TestStruct {
       u32 == other.u32 &&
       u64 == other.u64 &&
       vec1 == other.vec1 &&
-      vec2 == other.vec2;
+      vec2 == other.vec2 && 
+      vecOfVec == other.vecOfVec;
   }
 
   void serialize(ISerializer& s) {
     s(root, "root");
     s(vec1, "vec1");
     s(vec2, "vec2");
+    s(vecOfVec, "vecOfVec");
     s(u8, "u8");
     s(u32, "u32");
     s(u64, "u64");
@@ -127,6 +130,21 @@ TEST(KVSerialize, BigCollection) {
   TestElement sample;
   sample.nonce = 101;
   ts1.vec1.resize(0x10000 >> 2, sample);
+
+  TestStruct ts2;
+
+  std::string buf = CryptoNote::storeToBinaryKeyValue(ts1);
+  ASSERT_TRUE(CryptoNote::loadFromBinaryKeyValue(ts2, buf));
+  EXPECT_EQ(ts1, ts2);
+}
+
+TEST(KVSerialize, DISABLED_CollectionOfCollections) {
+  TestStruct ts1;
+
+  TestElement sample;
+  sample.nonce = 101;
+  ts1.vec1.resize(0x10000 >> 10, sample);
+  ts1.vecOfVec.resize(0x10000 >> 14, ts1.vec1);
 
   TestStruct ts2;
 

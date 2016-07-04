@@ -42,9 +42,7 @@ namespace CryptoNote
 {
   class Currency;
 
-  class CryptoNoteProtocolHandler : 
-    public i_cryptonote_protocol, 
-    public ICryptoNoteProtocolQuery
+  class CryptoNoteProtocolHandler : public ICryptoNoteProtocolHandler
   {
   public:
 
@@ -61,10 +59,9 @@ namespace CryptoNote
     // Interface t_payload_net_handler, where t_payload_net_handler is template argument of nodetool::node_server
     void stop();
     bool start_sync(CryptoNoteConnectionContext& context);
-    bool on_idle();
     void onConnectionOpened(CryptoNoteConnectionContext& context);
     void onConnectionClosed(CryptoNoteConnectionContext& context);
-    bool get_stat_info(core_stat_info& stat_inf);
+    CoreStatistics getStatistics();
     bool get_payload_sync_data(CORE_SYNC_DATA& hshd);
     bool process_payload_sync_data(const CORE_SYNC_DATA& hshd, CryptoNoteConnectionContext& context, bool is_inital);
     int handleCommand(bool is_notify, int command, const BinaryArray& in_buff, BinaryArray& buff_out, CryptoNoteConnectionContext& context, bool& handled);
@@ -83,8 +80,8 @@ namespace CryptoNote
     int handleRequestTxPool(int command, NOTIFY_REQUEST_TX_POOL::request& arg, CryptoNoteConnectionContext& context);
 
     //----------------- i_cryptonote_protocol ----------------------------------
-    virtual void relay_block(NOTIFY_NEW_BLOCK::request& arg) override;
-    virtual void relay_transactions(NOTIFY_NEW_TRANSACTIONS::request& arg) override;
+    virtual void relayBlock(NOTIFY_NEW_BLOCK::request& arg) override;
+    virtual void relayTransactions(const std::vector<BinaryArray>& transactions) override;
 
     //----------------------------------------------------------------------------------
     uint32_t get_current_blockchain_height();
@@ -92,7 +89,7 @@ namespace CryptoNote
     bool on_connection_synchronized();
     void updateObservedHeight(uint32_t peerHeight, const CryptoNoteConnectionContext& context);
     void recalculateMaxObservedHeight(const CryptoNoteConnectionContext& context);
-    int processObjects(CryptoNoteConnectionContext& context, const std::vector<block_complete_entry>& blocks);
+    int processObjects(CryptoNoteConnectionContext& context, std::vector<RawBlock>&& rawBlocks, const std::vector<CachedBlock>& cachedBlocks);
     Logging::LoggerRef logger;
 
   private:

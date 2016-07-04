@@ -22,20 +22,27 @@
 #include <unordered_set>
 
 #include "IBlockchainExplorer.h"
+#include "IDataBase.h"
 #include "INode.h"
 
-#include "Common/ObserverManager.h"
 #include "BlockchainExplorerErrors.h"
-
+#include "Common/ObserverManager.h"
+#include "Serialization/BinaryInputStreamSerializer.h"
+#include "Serialization/BinaryOutputStreamSerializer.h"
 #include "Wallet/WalletAsyncContextCounter.h"
 
 #include "Logging/LoggerRef.h"
 
 namespace CryptoNote {
 
+enum State {
+  NOT_INITIALIZED,
+  INITIALIZED
+};
+
 class BlockchainExplorer : public IBlockchainExplorer, public INodeObserver {
 public:
-  BlockchainExplorer(INode& node, Logging::ILogger& logger);
+  BlockchainExplorer(INode& node, Logging::ILogger& logger/*, IDataBase& dataBase*/);
 
   BlockchainExplorer(const BlockchainExplorer&) = delete;
   BlockchainExplorer(BlockchainExplorer&&) = delete;
@@ -56,7 +63,6 @@ public:
 
   virtual bool getTransactions(const std::vector<Crypto::Hash>& transactionHashes, std::vector<TransactionDetails>& transactions) override;
   virtual bool getTransactionsByPaymentId(const Crypto::Hash& paymentId, std::vector<TransactionDetails>& transactions) override;
-  virtual bool getPoolTransactions(uint64_t timestampBegin, uint64_t timestampEnd, uint32_t transactionsNumberLimit, std::vector<TransactionDetails>& transactions, uint64_t& transactionsNumberWithinTimestamps) override;
   virtual bool getPoolState(const std::vector<Crypto::Hash>& knownPoolTransactionHashes, Crypto::Hash knownBlockchainTop, bool& isBlockchainActual, std::vector<TransactionDetails>& newTransactions, std::vector<Crypto::Hash>& removedTransactions) override;
 
   virtual uint64_t getRewardBlocksWindow() override;
@@ -68,8 +74,9 @@ public:
   virtual void shutdown() override;
 
   virtual void poolChanged() override;
-  virtual void blockchainSynchronized(uint32_t topHeight) override;
-  virtual void localBlockchainUpdated(uint32_t height) override;
+  virtual void blockchainSynchronized(uint32_t topIndex) override;
+  virtual void localBlockchainUpdated(uint32_t index) override;
+  virtual void chainSwitched(uint32_t newTopIndex, uint32_t commonRoot, const std::vector<Crypto::Hash>& hashes) override;
 
   typedef WalletAsyncContextCounter AsyncContextCounter;
 
@@ -93,14 +100,14 @@ private:
     std::atomic<State> m_state;
   };
 
-  enum State {
-    NOT_INITIALIZED,
-    INITIALIZED
-  };
+  bool getBlockchainTop(BlockDetails& topBlock, bool checkInitialization);
+  bool getBlocks(const std::vector<uint32_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks, bool checkInitialization);
+
+  void rebuildIndexes();
+  void handleBlockchainUpdatedNotification(const std::vector<std::vector<BlockDetails>>& blocks);
 
   BlockDetails knownBlockchainTop;
-  uint32_t knownBlockchainTopHeight;
-  std::unordered_set<Crypto::Hash> knownPoolState;
+  std::unordered_map<Crypto::Hash, TransactionDetails> knownPoolState;
 
   std::atomic<State> state;
   std::atomic<bool> synchronized;
@@ -111,6 +118,7 @@ private:
 
   INode& node;
   Logging::LoggerRef logger;
+  IDataBase& database;
 
   AsyncContextCounter asyncContextCounter;
   PoolUpdateGuard poolUpdateGuard;

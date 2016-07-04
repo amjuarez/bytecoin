@@ -96,7 +96,7 @@ namespace {
       return finalTx;
     }
 
-    std::unique_ptr<ITransactionReader> addSpendingTransaction(const Hash& sourceTx, uint64_t height, uint32_t outputIndex, uint64_t amount = TEST_OUTPUT_AMOUNT, bool fixedKey = false) {
+    std::unique_ptr<ITransactionReader> addSpendingTransaction(const Hash& sourceTx, uint32_t height, uint32_t outputIndex, uint64_t amount = TEST_OUTPUT_AMOUNT, bool fixedKey = false) {
       auto outputs = container.getTransactionOutputs(sourceTx, ITransfersContainer::IncludeTypeAll |
         ITransfersContainer::IncludeStateUnlocked | ITransfersContainer::IncludeStateSoftLocked);
 

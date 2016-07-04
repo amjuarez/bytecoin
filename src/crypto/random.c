@@ -26,7 +26,9 @@
 static void generate_system_random_bytes(size_t n, void *result);
 
 #if defined(_WIN32)
-
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <wincrypt.h>
 

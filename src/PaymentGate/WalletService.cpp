@@ -36,6 +36,7 @@
 #include "CryptoNoteCore/TransactionExtra.h"
 
 #include <System/EventLock.h>
+#include <System/RemoteContext.h>
 
 #include "PaymentServiceJsonRpcMessages.h"
 #include "NodeFactory.h"
@@ -91,7 +92,11 @@ bool getPaymentIdFromExtra(const std::string& binaryString, Crypto::Hash& paymen
 std::string getPaymentIdStringFromExtra(const std::string& binaryString) {
   Crypto::Hash paymentId;
 
-  if (!getPaymentIdFromExtra(binaryString, paymentId)) {
+  try {
+    if (!getPaymentIdFromExtra(binaryString, paymentId)) {
+      return std::string();
+    }
+  } catch (std::exception&) {
     return std::string();
   }
 
@@ -931,8 +936,18 @@ std::error_code WalletService::getStatus(uint32_t& blockCount, uint32_t& knownBl
   try {
     System::EventLock lk(readyEvent);
 
-    knownBlockCount = node.getKnownBlockCount();
-    peerCount = static_cast<uint32_t>(node.getPeerCount());
+    System::RemoteContext<std::pair<uint32_t, uint32_t>> remoteContext(dispatcher, [this] () {
+      std::pair<uint32_t, uint32_t> res;
+      res.first = node.getKnownBlockCount();
+      res.second = static_cast<uint32_t>(node.getPeerCount());
+
+      return res;
+    });
+
+    auto remoteResult = remoteContext.get();
+    knownBlockCount = remoteResult.first;
+    peerCount = remoteResult.second;
+
     blockCount = wallet.getBlockCount();
 
     auto lastHashes = wallet.getBlockHashes(blockCount - 1, 1);

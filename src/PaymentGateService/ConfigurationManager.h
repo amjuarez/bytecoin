@@ -17,7 +17,6 @@
 
 #pragma once
 
-#include "CryptoNoteCore/CoreConfig.h"
 #include "PaymentServiceConfiguration.h"
 #include "P2p/NetNodeConfig.h"
 #include "RpcNodeConfiguration.h"
@@ -32,8 +31,8 @@ public:
   bool startInprocess;
   Configuration gateConfiguration;
   CryptoNote::NetNodeConfig netNodeConfig;
-  CryptoNote::CoreConfig coreConfig;
   RpcNodeConfiguration remoteNodeConfig;
+  std::string dataDir;
 };
 
 } //namespace PaymentService

@@ -43,7 +43,7 @@ gen_simple_chain_split_1::gen_simple_chain_split_1()
 //-----------------------------------------------------------------------------------------------------
 bool gen_simple_chain_split_1::generate(std::vector<test_event_entry> &events) const
 {
-  uint64_t ts_start = 1338224400;
+  //uint64_t ts_start = 1338224400;
   /*
    1    2    3    4    5    6     7     8      9    10    11    12    13    14    15    16    17    18   19   20     21    22    23   <-- main blockchain height
   (0 )-(1 )-(2 )-(3 )-(4 )-(5 ) -(6 ) -(7 ) -(8 )|-(17) -(18) -(19) -(20) -(21)|-(22)|-(23)|-(24)|
@@ -144,156 +144,156 @@ bool gen_simple_chain_split_1::generate(std::vector<test_event_entry> &events) c
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_mempool_2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_mempool_2(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_mempool_2");
-  CHECK_TEST_CONDITION(c.get_pool_transactions_count() == 2);
+  CHECK_TEST_CONDITION(c.getPoolTransactionCount() == 2);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_mempool_1(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_mempool_1(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_mempool_1");
-  CHECK_TEST_CONDITION(c.get_pool_transactions_count() == 3);
+  CHECK_TEST_CONDITION(c.getPoolTransactionCount() == 3);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_not_switched(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_not_switched(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_not_switched");
   //check height
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 9);
-  CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 9);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[8])));
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 2);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 9);
+  CHECK_TEST_CONDITION(c.getBlockchainTransactionCount() == 9);
+  CHECK_TEST_CONDITION(c.getTopBlockHash() == getBlockHash(boost::get<CryptoNote::BlockTemplate>(events[8])));
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 2);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_not_switched2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_not_switched2(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_not_switched2");
   //check height
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 9);
-  CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 9);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[8])));
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 3);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 9);
+  CHECK_TEST_CONDITION(c.getBlockchainTransactionCount() == 9);
+  CHECK_TEST_CONDITION(c.getTopBlockHash() == getBlockHash(boost::get<CryptoNote::BlockTemplate>(events[8])));
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 3);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_switched(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_switched(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_switched");
 
   //check height
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 10);
-  CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 10);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[14])));
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 3);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 10);
+  CHECK_TEST_CONDITION(c.getBlockchainTransactionCount() == 10);
+  CHECK_TEST_CONDITION(c.getTopBlockHash() == getBlockHash(boost::get<CryptoNote::BlockTemplate>(events[14])));
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 3);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_not_switched_back(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_not_switched_back(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_not_switched_back");
   //check height
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 14);
-  CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 14);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[19])));
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 8);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 14);
+  CHECK_TEST_CONDITION(c.getBlockchainTransactionCount() == 14);
+  CHECK_TEST_CONDITION(c.getTopBlockHash() == getBlockHash(boost::get<CryptoNote::BlockTemplate>(events[19])));
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 8);
 
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_switched_back_1(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_switched_back_1(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_switched_back_1");
 
   //check height
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 15);
-  CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 15);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[26])));
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 8);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 15);
+  CHECK_TEST_CONDITION(c.getBlockchainTransactionCount() == 15);
+  CHECK_TEST_CONDITION(c.getTopBlockHash() == getBlockHash(boost::get<CryptoNote::BlockTemplate>(events[26])));
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 8);
 
   return true;
 }//-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_split_switched_back_2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_split_switched_back_2(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_split_switched_back_2");
 
   //check height
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height() == 16);
-  CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 16);
-  CHECK_TEST_CONDITION(c.get_tail_id() == get_block_hash(boost::get<CryptoNote::Block>(events[28])));
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 8);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 16);
+  CHECK_TEST_CONDITION(c.getBlockchainTransactionCount() == 16);
+  CHECK_TEST_CONDITION(c.getTopBlockHash() == getBlockHash(boost::get<CryptoNote::BlockTemplate>(events[28])));
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 8);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
 /*
-bool gen_simple_chain_split_1::check_orphaned_chain_1(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_1(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_1");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 2);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_switched_to_alternative(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_switched_to_alternative(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_switched_to_alternative");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 0);
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 17);
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 11);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 17);
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 11);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_2(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_2(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_2");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 4);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_switched_to_main(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_switched_to_main(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_switched_to_main");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 0);
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 19);
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 14);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 19);
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 14);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_38(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_38(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_38");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 6);
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 14);
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 19);
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 14);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 19);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_39(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_39(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_39");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 4);
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 17);
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 19);
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 17);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 19);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_40(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_40(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_40");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 5);
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 17);
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 19);
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 17);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 19);
   return true;
 }
 //-----------------------------------------------------------------------------------------------------
-bool gen_simple_chain_split_1::check_orphaned_chain_41(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)
+bool gen_simple_chain_split_1::check_orphaned_chain_41(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   DEFINE_TESTS_ERROR_CONTEXT("gen_simple_chain_split_1::check_orphaned_chain_41");
   CHECK_TEST_CONDITION(c.get_orphaned_by_prev_blocks_count() == 0);
-  CHECK_TEST_CONDITION(c.get_alternative_blocks_count() == 19);
-  CHECK_TEST_CONDITION(c.get_current_blockchain_height()== 23);
+  CHECK_TEST_CONDITION(c.getAlternativeBlockCount() == 19);
+  CHECK_TEST_CONDITION(c.getTopBlockIndex() + 1 == 23);
 
   return true;
 }*/

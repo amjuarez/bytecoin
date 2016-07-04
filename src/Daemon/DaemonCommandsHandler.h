@@ -23,14 +23,14 @@
 #include <Logging/LoggerManager.h>
 
 namespace CryptoNote {
-class core;
+class Core;
 class NodeServer;
 }
 
 class DaemonCommandsHandler
 {
 public:
-  DaemonCommandsHandler(CryptoNote::core& core, CryptoNote::NodeServer& srv, Logging::LoggerManager& log);
+  DaemonCommandsHandler(CryptoNote::Core& core, CryptoNote::NodeServer& srv, Logging::LoggerManager& log);
 
   bool start_handling() {
     m_consoleHandler.start();
@@ -44,7 +44,7 @@ public:
 private:
 
   Common::ConsoleHandler m_consoleHandler;
-  CryptoNote::core& m_core;
+  CryptoNote::Core& m_core;
   CryptoNote::NodeServer& m_srv;
   Logging::LoggerRef logger;
   Logging::LoggerManager& m_logManager;

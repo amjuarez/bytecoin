@@ -39,8 +39,8 @@ namespace CryptoNote {
     bool m_headerOnly;
   };
 
-  inline ParentBlockSerializer makeParentBlockSerializer(const Block& b, bool hashingSerialization, bool headerOnly) {
-    Block& blockRef = const_cast<Block&>(b);
+  inline ParentBlockSerializer makeParentBlockSerializer(const BlockTemplate& b, bool hashingSerialization, bool headerOnly) {
+    BlockTemplate& blockRef = const_cast<BlockTemplate&>(b);
     return ParentBlockSerializer(blockRef.parentBlock, blockRef.timestamp, blockRef.nonce, hashingSerialization, headerOnly);
   }
 

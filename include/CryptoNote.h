@@ -87,7 +87,7 @@ struct BlockHeader {
   Crypto::Hash previousBlockHash;
 };
 
-struct Block : public BlockHeader {
+struct BlockTemplate : public BlockHeader {
   ParentBlock parentBlock;
   Transaction baseTransaction;
   std::vector<Crypto::Hash> transactionHashes;
@@ -110,5 +110,10 @@ struct KeyPair {
 };
 
 using BinaryArray = std::vector<uint8_t>;
+
+struct RawBlock {
+  BinaryArray block; //BlockTemplate
+  std::vector<BinaryArray> transactions;
+};
 
 }

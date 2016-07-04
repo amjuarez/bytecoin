@@ -46,7 +46,7 @@ namespace CryptoNote
     m_currency(currency),
     logger(log, "miner"),
     m_stop(true),
-    m_template(boost::value_initialized<Block>()),
+    m_template(boost::value_initialized<BlockTemplate>()),
     m_template_no(0),
     m_diffic(0),
     m_handler(handler),
@@ -67,20 +67,22 @@ namespace CryptoNote
     stop();
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::set_block_template(const Block& bl, const difficulty_type& di) {
+  bool miner::set_block_template(const BlockTemplate& bl, const Difficulty& di) {
     std::lock_guard<decltype(m_template_lock)> lk(m_template_lock);
 
     m_template = bl;
 
     if (m_template.majorVersion >= BLOCK_MAJOR_VERSION_2) {
-      CryptoNote::TransactionExtraMergeMiningTag mm_tag;
-      mm_tag.depth = 0;
-      if (!CryptoNote::get_aux_block_header_hash(m_template, mm_tag.merkleRoot)) {
-        return false;
-      }
-
-      m_template.parentBlock.baseTransaction.extra.clear();
-      if (!CryptoNote::appendMergeMiningTagToExtra(m_template.parentBlock.baseTransaction.extra, mm_tag)) {
+      CachedBlock cachedBlk(m_template);
+      CryptoNote::TransactionExtraMergeMiningTag mmTag;
+      mmTag.depth = 0;
+      try {
+        m_template.parentBlock.baseTransaction.extra.clear();
+        mmTag.merkleRoot = cachedBlk.getAuxiliaryBlockHeaderHash();
+        if (!CryptoNote::appendMergeMiningTagToExtra(m_template.parentBlock.baseTransaction.extra, mmTag)) {
+          return false;
+        }
+      } catch (std::exception&) {
         return false;
       }
     }
@@ -100,8 +102,8 @@ namespace CryptoNote
   }
   //-----------------------------------------------------------------------------------------------------
   bool miner::request_block_template() {
-    Block bl = boost::value_initialized<Block>();
-    difficulty_type di = 0;
+    BlockTemplate bl = boost::value_initialized<BlockTemplate>();
+    Difficulty di = 0;
     uint32_t height;
     CryptoNote::BinaryArray extra_nonce;
 
@@ -276,7 +278,7 @@ namespace CryptoNote
     return true;
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::find_nonce_for_given_block(Crypto::cn_context &context, Block& bl, const difficulty_type& diffic) {
+  bool miner::find_nonce_for_given_block(Crypto::cn_context &context, BlockTemplate& bl, const Difficulty& diffic) {
 
     unsigned nthreads = std::thread::hardware_concurrency();
 
@@ -291,12 +293,15 @@ namespace CryptoNote
           Crypto::cn_context localctx;
           Crypto::Hash h;
 
-          Block lb(bl); // copy to local block
+          BlockTemplate lb(bl); // copy to local block
 
           for (uint32_t nonce = startNonce + i; !found; nonce += nthreads) {
             lb.nonce = nonce;
 
-            if (!get_block_longhash(localctx, lb, h)) {
+            CachedBlock cb(lb);
+            try {
+              h = cb.getBlockLongHash(localctx);
+            } catch (std::exception&) {
               return;
             }
 
@@ -321,7 +326,10 @@ namespace CryptoNote
     } else {
       for (; bl.nonce != std::numeric_limits<uint32_t>::max(); bl.nonce++) {
         Crypto::Hash h;
-        if (!get_block_longhash(context, bl, h)) {
+        CachedBlock cb(bl);
+        try {
+          h = cb.getBlockLongHash(context);
+        } catch (std::exception&) {
           return false;
         }
 
@@ -366,10 +374,10 @@ namespace CryptoNote
   {
     logger(INFO) << "Miner thread was started ["<< th_local_index << "]";
     uint32_t nonce = m_starter_nonce + th_local_index;
-    difficulty_type local_diff = 0;
+    Difficulty local_diff = 0;
     uint32_t local_template_ver = 0;
     Crypto::cn_context context;
-    Block b;
+    BlockTemplate b;
 
     while(!m_stop)
     {
@@ -398,9 +406,15 @@ namespace CryptoNote
 
       b.nonce = nonce;
       Crypto::Hash h;
-      if (!m_stop && !get_block_longhash(context, b, h)) {
-        logger(ERROR) << "Failed to get block long hash";
-        m_stop = true;
+
+      CachedBlock cb(b);
+      if (!m_stop) {
+        try {
+          h = cb.getBlockLongHash(context);
+        } catch (std::exception& e) {
+          logger(ERROR) << "getBlockLongHash failed: " << e.what();
+          m_stop = true;
+        }
       }
 
       if (!m_stop && check_hash(h, local_diff))

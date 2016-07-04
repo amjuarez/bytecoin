@@ -36,21 +36,6 @@
 
 using namespace CryptoNote;
 
-/*
-class TransfersObserver : public ITransfersObserver {
-public:
-
-  virtual void onTransactionUpdated(ITransfersSubscription* object, const Hash& transactionHash,
-    uint64_t amountIn, uint64_t amountOut) override {
-    std::lock_guard<std::mutex> lk(m_mutex);
-    m_transfers.push_back(std::make_pair(transactionHash, amountIn - amountOut));
-  }
-
-  std::vector<std::pair<Hash, int64_t>> m_transfers;
-  std::mutex m_mutex;
-}; */
-
-
 class INodeStubWithPoolTx : public INodeTrivialRefreshStub {
 public:
   INodeStubWithPoolTx(TestBlockchainGenerator& generator) : INodeTrivialRefreshStub(generator), detached(false) {}

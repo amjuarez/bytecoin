@@ -22,6 +22,9 @@
 #include <boost/config.hpp>
 
 #ifdef BOOST_WINDOWS
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #endif
 

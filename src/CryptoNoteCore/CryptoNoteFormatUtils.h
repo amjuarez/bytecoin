@@ -66,25 +66,17 @@ bool lookup_acc_outs(const AccountKeys& acc, const Transaction& tx, std::vector<
 bool get_tx_fee(const Transaction& tx, uint64_t & fee);
 uint64_t get_tx_fee(const Transaction& tx);
 bool generate_key_image_helper(const AccountKeys& ack, const Crypto::PublicKey& tx_public_key, size_t real_output_index, KeyPair& in_ephemeral, Crypto::KeyImage& ki);
+bool getInputsMoneyAmount(const Transaction& tx, uint64_t& money);
+bool checkInputTypesSupported(const TransactionPrefix& tx);
+bool checkOutsValid(const TransactionPrefix& tx, std::string* error = nullptr);
+bool checkMultisignatureInputsDiff(const TransactionPrefix& tx);
+bool checkMoneyOverflow(const TransactionPrefix &tx);
+bool checkInputsOverflow(const TransactionPrefix &tx);
+bool checkOutsOverflow(const TransactionPrefix& tx);
+uint64_t get_outs_money_amount(const Transaction& tx);
 std::string short_hash_str(const Crypto::Hash& h);
 
-bool get_block_hashing_blob(const Block& b, BinaryArray& blob);
-bool get_parent_block_hashing_blob(const Block& b, BinaryArray& blob);
-bool get_aux_block_header_hash(const Block& b, Crypto::Hash& res);
-bool get_block_hash(const Block& b, Crypto::Hash& res);
-Crypto::Hash get_block_hash(const Block& b);
-bool get_block_longhash(Crypto::cn_context &context, const Block& b, Crypto::Hash& res);
-bool get_inputs_money_amount(const Transaction& tx, uint64_t& money);
-uint64_t get_outs_money_amount(const Transaction& tx);
-bool check_inputs_types_supported(const TransactionPrefix& tx);
-bool check_outs_valid(const TransactionPrefix& tx, std::string* error = 0);
-bool checkMultisignatureInputsDiff(const TransactionPrefix& tx);
-
-bool check_money_overflow(const TransactionPrefix& tx);
-bool check_outs_overflow(const TransactionPrefix& tx);
-bool check_inputs_overflow(const TransactionPrefix& tx);
-uint32_t get_block_height(const Block& b);
-std::vector<uint32_t> relative_output_offsets_to_absolute(const std::vector<uint32_t>& off);
+std::vector<uint32_t> relativeOutputOffsetsToAbsolute(const std::vector<uint32_t>& off);
 std::vector<uint32_t> absolute_output_offsets_to_relative(const std::vector<uint32_t>& off);
 
 
@@ -120,9 +112,5 @@ void decompose_amount_into_digits(uint64_t amount, uint64_t dust_threshold, cons
     dust_handler(dust);
   }
 }
-
-void get_tx_tree_hash(const std::vector<Crypto::Hash>& tx_hashes, Crypto::Hash& h);
-Crypto::Hash get_tx_tree_hash(const std::vector<Crypto::Hash>& tx_hashes);
-Crypto::Hash get_tx_tree_hash(const Block& b);
 
 }
