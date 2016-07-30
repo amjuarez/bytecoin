@@ -25,17 +25,17 @@
 #include "Serialization/BinaryInputStreamSerializer.h"
 #include "CryptoNoteSerialization.h"
 
+
 namespace CryptoNote {
 
 void getBinaryArrayHash(const BinaryArray& binaryArray, Crypto::Hash& hash);
 Crypto::Hash getBinaryArrayHash(const BinaryArray& binaryArray);
 
+// noexcept
 template<class T>
 bool toBinaryArray(const T& object, BinaryArray& binaryArray) {
   try {
-    ::Common::VectorOutputStream stream(binaryArray);
-    BinaryOutputStreamSerializer serializer(stream);
-    serialize(const_cast<T&>(object), serializer);
+    binaryArray = toBinaryArray(object);
   } catch (std::exception&) {
     return false;
   }
@@ -46,25 +46,38 @@ bool toBinaryArray(const T& object, BinaryArray& binaryArray) {
 template<>
 bool toBinaryArray(const BinaryArray& object, BinaryArray& binaryArray); 
 
+// throws exception if serialization failed
 template<class T>
 BinaryArray toBinaryArray(const T& object) {
   BinaryArray ba;
-  toBinaryArray(object, ba);
+  ::Common::VectorOutputStream stream(ba);
+  BinaryOutputStreamSerializer serializer(stream);
+  serialize(const_cast<T&>(object), serializer);
   return ba;
 }
 
 template<class T>
-bool fromBinaryArray(T& object, const BinaryArray& binaryArray) {
-  bool result = false;
-  try {
-    Common::MemoryInputStream stream(binaryArray.data(), binaryArray.size());
-    BinaryInputStreamSerializer serializer(stream);
-    serialize(object, serializer);
-    result = stream.endOfStream(); // check that all data was consumed
-  } catch (std::exception&) {
+T fromBinaryArray(const BinaryArray& binaryArray) {
+  T object;
+  Common::MemoryInputStream stream(binaryArray.data(), binaryArray.size());
+  BinaryInputStreamSerializer serializer(stream);
+  serialize(object, serializer);
+  if (!stream.endOfStream()) { // check that all data was consumed
+    throw std::runtime_error("failed to unpack type");
   }
 
-  return result;
+  return object;
+}
+
+template<class T>
+bool fromBinaryArray(T& object, const BinaryArray& binaryArray) {
+  try {
+    object = fromBinaryArray<T>(binaryArray);
+  } catch (std::exception&) {
+    return false;
+  }
+
+  return true;
 }
 
 template<class T>

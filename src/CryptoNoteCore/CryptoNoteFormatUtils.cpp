@@ -112,6 +112,21 @@ uint64_t get_tx_fee(const Transaction& tx) {
   return r;
 }
 
+std::vector<uint32_t> relativeOutputOffsetsToAbsolute(const std::vector<uint32_t>& off) {
+  std::vector<uint32_t> res = off;
+  for (size_t i = 1; i < res.size(); i++)
+    res[i] += res[i - 1];
+  return res;
+}
+
+std::vector<uint32_t> absolute_output_offsets_to_relative(const std::vector<uint32_t>& off) {
+  if (off.empty()) return {};
+  auto copy = off;
+  for (size_t i = 1; i < copy.size(); ++i) {
+    copy[i] = off[i] - off[i-1];
+  }
+  return copy;
+}
 
 bool constructTransaction(
   const AccountKeys& sender_account_keys,
@@ -249,7 +264,7 @@ bool constructTransaction(
   return true;
 }
 
-bool get_inputs_money_amount(const Transaction& tx, uint64_t& money) {
+bool getInputsMoneyAmount(const Transaction& tx, uint64_t& money) {
   money = 0;
 
   for (const auto& in : tx.inputs) {
@@ -266,18 +281,7 @@ bool get_inputs_money_amount(const Transaction& tx, uint64_t& money) {
   return true;
 }
 
-uint32_t get_block_height(const Block& b) {
-  if (b.baseTransaction.inputs.size() != 1) {
-    return 0;
-  }
-  const auto& in = b.baseTransaction.inputs[0];
-  if (in.type() != typeid(BaseInput)) {
-    return 0;
-  }
-  return boost::get<BaseInput>(in).blockIndex;
-}
-
-bool check_inputs_types_supported(const TransactionPrefix& tx) {
+bool checkInputTypesSupported(const TransactionPrefix& tx) {
   for (const auto& in : tx.inputs) {
     if (in.type() != typeid(KeyInput) && in.type() != typeid(MultisignatureInput)) {
       return false;
@@ -287,7 +291,7 @@ bool check_inputs_types_supported(const TransactionPrefix& tx) {
   return true;
 }
 
-bool check_outs_valid(const TransactionPrefix& tx, std::string* error) {
+bool checkOutsValid(const TransactionPrefix& tx, std::string* error) {
   for (const TransactionOutput& out : tx.outputs) {
     if (out.target.type() == typeid(KeyOutput)) {
       if (out.amount == 0) {
@@ -343,11 +347,11 @@ bool checkMultisignatureInputsDiff(const TransactionPrefix& tx) {
   return true;
 }
 
-bool check_money_overflow(const TransactionPrefix &tx) {
-  return check_inputs_overflow(tx) && check_outs_overflow(tx);
+bool checkMoneyOverflow(const TransactionPrefix &tx) {
+  return checkInputsOverflow(tx) && checkOutsOverflow(tx);
 }
 
-bool check_inputs_overflow(const TransactionPrefix &tx) {
+bool checkInputsOverflow(const TransactionPrefix &tx) {
   uint64_t money = 0;
 
   for (const auto &in : tx.inputs) {
@@ -367,7 +371,7 @@ bool check_inputs_overflow(const TransactionPrefix &tx) {
   return true;
 }
 
-bool check_outs_overflow(const TransactionPrefix& tx) {
+bool checkOutsOverflow(const TransactionPrefix& tx) {
   uint64_t money = 0;
   for (const auto& o : tx.outputs) {
     if (money > o.amount + money)
@@ -439,112 +443,6 @@ bool lookup_acc_outs(const AccountKeys& acc, const Transaction& tx, const Public
     ++outputIndex;
   }
   return true;
-}
-
-bool get_block_hashing_blob(const Block& b, BinaryArray& ba) {
-  if (!toBinaryArray(static_cast<const BlockHeader&>(b), ba)) {
-    return false;
-  }
-
-  Hash treeRootHash = get_tx_tree_hash(b);
-  ba.insert(ba.end(), treeRootHash.data, treeRootHash.data + 32);
-  auto transactionCount = asBinaryArray(Tools::get_varint_data(b.transactionHashes.size() + 1));
-  ba.insert(ba.end(), transactionCount.begin(), transactionCount.end());
-  return true;
-}
-
-bool get_parent_block_hashing_blob(const Block& b, BinaryArray& blob) {
-  auto serializer = makeParentBlockSerializer(b, true, true);
-  return toBinaryArray(serializer, blob);
-}
-
-bool get_block_hash(const Block& b, Hash& res) {
-  BinaryArray ba;
-  if (!get_block_hashing_blob(b, ba)) {
-    return false;
-  }
-
-  if (BLOCK_MAJOR_VERSION_2 <= b.majorVersion) {
-    BinaryArray parent_blob;
-    auto serializer = makeParentBlockSerializer(b, true, false);
-    if (!toBinaryArray(serializer, parent_blob))
-      return false;
-
-    ba.insert(ba.end(), parent_blob.begin(), parent_blob.end());
-  }
-
-  return getObjectHash(ba, res);
-}
-
-Hash get_block_hash(const Block& b) {
-  Hash p = NULL_HASH;
-  get_block_hash(b, p);
-  return p;
-}
-
-bool get_aux_block_header_hash(const Block& b, Hash& res) {
-  BinaryArray blob;
-  if (!get_block_hashing_blob(b, blob)) {
-    return false;
-  }
-
-  return getObjectHash(blob, res);
-}
-
-bool get_block_longhash(cn_context &context, const Block& b, Hash& res) {
-  BinaryArray bd;
-  if (b.majorVersion == BLOCK_MAJOR_VERSION_1) {
-    if (!get_block_hashing_blob(b, bd)) {
-      return false;
-    }
-  } else if (b.majorVersion >= BLOCK_MAJOR_VERSION_2) {
-    if (!get_parent_block_hashing_blob(b, bd)) {
-      return false;
-    }
-  } else {
-    return false;
-  }
-  cn_slow_hash(context, bd.data(), bd.size(), res);
-  return true;
-}
-
-std::vector<uint32_t> relative_output_offsets_to_absolute(const std::vector<uint32_t>& off) {
-  std::vector<uint32_t> res = off;
-  for (size_t i = 1; i < res.size(); i++)
-    res[i] += res[i - 1];
-  return res;
-}
-
-std::vector<uint32_t> absolute_output_offsets_to_relative(const std::vector<uint32_t>& off) {
-  std::vector<uint32_t> res = off;
-  if (!off.size())
-    return res;
-  std::sort(res.begin(), res.end());//just to be sure, actually it is already should be sorted
-  for (size_t i = res.size() - 1; i != 0; i--)
-    res[i] -= res[i - 1];
-
-  return res;
-}
-
-void get_tx_tree_hash(const std::vector<Hash>& tx_hashes, Hash& h) {
-  tree_hash(tx_hashes.data(), tx_hashes.size(), h);
-}
-
-Hash get_tx_tree_hash(const std::vector<Hash>& tx_hashes) {
-  Hash h = NULL_HASH;
-  get_tx_tree_hash(tx_hashes, h);
-  return h;
-}
-
-Hash get_tx_tree_hash(const Block& b) {
-  std::vector<Hash> txs_ids;
-  Hash h = NULL_HASH;
-  getObjectHash(b.baseTransaction, h);
-  txs_ids.push_back(h);
-  for (auto& th : b.transactionHashes) {
-    txs_ids.push_back(th);
-  }
-  return get_tx_tree_hash(txs_ids);
 }
 
 }

@@ -33,7 +33,7 @@ public:
     bool used;
   };
 
-  class iterator {
+  class iterator : public std::iterator<std::bidirectional_iterator_tag, Value> {
   public:
     iterator(Value* value);
 

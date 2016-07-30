@@ -121,7 +121,7 @@ struct IWalletBaseStub : public CryptoNote::IWallet, public CryptoNote::IFusionM
   }
 
   // IFusionManager
-  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin,
+  virtual size_t createFusionTransaction(uint64_t threshold, uint16_t mixin,
     const std::vector<std::string>& sourceAddresses = {}, const std::string& destinationAddress = "") override {
     throw std::runtime_error("Not implemented");
   }
@@ -1043,7 +1043,7 @@ public:
     return tx;
   }
 
-  virtual size_t createFusionTransaction(uint64_t threshold, uint64_t mixin,
+  virtual size_t createFusionTransaction(uint64_t threshold, uint16_t mixin,
     const std::vector<std::string>& sourceAddresses = {}, const std::string& destinationAddress = "") override {
 
     lastThreshold = threshold;

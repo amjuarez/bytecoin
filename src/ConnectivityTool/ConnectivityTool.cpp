@@ -155,11 +155,11 @@ bool print_COMMAND_REQUEST_STAT_INFO(const COMMAND_REQUEST_STAT_INFO::response &
   std::cout << "INC Connections:     " << si.incoming_connections_count << ENDL;
 
 
-  std::cout << "Tx pool size:        " << si.payload_info.tx_pool_size << ENDL;
-  std::cout << "BC height:           " << si.payload_info.blockchain_height << ENDL;
-  std::cout << "Mining speed:          " << si.payload_info.mining_speed << ENDL;
-  std::cout << "Alternative blocks:  " << si.payload_info.alternative_blocks << ENDL;
-  std::cout << "Top block id:        " << si.payload_info.top_block_id_str << ENDL;
+  std::cout << "Tx pool size:        " << si.payload_info.transactionPoolSize << ENDL;
+  std::cout << "BC height:           " << si.payload_info.blockchainHeight << ENDL;
+  std::cout << "Mining speed:          " << si.payload_info.miningSpeed << ENDL;
+  std::cout << "Alternative blocks:  " << si.payload_info.alternativeBlockCount << ENDL;
+  std::cout << "Top block id:        " << si.payload_info.topBlockHashString << ENDL;
   return true;
 }
 //---------------------------------------------------------------------------------------------------------------

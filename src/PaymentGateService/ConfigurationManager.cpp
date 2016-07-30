@@ -37,7 +37,7 @@ bool ConfigurationManager::init(int argc, char** argv) {
   po::options_description cmdGeneralOptions("Common Options");
 
   cmdGeneralOptions.add_options()
-  ("config,c", po::value<std::string>()->default_value(""), "configuration file");
+      ("config,c", po::value<std::string>(), "configuration file");
 
   po::options_description confGeneralOptions;
   confGeneralOptions.add(cmdGeneralOptions).add_options()
@@ -58,8 +58,7 @@ bool ConfigurationManager::init(int argc, char** argv) {
 
   po::options_description netNodeOptions("Local Node Options");
   CryptoNote::NetNodeConfig::initOptions(netNodeOptions);
-  CryptoNote::CoreConfig::initOptions(netNodeOptions);
-
+  
   po::options_description remoteNodeOptions("Remote Node Options");
   RpcNodeConfiguration::initOptions(remoteNodeOptions);
   po::options_description coinBaseOptions("Coin Base Options");
@@ -95,9 +94,13 @@ bool ConfigurationManager::init(int argc, char** argv) {
     po::store(po::parse_config_file(confStream, confOptionsDesc, true), confOptions);
     po::notify(confOptions);
 
+    std::string default_data_dir = Tools::getDefaultDataDirectory();
+    if (!coinBaseConfig.CRYPTONOTE_NAME.empty()) {
+      boost::replace_all(default_data_dir, CryptoNote::CRYPTONOTE_NAME, coinBaseConfig.CRYPTONOTE_NAME);
+    }
+    netNodeConfig.setConfigFolder(default_data_dir);
     gateConfiguration.init(confOptions);
     netNodeConfig.init(confOptions);
-    coreConfig.init(confOptions);
     remoteNodeConfig.init(confOptions);
     coinBaseConfig.init(confOptions);
 
@@ -108,14 +111,9 @@ bool ConfigurationManager::init(int argc, char** argv) {
   //command line options should override options from config file
   gateConfiguration.init(cmdOptions);
   netNodeConfig.init(cmdOptions);
-    std::string default_data_dir = Tools::getDefaultDataDirectory();
-    if (!coinBaseConfig.CRYPTONOTE_NAME.empty()) {
-      boost::replace_all(default_data_dir, CryptoNote::CRYPTONOTE_NAME, coinBaseConfig.CRYPTONOTE_NAME);
-    }
-    coreConfig.configFolder = default_data_dir;
-    netNodeConfig.setConfigFolder(default_data_dir);
-  coreConfig.init(cmdOptions);
   remoteNodeConfig.init(cmdOptions);
+    coinBaseConfig.init(cmdOptions);
+  dataDir = command_line::get_arg(cmdOptions, command_line::arg_data_dir);
 
   if (cmdOptions["testnet"].as<bool>()) {
     netNodeConfig.setTestnet(true);

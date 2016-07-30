@@ -32,7 +32,6 @@
 #include <System/InterruptedException.h>
 
 #include "P2p/NetNodeConfig.h"
-#include "CryptoNoteCore/CoreConfig.h"
 #include "CryptoNoteCore/CryptoNoteTools.h"
 #include "WalletLegacy/WalletLegacy.h"
 
@@ -82,7 +81,7 @@ void BaseFunctionalTests::launchInprocTestnet(size_t count, Topology t) {
 
   for (size_t i = 0; i < m_testnetSize; ++i) {
     auto cfg = createNodeConfiguration(i);
-    nodeDaemons.emplace_back(new InProcTestNode(cfg, m_currency));
+    nodeDaemons.emplace_back(new InProcTestNode(cfg, m_currency, m_dispatcher));
   }
 
   waitDaemonsReady();
@@ -106,7 +105,7 @@ void BaseFunctionalTests::launchTestnetWithInprocNode(size_t count, Topology t) 
   }
 
   auto cfg = createNodeConfiguration(m_testnetSize - 1);
-  nodeDaemons[m_testnetSize - 1].reset(new InProcTestNode(cfg, m_currency));
+  nodeDaemons[m_testnetSize - 1].reset(new InProcTestNode(cfg, m_currency, m_dispatcher));
 
   waitDaemonsReady();
 
@@ -309,7 +308,7 @@ namespace {
 
 bool BaseFunctionalTests::mineBlocks(TestNode& node, const CryptoNote::AccountPublicAddress& address, size_t blockCount) {
   for (size_t i = 0; i < blockCount; ++i) {
-    Block blockTemplate;
+    BlockTemplate blockTemplate;
     uint64_t difficulty;
 
     if (!node.getBlockTemplate(m_currency.accountAddressAsString(address), blockTemplate, difficulty)) {
@@ -328,7 +327,7 @@ bool BaseFunctionalTests::mineBlocks(TestNode& node, const CryptoNote::AccountPu
   return true;
 }
 
-bool BaseFunctionalTests::prepareAndSubmitBlock(TestNode& node, CryptoNote::Block&& blockTemplate) {
+bool BaseFunctionalTests::prepareAndSubmitBlock(TestNode& node, CryptoNote::BlockTemplate&& blockTemplate) {
   blockTemplate.timestamp = m_nextTimestamp;
   m_nextTimestamp += 2 * m_currency.difficultyTarget();
 
@@ -337,11 +336,13 @@ bool BaseFunctionalTests::prepareAndSubmitBlock(TestNode& node, CryptoNote::Bloc
     blockTemplate.parentBlock.minorVersion = BLOCK_MINOR_VERSION_0;
     blockTemplate.parentBlock.transactionCount = 1;
 
+    
     CryptoNote::TransactionExtraMergeMiningTag mmTag;
     mmTag.depth = 0;
-    if (!CryptoNote::get_aux_block_header_hash(blockTemplate, mmTag.merkleRoot)) {
-      return false;
-    }
+    //FIXME
+    /* if (!CryptoNote::get_aux_block_header_hash(blockTemplate, mmTag.merkleRoot)) { */
+    /*   return false; */
+    /* } */
 
     blockTemplate.parentBlock.baseTransaction.extra.clear();
     if (!CryptoNote::appendMergeMiningTagToExtra(blockTemplate.parentBlock.baseTransaction.extra, mmTag)) {

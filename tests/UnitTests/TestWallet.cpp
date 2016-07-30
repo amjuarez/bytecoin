@@ -197,17 +197,17 @@ protected:
   size_t sendMoneyToRandomAddressFrom(const std::string& address, const std::string& changeDestination);
 
   static size_t sendMoney(CryptoNote::WalletGreen& wallet, const std::vector<std::string>& sourceAdresses, const std::string& to,
-    uint64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+    uint64_t amount, uint64_t fee, uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
   static size_t sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, uint64_t amount, uint64_t fee,
-    uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
-  size_t sendMoney(const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+    uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t sendMoney(const std::string& to, uint64_t amount, uint64_t fee, uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
   size_t sendMoneyWithDonation(const std::string& to, uint64_t amount, uint64_t fee,
-    const std::string& donationAddress, uint64_t donationAmount, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+    const std::string& donationAddress, uint64_t donationAmount, uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
 
-  size_t makeTransaction(const std::vector<std::string>& sourceAdresses, const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
-  size_t makeTransaction(CryptoNote::WalletGreen& wallet, const std::vector<std::string>& sourceAdresses, const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
-  size_t makeTransaction(const std::vector<std::string>& sourceAdresses, const std::vector<CryptoNote::WalletOrder>& orders, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
-  size_t makeTransaction(CryptoNote::WalletGreen& wallet, const std::vector<std::string>& sourceAdresses, const std::vector<CryptoNote::WalletOrder>& orders, uint64_t fee, uint64_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t makeTransaction(const std::vector<std::string>& sourceAdresses, const std::string& to, uint64_t amount, uint64_t fee, uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t makeTransaction(CryptoNote::WalletGreen& wallet, const std::vector<std::string>& sourceAdresses, const std::string& to, uint64_t amount, uint64_t fee, uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t makeTransaction(const std::vector<std::string>& sourceAdresses, const std::vector<CryptoNote::WalletOrder>& orders, uint64_t fee, uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
+  size_t makeTransaction(CryptoNote::WalletGreen& wallet, const std::vector<std::string>& sourceAdresses, const std::vector<CryptoNote::WalletOrder>& orders, uint64_t fee, uint16_t mixIn = 0, const std::string& extra = "", uint64_t unlockTimestamp = 0);
 
   void fillWalletWithDetailsCache();
 
@@ -313,7 +313,7 @@ void WalletApi::generateFusionOutputsAndUnlock(WalletGreen& wallet, INodeTrivial
 
   uint64_t addedAmount = 0;
   for (size_t power = 0; power < POWERS_COUNT; ++power) {
-    int start = power == 0 ? digit: 1;
+    int start = power == 0 ? static_cast<int>(digit): 1;
     if (start * mul > threshold) {
       break;
     }
@@ -511,7 +511,7 @@ void WalletApi::fillWalletWithDetailsCache() {
 }
 
 size_t WalletApi::sendMoney(CryptoNote::WalletGreen& wallet, const std::vector<std::string>& sourceAdresses, const std::string& to,
-  uint64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+  uint64_t amount, uint64_t fee, uint16_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
 
   CryptoNote::WalletOrder order;
   order.address = to;
@@ -529,16 +529,16 @@ size_t WalletApi::sendMoney(CryptoNote::WalletGreen& wallet, const std::vector<s
   return wallet.transfer(params);
 }
 
-size_t WalletApi::sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+size_t WalletApi::sendMoney(CryptoNote::WalletGreen& wallet, const std::string& to, uint64_t amount, uint64_t fee, uint16_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
   return sendMoney(wallet, {}, to, amount, fee, mixIn, extra, unlockTimestamp);
 }
 
-size_t WalletApi::sendMoney(const std::string& to, uint64_t amount, uint64_t fee, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+size_t WalletApi::sendMoney(const std::string& to, uint64_t amount, uint64_t fee, uint16_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
   return sendMoney(alice, to, amount, fee, mixIn, extra, unlockTimestamp);
 }
 
 size_t WalletApi::sendMoneyWithDonation(const std::string& to, uint64_t amount, uint64_t fee,
-  const std::string& donationAddress, uint64_t donationAmount, uint64_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
+  const std::string& donationAddress, uint64_t donationAmount, uint16_t mixIn, const std::string& extra, uint64_t unlockTimestamp) {
 
   TransactionParameters params;
   params.destinations.push_back({to, amount});
@@ -557,7 +557,7 @@ size_t WalletApi::makeTransaction(
   const std::string& to,
   uint64_t amount,
   uint64_t fee,
-  uint64_t mixIn,
+  uint16_t mixIn,
   const std::string& extra,
   uint64_t unlockTimestamp) {
 
@@ -570,7 +570,7 @@ size_t WalletApi::makeTransaction(
   const std::string& to,
   uint64_t amount,
   uint64_t fee,
-  uint64_t mixIn,
+  uint16_t mixIn,
   const std::string& extra,
   uint64_t unlockTimestamp) {
 
@@ -589,7 +589,7 @@ size_t WalletApi::makeTransaction(
   const std::vector<std::string>& sourceAdresses,
   const std::vector<CryptoNote::WalletOrder>& orders,
   uint64_t fee,
-  uint64_t mixIn,
+  uint16_t mixIn,
   const std::string& extra,
   uint64_t unlockTimestamp) {
 
@@ -601,7 +601,7 @@ size_t WalletApi::makeTransaction(
   const std::vector<std::string>& sourceAdresses,
   const std::vector<CryptoNote::WalletOrder>& orders,
   uint64_t fee,
-  uint64_t mixIn,
+  uint16_t mixIn,
   const std::string& extra,
   uint64_t unlockTimestamp) {
 
@@ -939,7 +939,7 @@ TEST_F(WalletApi, transferCanSpendAllWalletOutputsIncludingDustOutputs) {
   generator.getBlockRewardForAddress(parseAddress(src));
 
   auto balance = wallet.getActualBalance();
-  generator.generateEmptyBlocks(std::max(currency.minedMoneyUnlockWindow(), static_cast<size_t>(TRANSACTION_SOFTLOCK_TIME)));
+  generator.generateEmptyBlocks(std::max(currency.minedMoneyUnlockWindow(), TRANSACTION_SOFTLOCK_TIME));
   node.updateObservers();
   waitActualBalanceUpdated(wallet, balance);
 
@@ -1048,7 +1048,7 @@ TEST_F(WalletApi, loadEmptyWallet) {
 }
 
 TEST_F(WalletApi, walletGetsBaseTransaction) {
-  // mine to alice's address to make it receive block base transaction
+  // mine to alice's address to make it recieve block base transaction
   setMinerTo(alice);
   generateAndUnlockMoney();
   ASSERT_TRUE(alice.getTransaction(0).isBase);
@@ -1060,7 +1060,7 @@ TEST_F(WalletApi, walletGetsNonBaseTransaction) {
 }
 
 TEST_F(WalletApi, loadWalletWithBaseTransaction) {
-  // mine to alice's address to make it receive block base transaction
+  // mine to alice's address to make it recieve block base transaction
   setMinerTo(alice);
   generateAndUnlockMoney();
 
@@ -1077,7 +1077,7 @@ TEST_F(WalletApi, loadWalletWithBaseTransaction) {
 }
 
 TEST_F(WalletApi, updateBaseTransactionAfterLoad) {
-  // mine to alice's address to make it receive block base transaction
+  // mine to alice's address to make it recieve block base transaction
   setMinerTo(alice);
   generateAndUnlockMoney();
 
@@ -1094,7 +1094,7 @@ TEST_F(WalletApi, updateBaseTransactionAfterLoad) {
 }
 
 TEST_F(WalletApi, setBaseTransactionAfterInSynchronization) {
-  // mine to alice's address to make it receive block base transaction
+  // mine to alice's address to make it recieve block base transaction
   setMinerTo(alice);
   generateAndUnlockMoney();
 
@@ -2183,7 +2183,7 @@ TEST_F(WalletApi, createFusionTransactionDoesnotAffectTotalBalance) {
 
 TEST_F(WalletApi, createFusionTransactionFailsIfMixinToobig) {
   generateFusionOutputsAndUnlock(alice, node, currency, FUSION_THRESHOLD);
-  ASSERT_ANY_THROW(alice.createFusionTransaction(FUSION_THRESHOLD, 10000000));
+  ASSERT_ANY_THROW(alice.createFusionTransaction(FUSION_THRESHOLD, std::numeric_limits<uint16_t>::max()));
 }
 
 TEST_F(WalletApi, createFusionTransactionFailsIfNoTransfers) {
@@ -2756,7 +2756,7 @@ public:
 
 protected:
   int makeAliceTransactionAndReturnErrorCode(const std::string& sourceAddress, const std::vector<CryptoNote::WalletOrder>& destinations,
-    uint64_t fee, uint64_t mixIn, const std::string& extra = "") {
+    uint64_t fee, uint16_t mixIn, const std::string& extra = "") {
 
     try {
       makeTransaction({sourceAddress}, destinations, fee, mixIn, extra);
@@ -2840,7 +2840,7 @@ TEST_F(WalletApi_makeTransaction, throwsIfWalletHasNotEnoughMoney) {
 
 TEST_F(WalletApi_makeTransaction, throwsIfMixInIsTooBig) {
   generateAndUnlockMoney();
-  uint64_t mixin = 10;
+  uint16_t mixin = 10;
   node.setMaxMixinCount(mixin - 1);
   int error = makeAliceTransactionAndReturnErrorCode({alice.getAddress(0)}, { CryptoNote::WalletOrder{ RANDOM_ADDRESS, SENT } }, FEE, mixin);
   ASSERT_EQ(static_cast<int>(error::WalletErrorCodes::MIXIN_COUNT_TOO_BIG), error);
@@ -3467,13 +3467,18 @@ TEST_F(WalletApi, getTransactionsReturnsCorrectTransactionsFromOneBlock) {
 
   waitForWalletEvent(alice, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  auto transactions = alice.getTransactions(generator.getBlockchain().size() - 1, 1);
+  auto transactions = alice.getTransactions(static_cast<uint32_t>(generator.getBlockchain().size()) - 1, 1);
 
   size_t transactionsCount = getTransactionsCount(transactions);
   ASSERT_EQ(2, transactionsCount);
 
   ASSERT_TRUE(transactionWithTransfersFound(alice, transactions, transactionId1));
   ASSERT_TRUE(transactionWithTransfersFound(alice, transactions, transactionId2));
+}
+
+Crypto::Hash getBlockHash(const CryptoNote::BlockTemplate& block) {
+  CryptoNote::CachedBlock cachedBlock(block);
+  return cachedBlock.getBlockHash();
 }
 
 TEST_F(WalletApi, getTransactionsReturnsBlockWithCorrectHash) {
@@ -3483,7 +3488,7 @@ TEST_F(WalletApi, getTransactionsReturnsBlockWithCorrectHash) {
   node.updateObservers();
   waitForWalletEvent(alice, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  Crypto::Hash lastBlockHash = get_block_hash(generator.getBlockchain().back());
+  Crypto::Hash lastBlockHash = getBlockHash(generator.getBlockchain().back());
   auto transactions = alice.getTransactions(lastBlockHash, 1);
 
   ASSERT_EQ(1, transactions.size());
@@ -3500,7 +3505,7 @@ TEST_F(WalletApi, getTransactionsReturnsCorrectTransactionByBlockHash) {
   node.updateObservers();
   waitForWalletEvent(alice, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  Crypto::Hash lastBlockHash = get_block_hash(generator.getBlockchain().back());
+  Crypto::Hash lastBlockHash = getBlockHash(generator.getBlockchain().back());
   auto transactions = alice.getTransactions(lastBlockHash, 1);
 
   ASSERT_TRUE(transactionWithTransfersFound(alice, transactions, transactionId));
@@ -3536,7 +3541,7 @@ TEST_F(WalletApi, getTransactionsReturnsConfirmedIncomingTransactions) {
   waitForTransactionCount(bob, 1);
   waitForWalletEvent(bob, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  auto transactions = bob.getTransactions(generator.getBlockchain().size() - 1, 1);
+  auto transactions = bob.getTransactions(static_cast<uint32_t>(generator.getBlockchain().size()) - 1, 1);
   ASSERT_EQ(1, getTransactionsCount(transactions));
   ASSERT_TRUE(transactionWithTransfersFound(bob, transactions, 0));
 
@@ -3587,7 +3592,7 @@ TEST_F(WalletApi, getTransactionsReturnsDelayedTransactionsAfterSend) {
   node.updateObservers();
   waitForWalletEvent(alice, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  auto transactions = alice.getTransactions(generator.getBlockchain().size() - 1, 1);
+  auto transactions = alice.getTransactions(static_cast<uint32_t>(generator.getBlockchain().size()) - 1, 1);
   ASSERT_TRUE(transactionWithTransfersFound(alice, transactions, id));
 }
 
@@ -3596,7 +3601,7 @@ TEST_F(WalletApi, getTransactionsDoesntReturnDeletedTransactions) {
 
   waitForWalletEvent(alice, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  size_t detachHeight = generator.getBlockchain().size() - 1;
+  uint32_t detachHeight = static_cast<uint32_t>(generator.getBlockchain().size()) - 1;
   size_t id = sendMoney(RANDOM_ADDRESS, SENT + FEE, FEE);
 
   node.updateObservers();
@@ -3608,19 +3613,19 @@ TEST_F(WalletApi, getTransactionsDoesntReturnDeletedTransactions) {
 
   waitForWalletEvent(alice, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  auto transactions = alice.getTransactions(generator.getBlockchain().size() - 1, 1);
+  auto transactions = alice.getTransactions(static_cast<uint32_t>(generator.getBlockchain().size()) - 1, 1);
   ASSERT_FALSE(transactionWithTransfersFound(alice, transactions, id));
 }
 
 TEST_F(WalletApi, getTransactionsByBlockHashThrowsIfNotInitialized) {
   CryptoNote::WalletGreen bob(dispatcher, currency, node, logger, TRANSACTION_SOFTLOCK_TIME);
-  auto hash = get_block_hash(generator.getBlockchain().back());
+  auto hash = getBlockHash(generator.getBlockchain().back());
   ASSERT_ANY_THROW(bob.getTransactions(hash, 1));
 }
 
 TEST_F(WalletApi, getTransactionsByBlockHashThrowsIfStopped) {
   alice.stop();
-  auto hash = get_block_hash(generator.getBlockchain().back());
+  auto hash = getBlockHash(generator.getBlockchain().back());
   ASSERT_ANY_THROW(alice.getTransactions(hash, 1));
   alice.start();
 }
@@ -3649,7 +3654,7 @@ TEST_F(WalletApi, getBlockHashesReturnsNewBlocks) {
 
   waitForPredicate(alice, [this] { return alice.getBlockCount() == 3; }, std::chrono::seconds(5));
 
-  auto hash = get_block_hash(generator.getBlockchain().back());
+  auto hash = getBlockHash(generator.getBlockchain().back());
   auto hashes = alice.getBlockHashes(0, generator.getBlockchain().size());
 
   ASSERT_EQ(generator.getBlockchain().size(), hashes.size());
@@ -3667,7 +3672,7 @@ TEST_F(WalletApi, getBlockHashesReturnsCorrectBlockHashesAfterDetach) {
 
   waitForWalletEvent(alice, CryptoNote::WalletEventType::SYNC_COMPLETED, std::chrono::seconds(3));
 
-  auto hash = get_block_hash(generator.getBlockchain()[1]);
+  auto hash = getBlockHash(generator.getBlockchain()[1]);
   auto hashes = alice.getBlockHashes(0, 2);
 
   ASSERT_EQ(2, hashes.size());
@@ -3764,7 +3769,7 @@ TEST_F(WalletApi, getBlockCountReturnsCorrectBlockCountAfterDetach) {
 
   auto prevBlockCount = alice.getBlockCount();
 
-  auto detachBlockIndex = generator.getBlockchain().size() - 2;
+  uint32_t detachBlockIndex = static_cast<uint32_t>(generator.getBlockchain().size() - 2);
   node.startAlternativeChain(detachBlockIndex);
   generator.generateEmptyBlocks(1);
   node.updateObservers();
@@ -4252,7 +4257,7 @@ TEST_F(WalletApi, walletHandlesResetAndSwitchingToAlternativeChain) {
   waitForWalletEvent(alice, CryptoNote::SYNC_COMPLETED, std::chrono::seconds(30));
   auto tx1 = alice.getTransactionCount() - 1;
 
-  size_t detachHeight = generator.getBlockchain().size();
+  uint32_t detachHeight = static_cast<uint32_t>(generator.getBlockchain().size());
 
   // Create transaction 2, that will be cancelled
   generateBlockReward(aliceAddress);

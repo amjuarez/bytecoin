@@ -51,8 +51,9 @@ SynchronizationState::ShortHistory SynchronizationState::getShortHistory(uint32_
     ++i;
   }
 
-  if (!genesis_included)
+  if (!genesis_included) {
     history.push_back(m_blockchain[0]);
+  }
 
   return history;
 }

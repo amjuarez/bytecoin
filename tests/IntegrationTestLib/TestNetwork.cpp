@@ -195,7 +195,7 @@ void TestNetwork::addNode(const TestNodeConfiguration& cfg) {
 
   switch (cfg.nodeType) {
   case NodeType::InProcess:
-    node.reset(new InProcTestNode(cfg, m_currency));
+    node.reset(new InProcTestNode(cfg, m_currency, m_dispatcher));
     break;
   case NodeType::RPC:
     node = startDaemon(cfg);

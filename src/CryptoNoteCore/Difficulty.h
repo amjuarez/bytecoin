@@ -22,9 +22,9 @@
 
 #include "crypto/hash.h"
 
-namespace CryptoNote
-{
-    typedef std::uint64_t difficulty_type;
+namespace CryptoNote {
 
-    bool check_hash(const Crypto::Hash &hash, difficulty_type difficulty);
+typedef std::uint64_t Difficulty;
+bool check_hash(const Crypto::Hash &hash, Difficulty difficulty);
+
 }

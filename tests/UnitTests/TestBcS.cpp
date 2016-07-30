@@ -210,7 +210,7 @@ public:
       generator.getBlockchain().begin(),
       generator.getBlockchain().end(),
       std::back_inserter(generatorBlockchain),
-      [](const Block& b) { return get_block_hash(b); });
+      [](const BlockTemplate& b) { return CachedBlock(b).getBlockHash(); });
 
     for (const auto& consumer : m_consumers) {
       ASSERT_EQ(consumer->getBlockchain(), generatorBlockchain);
@@ -1235,7 +1235,7 @@ TEST_F(BcSTest, checkStatePreservingBetweenSynchronizations) {
 
   generator.generateEmptyBlocks(20);
 
-  Hash lastBlockHash = get_block_hash(generator.getBlockchain().back());
+  Hash lastBlockHash = CachedBlock(generator.getBlockchain().back()).getBlockHash();
 
   m_sync.addObserver(&o1);
   m_sync.start();
@@ -1361,7 +1361,7 @@ TEST_F(BcSTest, checkTxOrder) {
 
   BlockShortEntry bse;
   bse.hasBlock = true;
-  bse.blockHash = get_block_hash(last_block);;
+  bse.blockHash = CachedBlock(last_block).getBlockHash();
   bse.block = last_block;
   bse.txsShortInfo.push_back({tx1hash, tx1});
   bse.txsShortInfo.push_back({tx2hash, tx2});

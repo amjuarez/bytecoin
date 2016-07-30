@@ -48,11 +48,25 @@ RemoteEventLock::RemoteEventLock(Dispatcher& dispatcher, Event& event) : dispatc
 }
 
 RemoteEventLock::~RemoteEventLock() {
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool locked = true;
+
   Event* eventPointer = &event;
-  dispatcher.remoteSpawn([=]() {
+  dispatcher.remoteSpawn([&]() {
     assert(!eventPointer->get());
     eventPointer->set();
+
+    mutex.lock();
+    locked = false;
+    condition.notify_one();
+    mutex.unlock();
   });
+
+  std::unique_lock<std::mutex> lock(mutex);
+  while (locked) {
+    condition.wait(lock);
+  }
 }
 
 }

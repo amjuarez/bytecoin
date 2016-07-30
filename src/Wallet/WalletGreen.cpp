@@ -515,7 +515,7 @@ void WalletGreen::loadContainerStorage(const std::string& path) {
 
     uint64_t creationTimestamp;
     decryptKeyPair(prefix->encryptedViewKeys, m_viewPublicKey, m_viewSecretKey, creationTimestamp);
-    throwIfKeysMissmatch(m_viewSecretKey, m_viewPublicKey, "Restored view public key doesn't correspond to secret key");
+    throwIfKeysMismatch(m_viewSecretKey, m_viewPublicKey, "Restored view public key doesn't correspond to secret key");
     m_logger = Logging::LoggerRef(m_logger.getLogger(), "WalletGreen/" + podToHex(m_viewPublicKey).substr(0, 5));
 
     loadSpendKeys();
@@ -712,7 +712,7 @@ void WalletGreen::loadSpendKeys() {
     }
 
     if (wallet.spendSecretKey != NULL_SECRET_KEY) {
-      throwIfKeysMissmatch(wallet.spendSecretKey, wallet.spendPublicKey, "Restored spend public key doesn't correspond to secret key");
+      throwIfKeysMismatch(wallet.spendSecretKey, wallet.spendPublicKey, "Restored spend public key doesn't correspond to secret key");
     } else {
       if (!Crypto::check_key(wallet.spendPublicKey)) {
         throw std::system_error(make_error_code(error::WRONG_PASSWORD), "Public spend key is incorrect");
@@ -1215,7 +1215,7 @@ size_t WalletGreen::transfer(const TransactionParameters& transactionParameters)
 void WalletGreen::prepareTransaction(std::vector<WalletOuts>&& wallets,
   const std::vector<WalletOrder>& orders,
   uint64_t fee,
-  uint64_t mixIn,
+  uint16_t mixIn,
   const std::string& extra,
   uint64_t unlockTimestamp,
   const DonationSettings& donation,
@@ -1275,7 +1275,7 @@ void WalletGreen::validateSourceAddresses(const std::vector<std::string>& source
   }
 }
 
-void WalletGreen::checkIfEnoughMixins(std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& mixinResult, uint64_t mixIn) const {
+void WalletGreen::checkIfEnoughMixins(std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& mixinResult, uint16_t mixIn) const {
   assert(mixIn != 0);
 
   auto notEnoughIt = std::find_if(mixinResult.begin(), mixinResult.end(),
@@ -1549,10 +1549,13 @@ void WalletGreen::commitTransaction(size_t transactionId) {
   System::Event completion(m_dispatcher);
   std::error_code ec;
 
-  m_node.relayTransaction(m_uncommitedTransactions[transactionId], [&ec, &completion, this](std::error_code error) {
-    ec = error;
-    this->m_dispatcher.remoteSpawn(std::bind(asyncRequestCompletion, std::ref(completion)));
+  System::RemoteContext<void> relayTransactionContext(m_dispatcher, [this, transactionId, &ec, &completion] () {
+    m_node.relayTransaction(m_uncommitedTransactions[transactionId], [&ec, &completion, this](std::error_code error) {
+      ec = error;
+      this->m_dispatcher.remoteSpawn(std::bind(asyncRequestCompletion, std::ref(completion)));
+    });
   });
+  relayTransactionContext.get();
   completion.wait();
 
   if (!ec) {
@@ -1971,10 +1974,14 @@ void WalletGreen::sendTransaction(const CryptoNote::Transaction& cryptoNoteTrans
   std::error_code ec;
 
   throwIfStopped();
-  m_node.relayTransaction(cryptoNoteTransaction, [&ec, &completion, this](std::error_code error) {
-    ec = error;
-    this->m_dispatcher.remoteSpawn(std::bind(asyncRequestCompletion, std::ref(completion)));
+
+  System::RemoteContext<void> relayTransactionContext(m_dispatcher, [this, &cryptoNoteTransaction, &ec, &completion] () {
+    m_node.relayTransaction(cryptoNoteTransaction, [&ec, &completion, this](std::error_code error) {
+      ec = error;
+      this->m_dispatcher.remoteSpawn(std::bind(asyncRequestCompletion, std::ref(completion)));
+    });
   });
+  relayTransactionContext.get();
   completion.wait();
 
   if (ec) {
@@ -2051,7 +2058,7 @@ AccountKeys WalletGreen::makeAccountKeys(const WalletRecord& wallet) const {
 
 void WalletGreen::requestMixinOuts(
   const std::vector<OutputToTransfer>& selectedTransfers,
-  uint64_t mixIn,
+  uint16_t mixIn,
   std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& mixinResult) {
 
   std::vector<uint64_t> amounts;
@@ -2064,14 +2071,16 @@ void WalletGreen::requestMixinOuts(
 
   throwIfStopped();
 
-  auto requestMixinCount = mixIn + 1; //+1 to allow to skip real output
+  uint16_t requestMixinCount = mixIn + 1; //+1 to allow to skip real output
 
   m_logger(DEBUGGING) << "Requesting random outputs";
-  m_node.getRandomOutsByAmounts(std::move(amounts), requestMixinCount, mixinResult, [&requestFinished, &mixinError, this] (std::error_code ec) {
-    mixinError = ec;
-    this->m_dispatcher.remoteSpawn(std::bind(asyncRequestCompletion, std::ref(requestFinished)));
+  System::RemoteContext<void> getOutputsContext(m_dispatcher, [this, amounts, requestMixinCount, &mixinResult, &requestFinished, &mixinError] () mutable {
+    m_node.getRandomOutsByAmounts(std::move(amounts), requestMixinCount, mixinResult, [&requestFinished, &mixinError, this] (std::error_code ec) mutable {
+      mixinError = ec;
+      m_dispatcher.remoteSpawn(std::bind(asyncRequestCompletion, std::ref(requestFinished)));
+    });
   });
-
+  getOutputsContext.get();
   requestFinished.wait();
 
   checkIfEnoughMixins(mixinResult, requestMixinCount);
@@ -2199,7 +2208,7 @@ CryptoNote::WalletGreen::ReceiverAmounts WalletGreen::splitAmount(
 void WalletGreen::prepareInputs(
   const std::vector<OutputToTransfer>& selectedTransfers,
   std::vector<CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::outs_for_amount>& mixinResult,
-  uint64_t mixIn,
+  uint16_t mixIn,
   std::vector<InputInfo>& keysInfo) {
 
   typedef CryptoNote::COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS::out_entry out_entry;
@@ -2679,7 +2688,11 @@ void WalletGreen::startBlockchainSynchronizer() {
 void WalletGreen::stopBlockchainSynchronizer() {
   if (m_blockchainSynchronizerStarted) {
     m_logger(DEBUGGING) << "Stopping BlockchainSynchronizer";
-    m_blockchainSynchronizer.stop();
+    System::RemoteContext<void> stopContext(m_dispatcher, [this] () {
+      m_blockchainSynchronizer.stop();
+    });
+    stopContext.get();
+
     m_blockchainSynchronizerStarted = false;
   }
 }
@@ -2808,7 +2821,7 @@ WalletGreen::WalletTrackingMode WalletGreen::getTrackingMode() const {
         WalletTrackingMode::TRACKING : WalletTrackingMode::NOT_TRACKING;
 }
 
-size_t WalletGreen::createFusionTransaction(uint64_t threshold, uint64_t mixin,
+size_t WalletGreen::createFusionTransaction(uint64_t threshold, uint16_t mixin,
   const std::vector<std::string>& sourceAddresses, const std::string& destinationAddress) {
 
   size_t id = WALLET_INVALID_TRANSACTION_ID;

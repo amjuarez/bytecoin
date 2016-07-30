@@ -32,8 +32,8 @@
 namespace CryptoNote {
 
 struct BlockMiningParameters {
-  Block blockTemplate;
-  difficulty_type difficulty;
+  BlockTemplate blockTemplate;
+  Difficulty difficulty;
 };
 
 class Miner {
@@ -41,7 +41,7 @@ public:
   Miner(System::Dispatcher& dispatcher, Logging::ILogger& logger);
   ~Miner();
 
-  Block mine(const BlockMiningParameters& blockMiningParameters, size_t threadCount);
+  BlockTemplate mine(const BlockMiningParameters& blockMiningParameters, size_t threadCount);
 
   //NOTE! this is blocking method
   void stop();
@@ -55,12 +55,12 @@ private:
 
   std::vector<std::unique_ptr<System::RemoteContext<void>>>  m_workers;
 
-  Block m_block;
+  BlockTemplate m_block;
 
   Logging::LoggerRef m_logger;
 
   void runWorkers(BlockMiningParameters blockMiningParameters, size_t threadCount);
-  void workerFunc(const Block& blockTemplate, difficulty_type difficulty, uint32_t nonceStep);
+  void workerFunc(const BlockTemplate& blockTemplate, Difficulty difficulty, uint32_t nonceStep);
   bool setStateBlockFound();
 };
 

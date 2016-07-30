@@ -50,7 +50,7 @@ public:
 
   virtual void perform(INode& node, std::function<void (WalletRequest::Callback, std::error_code)> cb) override
   {
-    node.getRandomOutsByAmounts(std::move(m_amounts), m_outsCount, std::ref(m_context->outs), std::bind(cb, m_cb, std::placeholders::_1));
+    node.getRandomOutsByAmounts(std::move(m_amounts), static_cast<uint16_t>(m_outsCount), std::ref(m_context->outs), std::bind(cb, m_cb, std::placeholders::_1));
   };
 
 private:

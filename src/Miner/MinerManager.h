@@ -53,7 +53,7 @@ private:
   System::Event m_httpEvent;
   std::queue<MinerEvent> m_events;
 
-  CryptoNote::Block m_minedBlock;
+  CryptoNote::BlockTemplate m_minedBlock;
 
   uint64_t m_lastBlockTimestamp;
 
@@ -67,10 +67,10 @@ private:
   void startBlockchainMonitoring();
   void stopBlockchainMonitoring();
 
-  bool submitBlock(const CryptoNote::Block& minedBlock, const std::string& daemonHost, uint16_t daemonPort);
+  bool submitBlock(const CryptoNote::BlockTemplate& minedBlock, const std::string& daemonHost, uint16_t daemonPort);
   CryptoNote::BlockMiningParameters requestMiningParameters(System::Dispatcher& dispatcher, const std::string& daemonHost, uint16_t daemonPort, const std::string& miningAddress);
 
-  void adjustBlockTemplate(CryptoNote::Block& blockTemplate) const;
+  void adjustBlockTemplate(CryptoNote::BlockTemplate& blockTemplate) const;
 };
 
 } //namespace Miner

@@ -813,6 +813,21 @@ public:
   SimpleTest test;
 };
 
+class SimpleTestCaseOtherConfig : public ::testing::Test {
+
+public:
+
+  SimpleTestCaseOtherConfig() : 
+    currency(CryptoNote::CurrencyBuilder(logger).testnet(true).mempoolTxLiveTime(60).currency()),
+    test(currency, dispatcher, baseCfg) {
+  }
+
+  System::Dispatcher dispatcher;
+  Logging::ConsoleLogger logger;
+  CryptoNote::Currency currency;
+  SimpleTest test;
+};
+
 TEST_F(SimpleTestCase, WALLET2WALLET) {
   ASSERT_TRUE(test.perform1());
 }
@@ -829,8 +844,7 @@ TEST_F(SimpleTestCase, TESTPOOLANDINPROCNODE) {
   ASSERT_TRUE(test.perform5());
 }
 
-TEST_F(SimpleTestCase, TESTPOOLDELETION) {
-  currency = CryptoNote::CurrencyBuilder(logger).testnet(true).mempoolTxLiveTime(60).currency();
+TEST_F(SimpleTestCaseOtherConfig, TESTPOOLDELETION) {
   ASSERT_TRUE(test.perform6());
 }
 

@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "version.h"
+#include <fstream>
 
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
@@ -23,19 +23,27 @@
 
 #include "DaemonCommandsHandler.h"
 
+#include "Common/ScopeExit.h"
 #include "Common/SignalHandler.h"
+#include "Common/StdOutputStream.h"
+#include "Common/StdInputStream.h"
 #include "Common/PathTools.h"
+#include "Common/Util.h"
 #include "crypto/hash.h"
 #include "CryptoNoteCore/CryptoNoteTools.h"
 #include "CryptoNoteCore/Core.h"
-#include "CryptoNoteCore/CoreConfig.h"
 #include "CryptoNoteCore/Currency.h"
+#include "CryptoNoteCore/DatabaseBlockchainCacheFactory.h"
+#include "CryptoNoteCore/MainChainStorage.h"
 #include "CryptoNoteCore/MinerConfig.h"
+#include "CryptoNoteCore/RocksDBWrapper.h"
 #include "CryptoNoteProtocol/CryptoNoteProtocolHandler.h"
 #include "P2p/NetNode.h"
 #include "P2p/NetNodeConfig.h"
 #include "Rpc/RpcServer.h"
 #include "Rpc/RpcServerConfig.h"
+#include "Serialization/BinaryInputStreamSerializer.h"
+#include "Serialization/BinaryOutputStreamSerializer.h"
 #include "version.h"
 
 #include <Logging/LoggerManager.h>
@@ -59,26 +67,25 @@ namespace
   const command_line::arg_descriptor<bool>        arg_console     = {"no-console", "Disable daemon console commands"};
   const command_line::arg_descriptor<bool>        arg_print_genesis_tx = { "print-genesis-tx", "Prints genesis' block tx hex to insert it to config and exits" };
   const command_line::arg_descriptor<std::vector<std::string>> arg_genesis_block_reward_address = { "genesis-block-reward-address", "" };
-  const command_line::arg_descriptor<bool>        arg_enable_blockchain_indexes = { "enable-blockchain-indexes", "Enable blockchain indexes", false };
   const command_line::arg_descriptor<bool>        arg_enable_cors = { "enable-cors", "Adds header 'Access-Control-Allow-Origin' to the daemon's RPC responses", false };
   const command_line::arg_descriptor<std::string> arg_GENESIS_COINBASE_TX_HEX  = {"GENESIS_COINBASE_TX_HEX", "Genesis transaction hex", CryptoNote::parameters::GENESIS_COINBASE_TX_HEX};  
   const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX  = {"CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX", "uint64_t", CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX};
   const command_line::arg_descriptor<uint64_t>    arg_MONEY_SUPPLY  = {"MONEY_SUPPLY", "uint64_t", CryptoNote::parameters::MONEY_SUPPLY};
   const command_line::arg_descriptor<unsigned>    arg_EMISSION_SPEED_FACTOR  = {"EMISSION_SPEED_FACTOR", "unsigned", CryptoNote::parameters::EMISSION_SPEED_FACTOR};
-  const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE", "uint64_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE};
-  const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1", "uint64_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1};
-  const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2", "uint64_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2};
-  const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_DISPLAY_DECIMAL_POINT  = {"CRYPTONOTE_DISPLAY_DECIMAL_POINT", "size_t", CryptoNote::parameters::CRYPTONOTE_DISPLAY_DECIMAL_POINT};
+  const command_line::arg_descriptor<size_t>      arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE", "size_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE};
+  const command_line::arg_descriptor<size_t>      arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1", "size_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1};
+  const command_line::arg_descriptor<size_t>      arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2  = {"CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2", "size_t", CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2};
+  const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_DISPLAY_DECIMAL_POINT  = {"CRYPTONOTE_DISPLAY_DECIMAL_POINT", "uint64_t", CryptoNote::parameters::CRYPTONOTE_DISPLAY_DECIMAL_POINT};
   const command_line::arg_descriptor<uint64_t>    arg_MINIMUM_FEE  = {"MINIMUM_FEE", "uint64_t", CryptoNote::parameters::MINIMUM_FEE};
   const command_line::arg_descriptor<uint64_t>    arg_DEFAULT_DUST_THRESHOLD  = {"DEFAULT_DUST_THRESHOLD", "uint64_t", CryptoNote::parameters::DEFAULT_DUST_THRESHOLD};
   const command_line::arg_descriptor<uint64_t>    arg_DIFFICULTY_TARGET  = {"DIFFICULTY_TARGET", "uint64_t", CryptoNote::parameters::DIFFICULTY_TARGET};
-  const command_line::arg_descriptor<size_t>      arg_CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW  = {"CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW", "size_t", CryptoNote::parameters::CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW};
-  const command_line::arg_descriptor<uint64_t>    arg_MAX_BLOCK_SIZE_INITIAL  = {"MAX_BLOCK_SIZE_INITIAL", "uint64_t", CryptoNote::parameters::MAX_BLOCK_SIZE_INITIAL};
+  const command_line::arg_descriptor<uint32_t>    arg_CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW  = {"CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW", "uint32_t", CryptoNote::parameters::CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW};
+  const command_line::arg_descriptor<size_t>      arg_MAX_BLOCK_SIZE_INITIAL  = {"MAX_BLOCK_SIZE_INITIAL", "size_t", CryptoNote::parameters::MAX_BLOCK_SIZE_INITIAL};
   const command_line::arg_descriptor<uint64_t>    arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY  = {"EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", "uint64_t"};
   const command_line::arg_descriptor<uint32_t>    arg_UPGRADE_HEIGHT_V2  = {"UPGRADE_HEIGHT_V2", "uint32_t", 0};
   const command_line::arg_descriptor<uint32_t>    arg_UPGRADE_HEIGHT_V3  = {"UPGRADE_HEIGHT_V3", "uint32_t", 0};
-  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT  = {"DIFFICULTY_CUT", "uint64_t", CryptoNote::parameters::DIFFICULTY_CUT};
-  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "uint64_t", CryptoNote::parameters::DIFFICULTY_LAG};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT  = {"DIFFICULTY_CUT", "size_t", CryptoNote::parameters::DIFFICULTY_CUT};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "size_t", CryptoNote::parameters::DIFFICULTY_LAG};
   const command_line::arg_descriptor<std::string> arg_CRYPTONOTE_NAME  = {"CRYPTONOTE_NAME", "Cryptonote name. Used for storage directory", ""};
   const command_line::arg_descriptor< std::vector<std::string> > arg_CHECKPOINT  = {"CHECKPOINT", "Checkpoints. Format: HEIGHT:HASH"};
   const command_line::arg_descriptor<uint64_t>    arg_GENESIS_BLOCK_REWARD  = {"GENESIS_BLOCK_REWARD", "uint64_t", 0};
@@ -142,7 +149,8 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
     if (CryptoNote::parameters::GENESIS_BLOCK_REWARD > 0) {
       std::cout << "Error: genesis block reward addresses are not defined" << std::endl;
     } else {
-  CryptoNote::CurrencyBuilder  currencyBuilder(logManager);
+  CryptoNote::CurrencyBuilder currencyBuilder(logManager);
+    currencyBuilder.cryptonoteName(command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
   currencyBuilder.mandatoryTransaction(command_line::get_arg(vm, arg_MANDATORY_TRANSACTION));
   currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
   currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
@@ -177,13 +185,49 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   }
   currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
+
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction();
+  currencyBuilder.mandatoryTransaction(command_line::get_arg(vm, arg_MANDATORY_TRANSACTION));
+    currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
+    currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
+    currencyBuilder.moneySupply(command_line::get_arg(vm, arg_MONEY_SUPPLY));
+    currencyBuilder.emissionSpeedFactor(command_line::get_arg(vm, arg_EMISSION_SPEED_FACTOR));
+    currencyBuilder.blockGrantedFullRewardZone(command_line::get_arg(vm, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE));
+    currencyBuilder.blockGrantedFullRewardZoneV1(command_line::get_arg(vm, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1));
+    currencyBuilder.blockGrantedFullRewardZoneV2(command_line::get_arg(vm, arg_CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2));
+    currencyBuilder.numberOfDecimalPlaces(command_line::get_arg(vm, arg_CRYPTONOTE_DISPLAY_DECIMAL_POINT));
+    currencyBuilder.mininumFee(command_line::get_arg(vm, arg_MINIMUM_FEE));
+    currencyBuilder.defaultDustThreshold(command_line::get_arg(vm, arg_DEFAULT_DUST_THRESHOLD));
+    currencyBuilder.difficultyTarget(command_line::get_arg(vm, arg_DIFFICULTY_TARGET));
+    currencyBuilder.minedMoneyUnlockWindow(command_line::get_arg(vm, arg_CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW));
+    currencyBuilder.maxBlockSizeInitial(command_line::get_arg(vm, arg_MAX_BLOCK_SIZE_INITIAL));
+    if (command_line::has_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY) && command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY) != 0)
+    {
+      currencyBuilder.difficultyWindow(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+      currencyBuilder.upgradeVotingWindow(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+      currencyBuilder.upgradeWindow(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+    } else {
+      currencyBuilder.difficultyWindow(24 * 60 * 60 / command_line::get_arg(vm, arg_DIFFICULTY_TARGET));
+    }
+    currencyBuilder.maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / command_line::get_arg(vm, arg_DIFFICULTY_TARGET));
+    currencyBuilder.lockedTxAllowedDeltaSeconds(command_line::get_arg(vm, arg_DIFFICULTY_TARGET) * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);  
+    if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT_V2) && command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V2) != 0)
+    {
+      currencyBuilder.upgradeHeightV2(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V2));
+    }
+    if (command_line::has_arg(vm, arg_UPGRADE_HEIGHT_V3) && command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V3) != 0)
+    {
+      currencyBuilder.upgradeHeightV3(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V3));
+    }
+    currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
+    currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
   std::cout << "Add this line into your coin configuration file as is: " << std::endl;
   std::cout << "GENESIS_COINBASE_TX_HEX=" << tx_hex << std::endl;
     }
   } else {
   CryptoNote::CurrencyBuilder  currencyBuilder(logManager);
+    currencyBuilder.cryptonoteName(command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
   currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
   currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
   currencyBuilder.moneySupply(command_line::get_arg(vm, arg_MONEY_SUPPLY));
@@ -245,7 +289,6 @@ JsonValue buildLoggerConfiguration(Level level, const std::string& logfile) {
   return loggerConfiguration;
 }
 
-
 int main(int argc, char* argv[])
 {
 
@@ -257,7 +300,6 @@ int main(int argc, char* argv[])
   LoggerRef logger(logManager, "daemon");
 
   try {
-
     po::options_description desc_cmd_only("Command line options");
     po::options_description desc_cmd_sett("Command line options and settings options");
 
@@ -297,19 +339,18 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_KILL_HEIGHT);
     command_line::add_arg(desc_cmd_sett, arg_MANDATORY_TRANSACTION);
 command_line::add_arg(desc_cmd_sett, arg_enable_cors);
-command_line::add_arg(desc_cmd_sett, arg_enable_blockchain_indexes);
 command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
   command_line::add_arg(desc_cmd_sett, arg_genesis_block_reward_address);
 
     RpcServerConfig::initOptions(desc_cmd_sett);
-    CoreConfig::initOptions(desc_cmd_sett);
     NetNodeConfig::initOptions(desc_cmd_sett);
-    MinerConfig::initOptions(desc_cmd_sett);
+    DataBaseConfig::initOptions(desc_cmd_sett);
 
     po::options_description desc_options("Allowed options");
     desc_options.add(desc_cmd_only).add(desc_cmd_sett);
 
     po::variables_map vm;
+    boost::filesystem::path data_dir_path;
     bool r = command_line::handle_error_helper(desc_options, [&]()
     {
       po::store(po::parse_command_line(argc, argv, desc_options), vm);
@@ -324,7 +365,7 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
       std::string data_dir = command_line::get_arg(vm, command_line::arg_data_dir);
       std::string config = command_line::get_arg(vm, arg_config_file);
 
-      boost::filesystem::path data_dir_path(data_dir);
+      data_dir_path = data_dir;
       boost::filesystem::path config_path(config);
       if (!config_path.has_parent_path()) {
         config_path = data_dir_path / config_path;
@@ -332,7 +373,7 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
 
       boost::system::error_code ec;
       if (boost::filesystem::exists(config_path, ec)) {
-        std::cout << "Success: Configuration file openned" << std::endl;
+        std::cout << "Success: Configuration file openned: " << config_path << std::endl;
         po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), desc_cmd_sett, true), vm);
       }
       else
@@ -345,6 +386,10 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
         return false;
       }
       po::notify(vm);
+      if (command_line::has_arg(vm, arg_CRYPTONOTE_NAME) && !command_line::get_arg(vm, arg_CRYPTONOTE_NAME).empty()) {
+        boost::replace_all(data_dir, CryptoNote::CRYPTONOTE_NAME, command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
+      }
+      data_dir_path = data_dir;
       if (command_line::get_arg(vm, arg_print_genesis_tx)) {
         print_genesis_tx_hex(vm, logManager);
         return false;
@@ -432,7 +477,6 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
       return 1;
     }
     CryptoNote::Currency currency = currencyBuilder.currency();
-CryptoNote::core ccore(currency, nullptr, logManager, command_line::get_arg(vm, arg_enable_blockchain_indexes));
 
     CryptoNote::Checkpoints checkpoints(logManager);
 std::vector<CryptoNote::CheckpointData> checkpoint_input;
@@ -456,74 +500,65 @@ else
       checkpoint_input = CryptoNote::CHECKPOINTS;
   }
 }
-for (const auto& cp : checkpoint_input) {
-      checkpoints.add_checkpoint(cp.height, cp.blockId);
-    }
-
     if (!testnet_mode) {
-      ccore.set_checkpoints(std::move(checkpoints));
+for (const auto& cp : checkpoint_input) {
+        checkpoints.addCheckpoint(cp.index, cp.blockId);
+      }
     }
-
-    CoreConfig coreConfig;
-    coreConfig.init(vm);
+    
     NetNodeConfig netNodeConfig;
     netNodeConfig.init(vm);
     netNodeConfig.setTestnet(testnet_mode);
-    MinerConfig minerConfig;
-    minerConfig.init(vm);
-    std::string default_data_dir = Tools::getDefaultDataDirectory();
-    if (command_line::has_arg(vm, arg_CRYPTONOTE_NAME) && !command_line::get_arg(vm, arg_CRYPTONOTE_NAME).empty()) {
-      boost::replace_all(default_data_dir, CryptoNote::CRYPTONOTE_NAME, command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
-    }
-    coreConfig.configFolder = default_data_dir;
-    netNodeConfig.setConfigFolder(default_data_dir);
+    netNodeConfig.setConfigFolder(data_dir_path.string());
+
     RpcServerConfig rpcConfig;
     rpcConfig.init(vm);
 
-    if (!coreConfig.configFolderDefaulted) {
-      if (!Tools::directoryExists(coreConfig.configFolder)) {
-        throw std::runtime_error("Directory does not exist: " + coreConfig.configFolder);
+    DataBaseConfig dbConfig;
+    dbConfig.init(vm);
+
+    dbConfig.setDataDir(data_dir_path.string());
+    if (dbConfig.isConfigFolderDefaulted()) {
+      if (!Tools::create_directories_if_necessary(dbConfig.getDataDir())) {
+        throw std::runtime_error("Can't create directory: " + dbConfig.getDataDir());
       }
     } else {
-      if (!Tools::create_directories_if_necessary(coreConfig.configFolder)) {
-        throw std::runtime_error("Can't create directory: " + coreConfig.configFolder);
+      if (!Tools::directoryExists(dbConfig.getDataDir())) {
+        throw std::runtime_error("Directory does not exist: " + dbConfig.getDataDir());
       }
     }
 
+    RocksDBWrapper database(logManager);
+    database.init(dbConfig);
+    Tools::ScopeExit dbShutdownOnExit([&database] () { database.shutdown(); });
+
     System::Dispatcher dispatcher;
+    logger(INFO) << "Initializing core...";
+    CryptoNote::Core ccore(
+      currency,
+      logManager,
+      std::move(checkpoints),
+      dispatcher,
+      std::unique_ptr<IBlockchainCacheFactory>(new DatabaseBlockchainCacheFactory(database, logger.getLogger())),
+      createSwappedMainChainStorage(data_dir_path.string(), currency));
+
+    ccore.load();
+    logger(INFO) << "Core initialized OK";
 
     CryptoNote::CryptoNoteProtocolHandler cprotocol(currency, dispatcher, ccore, nullptr, logManager);
     CryptoNote::NodeServer p2psrv(dispatcher, cprotocol, logManager);
     CryptoNote::RpcServer rpcServer(dispatcher, logManager, ccore, p2psrv, cprotocol);
 
     cprotocol.set_p2p_endpoint(&p2psrv);
-    ccore.set_cryptonote_protocol(&cprotocol);
     DaemonCommandsHandler dch(ccore, p2psrv, logManager);
-
-    // initialize objects
     logger(INFO) << "Initializing p2p server...";
     if (!p2psrv.init(netNodeConfig)) {
       logger(ERROR, BRIGHT_RED) << "Failed to initialize p2p server.";
       return 1;
     }
+
     logger(INFO) << "P2p server initialized OK";
 
-    //logger(INFO) << "Initializing core rpc server...";
-    //if (!rpc_server.init(vm)) {
-    //  logger(ERROR, BRIGHT_RED) << "Failed to initialize core rpc server.";
-    //  return 1;
-    //}
-    // logger(INFO, BRIGHT_GREEN) << "Core rpc server initialized OK on port: " << rpc_server.get_binded_port();
-
-    // initialize core here
-    logger(INFO) << "Initializing core...";
-    if (!ccore.init(coreConfig, minerConfig, true)) {
-      logger(ERROR, BRIGHT_RED) << "Failed to initialize core";
-      return 1;
-    }
-    logger(INFO) << "Core initialized OK";
-
-    // start components
     if (!command_line::has_arg(vm, arg_console)) {
       dch.start_handling();
     }
@@ -549,13 +584,11 @@ rpcServer.enableCors(command_line::get_arg(vm, arg_enable_cors));
     rpcServer.stop();
 
     //deinitialize components
-    logger(INFO) << "Deinitializing core...";
-    ccore.deinit();
     logger(INFO) << "Deinitializing p2p...";
     p2psrv.deinit();
 
-    ccore.set_cryptonote_protocol(NULL);
-    cprotocol.set_p2p_endpoint(NULL);
+    cprotocol.set_p2p_endpoint(nullptr);
+    ccore.save();
 
   } catch (const std::exception& e) {
     logger(ERROR, BRIGHT_RED) << "Exception: " << e.what();

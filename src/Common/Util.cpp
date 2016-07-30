@@ -23,6 +23,9 @@
 #include "CryptoNoteConfig.h"
 
 #ifdef WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <shlobj.h>
 #include <strsafe.h>
@@ -325,6 +328,23 @@ std::string get_nix_version_display_string()
 #endif
 
     return config_folder;
+  }
+
+  std::string getDefaultCacheFile(const std::string& dataDir) {
+    static const std::string name = "cache_file";
+
+    namespace bf = boost::filesystem;
+    bf::path dir = dataDir;
+
+    if (!bf::exists(dir) ) {
+      throw std::runtime_error("Directory \"" + dir.string() + "\" doesn't exist");
+    }
+
+    if (!bf::exists(dir/name)) {
+      throw std::runtime_error("File \"" + boost::filesystem::path(dir/name).string() + "\" doesn't exist");
+    }
+
+    return boost::filesystem::path(dir/name).string();
   }
 
   bool create_directories_if_necessary(const std::string& path)

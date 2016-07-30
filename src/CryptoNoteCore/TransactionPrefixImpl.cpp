@@ -192,15 +192,17 @@ bool TransactionPrefixImpl::findOutputsToAccount(const AccountPublicAddress& add
 }
 
 bool TransactionPrefixImpl::validateInputs() const {
-  return check_inputs_types_supported(m_txPrefix) &&
-          check_inputs_overflow(m_txPrefix) &&
-          checkInputsKeyimagesDiff(m_txPrefix) &&
-          checkMultisignatureInputsDiff(m_txPrefix);
+  return
+    checkInputTypesSupported(m_txPrefix) &&
+    checkInputsOverflow(m_txPrefix) &&
+    checkInputsKeyimagesDiff(m_txPrefix) &&
+    checkMultisignatureInputsDiff(m_txPrefix);
 }
 
 bool TransactionPrefixImpl::validateOutputs() const {
-  return check_outs_valid(m_txPrefix) &&
-          check_outs_overflow(m_txPrefix);
+  return
+    checkOutsValid(m_txPrefix) &&
+    checkOutsOverflow(m_txPrefix);
 }
 
 bool TransactionPrefixImpl::validateSignatures() const {

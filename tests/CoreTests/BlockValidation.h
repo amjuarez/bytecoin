@@ -19,8 +19,6 @@
 
 #include "Chaingen.h"
 
-const uint64_t UNDEF_HEIGHT = static_cast<uint64_t>(CryptoNote::UpgradeDetectorBase::UNDEF_HEIGHT);
-
 class CheckBlockPurged : public test_chain_unit_base {
 public:
   CheckBlockPurged(size_t invalidBlockIdx, uint8_t blockMajorVersion) :
@@ -29,32 +27,33 @@ public:
     assert(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_2);
 
     CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
-    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
-    m_currency = currencyBuilder.currency();
+    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? CryptoNote::IUpgradeDetector::UNDEF_HEIGHT : UINT32_C(0));
+    m_currency.reset(new Currency(currencyBuilder.currency()));
 
     REGISTER_CALLBACK("check_block_purged", CheckBlockPurged::check_block_purged);
     REGISTER_CALLBACK("markInvalidBlock", CheckBlockPurged::markInvalidBlock);
   }
 
-  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t eventIdx, const CryptoNote::Block& /*blk*/) {
-    if (m_invalidBlockIdx == eventIdx) {
-      return bvc.m_verifivation_failed;
-    } else {
-      return !bvc.m_verifivation_failed;
-    }
+  bool check_block_verification_context(std::error_code bve, size_t eventIdx, const CryptoNote::BlockTemplate& /*blk*/) {
+    std::cout << "message: " << bve.message() << std::endl;
+    return m_invalidBlockIdx != eventIdx ? blockWasAdded(bve) : blockWasNotAdded(bve);
   }
 
-  bool check_block_purged(CryptoNote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
+  bool check_block_verification_context(std::error_code bve, size_t eventIdx, const CryptoNote::RawBlock& /*blk*/) {
+    return check_block_verification_context(bve, eventIdx, CryptoNote::BlockTemplate{});
+  }
+
+  bool check_block_purged(CryptoNote::Core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
     DEFINE_TESTS_ERROR_CONTEXT("CheckBlockPurged::check_block_purged");
 
     CHECK_TEST_CONDITION(m_invalidBlockIdx < eventIdx);
-    CHECK_EQ(0, c.get_pool_transactions_count());
-    CHECK_EQ(m_invalidBlockIdx, c.get_current_blockchain_height());
+    CHECK_EQ(0, c.getPoolTransactionCount());
+    CHECK_EQ(m_invalidBlockIdx, c.getTopBlockIndex() + 1);
 
     return true;
   }
 
-  bool markInvalidBlock(CryptoNote::core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
+  bool markInvalidBlock(CryptoNote::Core& c, size_t eventIdx, const std::vector<test_event_entry>& events) {
     m_invalidBlockIdx = eventIdx + 1;
     return true;
   }
@@ -72,17 +71,17 @@ struct CheckBlockAccepted : public test_chain_unit_base {
     assert(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 || blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_2);
 
     CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
-    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
-    m_currency = currencyBuilder.currency();
+    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? CryptoNote::IUpgradeDetector::UNDEF_HEIGHT : UINT32_C(0));
+    m_currency.reset(new Currency(currencyBuilder.currency()));
 
     REGISTER_CALLBACK("check_block_accepted", CheckBlockAccepted::check_block_accepted);
   }
 
-  bool check_block_accepted(CryptoNote::core& c, size_t /*eventIdx*/, const std::vector<test_event_entry>& /*events*/) {
+  bool check_block_accepted(CryptoNote::Core& c, size_t /*eventIdx*/, const std::vector<test_event_entry>& /*events*/) {
     DEFINE_TESTS_ERROR_CONTEXT("CheckBlockAccepted::check_block_accepted");
 
-    CHECK_EQ(0, c.get_pool_transactions_count());
-    CHECK_EQ(m_expectedBlockchainHeight, c.get_current_blockchain_height());
+    CHECK_EQ(0, c.getPoolTransactionCount());
+    CHECK_EQ(m_expectedBlockchainHeight, c.getTopBlockIndex() + 1);
 
     return true;
   }
@@ -121,7 +120,9 @@ struct gen_block_ts_not_checked : public CheckBlockAccepted
 {
   gen_block_ts_not_checked(uint8_t blockMajorVersion)
     : CheckBlockAccepted(0, blockMajorVersion) {
-    m_expectedBlockchainHeight = m_currency.timestampCheckWindow();
+    // bad bad bad
+    const_cast<CryptoNote::BlockTemplate&>(m_currency->genesisBlock()).timestamp = 1338224400;
+    m_expectedBlockchainHeight = m_currency->timestampCheckWindow();
   }
 
   bool generate(std::vector<test_event_entry>& events) const;
@@ -131,7 +132,8 @@ struct gen_block_ts_in_past : public CheckBlockPurged
 {
   gen_block_ts_in_past(uint8_t blockMajorVersion)
     : CheckBlockPurged(0, blockMajorVersion) {
-    m_invalidBlockIdx = m_currency.timestampCheckWindow();
+    const_cast<CryptoNote::BlockTemplate&>(m_currency->genesisBlock()).timestamp = 1338224400;
+    m_invalidBlockIdx = m_currency->timestampCheckWindow();
   }
 
   bool generate(std::vector<test_event_entry>& events) const;
@@ -140,7 +142,9 @@ struct gen_block_ts_in_past : public CheckBlockPurged
 struct gen_block_ts_in_future_rejected : public CheckBlockPurged
 {
   gen_block_ts_in_future_rejected(uint8_t blockMajorVersion)
-    : CheckBlockPurged(1, blockMajorVersion) {}
+    : CheckBlockPurged(1, blockMajorVersion) {
+      const_cast<CryptoNote::BlockTemplate&>(m_currency->genesisBlock()).timestamp = 1338224400;
+    }
 
   bool generate(std::vector<test_event_entry>& events) const;
 };
@@ -159,7 +163,7 @@ struct gen_block_invalid_prev_id : public CheckBlockPurged
     : CheckBlockPurged(1, blockMajorVersion) {}
 
   bool generate(std::vector<test_event_entry>& events) const;
-  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*blk*/);
+  bool check_block_verification_context(std::error_code bve, size_t event_idx, const CryptoNote::BlockTemplate& /*blk*/);
 };
 
 struct gen_block_invalid_nonce : public CheckBlockPurged
@@ -229,7 +233,9 @@ struct gen_block_height_is_high : public CheckBlockPurged
 struct gen_block_miner_tx_has_2_tx_gen_in : public CheckBlockPurged
 {
   gen_block_miner_tx_has_2_tx_gen_in(uint8_t blockMajorVersion)
-    : CheckBlockPurged(1, blockMajorVersion) {}
+    : CheckBlockPurged(1, blockMajorVersion) {
+    m_invalidBlockIdx = 2;
+  }
 
   bool generate(std::vector<test_event_entry>& events) const;
 };
@@ -238,7 +244,7 @@ struct gen_block_miner_tx_has_2_in : public CheckBlockPurged
 {
   gen_block_miner_tx_has_2_in(uint8_t blockMajorVersion)
     : CheckBlockPurged(0, blockMajorVersion) {
-    m_invalidBlockIdx = m_currency.minedMoneyUnlockWindow() + 1;
+    m_invalidBlockIdx = m_currency->minedMoneyUnlockWindow() + 2;
   }
 
   bool generate(std::vector<test_event_entry>& events) const;
@@ -248,7 +254,7 @@ struct gen_block_miner_tx_with_txin_to_key : public CheckBlockPurged
 {
   gen_block_miner_tx_with_txin_to_key(uint8_t blockMajorVersion)
     : CheckBlockPurged(0, blockMajorVersion) {
-    m_invalidBlockIdx = m_currency.minedMoneyUnlockWindow() + 2;
+    m_invalidBlockIdx = m_currency->minedMoneyUnlockWindow() + 2;
   }
 
   bool generate(std::vector<test_event_entry>& events) const;
@@ -299,9 +305,9 @@ struct gen_block_is_too_big : public CheckBlockPurged
   gen_block_is_too_big(uint8_t blockMajorVersion)
       : CheckBlockPurged(1, blockMajorVersion) {
     CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
-    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? UNDEF_HEIGHT : UINT64_C(0));
+    currencyBuilder.upgradeHeightV2(blockMajorVersion == CryptoNote::BLOCK_MAJOR_VERSION_1 ? CryptoNote::IUpgradeDetector::UNDEF_HEIGHT : UINT32_C(0));
     currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
-    m_currency = currencyBuilder.currency();
+    m_currency.reset(new Currency(currencyBuilder.currency()));
   }
 
   bool generate(std::vector<test_event_entry>& events) const;
@@ -320,9 +326,9 @@ struct gen_block_invalid_binary_format : public test_chain_unit_base
   gen_block_invalid_binary_format(uint8_t blockMajorVersion);
 
   bool generate(std::vector<test_event_entry>& events) const;
-  bool check_block_verification_context(const CryptoNote::block_verification_context& bvc, size_t event_idx, const CryptoNote::Block& /*blk*/);
-  bool check_all_blocks_purged(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
-  bool corrupt_blocks_boundary(CryptoNote::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool check_block_verification_context(std::error_code bve, size_t event_idx, const CryptoNote::BlockTemplate& /*blk*/);
+  bool check_all_blocks_purged(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+  bool corrupt_blocks_boundary(CryptoNote::Core& c, size_t ev_index, const std::vector<test_event_entry>& events);
 
 private:
   const uint8_t m_blockMajorVersion;

@@ -49,7 +49,7 @@ public:
     {
       m_miners[i].generate();
 
-      if (!currency.constructMinerTx(BLOCK_MAJOR_VERSION_1, 0, 0, 0, 2, 0, m_miners[i].getAccountKeys().address, m_miner_txs[i]))
+      if (!currency.constructMinerTx(CryptoNote::BLOCK_MAJOR_VERSION_1, 0, 0, 0, 2, 0, m_miners[i].getAccountKeys().address, m_miner_txs[i]))
         return false;
 
       KeyOutput tx_out = boost::get<KeyOutput>(m_miner_txs[i].outputs[0].target);

@@ -33,65 +33,18 @@ namespace CryptoNote
   /************************************************************************/
   /*                                                                      */
   /************************************************************************/
-  struct block_complete_entry
-  {
-    std::string block;
-    std::vector<std::string> txs;
 
-    void serialize(ISerializer& s) {
-      KV_MEMBER(block);
-      KV_MEMBER(txs);
-    }
-
+  //just to keep backward compatibility with BlockCompleteEntry serialization
+  struct RawBlockLegacy {
+    BinaryArray block;
+    std::vector<BinaryArray> transactions;
   };
 
-  struct BlockFullInfo : public block_complete_entry
-  {
-    Crypto::Hash block_id;
-
-    void serialize(ISerializer& s) {
-      KV_MEMBER(block_id);
-      KV_MEMBER(block);
-      KV_MEMBER(txs);
-    }
-  };
-
-  struct TransactionPrefixInfo {
-    Crypto::Hash txHash;
-    TransactionPrefix txPrefix;
-
-    void serialize(ISerializer& s) {
-      KV_MEMBER(txHash);
-      KV_MEMBER(txPrefix);
-    }
-  };
-
-  struct BlockShortInfo {
-    Crypto::Hash blockId;
-    std::string block;
-    std::vector<TransactionPrefixInfo> txPrefixes;
-
-    void serialize(ISerializer& s) {
-      KV_MEMBER(blockId);
-      KV_MEMBER(block);
-      KV_MEMBER(txPrefixes);
-    }
-  };
-
-  /************************************************************************/
-  /*                                                                      */
-  /************************************************************************/
   struct NOTIFY_NEW_BLOCK_request
   {
-    block_complete_entry b;
+    RawBlockLegacy b;
     uint32_t current_blockchain_height;
     uint32_t hop;
-
-    void serialize(ISerializer& s) {
-      KV_MEMBER(b)
-      KV_MEMBER(current_blockchain_height)
-      KV_MEMBER(hop)
-    }
   };
 
   struct NOTIFY_NEW_BLOCK
@@ -105,12 +58,7 @@ namespace CryptoNote
   /************************************************************************/
   struct NOTIFY_NEW_TRANSACTIONS_request
   {
-    std::vector<std::string> txs;
-
-    void serialize(ISerializer& s) {
-      KV_MEMBER(txs);
-    }
-
+    std::vector<BinaryArray> txs;
   };
 
   struct NOTIFY_NEW_TRANSACTIONS
@@ -142,17 +90,9 @@ namespace CryptoNote
   struct NOTIFY_RESPONSE_GET_OBJECTS_request
   {
     std::vector<std::string> txs;
-    std::vector<block_complete_entry> blocks;
+    std::vector<RawBlockLegacy> blocks;
     std::vector<Crypto::Hash> missed_ids;
     uint32_t current_blockchain_height;
-
-    void serialize(ISerializer& s) {
-      KV_MEMBER(txs)
-      KV_MEMBER(blocks)
-      serializeAsBinary(missed_ids, "missed_ids", s);
-      KV_MEMBER(current_blockchain_height)
-    }
-
   };
 
   struct NOTIFY_RESPONSE_GET_OBJECTS

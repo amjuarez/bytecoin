@@ -20,12 +20,17 @@
 #include <future>
 
 #include "Common/SignalHandler.h"
+#include "Common/Util.h"
 #include "InProcessNode/InProcessNode.h"
 #include "Logging/LoggerRef.h"
 #include "PaymentGate/PaymentServiceJsonRpcServer.h"
 
-#include "CryptoNoteCore/CoreConfig.h"
+#include "Common/ScopeExit.h"
 #include "CryptoNoteCore/Core.h"
+#include "CryptoNoteCore/DatabaseBlockchainCacheFactory.h"
+#include "CryptoNoteCore/DataBaseConfig.h"
+#include "CryptoNoteCore/MainChainStorage.h"
+#include "CryptoNoteCore/RocksDBWrapper.h"
 #include "CryptoNoteProtocol/CryptoNoteProtocolHandler.h"
 #include "P2p/NetNode.h"
 #include <System/Context.h>
@@ -77,6 +82,8 @@ bool PaymentGateService::init(int argc, char** argv) {
 
   Logging::LoggerRef log(logger, "main");
 
+std::cout << config.coinBaseConfig.CRYPTONOTE_NAME << " ::: 1\n";
+std::cout << config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX << " ::: 2\n";
   currencyBuilder.genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
   currencyBuilder.publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
   currencyBuilder.moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
@@ -147,6 +154,47 @@ WalletConfiguration PaymentGateService::getWalletConfig() const {
 }
 
 const CryptoNote::Currency PaymentGateService::getCurrency() {
+std::cout << config.coinBaseConfig.CRYPTONOTE_NAME << " ::: b1\n";
+std::cout << config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX << " ::: b2\n";
+  currencyBuilder.genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
+  currencyBuilder.publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+  currencyBuilder.moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
+  currencyBuilder.genesisBlockReward(config.coinBaseConfig.GENESIS_BLOCK_REWARD);
+  currencyBuilder.cryptonoteCoinVersion(config.coinBaseConfig.CRYPTONOTE_COIN_VERSION);
+  currencyBuilder.killHeight(config.coinBaseConfig.KILL_HEIGHT);
+  currencyBuilder.mandatoryTransaction(config.coinBaseConfig.MANDATORY_TRANSACTION);
+  currencyBuilder.emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
+  currencyBuilder.blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+  currencyBuilder.blockGrantedFullRewardZoneV1(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1);
+  currencyBuilder.blockGrantedFullRewardZoneV2(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2);
+  currencyBuilder.numberOfDecimalPlaces(config.coinBaseConfig.CRYPTONOTE_DISPLAY_DECIMAL_POINT);
+  currencyBuilder.mininumFee(config.coinBaseConfig.MINIMUM_FEE);
+  currencyBuilder.defaultDustThreshold(config.coinBaseConfig.DEFAULT_DUST_THRESHOLD);
+  currencyBuilder.difficultyTarget(config.coinBaseConfig.DIFFICULTY_TARGET);
+  currencyBuilder.minedMoneyUnlockWindow(config.coinBaseConfig.CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW);
+  currencyBuilder.maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
+  if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
+  {
+    currencyBuilder.difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+    currencyBuilder.upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+    currencyBuilder.upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  } else {
+    currencyBuilder.difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+  }
+  currencyBuilder.maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+  currencyBuilder.lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
+  if (config.coinBaseConfig.UPGRADE_HEIGHT_V2 && config.coinBaseConfig.UPGRADE_HEIGHT_V2 != 0)
+  {
+    currencyBuilder.upgradeHeightV2(config.coinBaseConfig.UPGRADE_HEIGHT_V2);
+  }
+  if (config.coinBaseConfig.UPGRADE_HEIGHT_V3 && config.coinBaseConfig.UPGRADE_HEIGHT_V3 != 0)
+  {
+    currencyBuilder.upgradeHeightV3(config.coinBaseConfig.UPGRADE_HEIGHT_V3);
+  }
+  currencyBuilder.difficultyLag(config.coinBaseConfig.DIFFICULTY_LAG);
+currencyBuilder.maxTransactionSizeLimit(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT);
+currencyBuilder.fusionTxMaxSize(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT * 30 / 100);
+  currencyBuilder.difficultyCut(config.coinBaseConfig.DIFFICULTY_CUT);
   return currencyBuilder.currency();
 }
 
@@ -187,54 +235,75 @@ void PaymentGateService::stop() {
 }
 
 void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
-  if (!config.coreConfig.configFolderDefaulted) {
-    if (!Tools::directoryExists(config.coreConfig.configFolder)) {
-      throw std::runtime_error("Directory does not exist: " + config.coreConfig.configFolder);
+  log(Logging::INFO) << "Starting Payment Gate with local node";
+
+std::cout << config.dataDir << " ::: 3\n";
+      std::string data_dir = config.dataDir;
+      if (!config.coinBaseConfig.CRYPTONOTE_NAME.empty()) {
+        boost::replace_all(data_dir, CryptoNote::CRYPTONOTE_NAME, config.coinBaseConfig.CRYPTONOTE_NAME);
+      }
+std::cout << data_dir << " ::: 4\n";
+  CryptoNote::DataBaseConfig dbConfig;
+
+  //TODO: make command line options
+  dbConfig.setConfigFolderDefaulted(true);
+dbConfig.setDataDir(data_dir);
+  dbConfig.setMaxOpenFiles(10);
+  dbConfig.setReadCacheSize(100*1024*1024);
+  dbConfig.setWriteBufferSize(100*1024*1024);
+  dbConfig.setTestnet(false);
+  dbConfig.setBackgroundThreadsCount(2);
+
+  if (dbConfig.isConfigFolderDefaulted()) {
+    if (!Tools::create_directories_if_necessary(dbConfig.getDataDir())) {
+      throw std::runtime_error("Can't create directory: " + dbConfig.getDataDir());
     }
   } else {
-    if (!Tools::create_directories_if_necessary(config.coreConfig.configFolder)) {
-      throw std::runtime_error("Can't create directory: " + config.coreConfig.configFolder);
+    if (!Tools::directoryExists(dbConfig.getDataDir())) {
+      throw std::runtime_error("Directory does not exist: " + dbConfig.getDataDir());
     }
   }
 
-  log(Logging::INFO) << "Starting Payment Gate with local node";
+  CryptoNote::RocksDBWrapper database(logger);
+  database.init(dbConfig);
+  Tools::ScopeExit dbShutdownOnExit([&database] () { database.shutdown(); });
 
   CryptoNote::Currency currency = currencyBuilder.currency();
-  CryptoNote::core core(currency, NULL, logger, false);
 
-  CryptoNote::CryptoNoteProtocolHandler protocol(currency, *dispatcher, core, NULL, logger);
+  log(Logging::INFO) << "initializing core";
+
+  CryptoNote::Core core(
+    currency,
+    logger,
+    CryptoNote::Checkpoints(logger),
+    *dispatcher,
+    std::unique_ptr<CryptoNote::IBlockchainCacheFactory>(new CryptoNote::DatabaseBlockchainCacheFactory(database, log.getLogger())),
+    CryptoNote::createSwappedMainChainStorage(dbConfig.getDataDir(), currency));
+
+  core.load();
+
+  CryptoNote::CryptoNoteProtocolHandler protocol(currency, *dispatcher, core, nullptr, logger);
   CryptoNote::NodeServer p2pNode(*dispatcher, protocol, logger);
 
   protocol.set_p2p_endpoint(&p2pNode);
-  core.set_cryptonote_protocol(&protocol);
 
   log(Logging::INFO) << "initializing p2pNode";
   if (!p2pNode.init(config.netNodeConfig)) {
     throw std::runtime_error("Failed to init p2pNode");
   }
 
-  log(Logging::INFO) << "initializing core";
-  CryptoNote::MinerConfig emptyMiner;
-  core.init(config.coreConfig, emptyMiner, true);
+  std::unique_ptr<CryptoNote::INode> node(new CryptoNote::InProcessNode(core, protocol, *dispatcher));
 
-  std::promise<std::error_code> initPromise;
-  auto initFuture = initPromise.get_future();
-
-  std::unique_ptr<CryptoNote::INode> node(new CryptoNote::InProcessNode(core, protocol));
-
-  node->init([&initPromise, &log](std::error_code ec) {
-    if (ec) {
-      log(Logging::WARNING, Logging::YELLOW) << "Failed to init node: " << ec.message();
-    } else {
-      log(Logging::INFO) << "node is inited successfully";
-    }
-
-    initPromise.set_value(ec);
+  std::error_code nodeInitStatus;
+  node->init([&log, &nodeInitStatus](std::error_code ec) {
+    nodeInitStatus = ec;
   });
 
-  auto ec = initFuture.get();
-  if (ec) {
-    throw std::system_error(ec);
+  if (nodeInitStatus) {
+    log(Logging::WARNING, Logging::YELLOW) << "Failed to init node: " << nodeInitStatus.message();
+    throw std::system_error(nodeInitStatus);
+  } else {
+    log(Logging::INFO) << "node is inited successfully";
   }
 
   log(Logging::INFO) << "Spawning p2p server";
@@ -253,7 +322,6 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
   p2pNode.sendStopSignal();
   context.get();
   node->shutdown();
-  core.deinit();
   p2pNode.deinit(); 
 }
 

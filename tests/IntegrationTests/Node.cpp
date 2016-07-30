@@ -221,7 +221,7 @@ TEST_F(NodeTest, generateBlockchain) {
 
 TEST_F(NodeTest, dumpBlockchain) {
   startNetworkWithBlockchain("testnet_300");
-  auto& daemon = network.getNode(0);
+  //auto& daemon = network.getNode(0);
   auto mainNode = network.getNode(0).makeINode();
   dumpBlockchainInfo(*mainNode);
 }
@@ -306,7 +306,7 @@ TEST_F(NodeTest, queryBlocks) {
   auto startBlockIter = std::find_if(blocks.begin(), blocks.end(), [](const BlockShortEntry& e) { return e.hasBlock; });
   ASSERT_TRUE(startBlockIter != blocks.end());
 
-  const Block& startBlock = startBlockIter->block;
+  const BlockTemplate& startBlock = startBlockIter->block;
 
   std::cout << "Starting block timestamp: " << startBlock.timestamp << std::endl;
   auto startFullIndex = std::distance(blocks.begin(), startBlockIter);
