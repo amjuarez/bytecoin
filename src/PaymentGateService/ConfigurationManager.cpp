@@ -65,7 +65,7 @@ bool ConfigurationManager::init(int argc, char** argv) {
   CoinBaseConfiguration::initOptions(coinBaseOptions);
 
   po::options_description cmdOptionsDesc;
-  cmdOptionsDesc.add(cmdGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
+  cmdOptionsDesc.add(cmdGeneralOptions).add(remoteNodeOptions).add(netNodeOptions);
 
   po::options_description confOptionsDesc;
   confOptionsDesc.add(confGeneralOptions).add(remoteNodeOptions).add(netNodeOptions).add(coinBaseOptions);
@@ -84,13 +84,14 @@ bool ConfigurationManager::init(int argc, char** argv) {
     return false;
   }
 
+po::variables_map confOptions;
   if (cmdOptions.count("config")) {
     std::ifstream confStream(cmdOptions["config"].as<std::string>(), std::ifstream::in);
     if (!confStream.good()) {
       throw ConfigurationError("Cannot open configuration file");
     }
 
-    po::variables_map confOptions;
+
     po::store(po::parse_config_file(confStream, confOptionsDesc, true), confOptions);
     po::notify(confOptions);
 
@@ -112,8 +113,15 @@ bool ConfigurationManager::init(int argc, char** argv) {
   gateConfiguration.init(cmdOptions);
   netNodeConfig.init(cmdOptions);
   remoteNodeConfig.init(cmdOptions);
-    coinBaseConfig.init(cmdOptions);
   dataDir = command_line::get_arg(cmdOptions, command_line::arg_data_dir);
+
+  if (!(cmdOptions["BYTECOIN_NETWORK"].as<std::string>().compare("11100111-1100-0101-1011-001210110110"))) {
+    netNodeConfig.setNetworkId(boost::lexical_cast<boost::uuids::uuid>(confOptions["BYTECOIN_NETWORK"].as<std::string>()));
+  }
+
+  if (!(cmdOptions["P2P_STAT_TRUSTED_PUB_KEY"].as<std::string>().compare(""))) {
+    netNodeConfig.setP2pStatTrustedPubKey(confOptions["P2P_STAT_TRUSTED_PUB_KEY"].as<std::string>());
+  }
 
   if (cmdOptions["testnet"].as<bool>()) {
     netNodeConfig.setTestnet(true);

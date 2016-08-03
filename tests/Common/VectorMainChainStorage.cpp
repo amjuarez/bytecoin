@@ -48,7 +48,7 @@ std::unique_ptr<IMainChainStorage> createVectorMainChainStorage(const Currency& 
   genesis.block = toBinaryArray(currency.genesisBlock());
   storage->pushBlock(genesis);
 
-  return std::move(storage);
+return storage;
 }
 
 }

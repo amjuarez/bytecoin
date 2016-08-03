@@ -392,7 +392,6 @@ std::string print_peerlist_to_string(const std::list<PeerlistEntry>& pl) {
     m_allow_local_ip = config.getAllowLocalIp();
     m_network_id = config.getNetworkId();
     m_p2pStatTrustedPubKey = config.getP2pStatTrustedPubKey();
-    std::cout << "TEST: " << config.getNetworkId() << "\n";
 
     auto peers = config.getPeers();
     std::copy(peers.begin(), peers.end(), std::back_inserter(m_command_line_peers));

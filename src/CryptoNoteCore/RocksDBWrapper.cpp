@@ -148,7 +148,7 @@ std::error_code RocksDBWrapper::write(IWriteBatch& batch, bool sync) {
   writeOptions.sync = sync;
 
   rocksdb::WriteBatch rocksdbBatch;
-  std::vector<std::pair<std::string, std::string>> rawData(std::move(batch.extractRawDataToInsert()));
+std::vector<std::pair<std::string, std::string>> rawData(batch.extractRawDataToInsert());
   for (const std::pair<std::string, std::string>& kvPair : rawData) {
     rocksdbBatch.Put(rocksdb::Slice(kvPair.first), rocksdb::Slice(kvPair.second));
   }

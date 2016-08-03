@@ -675,7 +675,7 @@ void CryptoNoteProtocolHandler::requestMissingPoolTransactions(const CryptoNoteC
   }
 
   NOTIFY_REQUEST_TX_POOL::request notification;
-  notification.txs = std::move(m_core.getPoolTransactionHashes());
+notification.txs = m_core.getPoolTransactionHashes();
 
   bool ok = post_notify<NOTIFY_REQUEST_TX_POOL>(*m_p2p, notification, context);
   if (!ok) {

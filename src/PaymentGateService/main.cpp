@@ -307,8 +307,6 @@ int main(int argc, char** argv) {
     Logging::LoggerRef(pg.getLogger(), "main")(Logging::INFO) << "walled v" << PROJECT_VERSION_LONG;
 
     const auto& config = pg.getConfig();
-std::cout << config.coinBaseConfig.CRYPTONOTE_NAME << " ::: a1\n";
-std::cout << config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX << " ::: a2\n";
 
     if (config.gateConfiguration.generateNewContainer) {
       System::Dispatcher d;

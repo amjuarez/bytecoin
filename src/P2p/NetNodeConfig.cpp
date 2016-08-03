@@ -102,10 +102,17 @@ bool NetNodeConfig::init(const boost::program_options::variables_map& vm)
     externalPort = command_line::get_arg(vm, arg_p2p_external_port);
   }
 
+
+//  if (vm.count(arg_P2P_STAT_TRUSTED_PUB_KEY.name) != 0 && (!vm[arg_P2P_STAT_TRUSTED_PUB_KEY.name].defaulted())) {
+    p2pStatTrustedPubKey = command_line::get_arg(vm, arg_P2P_STAT_TRUSTED_PUB_KEY);
+//  }
+
+//  if (vm.count(arg_network_id.name) != 0 && (!vm[arg_network_id.name].defaulted())) {
+    networkId = boost::lexical_cast<boost::uuids::uuid>(command_line::get_arg(vm, arg_network_id));
+//  }
+
   if (vm.count(arg_p2p_allow_local_ip.name) != 0 && (!vm[arg_p2p_allow_local_ip.name].defaulted() || !allowLocalIp)) {
     allowLocalIp = command_line::get_arg(vm, arg_p2p_allow_local_ip);
-  p2pStatTrustedPubKey = command_line::get_arg(vm, arg_P2P_STAT_TRUSTED_PUB_KEY);
-  networkId = boost::lexical_cast<boost::uuids::uuid>(command_line::get_arg(vm, arg_network_id));
   }
 
   if (vm.count(command_line::arg_data_dir.name) != 0 && (!vm[command_line::arg_data_dir.name].defaulted() || configFolder == Tools::getDefaultDataDirectory())) {
@@ -201,11 +208,11 @@ bool NetNodeConfig::getHideMyPort() const {
   return hideMyPort;
 }
 
-  boost::uuids::uuid NetNodeConfig::getNetworkId() const {
+boost::uuids::uuid NetNodeConfig::getNetworkId() const {
   return networkId;
 }
 
-  std::string NetNodeConfig::getP2pStatTrustedPubKey() const {
+std::string NetNodeConfig::getP2pStatTrustedPubKey() const {
   return p2pStatTrustedPubKey;
 }
 

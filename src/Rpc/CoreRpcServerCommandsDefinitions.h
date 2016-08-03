@@ -671,7 +671,7 @@ struct F_COMMAND_RPC_GET_POOL {
   typedef std::vector<std::string> request;
 
   struct response {
-    std::string transactions;
+    std::vector<f_transaction_short_response> transactions; //transactions blobs as hex
     std::string status;
 
     void serialize(ISerializer &s) {
