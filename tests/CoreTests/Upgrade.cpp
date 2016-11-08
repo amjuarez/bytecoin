@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -34,7 +34,9 @@ namespace {
 gen_upgrade::gen_upgrade() : m_invalidBlockIndex(0), m_checkBlockTemplateVersionCallCounter(0) {
   CryptoNote::CurrencyBuilder currencyBuilder(m_logger);
   currencyBuilder.maxBlockSizeInitial(std::numeric_limits<size_t>::max() / 2);
-  currencyBuilder.upgradeHeight(UpgradeDetectorBase::UNDEF_HEIGHT);
+  currencyBuilder.upgradeHeightV2(UpgradeDetectorBase::UNDEF_HEIGHT);
+  // Disable voting and never upgrade to v.3.0
+  currencyBuilder.upgradeHeightV3(CryptoNote::parameters::CRYPTONOTE_MAX_BLOCK_NUMBER);
   m_currency = currencyBuilder.currency();
 
   REGISTER_CALLBACK_METHOD(gen_upgrade, markInvalidBlock);
@@ -191,8 +193,8 @@ bool gen_upgrade::checkBlockTemplateVersion(CryptoNote::core& c, uint8_t expecte
   difficulty_type diff;
   uint32_t height;
   CHECK_TEST_CONDITION(c.get_block_template(b, account.getAccountKeys().address, diff, height, BinaryArray()));
-  CHECK_EQ(b.majorVersion, expectedMajorVersion);
-  CHECK_EQ(b.minorVersion, expectedMinorVersion);
+  CHECK_EQ(static_cast<int>(b.majorVersion), static_cast<int>(expectedMajorVersion));
+  CHECK_EQ(static_cast<int>(b.minorVersion), static_cast<int>(expectedMinorVersion));
 
   return true;
 }

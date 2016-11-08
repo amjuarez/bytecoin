@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -34,6 +34,21 @@ MinerEvent BlockchainUpdatedEvent() {
   MinerEvent event;
   event.type = MinerEventType::BLOCKCHAIN_UPDATED;
   return event;
+}
+
+void adjustMergeMiningTag(Block& blockTemplate) {
+  if (blockTemplate.majorVersion >= BLOCK_MAJOR_VERSION_3) {
+    CryptoNote::TransactionExtraMergeMiningTag mmTag;
+    mmTag.depth = 0;
+    if (!CryptoNote::get_aux_block_header_hash(blockTemplate, mmTag.merkleRoot)) {
+      throw std::runtime_error("Couldn't get block header hash");
+    }
+
+    blockTemplate.rootBlock.baseTransaction.extra.clear();
+    if (!CryptoNote::appendMergeMiningTagToExtra(blockTemplate.rootBlock.baseTransaction.extra, mmTag)) {
+      throw std::runtime_error("Couldn't append merge mining tag");
+    }
+  }
 }
 
 }
@@ -232,6 +247,8 @@ BlockMiningParameters MinerManager::requestMiningParameters(System::Dispatcher& 
 
 
 void MinerManager::adjustBlockTemplate(CryptoNote::Block& blockTemplate) const {
+  adjustMergeMiningTag(blockTemplate);
+
   if (m_config.firstBlockTimestamp == 0) {
     //no need to fix timestamp
     return;

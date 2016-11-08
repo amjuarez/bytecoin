@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -187,8 +187,6 @@ void serialize(Transaction& tx, ISerializer& serializer) {
   serialize(static_cast<TransactionPrefix&>(tx), serializer);
 
   size_t sigSize = tx.inputs.size();
-  //TODO: make arrays without sizes
-//  serializer.beginArray(sigSize, "signatures");
   
   if (serializer.type() == ISerializer::INPUT) {
     tx.signatures.resize(sigSize);
@@ -294,16 +292,87 @@ void serialize(MultisignatureOutput& multisignature, ISerializer& serializer) {
   serializer(multisignature.term, "term");
 }
 
+void serialize(RootBlockSerializer& pbs, ISerializer& serializer) {
+  serializer(pbs.m_rootBlock.majorVersion, "majorVersion");
+  serializer(pbs.m_rootBlock.minorVersion, "minorVersion");
+  serializer(pbs.m_timestamp, "timestamp");
+  serializer(pbs.m_rootBlock.previousBlockHash, "prevId");
+  serializer.binary(&pbs.m_nonce, sizeof(pbs.m_nonce), "nonce");
+
+  if (pbs.m_hashingSerialization) {
+    Crypto::Hash minerTxHash;
+    if (!getObjectHash(pbs.m_rootBlock.baseTransaction, minerTxHash)) {
+      throw std::runtime_error("Get transaction hash error");
+    }
+
+    Crypto::Hash merkleRoot;
+    Crypto::tree_hash_from_branch(pbs.m_rootBlock.baseTransactionBranch.data(), pbs.m_rootBlock.baseTransactionBranch.size(), minerTxHash, 0, merkleRoot);
+
+    serializer(merkleRoot, "merkleRoot");
+  }
+
+  uint64_t txNum = static_cast<uint64_t>(pbs.m_rootBlock.transactionCount);
+  serializer(txNum, "numberOfTransactions");
+  pbs.m_rootBlock.transactionCount = static_cast<uint16_t>(txNum);
+  if (pbs.m_rootBlock.transactionCount < 1) {
+    throw std::runtime_error("Wrong transactions number");
+  }
+
+  if (pbs.m_headerOnly) {
+    return;
+  }
+
+  size_t branchSize = Crypto::tree_depth(pbs.m_rootBlock.transactionCount);
+  if (serializer.type() == ISerializer::OUTPUT) {
+    if (pbs.m_rootBlock.baseTransactionBranch.size() != branchSize) {
+      throw std::runtime_error("Wrong miner transaction branch size");
+    }
+  } else {
+    pbs.m_rootBlock.baseTransactionBranch.resize(branchSize);
+  }
+
+  for (Crypto::Hash& hash: pbs.m_rootBlock.baseTransactionBranch) {
+    serializer(hash, "");
+  }
+
+  serializer(pbs.m_rootBlock.baseTransaction, "minerTx");
+
+  TransactionExtraMergeMiningTag mmTag;
+  if (!getMergeMiningTagFromExtra(pbs.m_rootBlock.baseTransaction.extra, mmTag)) {
+    throw std::runtime_error("Can't get extra merge mining tag");
+  }
+
+  if (mmTag.depth > 8 * sizeof(Crypto::Hash)) {
+    throw std::runtime_error("Wrong merge mining tag depth");
+  }
+
+  if (serializer.type() == ISerializer::OUTPUT) {
+    if (mmTag.depth != pbs.m_rootBlock.blockchainBranch.size()) {
+      throw std::runtime_error("Blockchain branch size must be equal to merge mining tag depth");
+    }
+  } else {
+    pbs.m_rootBlock.blockchainBranch.resize(mmTag.depth);
+  }
+
+  for (Crypto::Hash& hash: pbs.m_rootBlock.blockchainBranch) {
+    serializer(hash, "");
+  }
+}
+
 void serializeBlockHeader(BlockHeader& header, ISerializer& serializer) {
   serializer(header.majorVersion, "major_version");
-  if (header.majorVersion > BLOCK_MAJOR_VERSION_2) {
+  if (header.majorVersion > BLOCK_MAJOR_VERSION_3) {
     throw std::runtime_error("Wrong major version");
   }
 
   serializer(header.minorVersion, "minor_version");
-  serializer(header.timestamp, "timestamp");
-  serializer(header.previousBlockHash, "prev_id");
-  serializer.binary(&header.nonce, sizeof(header.nonce), "nonce");
+  if (header.majorVersion < BLOCK_MAJOR_VERSION_3) {
+    serializer(header.timestamp, "timestamp");
+    serializer(header.previousBlockHash, "prev_id");
+    serializer.binary(&header.nonce, sizeof(header.nonce), "nonce");
+  } else {
+    serializer(header.previousBlockHash, "prev_id");
+  }
 }
 
 void serialize(BlockHeader& header, ISerializer& serializer) {
@@ -312,6 +381,11 @@ void serialize(BlockHeader& header, ISerializer& serializer) {
 
 void serialize(Block& block, ISerializer& serializer) {
   serializeBlockHeader(block, serializer);
+
+  if (block.majorVersion >= BLOCK_MAJOR_VERSION_3) {
+    auto rootBlockSerializer = makeRootBlockSerializer(block, false, false);
+    serializer(rootBlockSerializer, "root_block");
+  }
 
   serializer(block.baseTransaction, "miner_tx");
   serializer(block.transactionHashes, "tx_hashes");

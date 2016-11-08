@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -33,7 +33,8 @@ namespace {
       currencyBuilder.upgradeVotingThreshold(90);
       currencyBuilder.upgradeVotingWindow(720);
       currencyBuilder.upgradeWindow(720);
-      currencyBuilder.upgradeHeight(upgradeHeight);
+      currencyBuilder.upgradeHeightV2(upgradeHeight);
+      currencyBuilder.upgradeHeightV3(UpgradeDetector::UNDEF_HEIGHT);
       return currencyBuilder.currency();
     }
 
@@ -153,14 +154,14 @@ namespace {
     // Upgrade to v2 is here
     createBlocks(blocks, 1, BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_0);
 
-    createBlocks(blocks, currency.upgradeVotingWindow(), BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_1);
+    createBlocks(blocks, currency.upgradeVotingWindow() * currency.upgradeVotingThreshold() / 100, BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_1);
     uint64_t votingCompleteHeigntV3 = blocks.size() - 1;
     uint64_t upgradeHeightV3 = currency.calculateUpgradeHeight(votingCompleteHeigntV3);
     createBlocks(blocks, upgradeHeightV3 - blocks.size(), BLOCK_MAJOR_VERSION_2, BLOCK_MINOR_VERSION_0);
     // Upgrade to v3 is here
     createBlocks(blocks, 1, BLOCK_V3, BLOCK_MINOR_VERSION_0);
 
-    createBlocks(blocks, currency.upgradeVotingWindow(), BLOCK_V3, BLOCK_MINOR_VERSION_1);
+    createBlocks(blocks, currency.upgradeVotingWindow() * currency.upgradeVotingThreshold() / 100, BLOCK_V3, BLOCK_MINOR_VERSION_1);
     uint64_t votingCompleteHeigntV4 = blocks.size() - 1;
     uint64_t upgradeHeightV4 = currency.calculateUpgradeHeight(votingCompleteHeigntV4);
     createBlocks(blocks, upgradeHeightV4 - blocks.size(), BLOCK_V3, BLOCK_MINOR_VERSION_0);

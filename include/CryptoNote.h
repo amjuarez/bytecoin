@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -59,6 +59,16 @@ struct Transaction : public TransactionPrefix {
   std::vector<std::vector<Crypto::Signature>> signatures;
 };
 
+struct RootBlock {
+  uint8_t majorVersion;
+  uint8_t minorVersion;
+  Crypto::Hash previousBlockHash;
+  uint16_t transactionCount;
+  std::vector<Crypto::Hash> baseTransactionBranch;
+  Transaction baseTransaction;
+  std::vector<Crypto::Hash> blockchainBranch;
+};
+
 struct BlockHeader {
   uint8_t majorVersion;
   uint8_t minorVersion;
@@ -68,6 +78,7 @@ struct BlockHeader {
 };
 
 struct Block : public BlockHeader {
+  RootBlock rootBlock;
   Transaction baseTransaction;
   std::vector<Crypto::Hash> transactionHashes;
 };

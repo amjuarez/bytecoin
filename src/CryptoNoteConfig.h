@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -62,7 +62,8 @@ const size_t   FUSION_TX_MAX_SIZE                            = CRYPTONOTE_BLOCK_
 const size_t   FUSION_TX_MIN_INPUT_COUNT                     = 12;
 const size_t   FUSION_TX_MIN_IN_OUT_COUNT_RATIO              = 4;
 
-const uint64_t UPGRADE_HEIGHT                                = 136212;
+const uint32_t UPGRADE_HEIGHT_V2                             = 136212;
+const uint32_t UPGRADE_HEIGHT_V3                             = 317950;
 const unsigned UPGRADE_VOTING_THRESHOLD                      = 90;               // percent
 const size_t   UPGRADE_VOTING_WINDOW                         = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
 const size_t   UPGRADE_WINDOW                                = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;  // blocks
@@ -90,6 +91,7 @@ const uint8_t  TRANSACTION_VERSION_1                         =  1;
 const uint8_t  TRANSACTION_VERSION_2                         =  2;
 const uint8_t  BLOCK_MAJOR_VERSION_1                         =  1;
 const uint8_t  BLOCK_MAJOR_VERSION_2                         =  2;
+const uint8_t  BLOCK_MAJOR_VERSION_3                         =  3;
 const uint8_t  BLOCK_MINOR_VERSION_0                         =  0;
 const uint8_t  BLOCK_MINOR_VERSION_1                         =  1;
 
@@ -116,8 +118,11 @@ const size_t   P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT          = 5000;          //
 const char     P2P_STAT_TRUSTED_PUB_KEY[]                    = "85ae8734f90bc1ee295ceb0ec05a49852d4dbbc9d1c27a619b5f4bdf26a0196e";
 
 const std::initializer_list<const char*> SEED_NODES = {
-  "seed.digitalnote.org:42080",
-  "seed.ducknote.org:42080"
+  "64.34.219.46:42080",
+  "66.172.27.42:42080",
+  "66.172.27.6:42080",
+  "76.74.170.207:42080",
+  "76.74.219.163:42080",
 };
 
 struct CheckpointData {
@@ -157,6 +162,7 @@ const std::initializer_list<CheckpointData> CHECKPOINTS = {
     { 252525, "7798185c79c06fe58f04f69d7f5f0b0d2a08003fd1c9b11707b5d54d63b26832" },
     { 253000, "43c3acbd7e235d2efbf9409c8c3e1bfdc29780b200804608b668f8d5b2251220" },
     { 258852, "9f2b0ff556c8088b498928e835134727aede39832bf3c66cc439384b12bab289" },
+    { 317000, "775fe833c74ca0e0de22a259364379e83a1b228c99cfdabc52e50beabacf08d3" },
 };
 
 } // CryptoNote

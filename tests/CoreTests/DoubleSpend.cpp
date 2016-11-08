@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -79,7 +79,7 @@ DoubleSpendBase::DoubleSpendBase() :
   send_amount(MK_COINS(17)),
   has_invalid_tx(false)
 {
-  m_currency = CurrencyBuilder(m_logger).upgradeHeight(0).currency();
+  m_currency = CurrencyBuilder(m_logger).upgradeHeightV2(0).currency();
   m_outputTxKey = generateKeyPair();
   m_bob_account.generate();
   m_alice_account.generate();

@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -59,6 +59,20 @@ namespace CryptoNote
     std::lock_guard<decltype(m_template_lock)> lk(m_template_lock);
 
     m_template = bl;
+
+    if (m_template.majorVersion >= BLOCK_MAJOR_VERSION_3) {
+      CryptoNote::TransactionExtraMergeMiningTag mm_tag;
+      mm_tag.depth = 0;
+      if (!CryptoNote::get_aux_block_header_hash(m_template, mm_tag.merkleRoot)) {
+        return false;
+      }
+
+      m_template.rootBlock.baseTransaction.extra.clear();
+      if (!CryptoNote::appendMergeMiningTagToExtra(m_template.rootBlock.baseTransaction.extra, mm_tag)) {
+        return false;
+      }
+    }
+
     m_diffic = di;
     ++m_template_no;
     m_starter_nonce = Crypto::rand<uint32_t>();

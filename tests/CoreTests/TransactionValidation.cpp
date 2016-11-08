@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -701,7 +701,7 @@ bool GenerateTransactionWithZeroFee::generate(std::vector<test_event_entry>& eve
 MultiSigTx_OutputSignatures::MultiSigTx_OutputSignatures(size_t givenKeys, uint32_t requiredSignatures, bool shouldSucceed) :
   m_givenKeys(givenKeys), m_requiredSignatures(requiredSignatures), m_shouldSucceed(shouldSucceed) {
 
-  m_currency = CurrencyBuilder(m_logger).upgradeHeight(0).currency();
+  m_currency = CurrencyBuilder(m_logger).upgradeHeightV2(0).currency();
 
   for (size_t i = 0; i < m_givenKeys; ++i) {
     AccountBase acc;
@@ -832,7 +832,7 @@ MultiSigTx_Input::MultiSigTx_Input(
     m_givenSignatures(givenSignatures), 
     m_inputShouldSucceed(inputShouldSucceed) {
 
-  m_currency = CurrencyBuilder(m_logger).upgradeHeight(0).currency();
+  m_currency = CurrencyBuilder(m_logger).upgradeHeightV2(0).currency();
 }
 
 bool MultiSigTx_Input::generate(std::vector<test_event_entry>& events) const {

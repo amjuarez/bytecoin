@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -60,7 +60,8 @@ bool Currency::init() {
   }
 
   if (isTestnet()) {
-    m_upgradeHeight = 0;
+    m_upgradeHeightV2 = 0;
+    m_upgradeHeightV3 = static_cast<uint32_t>(-1);
     m_blocksFileName = "testnet_" + m_blocksFileName;
     m_blocksCacheFileName = "testnet_" + m_blocksCacheFileName;
     m_blockIndexesFileName = "testnet_" + m_blockIndexesFileName;
@@ -104,6 +105,16 @@ uint64_t Currency::baseRewardFunction(uint64_t alreadyGeneratedCoins, uint32_t h
   base_reward = (std::max)(base_reward, MIN_BLOCK_REWARD);
   base_reward = (std::min)(base_reward, m_moneySupply - alreadyGeneratedCoins);
   return base_reward;
+}
+
+uint32_t Currency::upgradeHeight(uint8_t majorVersion) const {
+  if (majorVersion == BLOCK_MAJOR_VERSION_2) {
+    return m_upgradeHeightV2;
+  } else if (majorVersion == BLOCK_MAJOR_VERSION_3) {
+    return m_upgradeHeightV3;
+  } else {
+    return static_cast<uint32_t>(-1);
+  }
 }
 
 bool Currency::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins,
@@ -490,14 +501,71 @@ difficulty_type Currency::nextDifficulty(std::vector<uint64_t> timestamps,
   return (low + timeSpan - 1) / timeSpan;
 }
 
-bool Currency::checkProofOfWork(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic,
+bool Currency::checkProofOfWorkV1(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic,
   Crypto::Hash& proofOfWork) const {
+  if (block.majorVersion > BLOCK_MAJOR_VERSION_2) {
+    return false;
+  }
 
   if (!get_block_longhash(context, block, proofOfWork)) {
     return false;
   }
 
   return check_hash(proofOfWork, currentDiffic);
+}
+
+bool Currency::checkProofOfWorkV2(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic,
+  Crypto::Hash& proofOfWork) const {
+  if (block.majorVersion < BLOCK_MAJOR_VERSION_3) {
+    return false;
+  }
+
+  if (!get_block_longhash(context, block, proofOfWork)) {
+    return false;
+  }
+
+  if (!check_hash(proofOfWork, currentDiffic)) {
+    return false;
+  }
+
+  TransactionExtraMergeMiningTag mmTag;
+  if (!getMergeMiningTagFromExtra(block.rootBlock.baseTransaction.extra, mmTag)) {
+    logger(ERROR) << "merge mining tag wasn't found in extra of the root block miner transaction";
+    return false;
+  }
+
+  if (8 * sizeof(m_genesisBlockHash) < block.rootBlock.blockchainBranch.size()) {
+    return false;
+  }
+
+  Crypto::Hash auxBlockHeaderHash;
+  if (!get_aux_block_header_hash(block, auxBlockHeaderHash)) {
+    return false;
+  }
+
+  Crypto::Hash auxBlocksMerkleRoot;
+  Crypto::tree_hash_from_branch(block.rootBlock.blockchainBranch.data(), block.rootBlock.blockchainBranch.size(),
+    auxBlockHeaderHash, &m_genesisBlockHash, auxBlocksMerkleRoot);
+
+  if (auxBlocksMerkleRoot != mmTag.merkleRoot) {
+    logger(ERROR, BRIGHT_YELLOW) << "Aux block hash wasn't found in merkle tree";
+    return false;
+  }
+
+  return true;
+}
+
+bool Currency::checkProofOfWork(Crypto::cn_context& context, const Block& block, difficulty_type currentDiffic, Crypto::Hash& proofOfWork) const {
+  switch (block.majorVersion) {
+  case BLOCK_MAJOR_VERSION_1:
+  case BLOCK_MAJOR_VERSION_2:
+    return checkProofOfWorkV1(context, block, currentDiffic, proofOfWork);
+  case BLOCK_MAJOR_VERSION_3:
+    return checkProofOfWorkV2(context, block, currentDiffic, proofOfWork);
+  }
+
+  logger(ERROR, BRIGHT_RED) << "Unknown block major version: " << block.majorVersion << "." << block.minorVersion;
+  return false;
 }
 
 size_t Currency::getApproximateMaximumInputCount(size_t transactionSize, size_t outputCount, size_t mixinCount) const {
@@ -566,7 +634,8 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
   mempoolTxFromAltBlockLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME);
   numberOfPeriodsToForgetTxDeletedFromPool(parameters::CRYPTONOTE_NUMBER_OF_PERIODS_TO_FORGET_TX_DELETED_FROM_POOL);
 
-  upgradeHeight(parameters::UPGRADE_HEIGHT);
+  upgradeHeightV2(parameters::UPGRADE_HEIGHT_V2);
+  upgradeHeightV3(parameters::UPGRADE_HEIGHT_V3);
   upgradeVotingThreshold(parameters::UPGRADE_VOTING_THRESHOLD);
   upgradeVotingWindow(parameters::UPGRADE_VOTING_WINDOW);
   upgradeWindow(parameters::UPGRADE_WINDOW);

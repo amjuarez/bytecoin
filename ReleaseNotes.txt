@@ -1,3 +1,8 @@
+Release notes 4.0.0-beta
+
+- Empowering XDN network security with merged mining with any CryptoNote cryptocurrency
+- Second step to the PoA with the new type of PoW merged mining blocks
+
 Release notes 3.1.0-beta
 
 - Messages 2.0 core support

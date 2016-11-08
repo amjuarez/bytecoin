@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -437,10 +437,24 @@ bool get_block_hashing_blob(const Block& b, BinaryArray& ba) {
   return true;
 }
 
+bool getRootBlockHashingBlob(const Block& b, BinaryArray& blob) {
+  auto serializer = makeRootBlockSerializer(b, true, true);
+  return toBinaryArray(serializer, blob);
+}
+
 bool get_block_hash(const Block& b, Hash& res) {
   BinaryArray ba;
   if (!get_block_hashing_blob(b, ba)) {
     return false;
+  }
+
+  if (b.majorVersion >= BLOCK_MAJOR_VERSION_3) {
+    BinaryArray rootBlob;
+    auto serializer = makeRootBlockSerializer(b, true, false);
+    if (!toBinaryArray(serializer, rootBlob))
+      return false;
+
+    ba.insert(ba.end(), rootBlob.begin(), rootBlob.end());
   }
 
   return getObjectHash(ba, res);
@@ -463,10 +477,17 @@ bool get_aux_block_header_hash(const Block& b, Hash& res) {
 
 bool get_block_longhash(cn_context &context, const Block& b, Hash& res) {
   BinaryArray bd;
-  if (!get_block_hashing_blob(b, bd)) {
+  if (b.majorVersion < BLOCK_MAJOR_VERSION_3) {
+    if (!get_block_hashing_blob(b, bd)) {
+      return false;
+    }
+  } else if (b.majorVersion >= BLOCK_MAJOR_VERSION_3) {
+    if (!getRootBlockHashingBlob(b, bd)) {
+      return false;
+    }
+  } else {
     return false;
   }
-
   cn_slow_hash(context, bd.data(), bd.size(), res);
   return true;
 }

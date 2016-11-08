@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN developers
+// Copyright (c) 2014-2016 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -311,7 +311,8 @@ m_tx_pool(tx_pool),
 m_current_block_cumul_sz_limit(0),
 m_is_in_checkpoint_zone(false),
 m_checkpoints(logger),
-m_upgradeDetector(currency, m_blocks, BLOCK_MAJOR_VERSION_2, logger) {
+m_upgradeDetectorV2(currency, m_blocks, BLOCK_MAJOR_VERSION_2, logger),
+m_upgradeDetectorV3(currency, m_blocks, BLOCK_MAJOR_VERSION_3, logger) {
 
   m_outputs.set_deleted_key(0);
   m_multisignatureOutputs.set_deleted_key(0);
@@ -449,7 +450,12 @@ bool Blockchain::init(const std::string& config_folder, bool load_existing) {
     }
   }
 
-  if (!m_upgradeDetector.init()) {
+  if (!m_upgradeDetectorV2.init()) {
+    logger(ERROR, BRIGHT_RED) << "Failed to initialize upgrade detector";
+    return false;
+  }
+
+  if (!m_upgradeDetectorV3.init()) {
     logger(ERROR, BRIGHT_RED) << "Failed to initialize upgrade detector";
     return false;
   }
@@ -690,7 +696,13 @@ difficulty_type Blockchain::difficultyAtHeight(uint64_t height) {
 }
 
 uint8_t Blockchain::get_block_major_version_for_height(uint64_t height) const {
-  return height > m_upgradeDetector.upgradeHeight() ? m_upgradeDetector.targetVersion() : BLOCK_MAJOR_VERSION_1;
+  if (height > m_upgradeDetectorV3.upgradeHeight()) {
+    return m_upgradeDetectorV3.targetVersion();
+  } else if (height > m_upgradeDetectorV2.upgradeHeight()) {
+    return m_upgradeDetectorV2.targetVersion();
+  } else {
+    return BLOCK_MAJOR_VERSION_1;
+  }
 }
 
 bool Blockchain::rollback_blockchain_switching(std::list<Block> &original_chain, size_t rollback_height) {
@@ -974,6 +986,11 @@ bool Blockchain::handle_alternative_block(const Block& b, const Crypto::Hash& id
   }
 
   if (!checkBlockVersion(b, id)) {
+    bvc.m_verifivation_failed = true;
+    return false;
+  }
+
+  if (!checkRootBlockSize(b, id)) {
     bvc.m_verifivation_failed = true;
     return false;
   }
@@ -1627,6 +1644,27 @@ bool Blockchain::checkBlockVersion(const Block& b, const Crypto::Hash& blockHash
   return true;
 }
 
+bool Blockchain::checkRootBlockSize(const Block& b, const Crypto::Hash& blockHash) {
+  if (b.majorVersion >= BLOCK_MAJOR_VERSION_3) {
+    auto serializer = makeRootBlockSerializer(b, false, false);
+    size_t rootBlockSize;
+    if (!getObjectBinarySize(serializer, rootBlockSize)) {
+      logger(ERROR, BRIGHT_RED) <<
+        "Block " << blockHash << ": failed to determine root block size";
+      return false;
+    }
+
+    if (rootBlockSize > 2 * 1024) {
+      logger(INFO, BRIGHT_WHITE) <<
+        "Block " << blockHash << " contains too big root block: " << rootBlockSize <<
+        " bytes, expected no more than " << 2 * 1024 << " bytes";
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool Blockchain::checkCumulativeBlockSize(const Crypto::Hash& blockId, size_t cumulativeBlockSize, uint64_t height) {
   size_t maxBlockCumulativeSize = m_currency.maxBlockCumulativeSize(height);
   if (cumulativeBlockSize > maxBlockCumulativeSize) {
@@ -1744,6 +1782,11 @@ bool Blockchain::pushBlock(const Block& blockData, const std::vector<Transaction
   }
 
   if (!checkBlockVersion(blockData, blockHash)) {
+    bvc.m_verifivation_failed = true;
+    return false;
+  }
+
+  if (!checkRootBlockSize(blockData, blockHash)) {
     bvc.m_verifivation_failed = true;
     return false;
   }
@@ -1890,7 +1933,8 @@ bool Blockchain::pushBlock(const Block& blockData, const std::vector<Transaction
 
   bvc.m_added_to_main_chain = true;
 
-  m_upgradeDetector.blockPushed();
+  m_upgradeDetectorV2.blockPushed();
+  m_upgradeDetectorV3.blockPushed();
   update_next_comulative_size_limit();
 
   return true;
@@ -1978,7 +2022,8 @@ void Blockchain::popBlock(const Crypto::Hash& blockHash) {
 
   assert(m_blockIndex.size() == m_blocks.size());
 
-  m_upgradeDetector.blockPopped();
+  m_upgradeDetectorV2.blockPopped();
+  m_upgradeDetectorV3.blockPopped();
 }
 
 bool Blockchain::pushTransaction(BlockEntry& block, const Crypto::Hash& transactionHash, TransactionIndex transactionIndex) {
