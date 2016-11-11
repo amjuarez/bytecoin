@@ -1,6 +1,6 @@
-```html
-   <font size="20px" color="red">Version 2.0.0 is in alpha. If you use Forknote for your pool or blockchain explorer, use the latest version in the "Release" section</font>
-```
+### Version 2.0.0 is in alpha. Do not use it on production. If you use Forknote for your pool or blockchain explorer, use the latest version in the "Release" section
+
+
 
 ### About
 Forknote is innovative way to create Cryptonote (https://cryptonote.org) based cryptotokens. It gives the users the ability to create cryptotokens just by creating a simple configuration file.
