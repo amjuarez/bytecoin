@@ -1,5 +1,6 @@
 ### Version 2.0.0 is in alpha. Do not use it on production.
 Forknote 2.0.0 has major bugs and problem with calculating the correct difficulty.
+
 For production use the latest version in the "Release" section
 
 
