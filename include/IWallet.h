@@ -72,6 +72,20 @@ struct WalletEvent {
   };
 };
 
+struct WalletOutput {
+  // output info
+  uint8_t type;
+  uint64_t amount;
+  uint32_t globalOutputIndex;
+  uint32_t outputInTransaction;
+
+  // transaction info
+  std::string transactionHash;
+  std::string transactionPublicKey;
+  std::string outputKey;         // Type: Key 
+  uint32_t requiredSignatures; // Type: Multisignature
+};
+
 struct WalletTransaction {
   WalletTransactionState state;
   uint64_t timestamp;
@@ -150,6 +164,7 @@ public:
   virtual std::string createAddress() = 0;
   virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) = 0;
   virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) = 0;
+  virtual std::vector<WalletOutput> getAddressOutputs(const std::string& address) const = 0;
   virtual void deleteAddress(const std::string& address) = 0;
 
   virtual uint64_t getActualBalance() const = 0;

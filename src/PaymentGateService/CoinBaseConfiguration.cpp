@@ -45,6 +45,7 @@ CoinBaseConfiguration::CoinBaseConfiguration() {
     MONEY_SUPPLY=CryptoNote::parameters::MONEY_SUPPLY;
     GENESIS_BLOCK_REWARD=CryptoNote::parameters::GENESIS_BLOCK_REWARD;
     CRYPTONOTE_COIN_VERSION=CryptoNote::parameters::CRYPTONOTE_COIN_VERSION;
+    TAIL_EMISSION_REWARD=CryptoNote::parameters::TAIL_EMISSION_REWARD;
     KILL_HEIGHT=CryptoNote::parameters::KILL_HEIGHT;
     MANDATORY_TRANSACTION=CryptoNote::parameters::MANDATORY_TRANSACTION;
     EMISSION_SPEED_FACTOR=CryptoNote::parameters::EMISSION_SPEED_FACTOR;
@@ -73,6 +74,7 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("MONEY_SUPPLY", po::value<uint64_t>()->default_value(CryptoNote::parameters::MONEY_SUPPLY), "uint64_t")
     ("GENESIS_BLOCK_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("CRYPTONOTE_COIN_VERSION", po::value<size_t>()->default_value(0), "size_t")
+    ("TAIL_EMISSION_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("KILL_HEIGHT", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("MANDATORY_TRANSACTION", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("EMISSION_SPEED_FACTOR", po::value<unsigned>()->default_value(CryptoNote::parameters::EMISSION_SPEED_FACTOR), "unsigned")
@@ -114,6 +116,9 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
   if (options.count("KILL_HEIGHT")) {
     KILL_HEIGHT = options["KILL_HEIGHT"].as<uint32_t>();
   }
+  if (options.count("TAIL_EMISSION_REWARD")) {
+    TAIL_EMISSION_REWARD = options["TAIL_EMISSION_REWARD"].as<uint64_t>();
+  }
   if (options.count("CRYPTONOTE_COIN_VERSION")) {
     CRYPTONOTE_COIN_VERSION = options["CRYPTONOTE_COIN_VERSION"].as<size_t>();
   }
@@ -130,7 +135,7 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 = options["CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1"].as<size_t>();
   }
   if (options.count("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2")) {
-    CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 = options["CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2"].as<size_t>();
+    CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2 = options["CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2"].as<size_t>();
   }
   if (options.count("CRYPTONOTE_DISPLAY_DECIMAL_POINT")) {
     CRYPTONOTE_DISPLAY_DECIMAL_POINT = options["CRYPTONOTE_DISPLAY_DECIMAL_POINT"].as<size_t>();

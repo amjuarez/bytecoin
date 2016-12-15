@@ -121,10 +121,12 @@ std::unordered_map<std::string, RpcServer::RpcHandler<RpcServer::HandlerFunction
   { "/get_transaction_hashes_by_payment_id.bin", { binMethod<COMMAND_RPC_GET_TRANSACTION_HASHES_BY_PAYMENT_ID>(&RpcServer::onGetTransactionHashesByPaymentId), false } },
 
   // json handlers
+{ "/getrandom_outs", { jsonMethod<COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_JSON>(&RpcServer::on_get_random_outs_json), false } },
   { "/getinfo", { jsonMethod<COMMAND_RPC_GET_INFO>(&RpcServer::on_get_info), true } },
   { "/getheight", { jsonMethod<COMMAND_RPC_GET_HEIGHT>(&RpcServer::on_get_height), true } },
   { "/gettransactions", { jsonMethod<COMMAND_RPC_GET_TRANSACTIONS>(&RpcServer::on_get_transactions), false } },
   { "/sendrawtransaction", { jsonMethod<COMMAND_RPC_SEND_RAW_TX>(&RpcServer::on_send_raw_tx), false } },
+  { "/feeaddress", { jsonMethod<COMMAND_RPC_GET_FEE_ADDRESS>(&RpcServer::on_get_fee_address), true } },
   { "/stop_daemon", { jsonMethod<COMMAND_RPC_STOP_DAEMON>(&RpcServer::on_stop_daemon), true } },
 
   // json rpc
@@ -159,9 +161,9 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
 
   using namespace JsonRpc;
 
-if (m_cors_enabled) {
-  response.addHeader("Access-Control-Allow-Origin", "*");
-}
+  for (const auto& cors_domain: m_cors_domains) {
+    response.addHeader("Access-Control-Allow-Origin", cors_domain);
+  }
   response.addHeader("Content-Type", "application/json");
 
   JsonRpcRequest jsonRequest;
@@ -210,8 +212,13 @@ if (m_cors_enabled) {
   return true;
 }
 
-bool RpcServer::enableCors(const bool is_enabled) {
-  m_cors_enabled = is_enabled;
+bool RpcServer::enableCors(const std::vector<std::string> domains) {
+  m_cors_domains = domains;
+  return true;
+}
+
+bool RpcServer::setFeeAddress(const std::string fee_address) {
+  m_fee_address = fee_address;
   return true;
 }
 
@@ -294,6 +301,31 @@ bool RpcServer::on_get_indexes(const COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::
   res.o_indexes.assign(outputIndexes.begin(), outputIndexes.end());
   res.status = CORE_RPC_STATUS_OK;
   logger(TRACE) << "COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES: [" << res.o_indexes.size() << "]";
+  return true;
+}
+
+bool RpcServer::on_get_random_outs_json(const COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_JSON::request& req, COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_JSON::response& res) {
+  res.status = "Failed";
+
+  for (uint64_t amount : req.amounts) {
+    std::vector<uint32_t> globalIndexes;
+    std::vector<Crypto::PublicKey> publicKeys;
+    if (!m_core.getRandomOutputs(amount, static_cast<uint16_t>(req.outs_count), globalIndexes, publicKeys)) {
+      return true;
+    }
+
+    assert(globalIndexes.size() == publicKeys.size());
+    res.outs.emplace_back(COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_JSON_outs_for_amount{amount, {}});
+    for (size_t i = 0; i < globalIndexes.size(); ++i) {
+      COMMAND_RPC_GET_RANDOM_OUTPUTS_FOR_AMOUNTS_JSON_out_entry out_entry;
+      out_entry.global_amount_index = globalIndexes[i];
+      out_entry.out_key = publicKeys[i];
+      res.outs.back().outs.push_back(out_entry);
+    }
+  }
+
+  res.status = CORE_RPC_STATUS_OK;
+
   return true;
 }
 
@@ -505,6 +537,17 @@ bool RpcServer::on_send_raw_tx(const COMMAND_RPC_SEND_RAW_TX::request& req, COMM
   return true;
 }
 
+bool RpcServer::on_get_fee_address(const COMMAND_RPC_GET_FEE_ADDRESS::request& req, COMMAND_RPC_GET_FEE_ADDRESS::response& res) {
+  if (m_fee_address.empty()) {
+    res.status = "Node's fee address is not set";
+    return false;
+  }
+
+  res.fee_address = m_fee_address;
+  res.status = CORE_RPC_STATUS_OK;
+  return true;
+}
+
 bool RpcServer::on_stop_daemon(const COMMAND_RPC_STOP_DAEMON::request& req, COMMAND_RPC_STOP_DAEMON::response& res) {
   if (m_core.getCurrency().isTestnet()) {
     m_p2p.sendStopSignal();
@@ -600,7 +643,7 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   res.block.depth = m_core.getTopBlockIndex() - res.block.height;
   res.block.difficulty = m_core.getBlockDifficulty(res.block.height);
   res.block.transactionsCumulativeSize = blkDetails.transactionsCumulativeSize;
-  res.block.alreadyGeneratedCoins = blkDetails.alreadyGeneratedCoins;
+  res.block.alreadyGeneratedCoins = std::to_string(blkDetails.alreadyGeneratedCoins);
   res.block.alreadyGeneratedTransactions = blkDetails.alreadyGeneratedTransactions;
   res.block.reward = block_header.reward;
   res.block.sizeMedian = blkDetails.sizeMedian;
@@ -774,6 +817,9 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   }
   if (m_core.getCurrency().killHeight() != 0) {
     res.extensions.push_back("kill-height.json");
+  }
+  if (m_core.getCurrency().tailEmissionReward() != 0) {
+    res.extensions.push_back("tail-emission-reward.json");
   }
   if (m_core.getCurrency().mandatoryTransaction() == 1) {
     res.extensions.push_back("mandatory-transaction-in-block.json");
@@ -1034,15 +1080,15 @@ bool RpcServer::on_get_block_header_by_hash(const COMMAND_RPC_GET_BLOCK_HEADER_B
 }
 
 bool RpcServer::on_get_block_header_by_height(const COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::request& req, COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::response& res) {
-  if (m_core.getTopBlockIndex() + 1 < req.height) {
+  if (m_core.getTopBlockIndex() < req.height) {
     throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
       std::string("To big height: ") + std::to_string(req.height) + ", current blockchain height = " + std::to_string(m_core.getTopBlockIndex() + 1) };
   }
 
-  uint32_t index = static_cast<uint32_t>(req.height) - 1;
+  uint32_t index = static_cast<uint32_t>(req.height);
   auto block = m_core.getBlockByIndex(index);
   CachedBlock cachedBlock(block);
-  assert(cachedBlock.getBlockIndex() == req.height - 1);
+  assert(cachedBlock.getBlockIndex() == req.height);
   fill_block_header_response(block, false, index, cachedBlock.getBlockHash(), res.block_header);
   res.status = CORE_RPC_STATUS_OK;
   return true;

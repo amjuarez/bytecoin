@@ -87,6 +87,7 @@ bool PaymentGateService::init(int argc, char** argv) {
   currencyBuilder.moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
   currencyBuilder.genesisBlockReward(config.coinBaseConfig.GENESIS_BLOCK_REWARD);
   currencyBuilder.cryptonoteCoinVersion(config.coinBaseConfig.CRYPTONOTE_COIN_VERSION);
+  currencyBuilder.tailEmissionReward(config.coinBaseConfig.TAIL_EMISSION_REWARD);
   currencyBuilder.killHeight(config.coinBaseConfig.KILL_HEIGHT);
   currencyBuilder.mandatoryTransaction(config.coinBaseConfig.MANDATORY_TRANSACTION);
   currencyBuilder.emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);

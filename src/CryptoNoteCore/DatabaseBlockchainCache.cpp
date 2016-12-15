@@ -1350,6 +1350,10 @@ std::vector<CachedBlockInfo> DatabaseBlockchainCache::getLastCachedUnits(uint32_
 
   count = std::min(blockIndex + 1, static_cast<uint32_t>(count));
   uint32_t offset = std::max(static_cast<uint32_t>(blockIndex + 1 - count), cacheStart) - cacheStart;
+  if (offset == 0) {
+    ++offset;
+    ++cacheStart;
+  }
   assert(offset < unitsCache.size());
 
   cachedResult.reserve(unitsCache.size() - offset - (getTopBlockIndex() - blockIndex));

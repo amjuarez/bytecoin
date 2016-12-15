@@ -1036,6 +1036,36 @@ std::string WalletGreen::addWallet(const Crypto::PublicKey& spendPublicKey, cons
   }
 }
 
+std::vector<WalletOutput> WalletGreen::getAddressOutputs(const std::string& address) const {
+  throwIfNotInitialized();
+  throwIfStopped();
+
+  std::vector<WalletOutput> outputs;
+
+  const auto& wallet = getWalletRecord(address);
+
+  ITransfersContainer* container = wallet.container;
+  WalletOuts outs;
+  container->getOutputs(outs.outs, ITransfersContainer::IncludeKeyUnlocked);
+
+  for (const auto& out: outs.outs) {
+    WalletOutput output;
+
+    output.type = uint8_t(out.type);
+    output.amount = out.amount;
+
+    output.globalOutputIndex = out.globalOutputIndex;
+    output.outputInTransaction = out.outputInTransaction;
+    output.transactionHash = Common::podToHex(out.transactionHash);
+    output.transactionPublicKey = Common::podToHex(out.transactionPublicKey);
+    output.outputKey = Common::podToHex(out.outputKey);
+    output.requiredSignatures = out.requiredSignatures;
+
+    outputs.push_back(output);
+  }
+
+  return outputs;
+}
 void WalletGreen::deleteAddress(const std::string& address) {
   throwIfNotInitialized();
   throwIfStopped();
