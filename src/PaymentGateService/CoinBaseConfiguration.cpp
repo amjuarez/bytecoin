@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The Forknote developers
+// Copyright (c) 2015-2016, The Forknote developers
 //
 // This file is part of Forknote.
 //
@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Forknote.  If not, see <http://www.gnu.org/licenses/>.
 
-// Copyright (c) 2015, The Forknote developers
+// Copyright (c) 2016, The Forknote developers
 //
 // This file is part of Forknote.
 //
@@ -43,6 +43,7 @@ CoinBaseConfiguration::CoinBaseConfiguration() {
     GENESIS_COINBASE_TX_HEX=CryptoNote::parameters::GENESIS_COINBASE_TX_HEX;
     CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX=CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     MONEY_SUPPLY=CryptoNote::parameters::MONEY_SUPPLY;
+    ZAWY_DIFFICULTY_V2=CryptoNote::parameters::ZAWY_DIFFICULTY_V2;
     GENESIS_BLOCK_REWARD=CryptoNote::parameters::GENESIS_BLOCK_REWARD;
     CRYPTONOTE_COIN_VERSION=CryptoNote::parameters::CRYPTONOTE_COIN_VERSION;
     TAIL_EMISSION_REWARD=CryptoNote::parameters::TAIL_EMISSION_REWARD;
@@ -61,6 +62,13 @@ CoinBaseConfiguration::CoinBaseConfiguration() {
     EXPECTED_NUMBER_OF_BLOCKS_PER_DAY=0;
     UPGRADE_HEIGHT_V2=0;
     UPGRADE_HEIGHT_V3=0;
+    DIFFICULTY_WINDOW_V1=CryptoNote::parameters::DIFFICULTY_WINDOW_V1;
+    DIFFICULTY_WINDOW_V2=CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
+    DIFFICULTY_LAG_V1=CryptoNote::parameters::DIFFICULTY_LAG_V1;
+    DIFFICULTY_LAG_V2=CryptoNote::parameters::DIFFICULTY_LAG_V2;
+    DIFFICULTY_CUT_V1=CryptoNote::parameters::DIFFICULTY_CUT_V1;
+    DIFFICULTY_CUT_V2=CryptoNote::parameters::DIFFICULTY_CUT_V2;
+    DIFFICULTY_WINDOW=CryptoNote::parameters::DIFFICULTY_WINDOW;
 MAX_TRANSACTION_SIZE_LIMIT=CryptoNote::parameters::MAX_TRANSACTION_SIZE_LIMIT;
     DIFFICULTY_CUT=CryptoNote::parameters::DIFFICULTY_CUT;
     DIFFICULTY_LAG=CryptoNote::parameters::DIFFICULTY_LAG;
@@ -72,6 +80,7 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("GENESIS_COINBASE_TX_HEX", po::value<std::string>()->default_value(CryptoNote::parameters::GENESIS_COINBASE_TX_HEX), "Genesis transaction hex")
     ("CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX), "uint64_t")
     ("MONEY_SUPPLY", po::value<uint64_t>()->default_value(CryptoNote::parameters::MONEY_SUPPLY), "uint64_t")
+    ("ZAWY_DIFFICULTY_V2", po::value<bool>()->default_value(0), "bool")
     ("GENESIS_BLOCK_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("CRYPTONOTE_COIN_VERSION", po::value<size_t>()->default_value(0), "size_t")
     ("TAIL_EMISSION_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
@@ -90,6 +99,13 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("UPGRADE_HEIGHT_V2", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("UPGRADE_HEIGHT_V3", po::value<uint32_t>()->default_value(0), "uint32_t")
+    ("DIFFICULTY_WINDOW_V1", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_WINDOW_V1), "size_t")
+    ("DIFFICULTY_WINDOW_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_WINDOW_V2), "size_t")
+    ("DIFFICULTY_CUT_V1", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT_V2), "size_t")
+    ("DIFFICULTY_CUT_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT_V1), "size_t")
+    ("DIFFICULTY_LAG_V1", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG_V1), "size_t")
+    ("DIFFICULTY_LAG_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG_V2), "size_t")
+    ("DIFFICULTY_WINDOW", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_WINDOW), "size_t")
 ("MAX_TRANSACTION_SIZE_LIMIT", po::value<uint64_t>()->default_value(CryptoNote::parameters::MAX_TRANSACTION_SIZE_LIMIT), "uint64_t")
     ("DIFFICULTY_CUT", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT), "size_t")
     ("DIFFICULTY_LAG", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG), "size_t")
@@ -124,6 +140,9 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
   }
   if (options.count("GENESIS_BLOCK_REWARD")) {
     GENESIS_BLOCK_REWARD = options["GENESIS_BLOCK_REWARD"].as<uint64_t>();
+  }
+  if (options.count("ZAWY_DIFFICULTY_V2")) {
+    ZAWY_DIFFICULTY_V2 = options["ZAWY_DIFFICULTY_V2"].as<bool>();
   }
   if (options.count("EMISSION_SPEED_FACTOR")) {
     EMISSION_SPEED_FACTOR = options["EMISSION_SPEED_FACTOR"].as<unsigned>();
@@ -163,6 +182,27 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
   }
   if (options.count("UPGRADE_HEIGHT_V3")) {
     UPGRADE_HEIGHT_V3 = options["UPGRADE_HEIGHT_V3"].as<uint32_t>();
+  }
+  if (options.count("DIFFICULTY_WINDOW_V1")) {
+    DIFFICULTY_WINDOW_V1 = options["DIFFICULTY_WINDOW_V1"].as<size_t>();
+  }
+  if (options.count("DIFFICULTY_WINDOW_V2")) {
+    DIFFICULTY_WINDOW_V2 = options["DIFFICULTY_WINDOW_V2"].as<size_t>();
+  }
+  if (options.count("DIFFICULTY_CUT_V1")) {
+    DIFFICULTY_CUT_V1 = options["DIFFICULTY_CUT_V1"].as<size_t>();
+  }
+  if (options.count("DIFFICULTY_CUT_V2")) {
+    DIFFICULTY_CUT_V2 = options["DIFFICULTY_CUT_V2"].as<size_t>();
+  }
+  if (options.count("DIFFICULTY_LAG_V1")) {
+    DIFFICULTY_LAG_V1 = options["DIFFICULTY_LAG_V1"].as<size_t>();
+  }
+  if (options.count("DIFFICULTY_LAG_V2")) {
+    DIFFICULTY_LAG_V2 = options["DIFFICULTY_LAG_V2"].as<size_t>();
+  }
+  if (options.count("DIFFICULTY_WINDOW")) {
+    DIFFICULTY_WINDOW = options["DIFFICULTY_WINDOW"].as<size_t>();
   }
   if (options.count("MAX_TRANSACTION_SIZE_LIMIT")) {
     MAX_TRANSACTION_SIZE_LIMIT = options["MAX_TRANSACTION_SIZE_LIMIT"].as<uint64_t>();

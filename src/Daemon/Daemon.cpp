@@ -85,10 +85,18 @@ namespace
   const command_line::arg_descriptor<uint64_t>    arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY  = {"EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", "uint64_t"};
   const command_line::arg_descriptor<uint32_t>    arg_UPGRADE_HEIGHT_V2  = {"UPGRADE_HEIGHT_V2", "uint32_t", 0};
   const command_line::arg_descriptor<uint32_t>    arg_UPGRADE_HEIGHT_V3  = {"UPGRADE_HEIGHT_V3", "uint32_t", 0};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_WINDOW_V1  = {"DIFFICULTY_WINDOW_V1", "size_t", CryptoNote::parameters::DIFFICULTY_WINDOW_V1};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_WINDOW_V2  = {"DIFFICULTY_WINDOW_V2", "size_t", CryptoNote::parameters::DIFFICULTY_WINDOW_V2};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT_V1  = {"DIFFICULTY_CUT_V1", "size_t", CryptoNote::parameters::DIFFICULTY_CUT_V1};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT_V2  = {"DIFFICULTY_CUT_V2", "size_t", CryptoNote::parameters::DIFFICULTY_CUT_V2};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG_V1  = {"DIFFICULTY_LAG_V1", "size_t", CryptoNote::parameters::DIFFICULTY_LAG_V1};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG_V2  = {"DIFFICULTY_LAG_V2", "size_t", CryptoNote::parameters::DIFFICULTY_LAG_V2};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_WINDOW  = {"DIFFICULTY_WINDOW", "size_t", CryptoNote::parameters::DIFFICULTY_WINDOW};
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT  = {"DIFFICULTY_CUT", "size_t", CryptoNote::parameters::DIFFICULTY_CUT};
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "size_t", CryptoNote::parameters::DIFFICULTY_LAG};
   const command_line::arg_descriptor<std::string> arg_CRYPTONOTE_NAME  = {"CRYPTONOTE_NAME", "Cryptonote name. Used for storage directory", ""};
   const command_line::arg_descriptor< std::vector<std::string> > arg_CHECKPOINT  = {"CHECKPOINT", "Checkpoints. Format: HEIGHT:HASH"};
+  const command_line::arg_descriptor<bool>    arg_ZAWY_DIFFICULTY_V2  = {"ZAWY_DIFFICULTY_V2", "bool", 0};
   const command_line::arg_descriptor<uint64_t>    arg_GENESIS_BLOCK_REWARD  = {"GENESIS_BLOCK_REWARD", "uint64_t", 0};
   const command_line::arg_descriptor<size_t>    arg_CRYPTONOTE_COIN_VERSION  = {"CRYPTONOTE_COIN_VERSION", "size_t", 0};
   const command_line::arg_descriptor<uint64_t>    arg_TAIL_EMISSION_REWARD  = {"TAIL_EMISSION_REWARD", "uint64_t", 0};
@@ -136,6 +144,14 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
     {
       currencyBuilder.upgradeHeightV3(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V3));
     }
+  currencyBuilder.difficultyWindowV1(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V1));
+  currencyBuilder.difficultyWindowV2(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V2));
+  currencyBuilder.difficultyLagV1(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V1));
+  currencyBuilder.difficultyLagV2(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V2));
+  currencyBuilder.difficultyCutV1(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V1));
+  currencyBuilder.difficultyCutV2(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V2));
+  currencyBuilder.expectedNumberOfBlocksPerDay(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+    currencyBuilder.difficultyWindow(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW));
     currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
     currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   CryptoNote::Currency currency = currencyBuilder.currency();
@@ -185,6 +201,14 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   {
     currencyBuilder.upgradeHeightV3(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V3));
   }
+  currencyBuilder.difficultyWindowV1(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V1));
+  currencyBuilder.difficultyWindowV2(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V2));
+  currencyBuilder.difficultyLagV1(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V1));
+  currencyBuilder.difficultyLagV2(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V2));
+  currencyBuilder.difficultyCutV1(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V1));
+  currencyBuilder.difficultyCutV2(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V2));
+  currencyBuilder.expectedNumberOfBlocksPerDay(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+  currencyBuilder.difficultyWindow(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW));
   currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
 
@@ -221,6 +245,14 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
     {
       currencyBuilder.upgradeHeightV3(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V3));
     }
+  currencyBuilder.difficultyWindowV1(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V1));
+  currencyBuilder.difficultyWindowV2(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V2));
+  currencyBuilder.difficultyLagV1(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V1));
+  currencyBuilder.difficultyLagV2(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V2));
+  currencyBuilder.difficultyCutV1(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V1));
+  currencyBuilder.difficultyCutV2(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V2));
+  currencyBuilder.expectedNumberOfBlocksPerDay(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+    currencyBuilder.difficultyWindow(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW));
     currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
     currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
@@ -229,7 +261,6 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
     }
   } else {
   CryptoNote::CurrencyBuilder  currencyBuilder(logManager);
-    currencyBuilder.cryptonoteName(command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
   currencyBuilder.genesisCoinbaseTxHex(command_line::get_arg(vm, arg_GENESIS_COINBASE_TX_HEX));
   currencyBuilder.publicAddressBase58Prefix(command_line::get_arg(vm, arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX));
   currencyBuilder.moneySupply(command_line::get_arg(vm, arg_MONEY_SUPPLY));
@@ -265,6 +296,7 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
   currencyBuilder.genesisBlockReward(command_line::get_arg(vm, arg_GENESIS_BLOCK_REWARD));
   CryptoNote::Transaction tx = currencyBuilder.generateGenesisTransaction(targets);
+    currencyBuilder.cryptonoteName(command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
       std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
       std::cout << "Modify this line into your coin configuration file as is: " << std::endl;
   std::cout << "GENESIS_COINBASE_TX_HEX=" << tx_hex << std::endl;
@@ -333,10 +365,18 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     command_line::add_arg(desc_cmd_sett, arg_UPGRADE_HEIGHT_V2);
     command_line::add_arg(desc_cmd_sett, arg_UPGRADE_HEIGHT_V3);
+    command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_WINDOW_V1);
+    command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_WINDOW_V2);
+    command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_CUT_V1);
+    command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_CUT_V2);
+    command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_LAG_V1);
+    command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_LAG_V2);
+    command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_WINDOW);
     command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_CUT);
     command_line::add_arg(desc_cmd_sett, arg_DIFFICULTY_LAG);
     command_line::add_arg(desc_cmd_sett, arg_CRYPTONOTE_NAME);
     command_line::add_arg(desc_cmd_sett, arg_CHECKPOINT);
+    command_line::add_arg(desc_cmd_sett, arg_ZAWY_DIFFICULTY_V2);
     command_line::add_arg(desc_cmd_sett, arg_GENESIS_BLOCK_REWARD);
     command_line::add_arg(desc_cmd_sett, arg_CRYPTONOTE_COIN_VERSION);
     command_line::add_arg(desc_cmd_sett, arg_TAIL_EMISSION_REWARD);
@@ -390,7 +430,7 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
         return false;
       }
       po::notify(vm);
-      if (command_line::has_arg(vm, arg_CRYPTONOTE_NAME) && !command_line::get_arg(vm, arg_CRYPTONOTE_NAME).empty()) {
+      if (command_line::get_arg(vm, command_line::arg_data_dir) == Tools::getDefaultDataDirectory() && command_line::has_arg(vm, arg_CRYPTONOTE_NAME) && !command_line::get_arg(vm, arg_CRYPTONOTE_NAME).empty()) {
         boost::replace_all(data_dir, CryptoNote::CRYPTONOTE_NAME, command_line::get_arg(vm, arg_CRYPTONOTE_NAME));
       }
       data_dir_path = data_dir;
@@ -468,12 +508,21 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
     {
       currencyBuilder.upgradeHeightV3(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V3));
     }
+  currencyBuilder.difficultyWindowV1(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V1));
+  currencyBuilder.difficultyWindowV2(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V2));
+  currencyBuilder.difficultyLagV1(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V1));
+  currencyBuilder.difficultyLagV2(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V2));
+  currencyBuilder.difficultyCutV1(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V1));
+  currencyBuilder.difficultyCutV2(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V2));
+  currencyBuilder.expectedNumberOfBlocksPerDay(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+    currencyBuilder.difficultyWindow(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW));
     currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
     currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
     currencyBuilder.killHeight(command_line::get_arg(vm, arg_KILL_HEIGHT));
     currencyBuilder.tailEmissionReward(command_line::get_arg(vm, arg_TAIL_EMISSION_REWARD));
     currencyBuilder.cryptonoteCoinVersion(command_line::get_arg(vm, arg_CRYPTONOTE_COIN_VERSION));
     currencyBuilder.genesisBlockReward(command_line::get_arg(vm, arg_GENESIS_BLOCK_REWARD));
+    currencyBuilder.zawyDifficultyV2(command_line::get_arg(vm, arg_ZAWY_DIFFICULTY_V2));
     currencyBuilder.testnet(testnet_mode);
     try {
       currencyBuilder.currency();

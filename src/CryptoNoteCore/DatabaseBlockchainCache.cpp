@@ -1213,6 +1213,13 @@ uint32_t DatabaseBlockchainCache::getTopBlockIndex() const {
   return *topBlockIndex;
 }
 
+uint8_t DatabaseBlockchainCache::getBlockMajorVersionForHeight(uint32_t height) const {
+  UpgradeManager upgradeManager;
+  upgradeManager.addMajorBlockVersion(BLOCK_MAJOR_VERSION_2, currency.upgradeHeight(BLOCK_MAJOR_VERSION_2));
+  upgradeManager.addMajorBlockVersion(BLOCK_MAJOR_VERSION_3, currency.upgradeHeight(BLOCK_MAJOR_VERSION_3));
+  return upgradeManager.getBlockMajorVersion(height);
+}
+
 uint64_t DatabaseBlockchainCache::getCachedTransactionsCount() const {
   if (!transactionsCount) {
     auto batch = BlockchainReadBatch().requestTransactionsCount();
@@ -1301,10 +1308,11 @@ Difficulty DatabaseBlockchainCache::getDifficultyForNextBlock() const {
 
 Difficulty DatabaseBlockchainCache::getDifficultyForNextBlock(uint32_t blockIndex) const {
   assert(blockIndex <= getTopBlockIndex());
-  auto timestamps = getLastTimestamps(currency.difficultyBlocksCount(), blockIndex, UseGenesis{false});
+  uint8_t nextBlockMajorVersion = getBlockMajorVersionForHeight(blockIndex+1);
+  auto timestamps = getLastTimestamps(currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion), blockIndex, UseGenesis{false});
   auto commulativeDifficulties =
-      getLastCumulativeDifficulties(currency.difficultyBlocksCount(), blockIndex, UseGenesis{false});
-  return currency.nextDifficulty(std::move(timestamps), std::move(commulativeDifficulties));
+      getLastCumulativeDifficulties(currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion), blockIndex, UseGenesis{false});
+  return currency.nextDifficulty(nextBlockMajorVersion, std::move(timestamps), std::move(commulativeDifficulties));
 }
 
 Difficulty DatabaseBlockchainCache::getCurrentCumulativeDifficulty() const {
@@ -1341,7 +1349,7 @@ std::vector<CachedBlockInfo> DatabaseBlockchainCache::getLastCachedUnits(uint32_
   uint32_t cacheStart = (getTopBlockIndex() + 1) - static_cast<uint32_t>(unitsCache.size());
   if (cacheStart == 0 && !useGenesis) {
     count = std::min(static_cast<size_t>(getTopBlockIndex()), count);
-    cacheStart = 1;
+  cacheStart = 0;
   }
 
   if (cacheStart > blockIndex || count == 0) {
@@ -1371,6 +1379,9 @@ std::vector<CachedBlockInfo> DatabaseBlockchainCache::getLastDbUnits(uint32_t bl
   }
 
   uint32_t toRead = blockIndex - readFrom + 1;
+  if (toRead != 0) {
+    toRead--;
+  }
   std::vector<CachedBlockInfo> units;
   units.reserve(toRead);
 

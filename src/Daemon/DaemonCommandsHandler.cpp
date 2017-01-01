@@ -190,9 +190,9 @@ bool DaemonCommandsHandler::print_block_by_height(uint32_t height)
     return false;
   }
 
-  auto hash = m_core.getBlockHashByIndex(height - 1);
+  auto hash = m_core.getBlockHashByIndex(height);
   std::cout << "block_id: " << hash << ENDL;
-  print_as_json(m_core.getBlockByIndex(height - 1));
+  print_as_json(m_core.getBlockByIndex(height));
 
   return true;
 }

@@ -38,6 +38,7 @@ const uint32_t MANDATORY_TRANSACTION                          = 0;
 const uint32_t KILL_HEIGHT                          = 0;
 const uint64_t TAIL_EMISSION_REWARD                          = 0;
 const size_t CRYPTONOTE_COIN_VERSION                          = 0;
+const bool ZAWY_DIFFICULTY_V2                          = 0;
 const unsigned EMISSION_SPEED_FACTOR                         = 18;
 const uint64_t GENESIS_BLOCK_REWARD                          = 0;
 static_assert(EMISSION_SPEED_FACTOR <= 8 * sizeof(uint64_t), "Bad EMISSION_SPEED_FACTOR");

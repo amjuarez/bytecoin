@@ -33,6 +33,7 @@
 #include "Currency.h"
 #include "Difficulty.h"
 #include "IBlockchainCache.h"
+#include "CryptoNoteCore/UpgradeManager.h"
 
 namespace CryptoNote {
 
@@ -336,6 +337,7 @@ private:
   OutputSearchResult findPackedOutForMultisignatureInCurrentSegment(uint64_t amount, uint32_t globalIndex, PackedOutIndex& packedOut) const;
   TransactionValidatorState fillOutputsSpentByBlock(uint32_t blockIndex) const;
 
+uint8_t getBlockMajorVersionForHeight(uint32_t height) const;
   void fixChildrenParent(IBlockchainCache* p);
 
   void doPushBlock(const CachedBlock& cachedBlock,

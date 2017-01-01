@@ -53,6 +53,7 @@ public:
   uint32_t mandatoryTransaction() const { return m_mandatoryTransaction; }
   uint32_t killHeight() const { return m_killHeight; }
   uint64_t tailEmissionReward() const { return m_tailEmissionReward; }
+  bool zawyDifficultyV2() const { return m_zawyDifficultyV2; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
   size_t blockGrantedFullRewardZoneV1() const { return m_blockGrantedFullRewardZoneV1; }
   size_t blockGrantedFullRewardZoneV2() const { return m_blockGrantedFullRewardZoneV2; }
@@ -68,6 +69,13 @@ public:
 
   uint64_t difficultyTarget() const { return m_difficultyTarget; }
   size_t difficultyWindow() const { return m_difficultyWindow; }
+  size_t difficultyWindowV1() const { return m_difficultyWindowV1; }
+  size_t difficultyWindowV2() const { return m_difficultyWindowV2; }
+  size_t difficultyLagV1() const { return m_difficultyLagV1; }
+  size_t difficultyLagV2() const { return m_difficultyLagV2; }
+  size_t difficultyCutV1() const { return m_difficultyCutV1; }
+  size_t difficultyCutV2() const { return m_difficultyCutV2; }
+  uint64_t expectedNumberOfBlocksPerDay() const { return m_expectedNumberOfBlocksPerDay; }
 size_t difficultyWindowByBlockVersion(uint8_t blockMajorVersion) const;
   size_t difficultyLag() const { return m_difficultyLag; }
 size_t difficultyLagByBlockVersion(uint8_t blockMajorVersion) const;
@@ -168,6 +176,7 @@ private:
   uint32_t m_mandatoryTransaction;
   uint32_t m_killHeight;
   uint64_t m_tailEmissionReward;
+  bool m_zawyDifficultyV2;
   size_t m_blockGrantedFullRewardZone;
   size_t m_blockGrantedFullRewardZoneV1;
   size_t m_blockGrantedFullRewardZoneV2;
@@ -181,6 +190,13 @@ private:
   uint64_t m_defaultDustThreshold;
 
   uint64_t m_difficultyTarget;
+  size_t m_difficultyWindowV1;
+  size_t m_difficultyWindowV2;
+  size_t m_difficultyLagV1;
+  size_t m_difficultyLagV2;
+  size_t m_difficultyCutV1;
+  size_t m_difficultyCutV2;
+  uint64_t m_expectedNumberOfBlocksPerDay;
   size_t m_difficultyWindow;
   size_t m_difficultyLag;
   size_t m_difficultyCut;
@@ -256,6 +272,7 @@ public:
   CurrencyBuilder& mandatoryTransaction(uint8_t val) { m_currency.m_mandatoryTransaction = val; return *this; }
   CurrencyBuilder& killHeight(uint32_t val) { m_currency.m_killHeight = val; return *this; }
   CurrencyBuilder& tailEmissionReward(uint64_t val) { m_currency.m_tailEmissionReward = val; return *this; }
+  CurrencyBuilder& zawyDifficultyV2(bool val) { m_currency.m_zawyDifficultyV2 = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV1(size_t val) { m_currency.m_blockGrantedFullRewardZoneV1 = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV2(size_t val) { m_currency.m_blockGrantedFullRewardZoneV2 = val; return *this; }
@@ -268,6 +285,13 @@ public:
   CurrencyBuilder& defaultDustThreshold(uint64_t val) { m_currency.m_defaultDustThreshold = val; return *this; }
 
   CurrencyBuilder& difficultyTarget(uint64_t val) { m_currency.m_difficultyTarget = val; return *this; }
+  CurrencyBuilder& difficultyWindowV1(size_t val) { m_currency.m_difficultyWindowV1 = val; return *this; }
+  CurrencyBuilder& difficultyWindowV2(size_t val) { m_currency.m_difficultyWindowV2 = val; return *this; }
+  CurrencyBuilder& difficultyLagV1(size_t val) { m_currency.m_difficultyLagV1 = val; return *this; }
+  CurrencyBuilder& difficultyLagV2(size_t val) { m_currency.m_difficultyLagV2 = val; return *this; }
+  CurrencyBuilder& difficultyCutV1(size_t val) { m_currency.m_difficultyCutV1 = val; return *this; }
+  CurrencyBuilder& difficultyCutV2(size_t val) { m_currency.m_difficultyCutV2 = val; return *this; }
+  CurrencyBuilder& expectedNumberOfBlocksPerDay(uint64_t val) { m_currency.m_expectedNumberOfBlocksPerDay = val; return *this; }
   CurrencyBuilder& difficultyWindow(size_t val);
   CurrencyBuilder& difficultyLag(size_t val) { m_currency.m_difficultyLag = val; return *this; }
   CurrencyBuilder& difficultyCut(size_t val) { m_currency.m_difficultyCut = val; return *this; }

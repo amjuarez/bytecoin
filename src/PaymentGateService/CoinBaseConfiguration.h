@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2015, The Forknote developers
+// Copyright (c) 2015-2016, The Forknote developers
 //
 // This file is part of Forknote.
 //
@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with Forknote.  If not, see <http://www.gnu.org/licenses/>.
 
-// Copyright (c) 2015, The Forknote developers
+// Copyright (c) 2016, The Forknote developers
 //
 // This file is part of Forknote.
 //
@@ -53,6 +53,7 @@ public:
   std::string GENESIS_COINBASE_TX_HEX;
   uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
   uint64_t MONEY_SUPPLY;
+  bool ZAWY_DIFFICULTY_V2;
   uint64_t GENESIS_BLOCK_REWARD;
   size_t CRYPTONOTE_COIN_VERSION;
   uint64_t TAIL_EMISSION_REWARD;
@@ -71,6 +72,13 @@ public:
   uint64_t EXPECTED_NUMBER_OF_BLOCKS_PER_DAY;
   uint32_t UPGRADE_HEIGHT_V2;
   uint32_t UPGRADE_HEIGHT_V3;
+  size_t DIFFICULTY_WINDOW_V1;
+  size_t DIFFICULTY_WINDOW_V2;
+  size_t DIFFICULTY_LAG_V1;
+  size_t DIFFICULTY_LAG_V2;
+  size_t DIFFICULTY_CUT_V1;
+  size_t DIFFICULTY_CUT_V2;
+  size_t DIFFICULTY_WINDOW;
 uint64_t MAX_TRANSACTION_SIZE_LIMIT;
   size_t DIFFICULTY_CUT;
   size_t DIFFICULTY_LAG;

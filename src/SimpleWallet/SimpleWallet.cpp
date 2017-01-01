@@ -92,6 +92,13 @@ const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", IN
   const command_line::arg_descriptor<uint64_t>    arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY  = {"EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", "uint64_t"};
   const command_line::arg_descriptor<uint32_t>    arg_UPGRADE_HEIGHT_V2  = {"UPGRADE_HEIGHT_V2", "uint32_t", 0};
   const command_line::arg_descriptor<uint32_t>    arg_UPGRADE_HEIGHT_V3  = {"UPGRADE_HEIGHT_V3", "uint32_t", 0};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_WINDOW_V1  = {"DIFFICULTY_WINDOW_V1", "size_t", CryptoNote::parameters::DIFFICULTY_WINDOW_V1};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_WINDOW_V2  = {"DIFFICULTY_WINDOW_V2", "size_t", CryptoNote::parameters::DIFFICULTY_WINDOW_V2};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG_V1  = {"DIFFICULTY_LAG_V1", "size_t", CryptoNote::parameters::DIFFICULTY_LAG_V1};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG_V2  = {"DIFFICULTY_LAG_V2", "size_t", CryptoNote::parameters::DIFFICULTY_LAG_V2};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT_V1  = {"DIFFICULTY_CUT_V1", "size_t", CryptoNote::parameters::DIFFICULTY_CUT_V1};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT_V2  = {"DIFFICULTY_CUT_V2", "size_t", CryptoNote::parameters::DIFFICULTY_CUT_V2};
+  const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_WINDOW  = {"DIFFICULTY_WINDOW", "size_t", CryptoNote::parameters::DIFFICULTY_WINDOW};
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_CUT  = {"DIFFICULTY_CUT", "size_t", CryptoNote::parameters::DIFFICULTY_CUT};
   const command_line::arg_descriptor<size_t>      arg_DIFFICULTY_LAG  = {"DIFFICULTY_LAG", "size_t", CryptoNote::parameters::DIFFICULTY_LAG};
   const command_line::arg_descriptor<std::string> arg_rpc_bind_port = {"rpc-bind-port", "", std::to_string(RPC_DEFAULT_PORT)};
@@ -1240,6 +1247,14 @@ int main(int argc, char* argv[]) {
   command_line::add_arg(desc_params, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
   command_line::add_arg(desc_params, arg_UPGRADE_HEIGHT_V2);
   command_line::add_arg(desc_params, arg_UPGRADE_HEIGHT_V3);
+  command_line::add_arg(desc_params, arg_DIFFICULTY_WINDOW_V1);
+  command_line::add_arg(desc_params, arg_DIFFICULTY_WINDOW_V2);
+  command_line::add_arg(desc_params, arg_DIFFICULTY_CUT_V1);
+  command_line::add_arg(desc_params, arg_DIFFICULTY_CUT_V2);
+  command_line::add_arg(desc_params, arg_DIFFICULTY_LAG_V1);
+  command_line::add_arg(desc_params, arg_DIFFICULTY_LAG_V2);
+  command_line::add_arg(desc_params, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  command_line::add_arg(desc_params, arg_DIFFICULTY_WINDOW);
   command_line::add_arg(desc_params, arg_DIFFICULTY_CUT);
   command_line::add_arg(desc_params, arg_DIFFICULTY_LAG);
   command_line::add_arg(desc_params, arg_rpc_bind_port);
@@ -1349,6 +1364,14 @@ int main(int argc, char* argv[]) {
   {
     currencyBuilder.upgradeHeightV3(command_line::get_arg(vm, arg_UPGRADE_HEIGHT_V3));
   }
+  currencyBuilder.difficultyWindowV1(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V1));
+  currencyBuilder.difficultyWindowV2(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW_V2));
+  currencyBuilder.difficultyCutV1(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V1));
+  currencyBuilder.difficultyCutV2(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V2));
+  currencyBuilder.difficultyLagV1(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V1));
+  currencyBuilder.difficultyLagV2(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V2));
+  currencyBuilder.expectedNumberOfBlocksPerDay(command_line::get_arg(vm, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY));
+  currencyBuilder.difficultyWindow(command_line::get_arg(vm, arg_DIFFICULTY_WINDOW));
   currencyBuilder.difficultyLag(command_line::get_arg(vm, arg_DIFFICULTY_LAG));
   currencyBuilder.difficultyCut(command_line::get_arg(vm, arg_DIFFICULTY_CUT));
 currencyBuilder.maxTransactionSizeLimit(command_line::get_arg(vm, arg_MAX_TRANSACTION_SIZE_LIMIT));

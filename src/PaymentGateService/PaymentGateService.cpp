@@ -85,6 +85,7 @@ bool PaymentGateService::init(int argc, char** argv) {
   currencyBuilder.genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
   currencyBuilder.publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
   currencyBuilder.moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
+  currencyBuilder.zawyDifficultyV2(config.coinBaseConfig.ZAWY_DIFFICULTY_V2);
   currencyBuilder.genesisBlockReward(config.coinBaseConfig.GENESIS_BLOCK_REWARD);
   currencyBuilder.cryptonoteCoinVersion(config.coinBaseConfig.CRYPTONOTE_COIN_VERSION);
   currencyBuilder.tailEmissionReward(config.coinBaseConfig.TAIL_EMISSION_REWARD);
@@ -118,6 +119,14 @@ bool PaymentGateService::init(int argc, char** argv) {
   {
     currencyBuilder.upgradeHeightV3(config.coinBaseConfig.UPGRADE_HEIGHT_V3);
   }
+  currencyBuilder.difficultyWindowV1(config.coinBaseConfig.DIFFICULTY_WINDOW_V1);
+  currencyBuilder.difficultyWindowV2(config.coinBaseConfig.DIFFICULTY_WINDOW_V2);
+  currencyBuilder.difficultyLagV1(config.coinBaseConfig.DIFFICULTY_LAG_V1);
+  currencyBuilder.difficultyLagV2(config.coinBaseConfig.DIFFICULTY_LAG_V2);
+  currencyBuilder.difficultyCutV1(config.coinBaseConfig.DIFFICULTY_CUT_V1);
+  currencyBuilder.difficultyCutV2(config.coinBaseConfig.DIFFICULTY_CUT_V2);
+  currencyBuilder.expectedNumberOfBlocksPerDay(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+  currencyBuilder.difficultyWindow(config.coinBaseConfig.DIFFICULTY_WINDOW);
   currencyBuilder.difficultyLag(config.coinBaseConfig.DIFFICULTY_LAG);
 currencyBuilder.maxTransactionSizeLimit(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT);
 currencyBuilder.fusionTxMaxSize(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT * 30 / 100);
@@ -196,7 +205,7 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
   log(Logging::INFO) << "Starting Payment Gate with local node";
 
       std::string data_dir = config.dataDir;
-      if (!config.coinBaseConfig.CRYPTONOTE_NAME.empty()) {
+      if (config.dataDir == Tools::getDefaultDataDirectory() && !config.coinBaseConfig.CRYPTONOTE_NAME.empty()) {
         boost::replace_all(data_dir, CryptoNote::CRYPTONOTE_NAME, config.coinBaseConfig.CRYPTONOTE_NAME);
       }
   CryptoNote::DataBaseConfig dbConfig;
