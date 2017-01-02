@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN-project developers
+// Copyright (c) 2014-2017 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -35,6 +35,7 @@ namespace {
       currencyBuilder.upgradeWindow(720);
       currencyBuilder.upgradeHeightV2(upgradeHeight);
       currencyBuilder.upgradeHeightV3(UpgradeDetector::UNDEF_HEIGHT);
+      currencyBuilder.upgradeHeightV4(UpgradeDetector::UNDEF_HEIGHT);
       return currencyBuilder.currency();
     }
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN-project developers
+// Copyright (c) 2014-2017 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -213,7 +213,7 @@ bool test_generator::constructMaxSizeBlock(CryptoNote::Block& blk, const CryptoN
   medianBlockCount = medianBlockCount == 0 ? m_currency.rewardBlocksWindow() : medianBlockCount;
   getLastNBlockSizes(blockSizes, get_block_hash(blkPrev), medianBlockCount);
 
-  size_t median = std::max(Common::medianValue(blockSizes), m_currency.blockGrantedFullRewardZone());
+  size_t median = std::max(Common::medianValue(blockSizes), m_currency.blockGrantedFullRewardZoneByBlockVersion(defaultMajorVersion));
   uint64_t totalFee = 0;
   size_t txsSize = 0;
   std::vector<Crypto::Hash> transactionHashes;

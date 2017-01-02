@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN-project developers
+// Copyright (c) 2014-2017 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,7 +14,7 @@ using namespace CryptoNote;
 
 namespace
 {
-using CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+  const size_t TEST_GRANTED_FULL_REWARD_ZONE = 32000;
 
   //--------------------------------------------------------------------------------------------------------------------
   class block_reward_and_height : public ::testing::Test
@@ -31,8 +31,8 @@ using CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
         already_generated_coins, 0, height, m_block_reward, emissionChange);
     }
 
-    static const size_t median_block_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
-    static const size_t current_block_size = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+    static const size_t median_block_size = TEST_GRANTED_FULL_REWARD_ZONE;
+    static const size_t current_block_size = TEST_GRANTED_FULL_REWARD_ZONE;
 
     Logging::ConsoleLogger m_logger;
     bool m_block_not_too_big;
@@ -100,7 +100,10 @@ using CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
   protected:
 
     block_reward_and_current_block_size() :
-      m_currency(CurrencyBuilder(m_logger).currency()) {}
+      m_currency(CurrencyBuilder(m_logger).
+      blockGrantedFullRewardZone(TEST_GRANTED_FULL_REWARD_ZONE).
+      currency()) {
+    }
 
     virtual void SetUp()
     {
@@ -108,7 +111,7 @@ using CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
       m_block_not_too_big = m_currency.getBlockReward(0, 0, 
         already_generated_coins, 0, height, m_standard_block_reward, emissionChange);
       ASSERT_TRUE(m_block_not_too_big);
-      ASSERT_LT(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
+      ASSERT_LT(TEST_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
     }
 
     void do_test(size_t median_block_size, size_t current_block_size)
@@ -130,28 +133,28 @@ using CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
 
   TEST_F(block_reward_and_current_block_size, handles_block_size_less_relevance_level)
   {
-    do_test(0, CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE - 1);
+    do_test(0, TEST_GRANTED_FULL_REWARD_ZONE - 1);
     ASSERT_TRUE(m_block_not_too_big);
     ASSERT_EQ(m_block_reward, m_standard_block_reward);
   }
 
   TEST_F(block_reward_and_current_block_size, handles_block_size_eq_relevance_level)
   {
-    do_test(0, CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+    do_test(0, TEST_GRANTED_FULL_REWARD_ZONE);
     ASSERT_TRUE(m_block_not_too_big);
     ASSERT_EQ(m_block_reward, m_standard_block_reward);
   }
 
   TEST_F(block_reward_and_current_block_size, handles_block_size_gt_relevance_level)
   {
-    do_test(0, CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE + 1);
+    do_test(0, TEST_GRANTED_FULL_REWARD_ZONE + 1);
     ASSERT_TRUE(m_block_not_too_big);
     ASSERT_LT(m_block_reward, m_standard_block_reward);
   }
 
   TEST_F(block_reward_and_current_block_size, handles_block_size_less_2_relevance_level)
   {
-    do_test(0, 2 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE - 1);
+    do_test(0, 2 * TEST_GRANTED_FULL_REWARD_ZONE - 1);
     ASSERT_TRUE(m_block_not_too_big);
     ASSERT_LT(m_block_reward, m_standard_block_reward);
     ASSERT_LT(0, m_block_reward);
@@ -159,14 +162,14 @@ using CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
 
   TEST_F(block_reward_and_current_block_size, handles_block_size_eq_2_relevance_level)
   {
-    do_test(0, 2 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+    do_test(0, 2 * TEST_GRANTED_FULL_REWARD_ZONE);
     ASSERT_TRUE(m_block_not_too_big);
     ASSERT_EQ(0, m_block_reward);
   }
 
   TEST_F(block_reward_and_current_block_size, handles_block_size_gt_2_relevance_level)
   {
-    do_test(0, 2 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE + 1);
+    do_test(0, 2 * TEST_GRANTED_FULL_REWARD_ZONE + 1);
     ASSERT_FALSE(m_block_not_too_big);
   }
 
@@ -198,19 +201,19 @@ using CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
     {
       int64_t emissionChange;
 
-      m_last_block_sizes.push_back(3  * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
-      m_last_block_sizes.push_back(5  * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
-      m_last_block_sizes.push_back(7  * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
-      m_last_block_sizes.push_back(11 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
-      m_last_block_sizes.push_back(13 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
+      m_last_block_sizes.push_back(3  * TEST_GRANTED_FULL_REWARD_ZONE);
+      m_last_block_sizes.push_back(5  * TEST_GRANTED_FULL_REWARD_ZONE);
+      m_last_block_sizes.push_back(7  * TEST_GRANTED_FULL_REWARD_ZONE);
+      m_last_block_sizes.push_back(11 * TEST_GRANTED_FULL_REWARD_ZONE);
+      m_last_block_sizes.push_back(13 * TEST_GRANTED_FULL_REWARD_ZONE);
 
-      m_last_block_sizes_median = 7 * CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+      m_last_block_sizes_median = 7 * TEST_GRANTED_FULL_REWARD_ZONE;
 
       m_block_not_too_big = m_currency.getBlockReward(Common::medianValue(m_last_block_sizes), 0,
         already_generated_coins, 0, height, m_standard_block_reward, emissionChange);
 
       ASSERT_TRUE(m_block_not_too_big);
-      ASSERT_LT(CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
+      ASSERT_LT(TEST_GRANTED_FULL_REWARD_ZONE, m_standard_block_reward);
     }
 
     void do_test(size_t current_block_size)

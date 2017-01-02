@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN-project developers
+// Copyright (c) 2014-2017 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -62,6 +62,7 @@ bool Currency::init() {
   if (isTestnet()) {
     m_upgradeHeightV2 = 0;
     m_upgradeHeightV3 = static_cast<uint32_t>(-1);
+    m_upgradeHeightV4 = static_cast<uint32_t>(-1);
     m_blocksFileName = "testnet_" + m_blocksFileName;
     m_blocksCacheFileName = "testnet_" + m_blocksCacheFileName;
     m_blockIndexesFileName = "testnet_" + m_blockIndexesFileName;
@@ -107,11 +108,21 @@ uint64_t Currency::baseRewardFunction(uint64_t alreadyGeneratedCoins, uint32_t h
   return base_reward;
 }
 
+size_t Currency::blockGrantedFullRewardZoneByBlockVersion(uint8_t blockMajorVersion) const {
+  if (blockMajorVersion >= BLOCK_MAJOR_VERSION_4) {
+    return m_blockGrantedFullRewardZone;
+  } else {
+    return CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
+  }
+}
+
 uint32_t Currency::upgradeHeight(uint8_t majorVersion) const {
   if (majorVersion == BLOCK_MAJOR_VERSION_2) {
     return m_upgradeHeightV2;
   } else if (majorVersion == BLOCK_MAJOR_VERSION_3) {
     return m_upgradeHeightV3;
+  } else if (majorVersion == BLOCK_MAJOR_VERSION_4) {
+    return m_upgradeHeightV4;
   } else {
     return static_cast<uint32_t>(-1);
   }
@@ -123,7 +134,8 @@ bool Currency::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64
 
   uint64_t baseReward = baseRewardFunction(alreadyGeneratedCoins, height);
 
-  medianSize = std::max(medianSize, m_blockGrantedFullRewardZone);
+  size_t blockGrantedFullRewardZone = (height < parameters::UPGRADE_HEIGHT_V4) ? parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 : m_blockGrantedFullRewardZone;
+  medianSize = std::max(medianSize, blockGrantedFullRewardZone);
   if (currentBlockSize > UINT64_C(2) * medianSize) {
     logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
     return false;
@@ -561,6 +573,7 @@ bool Currency::checkProofOfWork(Crypto::cn_context& context, const Block& block,
   case BLOCK_MAJOR_VERSION_2:
     return checkProofOfWorkV1(context, block, currentDiffic, proofOfWork);
   case BLOCK_MAJOR_VERSION_3:
+  case BLOCK_MAJOR_VERSION_4:
     return checkProofOfWorkV2(context, block, currentDiffic, proofOfWork);
   }
 
@@ -636,6 +649,7 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
 
   upgradeHeightV2(parameters::UPGRADE_HEIGHT_V2);
   upgradeHeightV3(parameters::UPGRADE_HEIGHT_V3);
+  upgradeHeightV4(parameters::UPGRADE_HEIGHT_V4);
   upgradeVotingThreshold(parameters::UPGRADE_VOTING_THRESHOLD);
   upgradeVotingWindow(parameters::UPGRADE_VOTING_WINDOW);
   upgradeWindow(parameters::UPGRADE_WINDOW);

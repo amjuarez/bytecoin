@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN-project developers
+// Copyright (c) 2014-2017 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -162,7 +162,7 @@ namespace CryptoNote {
     };
 
     typedef hashed_unique<BOOST_MULTI_INDEX_MEMBER(TransactionDetails, Crypto::Hash, id)> main_index_t;
-    typedef ordered_non_unique<identity<TransactionDetails>, TransactionPriorityComparator> fee_index_t;
+    typedef ordered_non_unique<boost::multi_index::identity<TransactionDetails>, TransactionPriorityComparator> fee_index_t;
 
     typedef multi_index_container<TransactionDetails,
       indexed_by<main_index_t, fee_index_t>

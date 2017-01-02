@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN-project developers
+// Copyright (c) 2014-2017 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -312,7 +312,8 @@ m_current_block_cumul_sz_limit(0),
 m_is_in_checkpoint_zone(false),
 m_checkpoints(logger),
 m_upgradeDetectorV2(currency, m_blocks, BLOCK_MAJOR_VERSION_2, logger),
-m_upgradeDetectorV3(currency, m_blocks, BLOCK_MAJOR_VERSION_3, logger) {
+m_upgradeDetectorV3(currency, m_blocks, BLOCK_MAJOR_VERSION_3, logger),
+m_upgradeDetectorV4(currency, m_blocks, BLOCK_MAJOR_VERSION_4, logger) {
 
   m_outputs.set_deleted_key(0);
   m_multisignatureOutputs.set_deleted_key(0);
@@ -456,6 +457,11 @@ bool Blockchain::init(const std::string& config_folder, bool load_existing) {
   }
 
   if (!m_upgradeDetectorV3.init()) {
+    logger(ERROR, BRIGHT_RED) << "Failed to initialize upgrade detector";
+    return false;
+  }
+
+  if (!m_upgradeDetectorV4.init()) {
     logger(ERROR, BRIGHT_RED) << "Failed to initialize upgrade detector";
     return false;
   }
@@ -696,7 +702,9 @@ difficulty_type Blockchain::difficultyAtHeight(uint64_t height) {
 }
 
 uint8_t Blockchain::get_block_major_version_for_height(uint64_t height) const {
-  if (height > m_upgradeDetectorV3.upgradeHeight()) {
+  if (height > m_upgradeDetectorV4.upgradeHeight()) {
+    return m_upgradeDetectorV4.targetVersion();
+  } else if (height > m_upgradeDetectorV3.upgradeHeight()) {
     return m_upgradeDetectorV3.targetVersion();
   } else if (height > m_upgradeDetectorV2.upgradeHeight()) {
     return m_upgradeDetectorV2.targetVersion();
@@ -1693,12 +1701,17 @@ bool Blockchain::getBlockCumulativeSize(const Block& block, size_t& cumulativeSi
 
 // Precondition: m_blockchain_lock is locked.
 bool Blockchain::update_next_comulative_size_limit() {
+  size_t blockGrantedFullRewardZone =
+    get_block_major_version_for_height(getCurrentBlockchainHeight()) < parameters::UPGRADE_HEIGHT_V4 ?
+    parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1 :
+    m_currency.blockGrantedFullRewardZone();
+
   std::vector<size_t> sz;
   get_last_n_blocks_sizes(sz, m_currency.rewardBlocksWindow());
 
   uint64_t median = Common::medianValue(sz);
-  if (median <= m_currency.blockGrantedFullRewardZone()) {
-    median = m_currency.blockGrantedFullRewardZone();
+  if (median <= blockGrantedFullRewardZone) {
+    median = blockGrantedFullRewardZone;
   }
 
   m_current_block_cumul_sz_limit = median * 2;
@@ -1935,6 +1948,7 @@ bool Blockchain::pushBlock(const Block& blockData, const std::vector<Transaction
 
   m_upgradeDetectorV2.blockPushed();
   m_upgradeDetectorV3.blockPushed();
+  m_upgradeDetectorV4.blockPushed();
   update_next_comulative_size_limit();
 
   return true;
@@ -2024,6 +2038,7 @@ void Blockchain::popBlock(const Crypto::Hash& blockHash) {
 
   m_upgradeDetectorV2.blockPopped();
   m_upgradeDetectorV3.blockPopped();
+  m_upgradeDetectorV4.blockPopped();
 }
 
 bool Blockchain::pushTransaction(BlockEntry& block, const Crypto::Hash& transactionHash, TransactionIndex transactionIndex) {

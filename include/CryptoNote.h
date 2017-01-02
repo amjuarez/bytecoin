@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2016 The Cryptonote developers
-// Copyright (c) 2014-2016 XDN-project developers
+// Copyright (c) 2014-2017 XDN-project developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <boost/variant.hpp>
+#include "crypto/rctTypes.h"
 #include "CryptoTypes.h"
 
 namespace CryptoNote {
@@ -59,13 +60,18 @@ struct Transaction : public TransactionPrefix {
   std::vector<std::vector<Crypto::Signature>> signatures;
 };
 
+struct RootBlockTransaction  : public TransactionPrefix {
+  std::vector<std::vector<Crypto::Signature>> signatures;
+  rct::rctSig rctSignatures;
+};
+
 struct RootBlock {
   uint8_t majorVersion;
   uint8_t minorVersion;
   Crypto::Hash previousBlockHash;
   uint16_t transactionCount;
   std::vector<Crypto::Hash> baseTransactionBranch;
-  Transaction baseTransaction;
+  RootBlockTransaction baseTransaction;
   std::vector<Crypto::Hash> blockchainBranch;
 };
 
