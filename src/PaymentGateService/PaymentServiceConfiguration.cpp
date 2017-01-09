@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -32,6 +32,7 @@ Configuration::Configuration() {
   daemonize = false;
   registerService = false;
   unregisterService = false;
+  containerPassword = "";
   logFile = "walletd.log";
   testnet = false;
   printAddresses = false;
@@ -120,8 +121,8 @@ void Configuration::init(const boost::program_options::variables_map& options) {
   }
 
   if (!registerService && !unregisterService) {
-    if (containerFile.empty() || containerPassword.empty()) {
-      throw ConfigurationError("Both container-file and container-password parameters are required");
+    if (containerFile.empty()) {
+      throw ConfigurationError("container-file parameter are required");
     }
   }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -185,7 +185,7 @@ namespace CryptoNote {
 void serialize(TransactionPrefix& txP, ISerializer& serializer) {
   serializer(txP.version, "version");
 
-  if (CURRENT_TRANSACTION_VERSION < txP.version) {
+  if (CURRENT_TRANSACTION_VERSION < txP.version && serializer.type() == ISerializer::INPUT) {
     throw std::runtime_error("Wrong transaction version");
   }
 
@@ -193,6 +193,19 @@ void serialize(TransactionPrefix& txP, ISerializer& serializer) {
   serializer(txP.inputs, "vin");
   serializer(txP.outputs, "vout");
   serializeAsBinary(txP.extra, "extra", serializer);
+}
+
+void serialize(BaseTransaction& tx, ISerializer& serializer) {
+  serializer(tx.version, "version");
+  serializer(tx.unlockTime, "unlock_time");
+  serializer(tx.inputs, "vin");
+  serializer(tx.outputs, "vout");
+  serializeAsBinary(tx.extra, "extra", serializer);
+
+  if (tx.version >= TRANSACTION_VERSION_2) {
+    size_t ignored = 0;
+    serializer(ignored, "ignored");
+  }
 }
 
 void serialize(Transaction& tx, ISerializer& serializer) {
@@ -315,7 +328,7 @@ void serialize(ParentBlockSerializer& pbs, ISerializer& serializer) {
 
   if (pbs.m_hashingSerialization) {
     Crypto::Hash minerTxHash;
-    if (!getObjectHash(pbs.m_parentBlock.baseTransaction, minerTxHash)) {
+    if (!getBaseTransactionHash(pbs.m_parentBlock.baseTransaction, minerTxHash)) {
       throw std::runtime_error("Get transaction hash error");
     }
 

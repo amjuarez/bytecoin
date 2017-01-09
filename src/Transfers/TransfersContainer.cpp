@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -896,7 +896,8 @@ void TransfersContainer::load(std::istream& in) {
   m_spentTransfers = std::move(spentTransfers);
 
   // Repair the container if it was broken while handling addTransaction() in previous version of the code
-  repair();
+  // Hope it isn't necessary anymore
+  //repair();
 }
 
 void TransfersContainer::repair() {

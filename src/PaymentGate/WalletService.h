@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -58,9 +58,11 @@ public:
   void saveWallet();
 
   std::error_code saveWalletNoThrow();
+  std::error_code exportWallet(const std::string& fileName);
   std::error_code resetWallet();
   std::error_code replaceWithNewWallet(const std::string& viewSecretKey);
   std::error_code createAddress(const std::string& spendSecretKeyText, std::string& address);
+  std::error_code createAddressList(const std::vector<std::string>& spendSecretKeysText, std::vector<std::string>& addresses);
   std::error_code createAddress(std::string& address);
   std::error_code createTrackingAddress(const std::string& spendPublicKeyText, std::string& address);
   std::error_code deleteAddress(const std::string& address);

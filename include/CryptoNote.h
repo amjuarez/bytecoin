@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -69,13 +69,16 @@ struct Transaction : public TransactionPrefix {
   std::vector<std::vector<Crypto::Signature>> signatures;
 };
 
+struct BaseTransaction : public TransactionPrefix {
+};
+
 struct ParentBlock {
   uint8_t majorVersion;
   uint8_t minorVersion;
   Crypto::Hash previousBlockHash;
   uint16_t transactionCount;
   std::vector<Crypto::Hash> baseTransactionBranch;
-  Transaction baseTransaction;
+  BaseTransaction baseTransaction;
   std::vector<Crypto::Hash> blockchainBranch;
 };
 

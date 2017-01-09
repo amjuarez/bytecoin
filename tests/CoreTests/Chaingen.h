@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -119,6 +119,9 @@ inline bool operator==(const CryptoNote::Transaction& a, const CryptoNote::Trans
   using SigVect = decltype(a.signatures)::value_type;
   return std::equal(a.signatures.begin(), a.signatures.end(), b.signatures.begin(),
                     [](const SigVect& l, const SigVect& r) { return std::equal(l.begin(), l.end(), r.begin()); });
+}
+inline bool operator==(const CryptoNote::BaseTransaction& a, const CryptoNote::BaseTransaction& b) {
+  return getObjectHash(a) == getObjectHash(b);
 }
 inline bool operator==(const CryptoNote::BlockHeader& a, const CryptoNote::BlockHeader& b) {
   return a.majorVersion == b.majorVersion && a.minorVersion == b.minorVersion && a.nonce == b.nonce &&

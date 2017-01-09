@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -44,6 +44,7 @@ enum class SerializationTag : uint8_t { Base = 0xff, Key = 0x2, Multisignature =
 
 void serialize(TransactionPrefix& txP, ISerializer& serializer);
 void serialize(Transaction& tx, ISerializer& serializer);
+void serialize(BaseTransaction& tx, ISerializer& serializer);
 void serialize(TransactionInput& in, ISerializer& serializer);
 void serialize(TransactionOutput& in, ISerializer& serializer);
 
