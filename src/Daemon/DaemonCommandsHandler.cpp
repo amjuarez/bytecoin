@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -185,8 +185,8 @@ bool DaemonCommandsHandler::set_log(const std::vector<std::string>& args)
 //--------------------------------------------------------------------------------
 bool DaemonCommandsHandler::print_block_by_height(uint32_t height)
 {
-  if (height - 1 > m_core.getTopBlockIndex()) {
-    std::cout << "block wasn't found. Current block chain height: " << m_core.getTopBlockIndex() + 1 << ", requested: " << height << std::endl;
+  if (height > m_core.getTopBlockIndex()) {
+std::cout << "block wasn't found. Current block chain height: " << m_core.getTopBlockIndex() << ", requested: " << height << std::endl;
     return false;
   }
 

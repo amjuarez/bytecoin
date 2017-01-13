@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -893,6 +893,9 @@ uint32_t DatabaseBlockchainCache::updateKeyOutputCount(Amount amount, int32_t di
 
       keyOutputAmountsCount = *keyOutputAmountsCount + 1;
     }
+  } else if (!keyOutputAmountsCount) {
+    auto result = readDatabase(BlockchainReadBatch().requestKeyOutputAmountsCount());
+    keyOutputAmountsCount = result.getKeyOutputAmountsCount();
   }
 
   it->second += diff;
@@ -920,7 +923,11 @@ uint32_t DatabaseBlockchainCache::updateMultiOutputCount(Amount amount, int32_t 
 
       multiOutputAmountsCount = *multiOutputAmountsCount + 1;
     }
+  } else if (!multiOutputAmountsCount) {
+    auto result = readDatabase(BlockchainReadBatch().requestMultisignatureOutputAmountsCount());
+    multiOutputAmountsCount = result.getMultisignatureOutputAmountsCount();
   }
+
 
   it->second += diff;
   assert(it->second >= 0);
@@ -1358,10 +1365,6 @@ std::vector<CachedBlockInfo> DatabaseBlockchainCache::getLastCachedUnits(uint32_
 
   count = std::min(blockIndex + 1, static_cast<uint32_t>(count));
   uint32_t offset = std::max(static_cast<uint32_t>(blockIndex + 1 - count), cacheStart) - cacheStart;
-  if (offset == 0) {
-    ++offset;
-    ++cacheStart;
-  }
   assert(offset < unitsCache.size());
 
   cachedResult.reserve(unitsCache.size() - offset - (getTopBlockIndex() - blockIndex));
@@ -1379,9 +1382,6 @@ std::vector<CachedBlockInfo> DatabaseBlockchainCache::getLastDbUnits(uint32_t bl
   }
 
   uint32_t toRead = blockIndex - readFrom + 1;
-  if (toRead != 0) {
-    toRead--;
-  }
   std::vector<CachedBlockInfo> units;
   units.reserve(toRead);
 

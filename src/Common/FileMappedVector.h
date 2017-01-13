@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -276,6 +276,9 @@ public:
   void push_back(const T& val);
   void swap(FileMappedVector& other);
 
+  bool getAutoFlush() const;
+  void setAutoFlush(bool autoFlush);
+
   void flush();
 
   const uint8_t* prefix() const;
@@ -299,6 +302,7 @@ private:
   System::MemoryMappedFile m_file;
   uint64_t m_prefixSize;
   uint64_t m_suffixSize;
+  bool m_autoFlush;
 
 private:
   template<class F>
@@ -329,11 +333,15 @@ private:
 };
 
 template<class T>
-FileMappedVector<T>::FileMappedVector() {
+FileMappedVector<T>::FileMappedVector() :
+  m_autoFlush(true)
+{
 }
 
 template<class T>
-FileMappedVector<T>::FileMappedVector(const std::string& path, FileMappedVectorOpenMode mode, uint64_t prefixSize) {
+FileMappedVector<T>::FileMappedVector(const std::string& path, FileMappedVectorOpenMode mode, uint64_t prefixSize) :
+  m_autoFlush(true)
+{
   open(path, mode, prefixSize);
 }
 
@@ -654,6 +662,16 @@ void FileMappedVector<T>::swap(FileMappedVector& other) {
 }
 
 template<class T>
+bool FileMappedVector<T>::getAutoFlush() const {
+  return m_autoFlush;
+}
+
+template<class T>
+void FileMappedVector<T>::setAutoFlush(bool autoFlush) {
+  m_autoFlush = autoFlush;
+}
+
+template<class T>
 void FileMappedVector<T>::flush() {
   assert(isOpened());
 
@@ -904,12 +922,16 @@ uint64_t FileMappedVector<T>::nextCapacity() {
 
 template<class T>
 void FileMappedVector<T>::flushElement(uint64_t index) {
-  m_file.flush(reinterpret_cast<uint8_t*>(vectorDataPtr() + index), valueSize);
+  if (m_autoFlush) {
+    m_file.flush(reinterpret_cast<uint8_t*>(vectorDataPtr() + index), valueSize);
+  }
 }
 
 template<class T>
 void FileMappedVector<T>::flushSize() {
-  m_file.flush(reinterpret_cast<uint8_t*>(sizePtr()), sizeof(uint64_t));
+  if (m_autoFlush) {
+    m_file.flush(reinterpret_cast<uint8_t*>(sizePtr()), sizeof(uint64_t));
+  }
 }
 
 }

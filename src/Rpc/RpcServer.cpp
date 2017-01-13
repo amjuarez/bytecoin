@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -734,7 +734,7 @@ bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAIL
     }
     blockHash = m_core.getBlockHashByIndex(blockHeight);
     BlockTemplate blk = m_core.getBlockByHash(blockHash);
-    BlockDetails blkDetails = m_core.getBlockDetails(hash);
+    BlockDetails blkDetails = m_core.getBlockDetails(blockHash);
 
     f_block_short_response block_short;
 

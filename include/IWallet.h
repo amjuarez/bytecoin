@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -164,6 +164,7 @@ public:
   virtual std::string createAddress() = 0;
   virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) = 0;
   virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) = 0;
+  virtual std::vector<std::string> createAddressList(const std::vector<Crypto::SecretKey>& spendSecretKeys) = 0;
   virtual std::vector<WalletOutput> getAddressOutputs(const std::string& address) const = 0;
   virtual void deleteAddress(const std::string& address) = 0;
 

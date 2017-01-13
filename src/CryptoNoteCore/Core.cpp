@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -1018,7 +1018,7 @@ bool Core::getBlockTemplate(BlockTemplate& b, const AccountPublicAddress& adr, c
                             Difficulty& difficulty, uint32_t& height) const {
   throwIfNotInitialized();
 
-  height = getTopBlockIndex() + 1;
+  height = getTopBlockIndex() + 1; // remove +1
   difficulty = getDifficultyForNextBlock();
   if (difficulty == 0) {
     logger(Logging::ERROR, Logging::BRIGHT_RED) << "difficulty overhead.";

@@ -1,3 +1,7 @@
+Release notes 2.0.1
+
+- Bytecoin RPC Wallet API improvements
+
 Release notes 2.0.0
 
 - Completely revamped CryptoNote core

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -48,7 +48,7 @@ std::unique_ptr<IMainChainStorage> createVectorMainChainStorage(const Currency& 
   genesis.block = toBinaryArray(currency.genesisBlock());
   storage->pushBlock(genesis);
 
-return storage;
+  return storage;
 }
 
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -24,6 +24,15 @@ void Save::Request::serialize(CryptoNote::ISerializer& /*serializer*/) {
 }
 
 void Save::Response::serialize(CryptoNote::ISerializer& /*serializer*/) {
+}
+
+void Export::Request::serialize(CryptoNote::ISerializer& serializer) {
+  if (!serializer(fileName, "fileName")) {
+    throw RequestSerializationError();
+  }
+}
+
+void Export::Response::serialize(CryptoNote::ISerializer& serializer) {
 }
 
 void Reset::Request::serialize(CryptoNote::ISerializer& serializer) {
@@ -69,6 +78,17 @@ void CreateAddress::Request::serialize(CryptoNote::ISerializer& serializer) {
 
 void CreateAddress::Response::serialize(CryptoNote::ISerializer& serializer) {
   serializer(address, "address");
+}
+
+void CreateAddressList::Request::serialize(CryptoNote::ISerializer& serializer) {
+  if (!serializer(spendSecretKeys, "spendSecretKeys")) {
+    //TODO: replace it with error codes
+    throw RequestSerializationError();
+  }
+}
+
+void CreateAddressList::Response::serialize(CryptoNote::ISerializer& serializer) {
+  serializer(addresses, "addresses");
 }
 
 void DeleteAddress::Request::serialize(CryptoNote::ISerializer& serializer) {

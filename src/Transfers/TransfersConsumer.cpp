@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -122,7 +122,14 @@ ITransfersSubscription& TransfersConsumer::addSubscription(const AccountSubscrip
   if (res.get() == nullptr) {
     res.reset(new TransfersSubscription(m_currency, m_logger.getLogger(), subscription));
     m_spendKeys.insert(subscription.keys.address.spendPublicKey);
-    updateSyncStart();
+
+    if (m_subscriptions.size() == 1) {
+      m_syncStart = res->getSyncStart();
+    } else {
+      auto subStart = res->getSyncStart();
+      m_syncStart.height = std::min(m_syncStart.height, subStart.height);
+      m_syncStart.timestamp = std::min(m_syncStart.timestamp, subStart.timestamp);
+    }
   }
 
   return *res;

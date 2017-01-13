@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -749,7 +749,7 @@ struct F_COMMAND_RPC_GET_TRANSACTION_DETAILS {
 };
 
 struct F_COMMAND_RPC_GET_POOL {
-  typedef std::vector<std::string> request;
+  typedef EMPTY_STRUCT request;
 
   struct response {
     std::vector<f_transaction_short_response> transactions; //transactions blobs as hex

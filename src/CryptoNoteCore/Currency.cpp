@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -535,7 +535,7 @@ Difficulty Currency::nextDifficulty(uint8_t version, std::vector<uint64_t> times
     return 0;
   }
 
-  if (version == 2 && m_zawyDifficultyV2) {
+  if (version >= 2 && m_zawyDifficultyV2) {
     if (high != 0) {
       return 0;
     }

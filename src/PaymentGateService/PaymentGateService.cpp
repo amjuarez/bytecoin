@@ -1,4 +1,4 @@
-// Copyright (c) 2012-2016, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
 //
 // This file is part of Bytecoin.
 //
@@ -104,10 +104,14 @@ bool PaymentGateService::init(int argc, char** argv) {
   if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
   {
     currencyBuilder.difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+    currencyBuilder.difficultyWindowV1(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
+    currencyBuilder.difficultyWindowV2(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     currencyBuilder.upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     currencyBuilder.upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
   } else {
     currencyBuilder.difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+    currencyBuilder.difficultyWindowV1(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
+    currencyBuilder.difficultyWindowV2(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
   }
   currencyBuilder.maxBlockSizeGrowthSpeedDenominator(365 * 24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
   currencyBuilder.lockedTxAllowedDeltaSeconds(config.coinBaseConfig.DIFFICULTY_TARGET * CryptoNote::parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
@@ -119,18 +123,27 @@ bool PaymentGateService::init(int argc, char** argv) {
   {
     currencyBuilder.upgradeHeightV3(config.coinBaseConfig.UPGRADE_HEIGHT_V3);
   }
-  currencyBuilder.difficultyWindowV1(config.coinBaseConfig.DIFFICULTY_WINDOW_V1);
-  currencyBuilder.difficultyWindowV2(config.coinBaseConfig.DIFFICULTY_WINDOW_V2);
+  if (config.coinBaseConfig.DIFFICULTY_WINDOW && config.coinBaseConfig.DIFFICULTY_WINDOW != 0)
+  {
+    currencyBuilder.difficultyWindow(config.coinBaseConfig.DIFFICULTY_WINDOW);
+  }
+  currencyBuilder.difficultyLag(config.coinBaseConfig.DIFFICULTY_LAG);
+currencyBuilder.maxTransactionSizeLimit(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT);
+currencyBuilder.fusionTxMaxSize(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT * 30 / 100);
+  currencyBuilder.difficultyCut(config.coinBaseConfig.DIFFICULTY_CUT);
+  if (config.coinBaseConfig.DIFFICULTY_WINDOW_V1 && config.coinBaseConfig.DIFFICULTY_WINDOW_V1 != 0)
+  {
+    currencyBuilder.difficultyWindowV1(config.coinBaseConfig.DIFFICULTY_WINDOW_V1);
+  }
+  if (config.coinBaseConfig.DIFFICULTY_WINDOW_V2 && config.coinBaseConfig.DIFFICULTY_WINDOW_V2 != 0)
+  {
+    currencyBuilder.difficultyWindowV2(config.coinBaseConfig.DIFFICULTY_WINDOW_V2);
+  }
   currencyBuilder.difficultyLagV1(config.coinBaseConfig.DIFFICULTY_LAG_V1);
   currencyBuilder.difficultyLagV2(config.coinBaseConfig.DIFFICULTY_LAG_V2);
   currencyBuilder.difficultyCutV1(config.coinBaseConfig.DIFFICULTY_CUT_V1);
   currencyBuilder.difficultyCutV2(config.coinBaseConfig.DIFFICULTY_CUT_V2);
   currencyBuilder.expectedNumberOfBlocksPerDay(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
-  currencyBuilder.difficultyWindow(config.coinBaseConfig.DIFFICULTY_WINDOW);
-  currencyBuilder.difficultyLag(config.coinBaseConfig.DIFFICULTY_LAG);
-currencyBuilder.maxTransactionSizeLimit(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT);
-currencyBuilder.fusionTxMaxSize(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT * 30 / 100);
-  currencyBuilder.difficultyCut(config.coinBaseConfig.DIFFICULTY_CUT);
   if (config.gateConfiguration.testnet) {
     log(Logging::INFO) << "Starting in testnet mode";
     currencyBuilder.testnet(true);

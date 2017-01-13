@@ -62,13 +62,13 @@ CoinBaseConfiguration::CoinBaseConfiguration() {
     EXPECTED_NUMBER_OF_BLOCKS_PER_DAY=0;
     UPGRADE_HEIGHT_V2=0;
     UPGRADE_HEIGHT_V3=0;
+    DIFFICULTY_WINDOW=CryptoNote::parameters::DIFFICULTY_WINDOW;
     DIFFICULTY_WINDOW_V1=CryptoNote::parameters::DIFFICULTY_WINDOW_V1;
     DIFFICULTY_WINDOW_V2=CryptoNote::parameters::DIFFICULTY_WINDOW_V2;
     DIFFICULTY_LAG_V1=CryptoNote::parameters::DIFFICULTY_LAG_V1;
     DIFFICULTY_LAG_V2=CryptoNote::parameters::DIFFICULTY_LAG_V2;
     DIFFICULTY_CUT_V1=CryptoNote::parameters::DIFFICULTY_CUT_V1;
     DIFFICULTY_CUT_V2=CryptoNote::parameters::DIFFICULTY_CUT_V2;
-    DIFFICULTY_WINDOW=CryptoNote::parameters::DIFFICULTY_WINDOW;
 MAX_TRANSACTION_SIZE_LIMIT=CryptoNote::parameters::MAX_TRANSACTION_SIZE_LIMIT;
     DIFFICULTY_CUT=CryptoNote::parameters::DIFFICULTY_CUT;
     DIFFICULTY_LAG=CryptoNote::parameters::DIFFICULTY_LAG;
@@ -99,13 +99,13 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("EXPECTED_NUMBER_OF_BLOCKS_PER_DAY", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("UPGRADE_HEIGHT_V2", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("UPGRADE_HEIGHT_V3", po::value<uint32_t>()->default_value(0), "uint32_t")
-    ("DIFFICULTY_WINDOW_V1", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_WINDOW_V1), "size_t")
-    ("DIFFICULTY_WINDOW_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_WINDOW_V2), "size_t")
+    ("DIFFICULTY_WINDOW", po::value<size_t>()->default_value(0), "size_t")
+    ("DIFFICULTY_WINDOW_V1", po::value<size_t>()->default_value(0), "size_t")
+    ("DIFFICULTY_WINDOW_V2", po::value<size_t>()->default_value(0), "size_t")
     ("DIFFICULTY_CUT_V1", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT_V2), "size_t")
     ("DIFFICULTY_CUT_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT_V1), "size_t")
     ("DIFFICULTY_LAG_V1", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG_V1), "size_t")
     ("DIFFICULTY_LAG_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG_V2), "size_t")
-    ("DIFFICULTY_WINDOW", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_WINDOW), "size_t")
 ("MAX_TRANSACTION_SIZE_LIMIT", po::value<uint64_t>()->default_value(CryptoNote::parameters::MAX_TRANSACTION_SIZE_LIMIT), "uint64_t")
     ("DIFFICULTY_CUT", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT), "size_t")
     ("DIFFICULTY_LAG", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG), "size_t")
