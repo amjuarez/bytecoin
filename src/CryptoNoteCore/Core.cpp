@@ -1018,7 +1018,7 @@ bool Core::getBlockTemplate(BlockTemplate& b, const AccountPublicAddress& adr, c
                             Difficulty& difficulty, uint32_t& height) const {
   throwIfNotInitialized();
 
-  height = getTopBlockIndex() + 1; // remove +1
+  height = getTopBlockIndex() + 1;
   difficulty = getDifficultyForNextBlock();
   if (difficulty == 0) {
     logger(Logging::ERROR, Logging::BRIGHT_RED) << "difficulty overhead.";
@@ -1027,7 +1027,6 @@ bool Core::getBlockTemplate(BlockTemplate& b, const AccountPublicAddress& adr, c
 
   b = boost::value_initialized<BlockTemplate>();
   b.majorVersion = getBlockMajorVersionForHeight(height);
-  b.majorVersion = getBlockMajorVersionForHeight(height - 1);
 
   if (b.majorVersion == BLOCK_MAJOR_VERSION_1) {
     b.minorVersion = currency.upgradeHeight(BLOCK_MAJOR_VERSION_2) == IUpgradeDetector::UNDEF_HEIGHT ? BLOCK_MINOR_VERSION_1 : BLOCK_MINOR_VERSION_0;
@@ -1362,6 +1361,11 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
     summaryOutputAmount += output.amount;
   }
 
+    // parameters used for the additional key_image check
+    static const Crypto::KeyImage Z = { {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+    static const Crypto::KeyImage I = { {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+    static const Crypto::KeyImage L = { {0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10 } };
+
   uint64_t summaryInputAmount = 0;
   std::unordered_set<Crypto::KeyImage> ki;
   std::set<std::pair<uint64_t, uint32_t>> outputsUsage;
@@ -1380,6 +1384,11 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
 
       // outputIndexes are packed here, first is absolute, others are offsets to previous,
       // so first can be zero, others can't
+  // additional key_image check
+  if (!(scalarmultKey(in.keyImage, L) == I)) {
+    return error::TransactionValidationError::INPUT_INVALID_DOMAIN_KEYIMAGES;
+  }
+
       if (std::find(++std::begin(in.outputIndexes), std::end(in.outputIndexes), 0) != std::end(in.outputIndexes)) {
         return error::TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES;
       }

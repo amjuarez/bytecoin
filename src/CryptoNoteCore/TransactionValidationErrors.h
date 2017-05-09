@@ -28,6 +28,7 @@ enum class TransactionValidationError {
   EMPTY_INPUTS,
   INPUT_UNKNOWN_TYPE,
   INPUT_EMPTY_OUTPUT_USAGE,
+  INPUT_INVALID_DOMAIN_KEYIMAGES,
   INPUT_IDENTICAL_KEYIMAGES,
   INPUT_IDENTICAL_OUTPUT_INDEXES,
   INPUT_KEYIMAGE_ALREADY_SPENT,
@@ -71,6 +72,7 @@ public:
       case TransactionValidationError::EMPTY_INPUTS: return "Transaction has no inputs";
       case TransactionValidationError::INPUT_UNKNOWN_TYPE: return "Transaction has input with unknown type";
       case TransactionValidationError::INPUT_EMPTY_OUTPUT_USAGE: return "Transaction's input uses empty output";
+      case TransactionValidationError::INPUT_INVALID_DOMAIN_KEYIMAGES: return "Transaction uses key image not in the valid domain";
       case TransactionValidationError::INPUT_IDENTICAL_KEYIMAGES: return "Transaction has identical key images";
       case TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES: return "Transaction has identical output indexes";
       case TransactionValidationError::INPUT_KEYIMAGE_ALREADY_SPENT: return "Transaction uses spent key image";

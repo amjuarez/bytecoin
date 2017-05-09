@@ -1036,7 +1036,7 @@ std::error_code WalletService::getUnspendOuts(const GetUnspendOuts::Request& req
 
     auto outs = wallet.getAddressOutputs(request.address);
 
-  //  outputs = outs.outs;
+    outputs = convertWalletOutputsToTransactionOutputInformationSerialized(outs);
 
     logger(Logging::DEBUGGING) << "Got unspend outs for address " << request.address;
   } catch (std::exception& x) {

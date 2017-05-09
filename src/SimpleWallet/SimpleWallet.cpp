@@ -1265,7 +1265,6 @@ int main(int argc, char* argv[]) {
   command_line::add_arg(desc_params, arg_DIFFICULTY_LAG_V2);
   command_line::add_arg(desc_params, arg_DIFFICULTY_CUT_V1);
   command_line::add_arg(desc_params, arg_DIFFICULTY_CUT_V2);
-  command_line::add_arg(desc_params, arg_EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
   command_line::add_arg(desc_params, arg_DIFFICULTY_LAG);
   command_line::add_arg(desc_params, arg_rpc_bind_port);
   command_line::add_arg(desc_params, arg_SYNC_FROM_ZERO);

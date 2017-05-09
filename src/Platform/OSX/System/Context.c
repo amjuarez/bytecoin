@@ -16,7 +16,7 @@
 // along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <string.h>
-#include "context.h"
+#include "Context.h"
 
 void
 makecontext(uctx *ucp, void (*func)(void), intptr_t arg)

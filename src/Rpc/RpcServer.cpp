@@ -648,7 +648,7 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   res.block.reward = block_header.reward;
   res.block.sizeMedian = blkDetails.sizeMedian;
   res.block.blockSize = blkDetails.blockSize;
-  res.block.orphan_status = block_header.orphan_status;
+  res.block.orphan_status = blkDetails.isAlternative;
 
   uint64_t maxReward = 0;
   uint64_t currentReward = 0;
