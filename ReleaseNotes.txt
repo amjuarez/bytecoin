@@ -1,3 +1,10 @@
+Release notes 2.0.2
+
+- Security algorithm enhancement
+- Daemon synchronization issue fix
+- Wallet minor bug fixes
+- Bytecoin RPC Wallet log optimization
+
 Release notes 2.0.1
 
 - Bytecoin RPC Wallet API improvements

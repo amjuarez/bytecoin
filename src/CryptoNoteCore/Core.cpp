@@ -1246,7 +1246,8 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
         outputKeyPointers.reserve(outputKeys.size());
         std::for_each(outputKeys.begin(), outputKeys.end(), [&outputKeyPointers] (const Crypto::PublicKey& key) { outputKeyPointers.push_back(&key); });
         if (!Crypto::check_ring_signature(cachedTransaction.getTransactionPrefixHash(), in.keyImage, outputKeyPointers.data(),
-                                          outputKeyPointers.size(), transaction.signatures[inputIndex].data())) {
+                                          outputKeyPointers.size(), transaction.signatures[inputIndex].data(),
+                                          blockIndex > parameters::KEY_IMAGE_CHECKING_BLOCK_INDEX)) {
           return error::TransactionValidationError::INPUT_INVALID_SIGNATURES;
         }
       }

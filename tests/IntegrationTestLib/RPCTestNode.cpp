@@ -36,8 +36,8 @@ using namespace System;
 
 namespace Tests {
 
-RPCTestNode::RPCTestNode(uint16_t port, System::Dispatcher& d) : 
-  m_rpcPort(port), m_dispatcher(d), m_httpClient(d, "127.0.0.1", port) {
+RPCTestNode::RPCTestNode(uint16_t port, System::Dispatcher& d) :
+  m_logger(m_log, "RPCTestNode"), m_rpcPort(port), m_dispatcher(d), m_httpClient(d, "127.0.0.1", port) {
 }
 
 bool RPCTestNode::startMining(size_t threadsCount, const std::string& address) { 
@@ -145,7 +145,7 @@ bool RPCTestNode::getTailBlockId(Crypto::Hash& tailBlockId) {
 }
 
 bool RPCTestNode::makeINode(std::unique_ptr<CryptoNote::INode>& node) {
-  std::unique_ptr<CryptoNote::INode> newNode(new CryptoNote::NodeRpcProxy("127.0.0.1", m_rpcPort));
+  std::unique_ptr<CryptoNote::INode> newNode(new CryptoNote::NodeRpcProxy("127.0.0.1", m_rpcPort, m_logger.getLogger()));
   NodeCallback cb;
   newNode->init(cb.callback());
   auto ec = cb.get();
