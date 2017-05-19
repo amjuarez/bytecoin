@@ -1,3 +1,7 @@
+Release notes 4.0.2-beta
+
+- Latest checkpoints and fixes
+
 Release notes 4.0.1-beta
 
 - Default block size updated to 200Kb to avoid any unconfirmed transactions
