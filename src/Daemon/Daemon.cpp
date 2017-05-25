@@ -31,6 +31,7 @@
 #include "crypto/hash.h"
 #include "CryptoNoteCore/Core.h"
 #include "CryptoNoteCore/Currency.h"
+#include "CryptoNoteCore/DatabaseBlockchainCache.h"
 #include "CryptoNoteCore/DatabaseBlockchainCacheFactory.h"
 #include "CryptoNoteCore/MainChainStorage.h"
 #include "CryptoNoteCore/MinerConfig.h"
@@ -218,6 +219,17 @@ int main(int argc, char* argv[])
     RocksDBWrapper database(logManager);
     database.init(dbConfig);
     Tools::ScopeExit dbShutdownOnExit([&database] () { database.shutdown(); });
+
+    if (!DatabaseBlockchainCache::checkDBSchemeVersion(database, logManager))
+    {
+      dbShutdownOnExit.cancel();
+      database.shutdown();
+
+      database.destoy(dbConfig);
+
+      database.init(dbConfig);
+      dbShutdownOnExit.resume();
+    }
 
     System::Dispatcher dispatcher;
     logger(INFO) << "Initializing core...";

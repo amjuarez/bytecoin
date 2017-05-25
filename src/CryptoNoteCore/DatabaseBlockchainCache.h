@@ -48,6 +48,8 @@ public:
   DatabaseBlockchainCache(const Currency& currency, IDataBase& dataBase,
                           IBlockchainCacheFactory& blockchainCacheFactory, Logging::ILogger& logger);
 
+  static bool checkDBSchemeVersion(IDataBase& dataBase, Logging::ILogger& logger);
+
   /*
    * This methods splits cache, upper part (ie blocks with indexes larger than splitBlockIndex)
    * is copied to new BlockchainCache. Unfortunately, implementation requires return value to be of

@@ -96,7 +96,7 @@ bool TcpStreambuf::dumpBuffer(bool finalize) {
         pbump(-static_cast<int>(count));
       }
     }
-  } catch (std::exception&) {
+  } catch (...) {
     return false;
   }
 

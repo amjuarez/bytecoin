@@ -57,7 +57,7 @@ public:
   ~RemoteContext() {
     try {
       wait();
-    } catch (std::exception&) {
+    } catch (...) {
     }
 
     try {
@@ -65,7 +65,7 @@ public:
       if (future.valid()) {
         future.wait();
       }
-    } catch (std::exception&) {
+    } catch (...) {
     }
   }
 

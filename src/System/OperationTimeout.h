@@ -31,7 +31,7 @@ public:
       try {
         timeoutTimer.sleep(timeout);
         timerContext.interrupt();
-      } catch (std::exception&) {
+      } catch (...) {
       }
     });
   }

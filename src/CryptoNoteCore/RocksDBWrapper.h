@@ -43,6 +43,7 @@ public:
 
   void init(const DataBaseConfig& config);
   void shutdown();
+  void destoy(const DataBaseConfig& config); //Be careful with this method!
 
   std::error_code write(IWriteBatch& batch) override;
   std::error_code writeSync(IWriteBatch& batch) override;
@@ -50,6 +51,9 @@ public:
 
 private:
   std::error_code write(IWriteBatch& batch, bool sync);
+
+  rocksdb::Options getDBOptions(const DataBaseConfig& config);
+  std::string getDataDir(const DataBaseConfig& config);
 
   enum State {
     NOT_INITIALIZED,

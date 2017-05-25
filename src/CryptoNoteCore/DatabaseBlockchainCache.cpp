@@ -450,7 +450,7 @@ private:
   uint32_t schemeVersion;
 };
 
-const uint32_t CURRENT_DB_SCHEME_VERSION = 1;
+const uint32_t CURRENT_DB_SCHEME_VERSION = 2;
 
 }
 
@@ -484,6 +484,30 @@ DatabaseBlockchainCache::DatabaseBlockchainCache(const Currency& curr, IDataBase
   if (getTopBlockIndex() == 0) {
     logger(Logging::DEBUGGING) << "top block index is nill, add genesis block";
     addGenesisBlock(CachedBlock (currency.genesisBlock()));
+  }
+}
+
+bool DatabaseBlockchainCache::checkDBSchemeVersion(IDataBase& database, Logging::ILogger& _logger) {
+  Logging::LoggerRef logger(_logger, "DatabaseBlockchainCache");
+
+  DatabaseVersionReadBatch readBatch;
+  auto ec = database.read(readBatch);
+  if (ec) {
+    throw std::system_error(ec);
+  }
+
+  auto version = readBatch.getDbSchemeVersion();
+  if (!version) {
+    //DB scheme version not found. Looks like it was just created.
+    return true;
+  } else if (*version < CURRENT_DB_SCHEME_VERSION) {
+    logger(Logging::WARNING) << "DB scheme version is less than expected. Expected version " << CURRENT_DB_SCHEME_VERSION << ". Actual version " << *version << ". DB will be destroyed and recreated from blocks.bin file.";
+    return false;
+  } else if (*version > CURRENT_DB_SCHEME_VERSION) {
+    logger(Logging::ERROR) << "DB scheme version is greater than expected. Expected version " << CURRENT_DB_SCHEME_VERSION << ". Actual version " << *version << ". Please update your software.";
+    throw std::runtime_error("DB scheme version is greater than expected");
+  } else {
+    return true;
   }
 }
 
@@ -1345,23 +1369,31 @@ std::vector<CachedBlockInfo> DatabaseBlockchainCache::getLastCachedUnits(uint32_
   assert(blockIndex <= getTopBlockIndex());
 
   std::vector<CachedBlockInfo> cachedResult;
-  uint32_t cacheStart = (getTopBlockIndex() + 1) - static_cast<uint32_t>(unitsCache.size());
-  if (cacheStart == 0 && !useGenesis) {
-    count = std::min(static_cast<size_t>(getTopBlockIndex()), count);
-    cacheStart = 1;
-  }
+  const uint32_t cacheStartIndex = (getTopBlockIndex() + 1) - static_cast<uint32_t>(unitsCache.size());
 
-  if (cacheStart > blockIndex || count == 0) {
+  count = std::min(unitsCache.size(), count);
+
+  if (cacheStartIndex > blockIndex || count == 0) {
     return cachedResult;
   }
 
-  count = std::min(blockIndex + 1, static_cast<uint32_t>(count));
-  uint32_t offset = std::max(static_cast<uint32_t>(blockIndex + 1 - count), cacheStart) - cacheStart;
+  count = std::min(blockIndex - cacheStartIndex + 1, static_cast<uint32_t>(count));
+  uint32_t offset = static_cast<uint32_t>(blockIndex + 1 - count) - cacheStartIndex;
+
   assert(offset < unitsCache.size());
 
-  cachedResult.reserve(unitsCache.size() - offset - (getTopBlockIndex() - blockIndex));
-  for (size_t i = offset; (i + cacheStart) <= blockIndex; ++i) {
-    cachedResult.push_back(unitsCache[i]);
+  if (!useGenesis && cacheStartIndex == 0 && offset == 0) {
+    ++offset;
+    --count;
+  }
+
+  if (offset >= unitsCache.size() || count == 0) {
+    return cachedResult;
+  }
+
+  cachedResult.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    cachedResult.push_back(unitsCache[offset + i]);
   }
 
   return cachedResult;

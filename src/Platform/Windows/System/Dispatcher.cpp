@@ -382,7 +382,7 @@ void Dispatcher::contextProcedure() {
     ++runningContextCount;
     try {
       context.procedure();
-    } catch (std::exception&) {
+    } catch (...) {
     }
 
     if (context.group != nullptr) {

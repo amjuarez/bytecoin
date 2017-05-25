@@ -32,6 +32,7 @@ public:
   ScopeExit& operator=(ScopeExit&&) = delete;
 
   void cancel();
+  void resume();
 
 private:
   std::function<void()> m_handler;

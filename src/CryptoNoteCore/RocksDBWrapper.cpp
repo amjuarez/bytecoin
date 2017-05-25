@@ -45,63 +45,20 @@ void RocksDBWrapper::init(const DataBaseConfig& config) {
     throw std::system_error(make_error_code(CryptoNote::error::DataBaseErrorCodes::ALREADY_INITIALIZED));
   }
   
-  std::string dataDir;
-  if (config.getTestnet()) {
-    dataDir = config.getDataDir() + '/' + TESTNET_DB_NAME;
-  } else {
-    dataDir = config.getDataDir() + '/' + DB_NAME;
-  }
+  std::string dataDir = getDataDir(config);
 
   logger(INFO) << "Opening DB in " << dataDir;
 
   rocksdb::DB* dbPtr;
 
-  rocksdb::DBOptions dbOptions;
-  dbOptions.IncreaseParallelism(config.getBackgroundThreadsCount());
-  dbOptions.info_log_level = rocksdb::InfoLogLevel::WARN_LEVEL;
-  dbOptions.max_open_files = config.getMaxOpenFiles();
-
-  rocksdb::ColumnFamilyOptions fOptions;
-  fOptions.write_buffer_size = static_cast<size_t>(config.getWriteBufferSize());
-  // merge two memtables when flushing to L0
-  fOptions.min_write_buffer_number_to_merge = 2;
-  // this means we'll use 50% extra memory in the worst case, but will reduce
-  // write stalls.
-  fOptions.max_write_buffer_number = 6;
-  // start flushing L0->L1 as soon as possible. each file on level0 is
-  // (memtable_memory_budget / 2). This will flush level 0 when it's bigger than
-  // memtable_memory_budget.
-  fOptions.level0_file_num_compaction_trigger = 20;
-
-  fOptions.level0_slowdown_writes_trigger = 30;
-  fOptions.level0_stop_writes_trigger = 40;
-
-  // doesn't really matter much, but we don't want to create too many files
-  fOptions.target_file_size_base = config.getWriteBufferSize() / 10;
-  // make Level1 size equal to Level0 size, so that L0->L1 compactions are fast
-  fOptions.max_bytes_for_level_base = config.getWriteBufferSize();
-  fOptions.num_levels = 10;
-  fOptions.target_file_size_multiplier = 2;
-  // level style compaction
-  fOptions.compaction_style = rocksdb::kCompactionStyleLevel;
-
-  fOptions.compression_per_level.resize(fOptions.num_levels);
-  for (int i = 0; i < fOptions.num_levels; ++i) {
-      fOptions.compression_per_level[i] = rocksdb::kNoCompression;
-  }
-
-  rocksdb::BlockBasedTableOptions tableOptions;
-  tableOptions.block_cache = rocksdb::NewLRUCache(config.getReadCacheSize());
-  std::shared_ptr<rocksdb::TableFactory> tfp(NewBlockBasedTableFactory(tableOptions));
-  fOptions.table_factory = tfp;
-
-  rocksdb::Status status = rocksdb::DB::Open(rocksdb::Options(dbOptions, fOptions), dataDir, &dbPtr);
+  rocksdb::Options dbOptions = getDBOptions(config);
+  rocksdb::Status status = rocksdb::DB::Open(dbOptions, dataDir, &dbPtr);
   if (status.ok()) {
     logger(INFO) << "DB opened in " << dataDir;
   } else if (!status.ok() || status.IsNotFound()) {
     logger(INFO) << "DB not found in " << dataDir << ". Creating new DB...";
     dbOptions.create_if_missing = true;
-    rocksdb::Status status = rocksdb::DB::Open(rocksdb::Options(dbOptions, fOptions), dataDir, &dbPtr);
+    rocksdb::Status status = rocksdb::DB::Open(dbOptions, dataDir, &dbPtr);
     if (!status.ok()) {
       logger(ERROR) << "DB Error. DB can't be created in " << dataDir << ". Error: " << status.ToString();
       throw std::system_error(make_error_code(CryptoNote::error::DataBaseErrorCodes::INTERNAL_ERROR));
@@ -125,6 +82,26 @@ void RocksDBWrapper::shutdown() {
   db->SyncWAL();
   db.reset();
   state.store(NOT_INITIALIZED);
+}
+
+void RocksDBWrapper::destoy(const DataBaseConfig& config) {
+  if (state.load() != NOT_INITIALIZED) {
+    throw std::system_error(make_error_code(CryptoNote::error::DataBaseErrorCodes::ALREADY_INITIALIZED));
+  }
+
+  std::string dataDir = getDataDir(config);
+
+  logger(WARNING) << "Destroying DB in " << dataDir;
+
+  rocksdb::Options dbOptions = getDBOptions(config);
+  rocksdb::Status status = rocksdb::DestroyDB(dataDir, dbOptions);
+
+  if (status.ok()) {
+    logger(WARNING) << "DB destroyed in " << dataDir;
+  } else {
+    logger(ERROR) << "DB Error. DB can't be destroyed in " << dataDir << ". Error: " << status.ToString();
+    throw std::system_error(make_error_code(CryptoNote::error::DataBaseErrorCodes::INTERNAL_ERROR));
+  }
 }
 
 std::error_code RocksDBWrapper::write(IWriteBatch& batch) {
@@ -197,4 +174,55 @@ std::error_code RocksDBWrapper::read(IReadBatch& batch) {
 
   batch.submitRawResult(values, resultStates);
   return std::error_code();
+}
+
+rocksdb::Options RocksDBWrapper::getDBOptions(const DataBaseConfig& config) {
+  rocksdb::DBOptions dbOptions;
+  dbOptions.IncreaseParallelism(config.getBackgroundThreadsCount());
+  dbOptions.info_log_level = rocksdb::InfoLogLevel::WARN_LEVEL;
+  dbOptions.max_open_files = config.getMaxOpenFiles();
+
+  rocksdb::ColumnFamilyOptions fOptions;
+  fOptions.write_buffer_size = static_cast<size_t>(config.getWriteBufferSize());
+  // merge two memtables when flushing to L0
+  fOptions.min_write_buffer_number_to_merge = 2;
+  // this means we'll use 50% extra memory in the worst case, but will reduce
+  // write stalls.
+  fOptions.max_write_buffer_number = 6;
+  // start flushing L0->L1 as soon as possible. each file on level0 is
+  // (memtable_memory_budget / 2). This will flush level 0 when it's bigger than
+  // memtable_memory_budget.
+  fOptions.level0_file_num_compaction_trigger = 20;
+
+  fOptions.level0_slowdown_writes_trigger = 30;
+  fOptions.level0_stop_writes_trigger = 40;
+
+  // doesn't really matter much, but we don't want to create too many files
+  fOptions.target_file_size_base = config.getWriteBufferSize() / 10;
+  // make Level1 size equal to Level0 size, so that L0->L1 compactions are fast
+  fOptions.max_bytes_for_level_base = config.getWriteBufferSize();
+  fOptions.num_levels = 10;
+  fOptions.target_file_size_multiplier = 2;
+  // level style compaction
+  fOptions.compaction_style = rocksdb::kCompactionStyleLevel;
+
+  fOptions.compression_per_level.resize(fOptions.num_levels);
+  for (int i = 0; i < fOptions.num_levels; ++i) {
+    fOptions.compression_per_level[i] = rocksdb::kNoCompression;
+  }
+
+  rocksdb::BlockBasedTableOptions tableOptions;
+  tableOptions.block_cache = rocksdb::NewLRUCache(config.getReadCacheSize());
+  std::shared_ptr<rocksdb::TableFactory> tfp(NewBlockBasedTableFactory(tableOptions));
+  fOptions.table_factory = tfp;
+
+  return rocksdb::Options(dbOptions, fOptions);
+}
+
+std::string RocksDBWrapper::getDataDir(const DataBaseConfig& config) {
+  if (config.getTestnet()) {
+    return config.getDataDir() + '/' + TESTNET_DB_NAME;
+  } else {
+    return config.getDataDir() + '/' + DB_NAME;
+  }
 }
