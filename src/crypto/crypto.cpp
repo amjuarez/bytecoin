@@ -414,7 +414,7 @@ namespace Crypto {
 
   bool crypto_ops::check_ring_signature(const Hash &prefix_hash, const KeyImage &image,
     const PublicKey *const *pubs, size_t pubs_count,
-    const Signature *sig) {
+    const Signature *sig, bool checkKeyImage) {
     size_t i;
     ge_p3 image_unp;
     ge_dsmp image_pre;
@@ -429,6 +429,9 @@ namespace Crypto {
       return false;
     }
     ge_dsm_precomp(image_pre, &image_unp);
+    if (checkKeyImage && ge_check_subgroup_precomp_vartime(image_pre) != 0) {
+      return false;
+    }
     sc_0(reinterpret_cast<unsigned char*>(&sum));
     buf->h = prefix_hash;
     for (i = 0; i < pubs_count; i++) {

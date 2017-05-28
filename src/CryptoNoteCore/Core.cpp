@@ -1269,7 +1269,8 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
         outputKeyPointers.reserve(outputKeys.size());
         std::for_each(outputKeys.begin(), outputKeys.end(), [&outputKeyPointers] (const Crypto::PublicKey& key) { outputKeyPointers.push_back(&key); });
         if (!Crypto::check_ring_signature(cachedTransaction.getTransactionPrefixHash(), in.keyImage, outputKeyPointers.data(),
-                                          outputKeyPointers.size(), transaction.signatures[inputIndex].data())) {
+                                          outputKeyPointers.size(), transaction.signatures[inputIndex].data(),
+                                          blockIndex > currency.keyImageCheckingBlockIndex())) {
           return error::TransactionValidationError::INPUT_INVALID_SIGNATURES;
         }
       }
@@ -1384,7 +1385,7 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
 
       // outputIndexes are packed here, first is absolute, others are offsets to previous,
       // so first can be zero, others can't
-  // additional key_image check
+  // Fix discovered by Monero Lab and suggested by "fluffypony" (bitcointalk.org)
   if (!(scalarmultKey(in.keyImage, L) == I)) {
     return error::TransactionValidationError::INPUT_INVALID_DOMAIN_KEYIMAGES;
   }

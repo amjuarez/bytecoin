@@ -21,6 +21,8 @@
 #include <System/Dispatcher.h>
 #include "HTTP/HttpRequest.h"
 #include "HTTP/HttpResponse.h"
+#include "Logging/ConsoleLogger.h"
+#include "Logging/LoggerRef.h"
 #include "Rpc/HttpClient.h"
 
 #include "TestNode.h"
@@ -44,7 +46,8 @@ namespace Tests {
     virtual ~RPCTestNode() { }
 
   private:
-
+    Logging::ConsoleLogger m_log;
+    Logging::LoggerRef m_logger;
     uint16_t m_rpcPort;
     System::Dispatcher& m_dispatcher;
     CryptoNote::HttpClient m_httpClient;

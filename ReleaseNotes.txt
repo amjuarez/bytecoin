@@ -1,3 +1,20 @@
+Release notes 2.0.4
+
+- Fixed an issue where some users experienced daemon hanging
+- Fixed block difficulty calculation issue
+
+Release notes 2.0.3
+
+- Stability enhancement
+- Various improvements
+
+Release notes 2.0.2
+
+- Security algorithm enhancement
+- Daemon synchronization issue fix
+- Wallet minor bug fixes
+- Bytecoin RPC Wallet log optimization
+
 Release notes 2.0.1
 
 - Bytecoin RPC Wallet API improvements

@@ -390,7 +390,7 @@ int Dispatcher::getTimer() {
   if (timers.empty()) {
     timer = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     epoll_event timerEvent;
-    timerEvent.events = 0;
+    timerEvent.events = EPOLLONESHOT;
     timerEvent.data.ptr = nullptr;
 
     if (epoll_ctl(getEpoll(), EPOLL_CTL_ADD, timer, &timerEvent) == -1) {
@@ -424,7 +424,7 @@ void Dispatcher::contextProcedure(void* ucontext) {
     ++runningContextCount;
     try {
       context.procedure();
-    } catch(std::exception&) {
+    } catch(...) {
     }
 
     if (context.group != nullptr) {

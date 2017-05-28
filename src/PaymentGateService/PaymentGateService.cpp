@@ -27,6 +27,7 @@
 
 #include "Common/ScopeExit.h"
 #include "CryptoNoteCore/Core.h"
+#include "CryptoNoteCore/DatabaseBlockchainCache.h"
 #include "CryptoNoteCore/DatabaseBlockchainCacheFactory.h"
 #include "CryptoNoteCore/DataBaseConfig.h"
 #include "CryptoNoteCore/MainChainStorage.h"
@@ -103,12 +104,14 @@ bool PaymentGateService::init(int argc, char** argv) {
   currencyBuilder.maxBlockSizeInitial(config.coinBaseConfig.MAX_BLOCK_SIZE_INITIAL);
   if (config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY && config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY != 0)
   {
+    currencyBuilder.expectedNumberOfBlocksPerDay(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     currencyBuilder.difficultyWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     currencyBuilder.difficultyWindowV1(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     currencyBuilder.difficultyWindowV2(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     currencyBuilder.upgradeVotingWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
     currencyBuilder.upgradeWindow(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
   } else {
+    currencyBuilder.expectedNumberOfBlocksPerDay(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
     currencyBuilder.difficultyWindow(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
     currencyBuilder.difficultyWindowV1(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
     currencyBuilder.difficultyWindowV2(24 * 60 * 60 / config.coinBaseConfig.DIFFICULTY_TARGET);
@@ -122,6 +125,10 @@ bool PaymentGateService::init(int argc, char** argv) {
   if (config.coinBaseConfig.UPGRADE_HEIGHT_V3 && config.coinBaseConfig.UPGRADE_HEIGHT_V3 != 0)
   {
     currencyBuilder.upgradeHeightV3(config.coinBaseConfig.UPGRADE_HEIGHT_V3);
+  }
+  if (config.coinBaseConfig.KEY_IMAGE_CHECKING_BLOCK_INDEX && config.coinBaseConfig.KEY_IMAGE_CHECKING_BLOCK_INDEX != 0)
+  {
+    currencyBuilder.keyImageCheckingBlockIndex(config.coinBaseConfig.KEY_IMAGE_CHECKING_BLOCK_INDEX);
   }
   if (config.coinBaseConfig.DIFFICULTY_WINDOW && config.coinBaseConfig.DIFFICULTY_WINDOW != 0)
   {
@@ -143,7 +150,6 @@ currencyBuilder.fusionTxMaxSize(config.coinBaseConfig.MAX_TRANSACTION_SIZE_LIMIT
   currencyBuilder.difficultyLagV2(config.coinBaseConfig.DIFFICULTY_LAG_V2);
   currencyBuilder.difficultyCutV1(config.coinBaseConfig.DIFFICULTY_CUT_V1);
   currencyBuilder.difficultyCutV2(config.coinBaseConfig.DIFFICULTY_CUT_V2);
-  currencyBuilder.expectedNumberOfBlocksPerDay(config.coinBaseConfig.EXPECTED_NUMBER_OF_BLOCKS_PER_DAY);
   if (config.gateConfiguration.testnet) {
     log(Logging::INFO) << "Starting in testnet mode";
     currencyBuilder.testnet(true);
@@ -246,6 +252,17 @@ dbConfig.setDataDir(data_dir);
   database.init(dbConfig);
   Tools::ScopeExit dbShutdownOnExit([&database] () { database.shutdown(); });
 
+  if (!CryptoNote::DatabaseBlockchainCache::checkDBSchemeVersion(database, logger))
+  {
+    dbShutdownOnExit.cancel();
+    database.shutdown();
+
+    database.destoy(dbConfig);
+
+    database.init(dbConfig);
+    dbShutdownOnExit.resume();
+  }
+
   CryptoNote::Currency currency = currencyBuilder.currency();
 
   log(Logging::INFO) << "initializing core";
@@ -310,7 +327,8 @@ void PaymentGateService::runRpcProxy(Logging::LoggerRef& log) {
   std::unique_ptr<CryptoNote::INode> node(
     PaymentService::NodeFactory::createNode(
       config.remoteNodeConfig.daemonHost, 
-      config.remoteNodeConfig.daemonPort));
+      config.remoteNodeConfig.daemonPort,
+      log.getLogger()));
 
   runWalletService(currency, *node);
 }

@@ -21,6 +21,7 @@
 
 #include "CommonTypes.h"
 #include "Common/BlockingQueue.h"
+#include "CryptoNoteCore/CryptoNoteBasicImpl.h"
 #include "CryptoNoteCore/CryptoNoteFormatUtils.h"
 #include "CryptoNoteCore/TransactionApi.h"
 
@@ -29,6 +30,7 @@
 #include <future>
 
 using namespace Crypto;
+using namespace Logging;
 
 namespace {
 
@@ -479,6 +481,8 @@ std::error_code TransfersConsumer::processTransaction(const TransactionBlockInfo
 void TransfersConsumer::processTransaction(const TransactionBlockInfo& blockInfo, const ITransactionReader& tx, const PreprocessInfo& info) {
   std::vector<TransactionOutputInformationIn> emptyOutputs;
   std::vector<ITransfersContainer*> transactionContainers;
+
+  m_logger(TRACE) << "Process transaction, block " << blockInfo.height << ", transaction index " << blockInfo.transactionIndex << ", hash " << tx.getTransactionHash();
   bool someContainerUpdated = false;
   for (auto& kv : m_subscriptions) {
     auto it = info.outputs.find(kv.first);
@@ -494,7 +498,10 @@ void TransfersConsumer::processTransaction(const TransactionBlockInfo& blockInfo
   }
 
   if (someContainerUpdated) {
+    m_logger(TRACE) << "Transaction updated some containers, hash " << tx.getTransactionHash();
     m_observerManager.notify(&IBlockchainConsumerObserver::onTransactionUpdated, this, tx.getTransactionHash(), transactionContainers);
+  } else {
+    m_logger(TRACE) << "Transaction doesn't updated any container, hash " << tx.getTransactionHash();
   }
 }
 
@@ -519,7 +526,7 @@ void TransfersConsumer::processOutputs(const TransactionBlockInfo& blockInfo, Tr
   }
 }
 
-std::error_code TransfersConsumer::getGlobalIndices(const Hash& transactionHash, std::vector<uint32_t>& outsGlobalIndices) {  
+std::error_code TransfersConsumer::getGlobalIndices(const Hash& transactionHash, std::vector<uint32_t>& outsGlobalIndices) {
   std::promise<std::error_code> prom;
   std::future<std::error_code> f = prom.get_future();
 

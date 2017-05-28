@@ -76,7 +76,7 @@ int main(int argc, const char** argv) {
 
   Logging::ConsoleLogger log;
   Logging::LoggerRef logger(log, "main");
-  NodeRpcProxy nodeProxy("127.0.0.1", 18081);
+  NodeRpcProxy nodeProxy("127.0.0.1", 18081, logger.getLogger());
 
   NodeObserver observer1("obs1", nodeProxy, log);
   NodeObserver observer2("obs2", nodeProxy, log);

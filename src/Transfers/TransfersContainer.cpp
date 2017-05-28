@@ -181,8 +181,6 @@ bool TransfersContainer::addTransaction(const TransactionBlockInfo& block, const
   try {
     std::unique_lock<std::mutex> lock(m_mutex);
 
-    m_logger(TRACE) << "Adding transaction, block " << block.height << ", transaction index " << block.transactionIndex << ", hash " << tx.getTransactionHash();
-
     if (block.height < m_currentHeight) {
       auto message = "Failed to add transaction: block index < m_currentHeight";
       m_logger(ERROR, BRIGHT_RED) << message << ", block " << block.height << ", m_currentHeight " << m_currentHeight;
@@ -200,8 +198,6 @@ bool TransfersContainer::addTransaction(const TransactionBlockInfo& block, const
 
     if (added) {
       addTransaction(block, tx);
-    } else {
-      m_logger(TRACE) << "Transaction not added";
     }
 
     if (block.height != WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {

@@ -219,6 +219,9 @@ namespace CryptoNote
     void onIdle();
     void timedSyncLoop();
     void timeoutLoop();
+    
+    template<typename T>
+    void safeInterrupt(T& obj);
 
     struct config
     {

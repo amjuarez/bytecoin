@@ -25,6 +25,7 @@
 #include <unordered_set>
 
 #include "Common/ObserverManager.h"
+#include "Logging/LoggerRef.h"
 #include "INode.h"
 
 namespace System {
@@ -45,7 +46,7 @@ public:
 
 class NodeRpcProxy : public CryptoNote::INode {
 public:
-  NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort);
+  NodeRpcProxy(const std::string& nodeHost, unsigned short nodePort, Logging::ILogger& logger);
   virtual ~NodeRpcProxy();
 
   virtual bool addObserver(CryptoNote::INodeObserver* observer) override;
@@ -128,6 +129,7 @@ private:
   };
 
 private:
+  Logging::LoggerRef m_logger;
   State m_state = STATE_NOT_INITIALIZED;
   mutable std::mutex m_mutex;
   std::condition_variable m_cv_initialized;

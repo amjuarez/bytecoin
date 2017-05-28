@@ -120,7 +120,7 @@ bool test_transaction_generation_and_ring_signature()
   output_keys.push_back(&boost::get<KeyOutput>(tx_mine_5.outputs[0].target).key);
   output_keys.push_back(&boost::get<KeyOutput>(tx_mine_6.outputs[0].target).key);
   r = Crypto::check_ring_signature(pref_hash, boost::get<KeyInput>(tx_rc1.inputs[0]).keyImage,
-    output_keys, &tx_rc1.signatures[0][0]);
+    output_keys, &tx_rc1.signatures[0][0], true);
   CHECK_AND_ASSERT_MES(r, false, "failed to check ring signature");
 
   std::vector<size_t> outs;
