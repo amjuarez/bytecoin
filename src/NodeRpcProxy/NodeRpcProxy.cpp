@@ -511,6 +511,7 @@ std::error_code NodeRpcProxy::doRelayTransaction(const CryptoNote::Transaction& 
   COMMAND_RPC_SEND_RAW_TX::request req;
   COMMAND_RPC_SEND_RAW_TX::response rsp;
   req.tx_as_hex = toHex(toBinaryArray(transaction));
+  m_logger(TRACE) << "NodeRpcProxy::doRelayTransaction, tx hex " << req.tx_as_hex;
   return jsonCommand("/sendrawtransaction", req, rsp);
 }
 
@@ -757,6 +758,7 @@ std::error_code NodeRpcProxy::jsonCommand(const std::string& url, const Request&
   std::error_code ec;
 
   try {
+    m_logger(TRACE) << "Send " << url << " JSON request";
     EventLock eventLock(*m_httpEvent);
     invokeJsonCommand(*m_httpClient, url, req, res);
     ec = interpretResponseStatus(res.status);
@@ -764,6 +766,12 @@ std::error_code NodeRpcProxy::jsonCommand(const std::string& url, const Request&
     ec = make_error_code(error::CONNECT_ERROR);
   } catch (const std::exception&) {
     ec = make_error_code(error::NETWORK_ERROR);
+  }
+
+  if (ec) {
+    m_logger(TRACE) << url << " JSON request failed: " << ec << ", " << ec.message();
+  } else {
+    m_logger(TRACE) << url << " JSON request compete";
   }
 
   return ec;
@@ -774,6 +782,7 @@ std::error_code NodeRpcProxy::jsonRpcCommand(const std::string& method, const Re
   std::error_code ec = make_error_code(error::INTERNAL_NODE_ERROR);
 
   try {
+    m_logger(TRACE) << "Send " << method << " JSON RPC request";
     EventLock eventLock(*m_httpEvent);
 
     JsonRpc::JsonRpcRequest jsReq;
@@ -801,6 +810,12 @@ std::error_code NodeRpcProxy::jsonRpcCommand(const std::string& method, const Re
     ec = make_error_code(error::CONNECT_ERROR);
   } catch (const std::exception&) {
     ec = make_error_code(error::NETWORK_ERROR);
+  }
+
+  if (ec) {
+    m_logger(TRACE) << method << " JSON RPC request failed: " << ec << ", " << ec.message();
+  } else {
+    m_logger(TRACE) << method << " JSON RPC request compete";
   }
 
   return ec;

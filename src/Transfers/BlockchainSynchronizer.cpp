@@ -496,7 +496,6 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
 
     CompleteBlock completeBlock;
     completeBlock.blockHash = block.blockHash;
-    interval.blocks.push_back(completeBlock.blockHash);
     if (block.hasBlock) {
       completeBlock.block = std::move(block.block);
       completeBlock.transactions.push_back(createTransactionPrefix(completeBlock.block->baseTransaction));
@@ -513,6 +512,7 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
       }
     }
 
+    interval.blocks.push_back(completeBlock.blockHash);
     blocks.push_back(std::move(completeBlock));
   }
 
@@ -546,11 +546,6 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
         std::max(m_node.getKnownBlockCount(), m_node.getLocalBlockCount()));
       break;
     }
-
-    if (!blocks.empty()) {
-      lastBlockId = blocks.back().blockHash;
-      m_logger(DEBUGGING) << "Last block hash " << lastBlockId;
-    }
   }
 
   if (checkIfShouldStop()) { //Sic!
@@ -561,8 +556,12 @@ void BlockchainSynchronizer::processBlocks(GetBlocksResponse& response) {
 
 /// \pre m_consumersMutex is locked
 BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateConsumers(const BlockchainInterval& interval, const std::vector<CompleteBlock>& blocks) {
-  bool smthChanged = false;
+  assert(interval.blocks.size() == blocks.size());
 
+  bool smthChanged = false;
+  bool hasErrors = false;
+
+  uint32_t lastBlockIndex = std::numeric_limits<uint32_t>::max();
   for (auto& kv : m_consumers) {
     auto result = kv.second->checkInterval(interval);
 
@@ -574,21 +573,40 @@ BlockchainSynchronizer::UpdateConsumersResult BlockchainSynchronizer::updateCons
 
     if (result.hasNewBlocks) {
       uint32_t startOffset = result.newBlockHeight - interval.startHeight;
-      // update consumer
       uint32_t blockCount = static_cast<uint32_t>(blocks.size()) - startOffset;
+      // update consumer
       m_logger(DEBUGGING) << "Adding blocks to consumer, consumer " << kv.first << ", start index " << result.newBlockHeight << ", count " << blockCount;
-      if (kv.first->onNewBlocks(blocks.data() + startOffset, result.newBlockHeight, blockCount)) {
+      uint32_t addedCount = kv.first->onNewBlocks(blocks.data() + startOffset, result.newBlockHeight, blockCount);
+      if (addedCount > 0) {
+        if (addedCount < blockCount) {
+          m_logger(ERROR, BRIGHT_RED) << "Failed to add " << (blockCount - addedCount) << " blocks of " << blockCount << " to consumer, consumer " << kv.first;
+          hasErrors = true;
+        }
+
         // update state if consumer succeeded
-        kv.second->addBlocks(interval.blocks.data() + startOffset, result.newBlockHeight, static_cast<uint32_t>(interval.blocks.size()) - startOffset);
+        kv.second->addBlocks(interval.blocks.data() + startOffset, result.newBlockHeight, addedCount);
         smthChanged = true;
       } else {
         m_logger(ERROR, BRIGHT_RED) << "Failed to add blocks to consumer, consumer " << kv.first;
-        return UpdateConsumersResult::errorOccurred;
+        hasErrors = true;
+      }
+
+      if (addedCount > 0) {
+        lastBlockIndex = std::min(lastBlockIndex, startOffset + addedCount - 1);
       }
     }
   }
 
-  if (smthChanged) {
+  if (lastBlockIndex != std::numeric_limits<uint32_t>::max()) {
+    assert(lastBlockIndex < blocks.size());
+    lastBlockId = blocks[lastBlockIndex].blockHash;
+    m_logger(DEBUGGING) << "Last block hash " << lastBlockId << ", index " << (interval.startHeight + lastBlockIndex);
+  }
+
+  if (hasErrors) {
+    m_logger(DEBUGGING) << "Not all blocks were added to consumers, there were errors";
+    return UpdateConsumersResult::errorOccurred;
+  } else if (smthChanged) {
     m_logger(DEBUGGING) << "Blocks added to consumers";
     return UpdateConsumersResult::addedNewBlocks;
   } else {

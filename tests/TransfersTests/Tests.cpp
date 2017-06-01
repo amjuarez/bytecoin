@@ -75,7 +75,7 @@ public:
     m_transactions.erase(it, m_transactions.end());
   }
 
-  virtual bool onNewBlocks(const CompleteBlock* blocks, uint32_t startHeight, uint32_t count) override {
+  virtual uint32_t onNewBlocks(const CompleteBlock* blocks, uint32_t startHeight, uint32_t count) override {
     std::lock_guard<std::mutex> lk(m_mutex);
     for(size_t i = 0; i < count; ++i) {
       for (const auto& tx : blocks[i].transactions) {
@@ -83,7 +83,7 @@ public:
       }
     }
     m_cv.notify_all();
-    return true;
+    return count;
   }
 
   bool waitForTransaction(const Hash& txHash) {

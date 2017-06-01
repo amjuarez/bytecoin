@@ -328,7 +328,7 @@ TEST_F(TransfersConsumerTest, onBlockchainDetach) {
   blocks[2].block->timestamp = 1235;
   blocks[2].transactions.push_back(tx2);
 
-  ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 0, 3));
+  ASSERT_EQ(3, m_consumer.onNewBlocks(&blocks[0], 0, 3));
 
   m_consumer.onBlockchainDetach(0);
   std::vector<TransactionOutputInformation> trs;
@@ -364,7 +364,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_OneEmptyBlockOneFilled) {
   blocks[1].transactions.push_back(tx2);
 
   ITransfersContainer& container = m_consumer.addSubscription(subscription).getContainer();
-  ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 1, 2));
+  ASSERT_EQ(2, m_consumer.onNewBlocks(&blocks[0], 1, 2));
 
   auto outs = container.getTransactionOutputs(tx2->getTransactionHash(), ITransfersContainer::IncludeAll);
   ASSERT_TRUE(amountFound(outs, 850));
@@ -402,7 +402,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_DifferentTimestamps) {
   blocks[1].transactions.push_back(tx2);
 
   ITransfersContainer& container = m_consumer.addSubscription(subscription).getContainer();
-  ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 2, 2));
+  ASSERT_EQ(2, m_consumer.onNewBlocks(&blocks[0], 2, 2));
 
   auto ignoredOuts = container.getTransactionOutputs(tx1->getTransactionHash(), ITransfersContainer::IncludeAll);
   ASSERT_EQ(0, ignoredOuts.size());
@@ -437,7 +437,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_getTransactionOutsGlobalIndicesError) 
   block.transactions.push_back(tx);
 
   consumer.addSubscription(subscription);
-  ASSERT_FALSE(consumer.onNewBlocks(&block, static_cast<uint32_t>(subscription.syncStart.height), 1));
+  ASSERT_EQ(0, consumer.onNewBlocks(&block, static_cast<uint32_t>(subscription.syncStart.height), 1));
 }
 
 TEST_F(TransfersConsumerTest, onNewBlocks_updateHeight) {
@@ -457,7 +457,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_updateHeight) {
   block.block->timestamp = subscription.syncStart.timestamp;
   block.transactions.push_back(tx);
 
-  ASSERT_TRUE(m_consumer.onNewBlocks(&block, static_cast<uint32_t>(subscription.syncStart.height), 1));
+  ASSERT_EQ(1, m_consumer.onNewBlocks(&block, static_cast<uint32_t>(subscription.syncStart.height), 1));
   ASSERT_EQ(900, container.balance(ITransfersContainer::IncludeAllLocked));
 
   std::unique_ptr<CompleteBlock[]> blocks(new CompleteBlock[subscription.transactionSpendableAge]);
@@ -468,7 +468,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_updateHeight) {
     addTestKeyOutput(*tr, 100, i + 1, generateAccountKeys());
   }
 
-  ASSERT_TRUE(m_consumer.onNewBlocks(blocks.get(), static_cast<uint32_t>(subscription.syncStart.height + 1), static_cast<uint32_t>(subscription.transactionSpendableAge)));
+  ASSERT_EQ(subscription.transactionSpendableAge, m_consumer.onNewBlocks(blocks.get(), static_cast<uint32_t>(subscription.syncStart.height + 1), static_cast<uint32_t>(subscription.transactionSpendableAge)));
   ASSERT_EQ(0, container.balance(ITransfersContainer::IncludeAllLocked));
   ASSERT_EQ(900, container.balance(ITransfersContainer::IncludeAllUnlocked));
 }
@@ -492,7 +492,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_DifferentSubscribers) {
   block.block->timestamp = 0;
   block.transactions.push_back(tx);
 
-  ASSERT_TRUE(m_consumer.onNewBlocks(&block, 0, 1));
+  ASSERT_EQ(1, m_consumer.onNewBlocks(&block, 0, 1));
   auto outs1 = container1.getTransactionOutputs(tx->getTransactionHash(), ITransfersContainer::IncludeAll);
   ASSERT_EQ(1, outs1.size());
   ASSERT_EQ(amount1, outs1[0].amount);
@@ -522,7 +522,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_MultisignatureTransaction) {
   block.block->timestamp = 0;
   block.transactions.push_back(tx);
 
-  ASSERT_TRUE(m_consumer.onNewBlocks(&block, 0, 1));
+  ASSERT_EQ(1, m_consumer.onNewBlocks(&block, 0, 1));
   auto outs1 = container1.getTransactionOutputs(tx->getTransactionHash(), ITransfersContainer::IncludeAll);
   ASSERT_EQ(1, outs1.size());
   ASSERT_EQ(amount, outs1[0].amount);
@@ -558,7 +558,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_getTransactionOutsGlobalIndicesIsPrope
   block.block->timestamp = 0;
   block.transactions.push_back(tx);
 
-  ASSERT_TRUE(consumer.onNewBlocks(&block, 1, 1));
+  ASSERT_EQ(1, consumer.onNewBlocks(&block, 1, 1));
   const Crypto::Hash &hash = tx->getTransactionHash();
   const Crypto::Hash expectedHash = *reinterpret_cast<const Crypto::Hash*>(&hash);
   ASSERT_EQ(expectedHash, node.hash);
@@ -595,7 +595,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_getTransactionOutsGlobalIndicesIsNotCa
   block.block = CryptoNote::BlockTemplate();
   block.block->timestamp = 0;
   block.transactions.push_back(tx);
-  ASSERT_TRUE(consumer.onNewBlocks(&block, 1, 1));
+  ASSERT_EQ(1, consumer.onNewBlocks(&block, 1, 1));
 
   ASSERT_FALSE(node.called);
 }
@@ -627,7 +627,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_markTransactionConfirmed) {
   blocks[1].block = CryptoNote::BlockTemplate();
   blocks[1].block->timestamp = 0;
   blocks[1].transactions.push_back(createTransaction());
-  ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 0, 2));
+  ASSERT_EQ(2, m_consumer.onNewBlocks(&blocks[0], 0, 2));
 
   auto softLockedOuts = container.getTransactionOutputs(tx->getTransactionHash(), ITransfersContainer::IncludeKeyUnlocked);
   ASSERT_EQ(1, softLockedOuts.size());
@@ -664,7 +664,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_checkTransactionOutputInformation) {
   block.block = CryptoNote::BlockTemplate();
   block.block->timestamp = 0;
   block.transactions.push_back(tx);
-  ASSERT_TRUE(consumer.onNewBlocks(&block, 0, 1));
+  ASSERT_EQ(1, consumer.onNewBlocks(&block, 0, 1));
 
   auto outs = container.getTransactionOutputs(tx->getTransactionHash(), ITransfersContainer::IncludeAll);
   ASSERT_EQ(1, outs.size());
@@ -705,7 +705,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_checkTransactionOutputInformationMulti
   block.block = CryptoNote::BlockTemplate();
   block.block->timestamp = 0;
   block.transactions.push_back(tx);
-  ASSERT_TRUE(consumer.onNewBlocks(&block, 0, 1));
+  ASSERT_EQ(1, consumer.onNewBlocks(&block, 0, 1));
 
   auto outs = container.getTransactionOutputs(tx->getTransactionHash(), ITransfersContainer::IncludeAll);
   ASSERT_EQ(1, outs.size());
@@ -739,7 +739,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_checkTransactionInformation) {
   blocks[1].block->timestamp = 11;
   blocks[1].transactions.push_back(tx);
 
-  ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 0, 2));
+  ASSERT_EQ(2, m_consumer.onNewBlocks(&blocks[0], 0, 2));
 
   TransactionInformation info;
   ASSERT_TRUE(container.getTransactionInformation(tx->getTransactionHash(), info));
@@ -791,7 +791,7 @@ TEST_F(TransfersConsumerTest, onNewBlocks_manyBlocks) {
    }
  }
 
- ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 0, static_cast<uint32_t>(blocks.size())));
+ ASSERT_EQ(blocks.size(), m_consumer.onNewBlocks(&blocks[0], 0, static_cast<uint32_t>(blocks.size())));
 
  ASSERT_EQ(expectedTransactions, container.transactionsCount());
  ASSERT_EQ(expectedAmount, container.balance(ITransfersContainer::IncludeAll));
@@ -1061,7 +1061,7 @@ TEST_F(TransfersConsumerPerformanceTest, DISABLED_memory) {
 
   {
     AutoPrintTimer t;
-    ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 0, static_cast<uint32_t>(blocks.size())));
+    ASSERT_EQ(blocks.size(), m_consumer.onNewBlocks(&blocks[0], 0, static_cast<uint32_t>(blocks.size())));
   }
 
   blocks.clear();
@@ -1086,7 +1086,7 @@ TEST_F(TransfersConsumerPerformanceTest, DISABLED_performanceTest) {
   
   std::cout << "Calling onNewBlocks" << std::endl;
 
-  ASSERT_TRUE(m_consumer.onNewBlocks(&blocks[0], 0, static_cast<uint32_t>(blocks.size())));
+  ASSERT_EQ(blocks.size(), m_consumer.onNewBlocks(&blocks[0], 0, static_cast<uint32_t>(blocks.size())));
 
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> dur = end - start;
