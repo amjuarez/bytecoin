@@ -31,6 +31,7 @@ struct NativeContext {
   void* uctx;
   void* stackPtr;
   bool interrupted;
+  bool inExecutionQueue;
   NativeContext* next;
   NativeContextGroup* group;
   NativeContext* groupPrev;

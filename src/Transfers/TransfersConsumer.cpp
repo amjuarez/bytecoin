@@ -36,6 +36,19 @@ namespace {
 
 using namespace CryptoNote;
 
+class MarkTransactionConfirmedException : public std::exception {
+public:
+    MarkTransactionConfirmedException(const Crypto::Hash& txHash) {
+    }
+
+    const Hash& getTxHash() const {
+        return m_txHash;
+    }
+
+private:
+    Crypto::Hash m_txHash;
+};
+
 void checkOutputKey(
   const KeyDerivation& derivation,
   const PublicKey& key,
@@ -218,17 +231,20 @@ uint32_t TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t st
   BlockingQueue<Tx> inputQueue(workers * 2);
 
   std::atomic<bool> stopProcessing(false);
+  std::atomic<size_t> emptyBlockCount(0);
 
   auto pushingThread = std::async(std::launch::async, [&] {
     for( uint32_t i = 0; i < count && !stopProcessing; ++i) {
       const auto& block = blocks[i].block;
 
       if (!block.is_initialized()) {
+        ++emptyBlockCount;
         continue;
       }
 
       // filter by syncStartTimestamp
       if (m_syncStart.timestamp && block->timestamp < m_syncStart.timestamp) {
+        ++emptyBlockCount;
         continue;
       }
 
@@ -308,7 +324,7 @@ uint32_t TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t st
     return std::tie(a.blockInfo.height, a.blockInfo.transactionIndex) < std::tie(b.blockInfo.height, b.blockInfo.transactionIndex);
   });
 
-  uint32_t processedBlockCount = 0;
+  uint32_t processedBlockCount = emptyBlockCount;
   try {
     for (const auto& tx : preprocessedTransactions) {
       processTransaction(tx.blockInfo, *tx.tx, tx);
@@ -324,6 +340,14 @@ uint32_t TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t st
         });
       }
     }
+  } catch (const MarkTransactionConfirmedException& e) {
+    m_logger(ERROR, BRIGHT_RED) << "Failed to process block transactions: failed to confirm transaction " << e.getTxHash() <<
+      ", remove this transaction from all containers and transaction pool";
+    forEachSubscription([&e](TransfersSubscription& sub) {
+      sub.deleteUnconfirmedTransaction(e.getTxHash());
+    });
+
+    m_poolTxs.erase(e.getTxHash());
   } catch (std::exception& e) {
     m_logger(ERROR, BRIGHT_RED) << "Failed to process block transactions, exception: " << e.what();
   } catch (...) {
@@ -539,9 +563,14 @@ void TransfersConsumer::processOutputs(const TransactionBlockInfo& blockInfo, Tr
 
   if (contains) {
     if (subscribtionTxInfo.blockHeight == WALLET_UNCONFIRMED_TRANSACTION_HEIGHT && blockInfo.height != WALLET_UNCONFIRMED_TRANSACTION_HEIGHT) {
-      // pool->blockchain
-      sub.markTransactionConfirmed(blockInfo, tx.getTransactionHash(), globalIdxs);
-      updated = true;
+      try {
+        // pool->blockchain
+        sub.markTransactionConfirmed(blockInfo, tx.getTransactionHash(), globalIdxs);
+        updated = true;
+      } catch (...) {
+          m_logger(ERROR, BRIGHT_RED) << "markTransactionConfirmed failed, throw MarkTransactionConfirmedException";
+          throw MarkTransactionConfirmedException(tx.getTransactionHash());
+      }
     } else {
       assert(subscribtionTxInfo.blockHeight == blockInfo.height);
     }

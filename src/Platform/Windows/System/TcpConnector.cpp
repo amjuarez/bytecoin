@@ -157,6 +157,14 @@ TcpConnection TcpConnector::connect(const Ipv4Address& address, uint16_t port) {
                   }
                 }
               } else {
+                if (context2.interrupted) {
+                  if (closesocket(connection) != 0) {
+                    throw std::runtime_error("TcpConnector::connect, closesocket failed, " + errorMessage(WSAGetLastError()));
+                  } else {
+                    throw InterruptedException();
+                  }
+                }
+
                 assert(transferred == 0);
                 assert(flags == 0);
                 DWORD value = 1;

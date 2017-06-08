@@ -29,6 +29,7 @@ struct NativeContextGroup;
 struct NativeContext {
   void* fiber;
   bool interrupted;
+  bool inExecutionQueue;
   NativeContext* next;
   NativeContextGroup* group;
   NativeContext* groupPrev;

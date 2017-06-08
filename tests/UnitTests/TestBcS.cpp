@@ -145,7 +145,7 @@ public:
 
   virtual uint32_t onNewBlocks(const CompleteBlock* blocks, uint32_t startHeight, uint32_t count) override {
     //assert(m_blockchain.size() == startHeight);
-    while (count--) {
+    for (size_t i = 0; i < count; ++i) {
       m_blockchain.push_back(blocks->blockHash);
       ++blocks;
     }
@@ -995,7 +995,7 @@ public:
     onBlockchainDetachFunctor(height);
   }
 
-  std::function<uint32_t(const CompleteBlock*, uint32_t, size_t)> onNewBlocksFunctor;
+  std::function<uint32_t(const CompleteBlock*, uint32_t, uint32_t)> onNewBlocksFunctor;
   std::function<void(uint32_t)> onBlockchainDetachFunctor;
 };
 
@@ -1038,7 +1038,7 @@ TEST_F(BcSTest, checkConsumerError) {
 
   generator.generateEmptyBlocks(10);
 
-  c.onNewBlocksFunctor = [](const CompleteBlock*, uint32_t, size_t) -> uint32_t {
+  c.onNewBlocksFunctor = [](const CompleteBlock*, uint32_t, uint32_t count) -> uint32_t {
     return 0;
   };
 
@@ -1071,9 +1071,9 @@ TEST_F(BcSTest, checkBlocksRequesting) {
 
   size_t blocksRequested = 0;
 
-  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t, size_t count) -> uint32_t {
+  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t, uint32_t count) -> uint32_t {
     blocksRequested += count;
-    return static_cast<uint32_t>(count);
+    return count;
   };
 
   m_sync.addObserver(&o1);
@@ -1103,8 +1103,8 @@ TEST_F(BcSTest, checkConsumerHeightReceived) {
   generator.generateEmptyBlocks(static_cast<size_t>(firstlySnchronizedHeight - 1));//-1 for genesis
   m_node.setGetNewBlocksLimit(50);
 
-  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, size_t count) -> uint32_t {
-    return static_cast<uint32_t>(count);
+  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, uint32_t count) -> uint32_t {
+    return count;
   };
 
   m_sync.addObserver(&o1);
@@ -1118,9 +1118,9 @@ TEST_F(BcSTest, checkConsumerHeightReceived) {
   ConsumerStub fake_c(m_currency.genesisBlockHash());
   m_sync.addConsumer(&fake_c);
   uint32_t receivedStartHeight = 0;
-  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, size_t count) -> uint32_t {
+  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, uint32_t count) -> uint32_t {
     receivedStartHeight = startHeight;
-    return static_cast<uint32_t>(count);
+    return count;
   };
 
   m_sync.start();
@@ -1145,8 +1145,8 @@ TEST_F(BcSTest, checkConsumerOldBlocksNotIvoked) {
   generator.generateEmptyBlocks(20);
   m_node.setGetNewBlocksLimit(50);
 
-  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, size_t count) -> uint32_t {
-    return static_cast<uint32_t>(count);
+  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, uint32_t count) -> uint32_t {
+    return count;
   };
 
   m_sync.addObserver(&o1);
@@ -1160,9 +1160,9 @@ TEST_F(BcSTest, checkConsumerOldBlocksNotIvoked) {
 
   bool onNewBlocksInvoked = false;
 
-  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint64_t startHeight, size_t count) -> uint32_t {
+  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint64_t startHeight, uint32_t count) -> uint32_t {
     onNewBlocksInvoked = true;
-    return static_cast<uint32_t>(count);
+    return count;
   };
 
   m_sync.start();
@@ -1187,8 +1187,8 @@ TEST_F(BcSTest, checkConsumerHeightReceivedOnDetach) {
   generator.generateEmptyBlocks(20);
   m_node.setGetNewBlocksLimit(50);
 
-  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, size_t count) -> uint32_t {
-    return static_cast<uint32_t>(count);
+  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, uint32_t count) -> uint32_t {
+    return count;
   };
 
   m_sync.addObserver(&o1);
@@ -1203,9 +1203,9 @@ TEST_F(BcSTest, checkConsumerHeightReceivedOnDetach) {
   generator.generateEmptyBlocks(20);
 
   uint32_t receivedStartHeight = 0;
-  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, size_t count) -> uint32_t {
+  c.onNewBlocksFunctor = [&](const CompleteBlock*, uint32_t startHeight, uint32_t count) -> uint32_t {
     receivedStartHeight = startHeight;
-    return static_cast<uint32_t>(count);
+    return count;
   };
 
   uint32_t receivedetachHeight = 0;
@@ -1285,7 +1285,7 @@ TEST_F(BcSTest, checkBlocksRerequestingOnError) {
   std::vector<Hash> secondlyReceivedBlocks;
 
 
-  c.onNewBlocksFunctor = [&](const CompleteBlock* blocks, uint32_t, size_t count) -> uint32_t {
+  c.onNewBlocksFunctor = [&](const CompleteBlock* blocks, uint32_t, uint32_t count) -> uint32_t {
     if (requestsCount == 2) {
       for (size_t i = 0; i < count; ++i) {
         firstlyReceivedBlocks.push_back(blocks[i].blockHash);
@@ -1300,7 +1300,7 @@ TEST_F(BcSTest, checkBlocksRerequestingOnError) {
       }
     }
 
-    return static_cast<uint32_t>(count);
+    return count;
   };
 
   m_node.queryBlocksFunctor = [&](const std::vector<Hash>& knownBlockIds, uint64_t timestamp, std::vector<BlockShortEntry>& newBlocks, uint32_t& startHeight, const INode::Callback& callback) -> bool {
@@ -1386,13 +1386,13 @@ TEST_F(BcSTest, checkTxOrder) {
 
   std::vector<Hash> receivedTxHashes = {};
 
-  c.onNewBlocksFunctor = [&](const CompleteBlock* blocks, uint32_t, size_t count) -> uint32_t {
+  c.onNewBlocksFunctor = [&](const CompleteBlock* blocks, uint32_t, uint32_t count) -> uint32_t {
     for (auto& tx : blocks[count - 1].transactions) {
       auto hash = tx->getTransactionHash();
       receivedTxHashes.push_back(*reinterpret_cast<Hash*>(&hash));
     }
 
-    return static_cast<uint32_t>(count);
+    return count;
   };
 
   m_sync.addObserver(&o1);

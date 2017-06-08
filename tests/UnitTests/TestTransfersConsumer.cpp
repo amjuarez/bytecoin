@@ -308,17 +308,22 @@ TEST_F(TransfersConsumerTest, onBlockchainDetach) {
   auto keys = generateAccount();
   auto& container2 = addSubscription(keys).getContainer();
 
+  std::shared_ptr<ITransaction> tx0 = createTransaction();
+  addTestKeyOutput(*tx0, 50, 1);
+  addTestInput(*tx0, 100);
+
   std::shared_ptr<ITransaction> tx1 = createTransaction();
-  addTestInput(*tx1, 100);
   addTestKeyOutput(*tx1, 50, 1, m_accountKeys);
+  addTestInput(*tx1, 100);
 
   std::shared_ptr<ITransaction> tx2 = createTransaction();
-  addTestInput(*tx1, 100);
-  addTestKeyOutput(*tx1, 50, 1, keys);
+  addTestKeyOutput(*tx2, 50, 1, keys);
+  addTestInput(*tx2, 100);
 
   CompleteBlock blocks[3];
   blocks[0].block = CryptoNote::BlockTemplate();
   blocks[0].block->timestamp = 1233;
+  blocks[0].transactions.push_back(tx0);
 
   blocks[1].block = CryptoNote::BlockTemplate();
   blocks[1].block->timestamp = 1234;
@@ -428,8 +433,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_getTransactionOutsGlobalIndicesError) 
   auto subscription = getAccountSubscriptionWithSyncStart(m_accountKeys, 1234, 10);
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   addTestKeyOutput(*tx, 900, 2, m_accountKeys);
+  addTestInput(*tx, 10000);
 
   CompleteBlock block;
   block.block = CryptoNote::BlockTemplate();
@@ -449,8 +454,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_updateHeight) {
   auto& container = m_consumer.addSubscription(subscription).getContainer();
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   addTestKeyOutput(*tx, 900, 0, m_accountKeys);
+  addTestInput(*tx, 10000);
 
   CompleteBlock block;
   block.block = CryptoNote::BlockTemplate();
@@ -463,9 +468,11 @@ TEST_F(TransfersConsumerTest, onNewBlocks_updateHeight) {
   std::unique_ptr<CompleteBlock[]> blocks(new CompleteBlock[subscription.transactionSpendableAge]);
   for (uint32_t i = 0; i < subscription.transactionSpendableAge; ++i) {
     blocks[i].block = CryptoNote::BlockTemplate();
-    auto tr = createTransaction();
-    addTestInput(*tr, 1000);
+    blocks[i].block->timestamp = subscription.syncStart.timestamp;
+    std::shared_ptr<ITransaction> tr(createTransaction());
     addTestKeyOutput(*tr, 100, i + 1, generateAccountKeys());
+    addTestInput(*tr, 1000);
+    blocks[i].transactions.push_back(tr);
   }
 
   ASSERT_EQ(subscription.transactionSpendableAge, m_consumer.onNewBlocks(blocks.get(), static_cast<uint32_t>(subscription.syncStart.height + 1), static_cast<uint32_t>(subscription.transactionSpendableAge)));
@@ -483,9 +490,9 @@ TEST_F(TransfersConsumerTest, onNewBlocks_DifferentSubscribers) {
   uint64_t amount2 = 850;
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   addTestKeyOutput(*tx, amount1, 0, m_accountKeys);
   addTestKeyOutput(*tx, amount2, 1, keys);
+  addTestInput(*tx, 10000);
 
   CompleteBlock block;
   block.block = CryptoNote::BlockTemplate();
@@ -513,9 +520,9 @@ TEST_F(TransfersConsumerTest, onNewBlocks_MultisignatureTransaction) {
   uint64_t amount = 900;
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   tx->addOutput(amount, { m_accountKeys.address, keys.address, keys2.address } , 3);
   tx->addOutput(800, { keys.address, keys2.address, keys3.address }, 3);
+  addTestInput(*tx, 10000);
 
   CompleteBlock block;
   block.block = CryptoNote::BlockTemplate();
@@ -550,8 +557,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_getTransactionOutsGlobalIndicesIsPrope
   consumer.addSubscription(subscription);
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   addTestKeyOutput(*tx, 900, 2, m_accountKeys);
+  addTestInput(*tx, 10000);
 
   CompleteBlock block;
   block.block = CryptoNote::BlockTemplate();
@@ -588,8 +595,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_getTransactionOutsGlobalIndicesIsNotCa
   consumer.addSubscription(subscription);
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   addTestKeyOutput(*tx, 900, 2, generateAccount());
+  addTestInput(*tx, 10000);
 
   CompleteBlock block;
   block.block = CryptoNote::BlockTemplate();
@@ -605,8 +612,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_markTransactionConfirmed) {
   
   TestTransactionBuilder b1;
   auto unknownSender = generateAccountKeys();
-  b1.addTestInput(10000, unknownSender);
   b1.addTestKeyOutput(10000, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX, m_accountKeys);
+  b1.addTestInput(10000, unknownSender);
 
   auto tx = std::shared_ptr<ITransactionReader>(b1.build().release());
 
@@ -657,8 +664,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_checkTransactionOutputInformation) {
   auto& container = addSubscription(consumer).getContainer();
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   auto out = addTestKeyOutput(*tx, 10000, index, m_accountKeys);
+  addTestInput(*tx, 10000);
 
   CompleteBlock block;
   block.block = CryptoNote::BlockTemplate();
@@ -690,8 +697,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_checkTransactionOutputInformationMulti
   auto& container = addSubscription(consumer).getContainer();
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   size_t txIndex = tx->addOutput(300, { m_accountKeys.address, generateAccountKeys().address}, 2);
+  addTestInput(*tx, 10000);
 
   TransactionOutputInformation expectedOut;
   expectedOut.type = TransactionTypes::OutputType::Multisignature;
@@ -723,12 +730,12 @@ TEST_F(TransfersConsumerTest, onNewBlocks_checkTransactionInformation) {
   auto& container = addSubscription().getContainer();
 
   std::shared_ptr<ITransaction> tx(createTransaction());
-  addTestInput(*tx, 10000);
   addTestKeyOutput(*tx, 1000, 2, m_accountKeys);
   Hash paymentId = Crypto::rand<Hash>();
   uint64_t unlockTime = 10;
   tx->setPaymentId(paymentId);
   tx->setUnlockTime(unlockTime);
+  addTestInput(*tx, 10000);
 
   CompleteBlock blocks[2];
   blocks[0].block = CryptoNote::BlockTemplate();
@@ -788,6 +795,8 @@ TEST_F(TransfersConsumerTest, onNewBlocks_manyBlocks) {
        auto tx = std::shared_ptr<ITransactionReader>(b1.build().release());
        b.transactions.push_back(tx);
      }
+   } else {
+     b.transactions.push_back(createTransaction());
    }
  }
 
@@ -908,7 +917,7 @@ TEST_F(TransfersConsumerTest, onPoolUpdated_deleteTransaction) {
     TestTransactionBuilder b1;
     auto unknownSender = generateAccountKeys();
     b1.addTestInput(10000, unknownSender);
-    auto out = b1.addTestKeyOutput(10000, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX, m_accountKeys);
+    b1.addTestKeyOutput(10000, UNCONFIRMED_TRANSACTION_GLOBAL_OUTPUT_INDEX, m_accountKeys);
 
     auto tx = std::shared_ptr<ITransactionReader>(b1.build().release());
 

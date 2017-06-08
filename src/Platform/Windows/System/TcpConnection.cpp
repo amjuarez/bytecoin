@@ -140,6 +140,10 @@ size_t TcpConnection::read(uint8_t* data, size_t size) {
     throw InterruptedException();
   }
 
+  if (context.interrupted) {
+    throw InterruptedException();
+  }
+
   assert(transferred <= size);
   assert(flags == 0);
   return transferred;
@@ -206,6 +210,10 @@ size_t TcpConnection::write(const uint8_t* data, size_t size) {
     }
 
     assert(context.interrupted);
+    throw InterruptedException();
+  }
+
+  if (context.interrupted) {
     throw InterruptedException();
   }
 

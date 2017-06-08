@@ -182,6 +182,15 @@ TcpConnection TcpListener::accept() {
             }
           }
         } else {
+          if (context2.interrupted) {
+            if (closesocket(connection) != 0) {
+              throw std::runtime_error("TcpConnector::connect, closesocket failed, " + errorMessage(WSAGetLastError()));
+            }
+            else {
+              throw InterruptedException();
+            }
+          }
+
           assert(transferred == 0);
           assert(flags == 0);
           if (setsockopt(connection, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<char*>(&listener), sizeof listener) != 0) {

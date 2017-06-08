@@ -65,6 +65,7 @@ Dispatcher::Dispatcher() {
         mainContext.group = &contextGroup;
         mainContext.groupPrev = nullptr;
         mainContext.groupNext = nullptr;
+        mainContext.inExecutionQueue = false;
         contextGroup.firstContext = nullptr;
         contextGroup.lastContext = nullptr;
         contextGroup.firstWaiter = nullptr;
@@ -131,6 +132,10 @@ void Dispatcher::dispatch() {
     if (firstResumingContext != nullptr) {
       context = firstResumingContext;
       firstResumingContext = context->next;
+
+      assert(context->inExecutionQueue);
+      context->inExecutionQueue = false;
+      
       break;
     }
 
@@ -149,6 +154,10 @@ void Dispatcher::dispatch() {
     if (firstResumingContext != nullptr) {
       context = firstResumingContext;
       firstResumingContext = context->next;
+
+      assert(context->inExecutionQueue);
+      context->inExecutionQueue = false;
+
       break;
     }
 
@@ -224,7 +233,13 @@ bool Dispatcher::interrupted() {
 void Dispatcher::pushContext(NativeContext* context) {
   assert(GetCurrentThreadId() == threadId);
   assert(context != nullptr);
+
+  if (context->inExecutionQueue) {
+    return;
+  }
+
   context->next = nullptr;
+  context->inExecutionQueue = true;
   if (firstResumingContext != nullptr) {
     assert(lastResumingContext->next == nullptr);
     lastResumingContext->next = context;
@@ -359,6 +374,11 @@ void Dispatcher::pushReusableContext(NativeContext& context) {
 
 void Dispatcher::interruptTimer(uint64_t time, NativeContext* context) {
   assert(GetCurrentThreadId() == threadId);
+
+  if (context->inExecutionQueue) {
+    return;
+  }
+
   auto range = timers.equal_range(time);
   for (auto it = range.first; ; ++it) {
     assert(it != range.second);
@@ -376,6 +396,7 @@ void Dispatcher::contextProcedure() {
   NativeContext context;
   context.interrupted = false;
   context.next = nullptr;
+  context.inExecutionQueue = false;
   firstReusableContext = &context;
   SwitchToFiber(currentContext->fiber);
   for (;;) {

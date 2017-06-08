@@ -78,12 +78,23 @@ namespace {
   }
 
   void addTestInput(ITransaction& transaction, uint64_t amount) {
-    KeyInput input;
-    input.amount = amount;
-    input.keyImage = generateKeyImage();
-    input.outputIndexes.emplace_back(1);
+    AccountKeys accountKeys = generateAccountKeys();
+    KeyPair txKey = generateKeyPair();
+    PublicKey outKey;
+    KeyDerivation derivation;
+    generate_key_derivation(accountKeys.address.viewPublicKey, txKey.secretKey, derivation);
+    derive_public_key(derivation, 0, accountKeys.address.spendPublicKey, outKey);
 
-    transaction.addInput(input);
+    TransactionTypes::InputKeyInfo info;
+    info.amount = amount;
+    info.outputs.emplace_back(TransactionTypes::GlobalOutput{outKey, 0});
+    info.realOutput.transactionPublicKey = txKey.publicKey;
+    info.realOutput.transactionIndex = 0;
+    info.realOutput.outputInTransaction = 0;
+
+    KeyPair ephKeys;
+    size_t index = transaction.addInput(accountKeys, info, ephKeys);
+    transaction.signInputKey(index, info, ephKeys);
   }
 
   TransactionOutputInformationIn addTestKeyOutput(ITransaction& transaction, uint64_t amount,
