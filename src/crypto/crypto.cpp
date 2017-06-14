@@ -339,15 +339,17 @@ namespace Crypto {
 #pragma warning(disable: 4200)
 #endif
 
+    struct ec_point_pair {
+    EllipticCurvePoint a, b;
+  };
   struct rs_comm {
     Hash h;
-    struct {
-      EllipticCurvePoint a, b;
-    } ab[];
+    struct ec_point_pair ab[];
   };
 
+
   static inline size_t rs_comm_size(size_t pubs_count) {
-    return sizeof(rs_comm) + pubs_count * sizeof(rs_comm().ab[0]);
+     return sizeof(rs_comm) + pubs_count * sizeof(ec_point_pair);
   }
 
   void crypto_ops::generate_ring_signature(const Hash &prefix_hash, const KeyImage &image,
@@ -455,3 +457,4 @@ namespace Crypto {
     return sc_isnonzero(reinterpret_cast<unsigned char*>(&h)) == 0;
   }
 }
+

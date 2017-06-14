@@ -1,3 +1,13 @@
+Release notes 2.0.6
+
+- Wallet synchronization enhancements
+- Correct application closing
+- Daemon stability enhancements
+
+Release notes 2.0.5
+
+- Fixed Bytecoin RPC Wallet hang issue
+
 Release notes 2.0.4
 
 - Fixed an issue where some users experienced daemon hanging

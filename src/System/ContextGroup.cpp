@@ -83,6 +83,10 @@ void ContextGroup::wait() {
   if (contextGroup.firstContext != nullptr) {
     NativeContext* context = dispatcher->getCurrentContext();
     context->next = nullptr;
+
+    assert(!context->inExecutionQueue);
+    context->inExecutionQueue = true;
+
     if (contextGroup.firstWaiter != nullptr) {
       assert(contextGroup.lastWaiter->next == nullptr);
       contextGroup.lastWaiter->next = context;

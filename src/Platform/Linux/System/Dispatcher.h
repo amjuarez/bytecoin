@@ -30,6 +30,7 @@ struct NativeContext {
   void* ucontext;
   void* stackPtr;
   bool interrupted;
+  bool inExecutionQueue;
   NativeContext* next;
   NativeContextGroup* group;
   NativeContext* groupPrev;
