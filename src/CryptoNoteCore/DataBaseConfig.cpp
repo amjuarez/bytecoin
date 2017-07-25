@@ -36,7 +36,7 @@ const uint16_t DEFAULT_BACKGROUND_THREADS_COUNT = 2;
 
 const uint64_t MEGABYTE = 1024 * 1024;
 
-const command_line::arg_descriptor<uint16_t>    argBackgroundThreadsCount = { "db-threads", "Nuber of background threads used for compaction and flush", DEFAULT_BACKGROUND_THREADS_COUNT};
+const command_line::arg_descriptor<uint16_t>    argBackgroundThreadsCount = { "db-threads", "Number of background threads used for compaction and flush", DEFAULT_BACKGROUND_THREADS_COUNT};
 const command_line::arg_descriptor<uint32_t>    argMaxOpenFiles = { "db-max-open-files", "Number of open files that can be used by the DB", DEFAULT_MAX_OPEN_FILES};
 const command_line::arg_descriptor<uint64_t>    argWriteBufferSize = { "db-write-buffer-size", "Size of data base write buffer in megabytes", WRITE_BUFFER_MB_DEFAULT_SIZE};
 const command_line::arg_descriptor<uint64_t>    argReadCacheSize = { "db-read-cache-size", "Size of data base read cache in megabytes", READ_BUFFER_MB_DEFAULT_SIZE};
