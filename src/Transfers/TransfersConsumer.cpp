@@ -328,7 +328,6 @@ uint32_t TransfersConsumer::onNewBlocks(const CompleteBlock* blocks, uint32_t st
   try {
     for (const auto& tx : preprocessedTransactions) {
       processTransaction(tx.blockInfo, *tx.tx, tx);
-//std::cout << "are we here: " << std::endl;
 
       if (tx.isLastTransactionInBlock) {
         ++processedBlockCount;

@@ -535,6 +535,30 @@ Difficulty Currency::nextDifficulty(uint8_t version, std::vector<uint64_t> times
     return 0;
   }
 
+  if (version >= 4 && m_zawyDifficultyV4) {
+    if (high != 0) {
+      return 0;
+    }
+    uint64_t nextDiffZ = low / timeSpan;
+    if (nextDiffZ <= 100000) {
+      nextDiffZ = 100000;
+    }
+
+    return nextDiffZ;
+  }
+
+  if (version >= 3 && m_zawyDifficultyV3) {
+    if (high != 0) {
+      return 0;
+    }
+    uint64_t nextDiffZ = low / timeSpan;
+    if (nextDiffZ <= 100000) {
+      nextDiffZ = 100000;
+    }
+
+    return nextDiffZ;
+  }
+
   if (version >= 2 && m_zawyDifficultyV2) {
     if (high != 0) {
       return 0;
@@ -546,6 +570,7 @@ Difficulty Currency::nextDifficulty(uint8_t version, std::vector<uint64_t> times
 
     return nextDiffZ;
   }
+
   return (low + timeSpan - 1) / timeSpan;  // with version
 }
 
@@ -683,6 +708,8 @@ m_tailEmissionReward(currency.m_tailEmissionReward),
 m_cryptonoteCoinVersion(currency.m_cryptonoteCoinVersion),
 m_genesisBlockReward(currency.m_genesisBlockReward),
 m_zawyDifficultyV2(currency.m_zawyDifficultyV2),
+m_zawyDifficultyV3(currency.m_zawyDifficultyV3),
+m_zawyDifficultyV4(currency.m_zawyDifficultyV4),
 m_genesisCoinbaseTxHex(currency.m_genesisCoinbaseTxHex),
 m_testnet(currency.m_testnet),
 genesisBlockTemplate(std::move(currency.genesisBlockTemplate)),
@@ -711,6 +738,8 @@ mandatoryTransaction(parameters::MANDATORY_TRANSACTION);
 killHeight(parameters::KILL_HEIGHT);
 tailEmissionReward(parameters::TAIL_EMISSION_REWARD);
 zawyDifficultyV2(parameters::ZAWY_DIFFICULTY_V2);
+zawyDifficultyV3(parameters::ZAWY_DIFFICULTY_V3);
+zawyDifficultyV4(parameters::ZAWY_DIFFICULTY_V4);
   blockGrantedFullRewardZone(parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
   minerTxBlobReservedSize(parameters::CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE);
 maxTransactionSizeLimit(parameters::MAX_TRANSACTION_SIZE_LIMIT);

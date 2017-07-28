@@ -1229,9 +1229,13 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
                                           IBlockchainCache* cache, uint64_t& fee, uint32_t blockIndex) {
   // TransactionValidatorState currentState;
   const auto& transaction = cachedTransaction.getTransaction();
-  auto error = validateSemantic(transaction, fee);
+auto error = validateSemantic(transaction, fee, blockIndex);
   if (error != error::TransactionValidationError::VALIDATION_SUCCESS) {
     return error;
+  }
+
+  if (transaction.version > CURRENT_TRANSACTION_VERSION) {
+    return error::TransactionValidationError::INVALID_TRANSACTION_VERSION;
   }
 
   size_t inputIndex = 0;
@@ -1325,7 +1329,7 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
   return error::TransactionValidationError::VALIDATION_SUCCESS;
 }
 
-std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t& fee) {
+std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t& fee, uint32_t blockIndex) {
   if (transaction.inputs.empty()) {
     return error::TransactionValidationError::EMPTY_INPUTS;
   }
@@ -1386,7 +1390,7 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
       // outputIndexes are packed here, first is absolute, others are offsets to previous,
       // so first can be zero, others can't
   // Fix discovered by Monero Lab and suggested by "fluffypony" (bitcointalk.org)
-  if (!(scalarmultKey(in.keyImage, L) == I)) {
+  if (!(scalarmultKey(in.keyImage, L) == I) && blockIndex > currency.keyImageCheckingBlockIndex()) {
     return error::TransactionValidationError::INPUT_INVALID_DOMAIN_KEYIMAGES;
   }
 

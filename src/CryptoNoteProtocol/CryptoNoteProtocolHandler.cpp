@@ -223,7 +223,7 @@ void CryptoNoteProtocolHandler::log_connections() {
 }
 
 uint32_t CryptoNoteProtocolHandler::get_current_blockchain_height() {
-return m_core.getTopBlockIndex();
+  return m_core.getTopBlockIndex() + 1;
 }
 
 bool CryptoNoteProtocolHandler::process_payload_sync_data(const CORE_SYNC_DATA& hshd, CryptoNoteConnectionContext& context, bool is_inital) {

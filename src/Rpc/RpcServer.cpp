@@ -270,8 +270,8 @@ bool RpcServer::on_query_blocks(const COMMAND_RPC_QUERY_BLOCKS::request& req, CO
     return false;
   }
 
-  res.start_height = startIndex;
-  res.current_height = currentIndex;
+  res.start_height = startIndex + 1;
+  res.current_height = currentIndex + 1;
   res.full_offset = fullOffset;
   res.status = CORE_RPC_STATUS_OK;
   return true;
@@ -464,7 +464,7 @@ bool RpcServer::onGetTransactionHashesByPaymentId(const COMMAND_RPC_GET_TRANSACT
 //
 
 bool RpcServer::on_get_info(const COMMAND_RPC_GET_INFO::request& req, COMMAND_RPC_GET_INFO::response& res) {
-  res.height = m_core.getTopBlockIndex();
+  res.height = m_core.getTopBlockIndex() + 1;
   res.difficulty = m_core.getDifficultyForNextBlock();
   res.tx_count = m_core.getBlockchainTransactionCount() - res.height; //without coinbase
   res.tx_pool_size = m_core.getPoolTransactionCount();
@@ -480,7 +480,7 @@ bool RpcServer::on_get_info(const COMMAND_RPC_GET_INFO::request& req, COMMAND_RP
 }
 
 bool RpcServer::on_get_height(const COMMAND_RPC_GET_HEIGHT::request& req, COMMAND_RPC_GET_HEIGHT::response& res) {
-  res.height = m_core.getTopBlockIndex();
+  res.height = m_core.getTopBlockIndex() + 1;
   res.status = CORE_RPC_STATUS_OK;
   return true;
 }
@@ -1013,7 +1013,7 @@ bool RpcServer::on_submitblock(const COMMAND_RPC_SUBMITBLOCK::request& req, COMM
     NOTIFY_NEW_BLOCK::request newBlockMessage;
     newBlockMessage.b = prepareRawBlockLegacy(std::move(blockToSend));
     newBlockMessage.hop = 0;
-  newBlockMessage.current_blockchain_height = m_core.getTopBlockIndex();
+    newBlockMessage.current_blockchain_height = m_core.getTopBlockIndex() + 1; //+1 because previous version of core sent m_blocks.size()
 
     m_protocol.relayBlock(newBlockMessage);
   }
@@ -1105,10 +1105,10 @@ bool RpcServer::on_get_block_header_by_height(const COMMAND_RPC_GET_BLOCK_HEADER
       std::string("To big height: ") + std::to_string(req.height) + ", current blockchain height = " + std::to_string(m_core.getTopBlockIndex() + 1) };
   }
 
-  uint32_t index = static_cast<uint32_t>(req.height);
+  uint32_t index = static_cast<uint32_t>(req.height) - 1;
   auto block = m_core.getBlockByIndex(index);
   CachedBlock cachedBlock(block);
-  assert(cachedBlock.getBlockIndex() == req.height);
+  assert(cachedBlock.getBlockIndex() == req.height - 1);
   fill_block_header_response(block, false, index, cachedBlock.getBlockHash(), res.block_header);
   res.status = CORE_RPC_STATUS_OK;
   return true;

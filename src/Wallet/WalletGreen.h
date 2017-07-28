@@ -369,7 +369,6 @@ protected:
   uint64_t m_pendingBalance;
 
   uint64_t m_upperTransactionSizeLimit;
-  uint32_t m_totalBlockCount;
   uint32_t m_transactionSoftLockTime;
 
   BlockHashesContainer m_blockchain;
