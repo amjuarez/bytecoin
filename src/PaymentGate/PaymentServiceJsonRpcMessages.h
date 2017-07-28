@@ -216,18 +216,7 @@ struct GetTransactionHashes {
   };
 };
 
-struct TransferRpcSpentOutput {
-  uint64_t amount;
-  std::string key_image;
-  std::string tx_pub_key;
-  uint64_t out_index;
-  uint64_t mixin;
-
-  void serialize(CryptoNote::ISerializer& serializer);
-};
-
 struct TransferRpcInfo {
-  std::vector<TransferRpcSpentOutput> spentOutputs;
   uint8_t type;
   std::string address;
   int64_t amount;

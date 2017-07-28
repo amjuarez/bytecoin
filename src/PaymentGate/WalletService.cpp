@@ -34,7 +34,6 @@
 #include "CryptoNoteCore/CryptoNoteFormatUtils.h"
 #include "CryptoNoteCore/CryptoNoteBasicImpl.h"
 #include "CryptoNoteCore/TransactionExtra.h"
-#include "CryptoNoteCore/CryptoNoteTools.h"
 
 #include <System/EventLock.h>
 #include <System/RemoteContext.h>
@@ -203,7 +202,7 @@ std::vector<CryptoNote::TransactionsInBlockInfo> filterTransactions(
   return result;
 }
 
-PaymentService::TransactionRpcInfo convertTransactionWithTransfersToTransactionRpcInfo(CryptoNote::INode& node,
+PaymentService::TransactionRpcInfo convertTransactionWithTransfersToTransactionRpcInfo(
   const CryptoNote::WalletTransactionWithTransfers& transactionWithTransfers) {
 
   PaymentService::TransactionRpcInfo transactionInfo;
@@ -218,42 +217,12 @@ PaymentService::TransactionRpcInfo convertTransactionWithTransfersToTransactionR
   transactionInfo.fee = transactionWithTransfers.transaction.fee;
   transactionInfo.extra = Common::toHex(transactionWithTransfers.transaction.extra.data(), transactionWithTransfers.transaction.extra.size());
   transactionInfo.paymentId = getPaymentIdStringFromExtra(transactionWithTransfers.transaction.extra);
-  std::vector<Crypto::Hash> tx_ids;
-  tx_ids.push_back(transactionWithTransfers.transaction.hash);
-
-  std::vector<CryptoNote::TransactionDetails> txs;
-  std::promise<std::error_code> prom;
-  std::future<std::error_code> f = prom.get_future();
-
-  CryptoNote::INode::Callback cb = [&prom](std::error_code ec) { 
-    std::promise<std::error_code> p(std::move(prom));
-    p.set_value(ec);
-  };
-  node.getTransactions(tx_ids, txs, cb);
-
-  CryptoNote::TransactionDetails transaction = txs.front();
 
   for (const CryptoNote::WalletTransfer& transfer: transactionWithTransfers.transfers) {
     PaymentService::TransferRpcInfo rpcTransfer;
     rpcTransfer.address = transfer.address;
     rpcTransfer.amount = transfer.amount;
     rpcTransfer.type = static_cast<uint8_t>(transfer.type);
-    if (transfer.amount < 0) {
-      for (const CryptoNote::TransactionInputDetails& txinput : transaction.inputs) {
-// handle MultisignatureInput in future
-        if (txinput.type() == typeid(CryptoNote::KeyInputDetails)) {
-          auto txin = boost::get<CryptoNote::KeyInputDetails>(txinput);
-// store the key_images into the wallet and check here if it's one of them, instead of bulk sending all key_images of a transaction
-          TransferRpcSpentOutput spentOutput;
-          spentOutput.amount = txin.input.amount;
-          spentOutput.key_image = Common::podToHex(txin.input.keyImage);
-          spentOutput.tx_pub_key = Common::podToHex(transaction.extra.publicKey);
-          spentOutput.out_index = txin.output.number;
-          spentOutput.mixin = txin.mixin;
-          rpcTransfer.spentOutputs.push_back(spentOutput);
-        }
-      }
-    }
 
     transactionInfo.transfers.push_back(std::move(rpcTransfer));
   }
@@ -284,7 +253,7 @@ std::vector<PaymentService::TransactionOutputInformationSerialized> convertWalle
   return rpcOutputs;
 }
 
-std::vector<PaymentService::TransactionsInBlockRpcInfo> convertTransactionsInBlockInfoToTransactionsInBlockRpcInfo(CryptoNote::INode& node,
+std::vector<PaymentService::TransactionsInBlockRpcInfo> convertTransactionsInBlockInfoToTransactionsInBlockRpcInfo(
   const std::vector<CryptoNote::TransactionsInBlockInfo>& blocks) {
 
   std::vector<PaymentService::TransactionsInBlockRpcInfo> rpcBlocks;
@@ -294,7 +263,7 @@ std::vector<PaymentService::TransactionsInBlockRpcInfo> convertTransactionsInBlo
     rpcBlock.blockHash = Common::podToHex(block.blockHash);
 
     for (const CryptoNote::WalletTransactionWithTransfers& transactionWithTransfers: block.transactions) {
-      PaymentService::TransactionRpcInfo transactionInfo = convertTransactionWithTransfersToTransactionRpcInfo(node, transactionWithTransfers);
+      PaymentService::TransactionRpcInfo transactionInfo = convertTransactionWithTransfersToTransactionRpcInfo(transactionWithTransfers);
       rpcBlock.transactions.push_back(std::move(transactionInfo));
     }
 
@@ -848,7 +817,7 @@ std::error_code WalletService::getTransaction(const std::string& transactionHash
       return make_error_code(CryptoNote::error::OBJECT_NOT_FOUND);
     }
 
-    transaction = convertTransactionWithTransfersToTransactionRpcInfo(node, transactionWithTransfers);
+    transaction = convertTransactionWithTransfersToTransactionRpcInfo(transactionWithTransfers);
   } catch (std::system_error& x) {
     logger(Logging::WARNING, Logging::BRIGHT_YELLOW) << "Error while getting transaction: " << x.what();
     return x.code();
@@ -1245,13 +1214,13 @@ std::vector<TransactionHashesInBlockRpcInfo> WalletService::getRpcTransactionHas
 std::vector<TransactionsInBlockRpcInfo> WalletService::getRpcTransactions(const Crypto::Hash& blockHash, size_t blockCount, const TransactionsInBlockInfoFilter& filter) const {
   std::vector<CryptoNote::TransactionsInBlockInfo> allTransactions = getTransactions(blockHash, blockCount);
   std::vector<CryptoNote::TransactionsInBlockInfo> filteredTransactions = filterTransactions(allTransactions, filter);
-  return convertTransactionsInBlockInfoToTransactionsInBlockRpcInfo(node, filteredTransactions);
+  return convertTransactionsInBlockInfoToTransactionsInBlockRpcInfo(filteredTransactions);
 }
 
 std::vector<TransactionsInBlockRpcInfo> WalletService::getRpcTransactions(uint32_t firstBlockIndex, size_t blockCount, const TransactionsInBlockInfoFilter& filter) const {
   std::vector<CryptoNote::TransactionsInBlockInfo> allTransactions = getTransactions(firstBlockIndex, blockCount);
   std::vector<CryptoNote::TransactionsInBlockInfo> filteredTransactions = filterTransactions(allTransactions, filter);
-  return convertTransactionsInBlockInfoToTransactionsInBlockRpcInfo(node, filteredTransactions);
+  return convertTransactionsInBlockInfoToTransactionsInBlockRpcInfo(filteredTransactions);
 }
 
 } //namespace PaymentService

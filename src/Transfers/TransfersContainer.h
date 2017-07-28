@@ -45,13 +45,11 @@ struct TransactionOutputInformationIn;
 class SpentOutputDescriptor {
 public:
   SpentOutputDescriptor();
-SpentOutputDescriptor(const TransactionOutputInformationIn& transactionInfo, bool trackingMode);
+  SpentOutputDescriptor(const TransactionOutputInformationIn& transactionInfo);
   SpentOutputDescriptor(const Crypto::KeyImage* keyImage);
-  SpentOutputDescriptor(uint64_t amount, uint32_t globalOutputIndex, bool trackingMode);
   SpentOutputDescriptor(uint64_t amount, uint32_t globalOutputIndex);
 
   void assign(const Crypto::KeyImage* keyImage);
-  void assign(uint64_t amount, uint32_t globalOutputIndex, bool trackingMode);
   void assign(uint64_t amount, uint32_t globalOutputIndex);
 
   bool isValid() const;
@@ -60,7 +58,6 @@ SpentOutputDescriptor(const TransactionOutputInformationIn& transactionInfo, boo
   size_t hash() const;
 
 private:
-  bool m_trackingMode;
   TransactionTypes::OutputType m_type;
   union {
     const Crypto::KeyImage* m_keyImage;
@@ -82,13 +79,12 @@ struct TransactionOutputInformationIn : public TransactionOutputInformation {
 };
 
 struct TransactionOutputInformationEx : public TransactionOutputInformationIn {
-  bool trackingMode;
   uint64_t unlockTime;
   uint32_t blockHeight;
   uint32_t transactionIndex;
   bool visible;
 
-  SpentOutputDescriptor getSpentOutputDescriptor() const { return SpentOutputDescriptor(*this, trackingMode); }
+  SpentOutputDescriptor getSpentOutputDescriptor() const { return SpentOutputDescriptor(*this); }
   const Crypto::Hash& getTransactionHash() const { return transactionHash; }
 
   void serialize(CryptoNote::ISerializer& s) {
@@ -157,11 +153,8 @@ class TransfersContainer : public ITransfersContainer {
 public:
   TransfersContainer(const CryptoNote::Currency& currency, Logging::ILogger& logger, size_t transactionSpendableAge);
 
-  bool addTransaction(const bool trackingMode, const TransactionBlockInfo& block, const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers);
   bool addTransaction(const TransactionBlockInfo& block, const ITransactionReader& tx, const std::vector<TransactionOutputInformationIn>& transfers);
-  bool addTransactionTrackingModeInputs(const TransactionBlockInfo& block, const ITransactionReader& tx);
   bool deleteUnconfirmedTransaction(const Crypto::Hash& transactionHash);
-  bool markTransactionConfirmed(const bool trackingMode, const TransactionBlockInfo& block, const Crypto::Hash& transactionHash, const std::vector<uint32_t>& globalIndices);
   bool markTransactionConfirmed(const TransactionBlockInfo& block, const Crypto::Hash& transactionHash, const std::vector<uint32_t>& globalIndices);
 
   std::vector<Crypto::Hash> detach(uint32_t height);
@@ -266,37 +259,10 @@ private:
       >
     >
   > SpentTransfersMultiIndex;
-  typedef boost::multi_index_container<
-    SpentTransactionOutput,
-    boost::multi_index::indexed_by<
-      boost::multi_index::hashed_unique<
-        boost::multi_index::tag<SpentOutputDescriptorIndex>,
-        boost::multi_index::const_mem_fun<
-          TransactionOutputInformationEx,
-          SpentOutputDescriptor,
-          &TransactionOutputInformationEx::getSpentOutputDescriptor>,
-        SpentOutputDescriptorHasher
-      >,
-      boost::multi_index::hashed_non_unique<
-        boost::multi_index::tag<ContainingTransactionIndex>,
-        boost::multi_index::const_mem_fun<
-          TransactionOutputInformationEx,
-          const Crypto::Hash&,
-          &SpentTransactionOutput::getTransactionHash>
-      >,
-      boost::multi_index::hashed_non_unique <
-        boost::multi_index::tag<SpendingTransactionIndex>,
-        boost::multi_index::const_mem_fun <
-          SpentTransactionOutput,
-          const Crypto::Hash&,
-          &SpentTransactionOutput::getSpendingTransactionHash>
-      >
-    >
-  > TrackingModeSpentTransfersMultiIndex;
 
 private:
   void addTransaction(const TransactionBlockInfo& block, const ITransactionReader& tx);
-    bool addTransactionOutputs(const bool trackingMode, const TransactionBlockInfo& block, const ITransactionReader& tx,
+  bool addTransactionOutputs(const TransactionBlockInfo& block, const ITransactionReader& tx,
                              const std::vector<TransactionOutputInformationIn>& transfers);
   bool addTransactionInputs(const TransactionBlockInfo& block, const ITransactionReader& tx);
   void deleteTransactionTransfers(const Crypto::Hash& transactionHash);
@@ -305,7 +271,6 @@ private:
   static bool isIncluded(TransactionTypes::OutputType type, uint32_t state, uint32_t flags);
   void updateTransfersVisibility(const Crypto::KeyImage& keyImage);
 
-  void trackingModeCopyToSpent(const TransactionBlockInfo& block, const ITransactionReader& tx, size_t inputIndex, const TransactionOutputInformationEx& output);
   void copyToSpent(const TransactionBlockInfo& block, const ITransactionReader& tx, size_t inputIndex, const TransactionOutputInformationEx& output);
   void repair();
 
@@ -314,7 +279,6 @@ private:
   UnconfirmedTransfersMultiIndex m_unconfirmedTransfers;
   AvailableTransfersMultiIndex m_availableTransfers;
   SpentTransfersMultiIndex m_spentTransfers;
-  TrackingModeSpentTransfersMultiIndex m_trackingModeSpentTransfers;
 
   uint32_t m_currentHeight; // current height is needed to check if a transfer is unlocked
   size_t m_transactionSpendableAge;
