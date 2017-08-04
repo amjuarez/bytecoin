@@ -146,6 +146,8 @@ private:
   mutable std::mutex m_consumersMutex;
   mutable std::mutex m_stateMutex;
   std::condition_variable m_hasWork;
+
+  bool wasStarted = false;
 };
 
 }

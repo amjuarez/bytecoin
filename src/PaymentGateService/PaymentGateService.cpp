@@ -160,9 +160,9 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
   //TODO: make command line options
   dbConfig.setConfigFolderDefaulted(true);
   dbConfig.setDataDir(config.dataDir);
-  dbConfig.setMaxOpenFiles(10);
-  dbConfig.setReadCacheSize(100*1024*1024);
-  dbConfig.setWriteBufferSize(100*1024*1024);
+  dbConfig.setMaxOpenFiles(100);
+  dbConfig.setReadCacheSize(128*1024*1024);
+  dbConfig.setWriteBufferSize(128*1024*1024);
   dbConfig.setTestnet(false);
   dbConfig.setBackgroundThreadsCount(2);
 

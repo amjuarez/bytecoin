@@ -145,11 +145,12 @@ public:
 
   virtual uint32_t onNewBlocks(const CompleteBlock* blocks, uint32_t startHeight, uint32_t count) override {
     //assert(m_blockchain.size() == startHeight);
+    uint32_t blocksAdded = count;
     for (size_t i = 0; i < count; ++i) {
       m_blockchain.push_back(blocks->blockHash);
       ++blocks;
     }
-    return count;
+    return blocksAdded;
   }
 
   const std::vector<Hash>& getBlockchain() const {
@@ -1404,4 +1405,77 @@ TEST_F(BcSTest, checkTxOrder) {
   o1.syncFunc = [](std::error_code) {};
 
   EXPECT_EQ(expectedTxHashes, receivedTxHashes);
+}
+
+TEST_F(BcSTest, outdatedTxsRemovedOnlyAtFirstStart) {
+  auto tx1ptr = createTransaction();
+
+  auto tx1 = ::createTx(*tx1ptr.get());
+
+  auto tx1hash = getObjectHash(tx1);
+
+  FunctorialPoolConsumerStub c1(m_currency.genesisBlockHash());
+
+  c1.addPoolTransaction(tx1hash);
+
+  std::vector<Hash> expectedDeletedPoolAnswer = { tx1hash };
+
+  std::vector<Hash> c1ResponseDeletedPool;
+  std::vector<Hash> c1ResponseNewPool;
+
+  c1.onPoolUpdatedFunctor = [&](const std::vector<std::unique_ptr<ITransactionReader>>& new_txs, const std::vector<Hash>& deleted)->std::error_code {
+    c1ResponseDeletedPool.assign(deleted.begin(), deleted.end());
+    for (const auto& tx : new_txs) {
+      Hash hash = tx->getTransactionHash();
+      c1ResponseNewPool.push_back(reinterpret_cast<const Hash&>(hash));
+    }
+
+    return std::error_code();
+  };
+
+
+  m_sync.addConsumer(&c1);
+
+  int requestsCount = 0;
+  m_node.getPoolSymmetricDifferenceFunctor = [&](const std::vector<Hash>& known, Hash last, bool& is_actual,
+    std::vector<std::unique_ptr<ITransactionReader>>& new_txs, std::vector<Hash>& deleted, const INode::Callback& callback) {
+    ++requestsCount;
+    is_actual = true;
+    deleted.push_back(tx1hash);
+    callback(std::error_code());
+    return false;
+  };
+
+  IBlockchainSynchronizerFunctorialObserver o1;
+  EventWaiter e;
+  o1.syncFunc = [&e](std::error_code) {
+    e.notify();
+  };
+
+  m_sync.addObserver(&o1);
+  m_sync.start();
+  e.wait();
+  m_sync.stop();
+  m_sync.removeObserver(&o1);
+  o1.syncFunc = [](std::error_code) {};
+
+  EXPECT_EQ(2, requestsCount);
+  EXPECT_EQ(expectedDeletedPoolAnswer, c1ResponseDeletedPool);
+
+  generator.generateEmptyBlocks(20);
+  requestsCount = 0;
+
+  o1.syncFunc = [&e](std::error_code) {
+    e.notify();
+  };
+
+  m_sync.addObserver(&o1);
+  m_sync.start();
+  e.wait();
+  m_sync.stop();
+  m_sync.removeObserver(&o1);
+  o1.syncFunc = [](std::error_code) {};
+
+  EXPECT_EQ(1, requestsCount);
+  EXPECT_EQ(expectedDeletedPoolAnswer, c1ResponseDeletedPool);
 }

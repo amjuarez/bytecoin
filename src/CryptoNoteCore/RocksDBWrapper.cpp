@@ -55,7 +55,7 @@ void RocksDBWrapper::init(const DataBaseConfig& config) {
   rocksdb::Status status = rocksdb::DB::Open(dbOptions, dataDir, &dbPtr);
   if (status.ok()) {
     logger(INFO) << "DB opened in " << dataDir;
-  } else if (!status.ok() || status.IsNotFound()) {
+  } else if (!status.ok() && status.IsInvalidArgument()) {
     logger(INFO) << "DB not found in " << dataDir << ". Creating new DB...";
     dbOptions.create_if_missing = true;
     rocksdb::Status status = rocksdb::DB::Open(dbOptions, dataDir, &dbPtr);
@@ -63,6 +63,9 @@ void RocksDBWrapper::init(const DataBaseConfig& config) {
       logger(ERROR) << "DB Error. DB can't be created in " << dataDir << ". Error: " << status.ToString();
       throw std::system_error(make_error_code(CryptoNote::error::DataBaseErrorCodes::INTERNAL_ERROR));
     }
+  } else if (status.IsIOError()) {
+    logger(ERROR) << "DB Error. DB can't be opened in " << dataDir << ". Error: " << status.ToString();
+    throw std::system_error(make_error_code(CryptoNote::error::DataBaseErrorCodes::IO_ERROR));
   } else {
     logger(ERROR) << "DB Error. DB can't be opened in " << dataDir << ". Error: " << status.ToString();
     throw std::system_error(make_error_code(CryptoNote::error::DataBaseErrorCodes::INTERNAL_ERROR));
