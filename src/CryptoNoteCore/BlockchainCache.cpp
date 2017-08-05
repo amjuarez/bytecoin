@@ -1127,7 +1127,7 @@ Difficulty BlockchainCache::getDifficultyForNextBlock(uint32_t blockIndex) const
   auto timestamps = getLastTimestamps(currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion), blockIndex, skipGenesisBlock);
   auto commulativeDifficulties =
       getLastCumulativeDifficulties(currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion), blockIndex, skipGenesisBlock);
-  return currency.nextDifficulty(nextBlockMajorVersion, std::move(timestamps), std::move(commulativeDifficulties));
+  return currency.nextDifficulty(nextBlockMajorVersion, blockIndex, std::move(timestamps), std::move(commulativeDifficulties));
 }
 
 Difficulty BlockchainCache::getCurrentCumulativeDifficulty() const {

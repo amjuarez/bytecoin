@@ -814,6 +814,7 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
 
   // Hardcoded plugins, refactor this
   res.extensions.push_back("core/bytecoin.json");
+  res.extensions.push_back("bug-fixes.json");
   res.extensions.push_back("print-genesis-tx.json");
 
   if (m_core.getCurrency().mandatoryTransaction() == 1) {
@@ -836,7 +837,8 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
     m_core.getCurrency().difficultyCutByBlockVersion(1) != m_core.getCurrency().difficultyCutByBlockVersion(2) || m_core.getCurrency().difficultyCutByBlockVersion(1) != m_core.getCurrency().difficultyCutByBlockVersion(3)) {
     res.extensions.push_back("versionized-parameters.json");
   }
-  if (m_core.getCurrency().zawyDifficultyV2() != 0) {
+  if (m_core.getCurrency().zawyDifficultyV2() != 0 || m_core.getCurrency().zawyDifficultyV3() != 0 ||
+       m_core.getCurrency().zawyDifficultyV4() != 0 || m_core.getCurrency().zawyDifficultyBlockIndex() != 0 ) {
     res.extensions.push_back("zawy-difficulty-algorithm.json");
   }
   res.core.CRYPTONOTE_NAME = m_core.getCurrency().cryptonoteName();
@@ -870,8 +872,11 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   res.core.DIFFICULTY_CUT_V1 = m_core.getCurrency().difficultyCutV1();
   res.core.DIFFICULTY_CUT_V2 = m_core.getCurrency().difficultyCutV2();
   res.core.DIFFICULTY_LAG_V1 = m_core.getCurrency().difficultyLagV1();
-  res.core.DIFFICULTY_LAG_V1 = m_core.getCurrency().difficultyLagV2();
+  res.core.DIFFICULTY_LAG_V2 = m_core.getCurrency().difficultyLagV2();
+  res.core.ZAWY_DIFFICULTY_BLOCK_INDEX = m_core.getCurrency().zawyDifficultyBlockIndex();
   res.core.ZAWY_DIFFICULTY_V2 = m_core.getCurrency().zawyDifficultyV2();
+  res.core.ZAWY_DIFFICULTY_V3 = m_core.getCurrency().zawyDifficultyV3();
+  res.core.ZAWY_DIFFICULTY_V4 = m_core.getCurrency().zawyDifficultyV4();
   res.core.P2P_DEFAULT_PORT = m_p2p.get_this_peer_port();
   // Not real. Change
   res.core.RPC_DEFAULT_PORT = m_p2p.get_this_peer_port() + 1;

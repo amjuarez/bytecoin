@@ -26,7 +26,8 @@ namespace error {
 enum class DataBaseErrorCodes : int {
   NOT_INITIALIZED = 1,
   ALREADY_INITIALIZED,
-  INTERNAL_ERROR
+  INTERNAL_ERROR,
+  IO_ERROR
 };
 
 class DataBaseErrorCategory : public std::error_category {
@@ -46,6 +47,7 @@ public:
       case static_cast<int>(DataBaseErrorCodes::NOT_INITIALIZED) : return "Object was not initialized";
       case static_cast<int>(DataBaseErrorCodes::ALREADY_INITIALIZED) : return "Object has been already initialized";
       case static_cast<int>(DataBaseErrorCodes::INTERNAL_ERROR) : return "Internal error";
+      case static_cast<int>(DataBaseErrorCodes::IO_ERROR) : return "IO error";
       default: return "Unknown error";
     }
   }

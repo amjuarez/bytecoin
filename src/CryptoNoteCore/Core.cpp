@@ -520,7 +520,7 @@ Difficulty Core::getDifficultyForNextBlock() const {
   auto timestamps = mainChain->getLastTimestamps(blocksCount);
   auto difficulties = mainChain->getLastCumulativeDifficulties(blocksCount);
 
-  return currency.nextDifficulty(nextBlockMajorVersion, timestamps, difficulties);
+  return currency.nextDifficulty(nextBlockMajorVersion, topBlockIndex, timestamps, difficulties);
 }
 
 std::vector<Crypto::Hash> Core::findBlockchainSupplement(const std::vector<Crypto::Hash>& remoteBlockIds,
@@ -1232,10 +1232,6 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
 auto error = validateSemantic(transaction, fee, blockIndex);
   if (error != error::TransactionValidationError::VALIDATION_SUCCESS) {
     return error;
-  }
-
-  if (transaction.version > CURRENT_TRANSACTION_VERSION) {
-    return error::TransactionValidationError::INVALID_TRANSACTION_VERSION;
   }
 
   size_t inputIndex = 0;

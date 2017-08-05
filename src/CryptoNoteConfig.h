@@ -39,9 +39,10 @@ const uint32_t MANDATORY_TRANSACTION                          = 0;
 const uint32_t KILL_HEIGHT                          = 0;
 const uint64_t TAIL_EMISSION_REWARD                          = 0;
 const size_t CRYPTONOTE_COIN_VERSION                          = 0;
-const bool ZAWY_DIFFICULTY_V2                          = 0;
-const bool ZAWY_DIFFICULTY_V3                          = 0;
-const bool ZAWY_DIFFICULTY_V4                          = 0;
+const uint32_t ZAWY_DIFFICULTY_BLOCK_INDEX                 = 0;
+const size_t ZAWY_DIFFICULTY_V2                          = 0;
+const size_t ZAWY_DIFFICULTY_V3                          = 0;
+const size_t ZAWY_DIFFICULTY_V4                          = 0;
 const unsigned EMISSION_SPEED_FACTOR                         = 18;
 const uint64_t GENESIS_BLOCK_REWARD                          = 0;
 static_assert(EMISSION_SPEED_FACTOR <= 8 * sizeof(uint64_t), "Bad EMISSION_SPEED_FACTOR");
@@ -116,7 +117,7 @@ const uint8_t  BLOCK_MINOR_VERSION_0                         =  0;
 const uint8_t  BLOCK_MINOR_VERSION_1                         =  1;
 
 const size_t   BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT        =  10000;  //by default, blocks ids count in synchronizing
-const size_t   BLOCKS_SYNCHRONIZING_DEFAULT_COUNT            =  200;    //by default, blocks count in blocks downloading
+const size_t   BLOCKS_SYNCHRONIZING_DEFAULT_COUNT            =  100;    //by default, blocks count in blocks downloading
 const size_t   COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT         =  1000;
 
 const int      P2P_DEFAULT_PORT                              =  8080;
@@ -125,7 +126,7 @@ const int      RPC_DEFAULT_PORT                              =  8081;
 const size_t   P2P_LOCAL_WHITE_PEERLIST_LIMIT                =  1000;
 const size_t   P2P_LOCAL_GRAY_PEERLIST_LIMIT                 =  5000;
 
-const size_t   P2P_CONNECTION_MAX_WRITE_BUFFER_SIZE          = 16 * 1024 * 1024; // 16 MB
+const size_t   P2P_CONNECTION_MAX_WRITE_BUFFER_SIZE          = 32 * 1024 * 1024; // 32 MB
 const uint32_t P2P_DEFAULT_CONNECTIONS_COUNT                 = 8;
 const size_t   P2P_DEFAULT_WHITELIST_CONNECTIONS_PERCENT     = 70;
 const uint32_t P2P_DEFAULT_HANDSHAKE_INTERVAL                = 60;            // seconds
@@ -194,7 +195,8 @@ const std::initializer_list<CheckpointData> CHECKPOINTS = {
   {1272000, "2fb2c50328c8345d2f0a16b3ec4ea680a8a93730358494265ada9edbb9bfa1a6"},
   {1273000, "496a9238c654d79c48d269224aa75d61f51831bae6dc744f5e709bec11c7c9f2"},
   {1278000, "de0225cd279ca27cc8d4f8da1b5b92ba0112e48b3777b8c50301846ccfc9146b"},
-  {1283000, "826043db95e9801f038f254d223ce0d0912da269dcce1461b5f0f05ddfae9e1c"}
+  {1283000, "826043db95e9801f038f254d223ce0d0912da269dcce1461b5f0f05ddfae9e1c"},
+  {1324000, "981e6f6871a7c295b56c5ce544adb5a7d52540ee23e15474b4357c7728952fef"}
 };
 } // CryptoNote
 

@@ -53,9 +53,10 @@ public:
   uint32_t mandatoryTransaction() const { return m_mandatoryTransaction; }
   uint32_t killHeight() const { return m_killHeight; }
   uint64_t tailEmissionReward() const { return m_tailEmissionReward; }
-  bool zawyDifficultyV2() const { return m_zawyDifficultyV2; }
-  bool zawyDifficultyV3() const { return m_zawyDifficultyV3; }
-  bool zawyDifficultyV4() const { return m_zawyDifficultyV4; }
+  uint32_t zawyDifficultyBlockIndex() const { return m_zawyDifficultyBlockIndex; }
+  size_t zawyDifficultyV2() const { return m_zawyDifficultyV2; }
+  size_t zawyDifficultyV3() const { return m_zawyDifficultyV3; }
+  size_t zawyDifficultyV4() const { return m_zawyDifficultyV4; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
   uint64_t expectedNumberOfBlocksPerDay() const { return m_expectedNumberOfBlocksPerDay; }
   size_t blockGrantedFullRewardZoneV1() const { return m_blockGrantedFullRewardZoneV1; }
@@ -141,7 +142,7 @@ size_t difficultyBlocksCountByBlockVersion(uint8_t blockMajorVersion) const;
   bool parseAmount(const std::string& str, uint64_t& amount) const;
 
   Difficulty nextDifficulty(std::vector<uint64_t> timestamps, std::vector<Difficulty> cumulativeDifficulties) const;
-Difficulty nextDifficulty(uint8_t version, std::vector<uint64_t> timestamps, std::vector<Difficulty> cumulativeDifficulties) const;
+Difficulty nextDifficulty(uint8_t version, uint32_t blockIndex, std::vector<uint64_t> timestamps, std::vector<Difficulty> cumulativeDifficulties) const;
 
   bool checkProofOfWorkV1(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDifficulty) const;
   bool checkProofOfWorkV2(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDifficulty) const;
@@ -179,9 +180,10 @@ private:
   uint32_t m_mandatoryTransaction;
   uint32_t m_killHeight;
   uint64_t m_tailEmissionReward;
-  bool m_zawyDifficultyV2;
-  bool m_zawyDifficultyV3;
-  bool m_zawyDifficultyV4;
+  uint32_t m_zawyDifficultyBlockIndex;
+  size_t m_zawyDifficultyV2;
+  size_t m_zawyDifficultyV3;
+  size_t m_zawyDifficultyV4;
   size_t m_blockGrantedFullRewardZone;
   uint64_t m_expectedNumberOfBlocksPerDay;
   size_t m_blockGrantedFullRewardZoneV1;
@@ -278,9 +280,10 @@ public:
   CurrencyBuilder& mandatoryTransaction(uint8_t val) { m_currency.m_mandatoryTransaction = val; return *this; }
   CurrencyBuilder& killHeight(uint32_t val) { m_currency.m_killHeight = val; return *this; }
   CurrencyBuilder& tailEmissionReward(uint64_t val) { m_currency.m_tailEmissionReward = val; return *this; }
-  CurrencyBuilder& zawyDifficultyV2(bool val) { m_currency.m_zawyDifficultyV2 = val; return *this; }
-  CurrencyBuilder& zawyDifficultyV3(bool val) { m_currency.m_zawyDifficultyV3 = val; return *this; }
-  CurrencyBuilder& zawyDifficultyV4(bool val) { m_currency.m_zawyDifficultyV4 = val; return *this; }
+  CurrencyBuilder& zawyDifficultyBlockIndex(uint32_t val) { m_currency.m_zawyDifficultyBlockIndex = val; return *this; }
+  CurrencyBuilder& zawyDifficultyV2(size_t val) { m_currency.m_zawyDifficultyV2 = val; return *this; }
+  CurrencyBuilder& zawyDifficultyV3(size_t val) { m_currency.m_zawyDifficultyV3 = val; return *this; }
+  CurrencyBuilder& zawyDifficultyV4(size_t val) { m_currency.m_zawyDifficultyV4 = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
   CurrencyBuilder& expectedNumberOfBlocksPerDay(uint64_t val) { m_currency.m_expectedNumberOfBlocksPerDay = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV1(size_t val) { m_currency.m_blockGrantedFullRewardZoneV1 = val; return *this; }

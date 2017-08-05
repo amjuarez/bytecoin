@@ -247,7 +247,7 @@ bool BlockchainSynchronizer::setFutureStateIf(State s, std::function<bool(void)>
 
 void BlockchainSynchronizer::actualizeFutureState() {
   std::unique_lock<std::mutex> lk(m_stateMutex);
-  if (m_currentState == State::stopped && m_futureState == State::deleteOldTxs) { // start(), immideately attach observer
+  if (m_currentState == State::stopped && (m_futureState == State::deleteOldTxs || m_futureState == State::blockchainSync)) { // start(), immideately attach observer
     m_node.addObserver(this);
   }
 
@@ -349,7 +349,15 @@ void BlockchainSynchronizer::start() {
     throw std::runtime_error(message);
   }
 
-  if (!setFutureStateIf(State::deleteOldTxs, [this] { return m_currentState == State::stopped && m_futureState == State::stopped; })) {
+  State nextState;
+  if (!wasStarted) {
+    nextState = State::deleteOldTxs;
+    wasStarted = true;
+  } else {
+    nextState = State::blockchainSync;
+  }
+
+  if (!setFutureStateIf(nextState, [this] { return m_currentState == State::stopped && m_futureState == State::stopped; })) {
     auto message = "Failed to start: already started";
     m_logger(ERROR, BRIGHT_RED) << message;
     throw std::runtime_error(message);

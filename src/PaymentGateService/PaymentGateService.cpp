@@ -86,7 +86,10 @@ bool PaymentGateService::init(int argc, char** argv) {
   currencyBuilder.genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
   currencyBuilder.publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
   currencyBuilder.moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
+  currencyBuilder.zawyDifficultyBlockIndex(config.coinBaseConfig.ZAWY_DIFFICULTY_BLOCK_INDEX);
   currencyBuilder.zawyDifficultyV2(config.coinBaseConfig.ZAWY_DIFFICULTY_V2);
+  currencyBuilder.zawyDifficultyV3(config.coinBaseConfig.ZAWY_DIFFICULTY_V3);
+  currencyBuilder.zawyDifficultyV4(config.coinBaseConfig.ZAWY_DIFFICULTY_V4);
   currencyBuilder.genesisBlockReward(config.coinBaseConfig.GENESIS_BLOCK_REWARD);
   currencyBuilder.cryptonoteCoinVersion(config.coinBaseConfig.CRYPTONOTE_COIN_VERSION);
   currencyBuilder.tailEmissionReward(config.coinBaseConfig.TAIL_EMISSION_REWARD);
@@ -232,9 +235,9 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
   //TODO: make command line options
   dbConfig.setConfigFolderDefaulted(true);
 dbConfig.setDataDir(data_dir);
-  dbConfig.setMaxOpenFiles(10);
-  dbConfig.setReadCacheSize(100*1024*1024);
-  dbConfig.setWriteBufferSize(100*1024*1024);
+  dbConfig.setMaxOpenFiles(100);
+  dbConfig.setReadCacheSize(128*1024*1024);
+  dbConfig.setWriteBufferSize(128*1024*1024);
   dbConfig.setTestnet(false);
   dbConfig.setBackgroundThreadsCount(2);
 
