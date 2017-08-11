@@ -641,7 +641,8 @@ std::error_code Core::addBlock(const CachedBlock& cachedBlock, RawBlock&& rawBlo
 
         cache->pushBlock(cachedBlock, transactions, validatorState, cumulativeBlockSize, emissionChange, currentDifficulty, std::move(rawBlock));
 
-        actualizePoolTransactions();
+        updateBlockMedianSize();
+        actualizePoolTransactionsLite(validatorState);
 
         ret = error::AddBlockErrorCode::ADDED_TO_MAIN;
         logger(Logging::DEBUGGING) << "Block " << cachedBlock.getBlockHash() << " added to main chain. Index: " << (previousBlockIndex + 1);
@@ -662,6 +663,8 @@ std::error_code Core::addBlock(const CachedBlock& cachedBlock, RawBlock&& rawBlo
           assert(endpointIndex != 0);
           std::swap(chainsLeaves[0], chainsLeaves[endpointIndex]);
           updateMainChainSet();
+
+          updateBlockMedianSize();
           actualizePoolTransactions();
           copyTransactionsToPool(chainsLeaves[endpointIndex]);
 
@@ -688,9 +691,8 @@ std::error_code Core::addBlock(const CachedBlock& cachedBlock, RawBlock&& rawBlo
                                      currentDifficulty, std::move(rawBlock));
 
       updateMainChainSet();
+      updateBlockMedianSize();
     }
-
-    updateBlockMedianSize();
   } else {
     logger(Logging::DEBUGGING) << "Adding alternative block: " << cachedBlock.getBlockHash();
 
@@ -740,6 +742,22 @@ void Core::actualizePoolTransactions() {
 
     if (!addTransactionToPool(std::move(tx))) {
       notifyObservers(makeDelTransactionMessage({hash}, Messages::DeleteTransaction::Reason::NotActual));
+    }
+  }
+}
+
+void Core::actualizePoolTransactionsLite(const TransactionValidatorState& validatorState) {
+  auto& pool = *transactionPool;
+  auto hashes = pool.getTransactionHashes();
+
+  for (auto& hash : hashes) {
+    auto tx = pool.getTransaction(hash);
+
+    auto txState = extractSpentOutputs(tx);
+
+    if (hasIntersections(validatorState, txState) || tx.getTransactionBinaryArray().size() > getMaximumTransactionAllowedSize(blockMedianSize, currency)) {
+      pool.removeTransaction(hash);
+      notifyObservers(makeDelTransactionMessage({ hash }, Messages::DeleteTransaction::Reason::NotActual));
     }
   }
 }

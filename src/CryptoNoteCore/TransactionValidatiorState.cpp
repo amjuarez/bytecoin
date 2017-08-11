@@ -19,14 +19,17 @@
 
 namespace CryptoNote {
 
-bool mergeStates(TransactionValidatorState& source, TransactionValidatorState& destination) {  
-  /* source.spentKeyImages.insert(destination.spentKeyImages.begin(), destination.spentKeyImages.end()); */
-  /* source.spentMultisignatureGlobalIndexes.insert(destination.spentMultisignatureGlobalIndexes.begin(), destination.spentMultisignatureGlobalIndexes.end()); */
-  return std::all_of(destination.spentKeyImages.begin(), destination.spentKeyImages.end(),
-                     [&](const Crypto::KeyImage& ki) { return source.spentKeyImages.insert(ki).second; }) &&
-         std::all_of(destination.spentMultisignatureGlobalIndexes.begin(), destination.spentMultisignatureGlobalIndexes.end(),
+void mergeStates(TransactionValidatorState& destionation, const TransactionValidatorState& source) {
+  destionation.spentKeyImages.insert(source.spentKeyImages.begin(), source.spentKeyImages.end());
+  destionation.spentMultisignatureGlobalIndexes.insert(source.spentMultisignatureGlobalIndexes.begin(), source.spentMultisignatureGlobalIndexes.end());
+}
+
+bool hasIntersections(const TransactionValidatorState& destination, const TransactionValidatorState& source) {
+  return std::any_of(source.spentKeyImages.begin(), source.spentKeyImages.end(),
+                     [&](const Crypto::KeyImage& ki) { return destination.spentKeyImages.count(ki) != 0; }) ||
+         std::any_of(source.spentMultisignatureGlobalIndexes.begin(), source.spentMultisignatureGlobalIndexes.end(),
                      [&](const std::pair<uint64_t, uint32_t>& pr) {
-                       return source.spentMultisignatureGlobalIndexes.insert(pr).second;
+                       return destination.spentMultisignatureGlobalIndexes.count(pr) != 0;
                      });
 }
 

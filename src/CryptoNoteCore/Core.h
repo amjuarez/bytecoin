@@ -187,7 +187,9 @@ private:
   void notifyOnSuccess(error::AddBlockErrorCode opResult, uint32_t previousBlockIndex, const CachedBlock& cachedBlock,
                        const IBlockchainCache& cache);
   void copyTransactionsToPool(IBlockchainCache* alt);
+  
   void actualizePoolTransactions();
+  void actualizePoolTransactionsLite(const TransactionValidatorState& validatorState); //Checks pool txs only for double spend.
 
   void transactionPoolCleaningProcedure();
   void updateBlockMedianSize();
