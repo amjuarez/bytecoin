@@ -1,87 +1,165 @@
-// Copyright (c) 2012-2013 The Cryptonote developers
+// Copyright (c) 2011-2016 The Cryptonote developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #pragma once
 
-#include <array>
-#include <cstdint>
-#include <istream>
 #include <limits>
-#include <ostream>
 #include <string>
-#include <system_error>
 #include <vector>
+#include "CryptoNote.h"
 
 namespace CryptoNote {
 
-typedef size_t TransactionId;
-typedef size_t TransferId;
-typedef std::array<uint8_t, 32> TransactionHash;
+const size_t WALLET_INVALID_TRANSACTION_ID = std::numeric_limits<size_t>::max();
+const size_t WALLET_INVALID_TRANSFER_ID = std::numeric_limits<size_t>::max();
+const uint32_t WALLET_UNCONFIRMED_TRANSACTION_HEIGHT = std::numeric_limits<uint32_t>::max();
 
-struct Transfer {
+enum class WalletTransactionState : uint8_t {
+  SUCCEEDED = 0,
+  FAILED,
+  CANCELLED,
+  CREATED,
+  DELETED
+};
+
+enum WalletEventType {
+  TRANSACTION_CREATED,
+  TRANSACTION_UPDATED,
+  BALANCE_UNLOCKED,
+  SYNC_PROGRESS_UPDATED,
+  SYNC_COMPLETED,
+};
+
+struct WalletTransactionCreatedData {
+  size_t transactionIndex;
+};
+
+struct WalletTransactionUpdatedData {
+  size_t transactionIndex;
+};
+
+struct WalletSynchronizationProgressUpdated {
+  uint32_t processedBlockCount;
+  uint32_t totalBlockCount;
+};
+
+struct WalletEvent {
+  WalletEventType type;
+  union {
+    WalletTransactionCreatedData transactionCreated;
+    WalletTransactionUpdatedData transactionUpdated;
+    WalletSynchronizationProgressUpdated synchronizationProgressUpdated;
+  };
+};
+
+struct WalletTransaction {
+  WalletTransactionState state;
+  uint64_t timestamp;
+  uint32_t blockHeight;
+  Crypto::Hash hash;
+  int64_t totalAmount;
+  uint64_t fee;
+  uint64_t creationTime;
+  uint64_t unlockTime;
+  std::string extra;
+  bool isBase;
+};
+
+enum class WalletTransferType : uint8_t {
+  USUAL = 0,
+  DONATION,
+  CHANGE
+};
+
+struct WalletOrder {
+  std::string address;
+  uint64_t amount;
+};
+
+struct WalletTransfer {
+  WalletTransferType type;
   std::string address;
   int64_t amount;
 };
 
-const TransactionId INVALID_TRANSACTION_ID    = std::numeric_limits<TransactionId>::max();
-const TransferId INVALID_TRANSFER_ID          = std::numeric_limits<TransferId>::max();
-const uint64_t UNCONFIRMED_TRANSACTION_HEIGHT = std::numeric_limits<uint64_t>::max();
-
-struct Transaction {
-  TransferId      firstTransferId;
-  size_t          transferCount;
-  int64_t         totalAmount;
-  uint64_t        fee;
-  TransactionHash hash;
-  bool            isCoinbase;
-  uint64_t        blockHeight;
-  uint64_t        timestamp;
-  std::string     extra;
+struct DonationSettings {
+  std::string address;
+  uint64_t threshold = 0;
 };
 
-class IWalletObserver {
-public:
-  virtual void initCompleted(std::error_code result) {}
-  virtual void saveCompleted(std::error_code result) {}
-  virtual void synchronizationProgressUpdated(uint64_t current, uint64_t total, std::error_code result) {}
-  virtual void actualBalanceUpdated(uint64_t actualBalance) {}
-  virtual void pendingBalanceUpdated(uint64_t pendingBalance) {}
-  virtual void externalTransactionCreated(TransactionId transactionId) {}
-  virtual void sendTransactionCompleted(TransactionId transactionId, std::error_code result) {}
-  virtual void transactionUpdated(TransactionId transactionId) {}
+struct TransactionParameters {
+  std::vector<std::string> sourceAddresses;
+  std::vector<WalletOrder> destinations;
+  uint64_t fee = 0;
+  uint64_t mixIn = 0;
+  std::string extra;
+  uint64_t unlockTimestamp = 0;
+  DonationSettings donation;
+  std::string changeDestination;
+};
+
+struct WalletTransactionWithTransfers {
+  WalletTransaction transaction;
+  std::vector<WalletTransfer> transfers;
+};
+
+struct TransactionsInBlockInfo {
+  Crypto::Hash blockHash;
+  std::vector<WalletTransactionWithTransfers> transactions;
 };
 
 class IWallet {
 public:
-  virtual ~IWallet() {} ;
-  virtual void addObserver(IWalletObserver* observer) = 0;
-  virtual void removeObserver(IWalletObserver* observer) = 0;
+  virtual ~IWallet() {}
 
-  virtual void initAndGenerate(const std::string& password) = 0;
-  virtual void initAndLoad(std::istream& source, const std::string& password) = 0;
+  virtual void initialize(const std::string& password) = 0;
+  virtual void initializeWithViewKey(const Crypto::SecretKey& viewSecretKey, const std::string& password) = 0;
+  virtual void load(std::istream& source, const std::string& password) = 0;
   virtual void shutdown() = 0;
 
-  virtual void save(std::ostream& destination, bool saveDetailed = true, bool saveCache = true) = 0;
+  virtual void changePassword(const std::string& oldPassword, const std::string& newPassword) = 0;
+  virtual void save(std::ostream& destination, bool saveDetails = true, bool saveCache = true) = 0;
 
-  virtual std::error_code changePassword(const std::string& oldPassword, const std::string& newPassword) = 0;
+  virtual size_t getAddressCount() const = 0;
+  virtual std::string getAddress(size_t index) const = 0;
+  virtual KeyPair getAddressSpendKey(size_t index) const = 0;
+  virtual KeyPair getAddressSpendKey(const std::string& address) const = 0;
+  virtual KeyPair getViewKey() const = 0;
+  virtual std::string createAddress() = 0;
+  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) = 0;
+  virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) = 0;
+  virtual void deleteAddress(const std::string& address) = 0;
 
-  virtual std::string getAddress() = 0;
+  virtual uint64_t getActualBalance() const = 0;
+  virtual uint64_t getActualBalance(const std::string& address) const = 0;
+  virtual uint64_t getPendingBalance() const = 0;
+  virtual uint64_t getPendingBalance(const std::string& address) const = 0;
 
-  virtual uint64_t actualBalance() = 0;
-  virtual uint64_t pendingBalance() = 0;
+  virtual size_t getTransactionCount() const = 0;
+  virtual WalletTransaction getTransaction(size_t transactionIndex) const = 0;
+  virtual size_t getTransactionTransferCount(size_t transactionIndex) const = 0;
+  virtual WalletTransfer getTransactionTransfer(size_t transactionIndex, size_t transferIndex) const = 0;
 
-  virtual size_t getTransactionCount() = 0;
-  virtual size_t getTransferCount() = 0;
+  virtual WalletTransactionWithTransfers getTransaction(const Crypto::Hash& transactionHash) const = 0;
+  virtual std::vector<TransactionsInBlockInfo> getTransactions(const Crypto::Hash& blockHash, size_t count) const = 0;
+  virtual std::vector<TransactionsInBlockInfo> getTransactions(uint32_t blockIndex, size_t count) const = 0;
+  virtual std::vector<Crypto::Hash> getBlockHashes(uint32_t blockIndex, size_t count) const = 0;
+  virtual uint32_t getBlockCount() const  = 0;
+  virtual std::vector<WalletTransactionWithTransfers> getUnconfirmedTransactions() const = 0;
+  virtual std::vector<size_t> getDelayedTransactionIds() const = 0;
 
-  virtual TransactionId findTransactionByTransferId(TransferId transferId) = 0;
-  
-  virtual bool getTransaction(TransactionId transactionId, Transaction& transaction) = 0;
-  virtual bool getTransfer(TransferId transferId, Transfer& transfer) = 0;
+  virtual size_t transfer(const TransactionParameters& sendingTransaction) = 0;
 
-  virtual TransactionId sendTransaction(const Transfer& transfer, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) = 0;
-  virtual TransactionId sendTransaction(const std::vector<Transfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) = 0;
-  virtual std::error_code cancelTransaction(size_t transferId) = 0;
+  virtual size_t makeTransaction(const TransactionParameters& sendingTransaction) = 0;
+  virtual void commitTransaction(size_t transactionId) = 0;
+  virtual void rollbackUncommitedTransaction(size_t transactionId) = 0;
+
+  virtual void start() = 0;
+  virtual void stop() = 0;
+
+  //blocks until an event occurred
+  virtual WalletEvent getEvent() = 0;
 };
 
 }
