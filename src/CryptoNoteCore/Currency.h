@@ -61,7 +61,7 @@ public:
   uint64_t expectedNumberOfBlocksPerDay() const { return m_expectedNumberOfBlocksPerDay; }
   size_t blockGrantedFullRewardZoneV1() const { return m_blockGrantedFullRewardZoneV1; }
   size_t blockGrantedFullRewardZoneV2() const { return m_blockGrantedFullRewardZoneV2; }
-  size_t keyImageCheckingBlockIndex() const { return m_keyImageCheckingBlockIndex; }
+  uint32_t keyImageCheckingBlockIndex() const { return m_keyImageCheckingBlockIndex; }
   size_t blockGrantedFullRewardZoneByBlockVersion(uint8_t blockMajorVersion) const;
   size_t minerTxBlobReservedSize() const { return m_minerTxBlobReservedSize; }
   uint64_t maxTransactionSizeLimit() const { return m_maxTransactionSizeLimit; }
@@ -188,7 +188,7 @@ private:
   uint64_t m_expectedNumberOfBlocksPerDay;
   size_t m_blockGrantedFullRewardZoneV1;
   size_t m_blockGrantedFullRewardZoneV2;
-  size_t m_keyImageCheckingBlockIndex;
+  uint32_t m_keyImageCheckingBlockIndex;
   size_t m_minerTxBlobReservedSize;
   uint64_t m_maxTransactionSizeLimit;
 
@@ -288,7 +288,7 @@ public:
   CurrencyBuilder& expectedNumberOfBlocksPerDay(uint64_t val) { m_currency.m_expectedNumberOfBlocksPerDay = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV1(size_t val) { m_currency.m_blockGrantedFullRewardZoneV1 = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV2(size_t val) { m_currency.m_blockGrantedFullRewardZoneV2 = val; return *this; }
-  CurrencyBuilder& keyImageCheckingBlockIndex(size_t val) { m_currency.m_keyImageCheckingBlockIndex = val; return *this; }
+  CurrencyBuilder& keyImageCheckingBlockIndex(uint32_t val) { m_currency.m_keyImageCheckingBlockIndex = val; return *this; }
   CurrencyBuilder& minerTxBlobReservedSize(size_t val) { m_currency.m_minerTxBlobReservedSize = val; return *this; }
   CurrencyBuilder& maxTransactionSizeLimit(uint64_t val) { m_currency.m_maxTransactionSizeLimit = val; return *this; }
 

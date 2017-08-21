@@ -29,7 +29,8 @@ struct TransactionValidatorState {
   std::set<std::pair<uint64_t, uint32_t>> spentMultisignatureGlobalIndexes;
 };
 
-bool mergeStates(TransactionValidatorState& destionation, TransactionValidatorState& source);
+void mergeStates(TransactionValidatorState& destionation, const TransactionValidatorState& source);
+bool hasIntersections(const TransactionValidatorState& destionation, const TransactionValidatorState& source);
 void excludeFromState(TransactionValidatorState& state, const CachedTransaction& transaction);
 
 }
