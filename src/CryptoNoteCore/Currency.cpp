@@ -540,10 +540,6 @@ Difficulty Currency::nextDifficulty(uint8_t version, uint32_t blockIndex, std::v
       return 0;
     }
     uint64_t nextDiffZ = low / timeSpan;
-    if (nextDiffZ <= 100000) {
-      nextDiffZ = 100000;
-    }
-
     return nextDiffZ;
   }
 
@@ -552,9 +548,6 @@ Difficulty Currency::nextDifficulty(uint8_t version, uint32_t blockIndex, std::v
       return 0;
     }
     uint64_t nextDiffZ = low / timeSpan;
-    if (nextDiffZ <= 100000) {
-      nextDiffZ = 100000;
-    }
 
     return nextDiffZ;
   }
@@ -564,9 +557,6 @@ Difficulty Currency::nextDifficulty(uint8_t version, uint32_t blockIndex, std::v
       return 0;
     }
     uint64_t nextDiffZ = low / timeSpan;
-    if (nextDiffZ <= 100000) {
-      nextDiffZ = 100000;
-    }
 
     return nextDiffZ;
   }
@@ -622,9 +612,6 @@ DIFFICULTY_WINDOW=17
       return 0;
     }
     uint64_t nextDiffZ = low / timeSpan;
-    if (nextDiffZ <= 100000) {
-      nextDiffZ = 100000;
-    }
 
     return nextDiffZ;
   }
