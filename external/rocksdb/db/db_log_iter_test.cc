@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -10,10 +10,10 @@
 // Introduction of SyncPoint effectively disabled building and running this test
 // in Release build.
 // which is a pity, it is a good test
-#if !(defined NDEBUG) || !defined(OS_WIN)
+#if !defined(ROCKSDB_LITE)
 
+#include "db/db_test_util.h"
 #include "port/stack_trace.h"
-#include "util/db_test_util.h"
 
 namespace rocksdb {
 
@@ -27,7 +27,7 @@ class DBTestXactLogIterator : public DBTestBase {
     Status status = dbfull()->GetUpdatesSince(seq, &iter);
     EXPECT_OK(status);
     EXPECT_TRUE(iter->Valid());
-    return std::move(iter);
+    return iter;
   }
 };
 
@@ -277,10 +277,10 @@ TEST_F(DBTestXactLogIterator, TransactionLogIteratorBlobs) {
 }
 }  // namespace rocksdb
 
-#endif  // !(defined NDEBUG) || !defined(OS_WIN)
+#endif  // !defined(ROCKSDB_LITE)
 
 int main(int argc, char** argv) {
-#if !(defined NDEBUG) || !defined(OS_WIN)
+#if !defined(ROCKSDB_LITE)
   rocksdb::port::InstallStackTraceHandler();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

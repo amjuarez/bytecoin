@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -14,6 +14,7 @@
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
 #include "db/dbformat.h"
+#include "table/internal_iterator.h"
 #include "util/arena.h"
 
 namespace rocksdb {
@@ -23,6 +24,7 @@ class Env;
 struct SuperVersion;
 class ColumnFamilyData;
 class LevelIterator;
+class VersionStorageInfo;
 struct FileMetaData;
 
 class MinIterComparator {
@@ -30,16 +32,15 @@ class MinIterComparator {
   explicit MinIterComparator(const Comparator* comparator) :
     comparator_(comparator) {}
 
-  bool operator()(Iterator* a, Iterator* b) {
+  bool operator()(InternalIterator* a, InternalIterator* b) {
     return comparator_->Compare(a->key(), b->key()) > 0;
   }
  private:
   const Comparator* comparator_;
 };
 
-typedef std::priority_queue<Iterator*,
-          std::vector<Iterator*>,
-          MinIterComparator> MinIterHeap;
+typedef std::priority_queue<InternalIterator*, std::vector<InternalIterator*>,
+                            MinIterComparator> MinIterHeap;
 
 /**
  * ForwardIterator is a special type of iterator that only supports Seek()
@@ -48,7 +49,7 @@ typedef std::priority_queue<Iterator*,
  * the iterator. At the current implementation, snapshot is taken at the
  * time Seek() is called. The Next() followed do not see new values after.
  */
-class ForwardIterator : public Iterator {
+class ForwardIterator : public InternalIterator {
  public:
   ForwardIterator(DBImpl* db, const ReadOptions& read_options,
                   ColumnFamilyData* cfd, SuperVersion* current_sv = nullptr);
@@ -70,11 +71,16 @@ class ForwardIterator : public Iterator {
   virtual Slice key() const override;
   virtual Slice value() const override;
   virtual Status status() const override;
+  virtual Status GetProperty(std::string prop_name, std::string* prop) override;
+
   bool TEST_CheckDeletedIters(int* deleted_iters, int* num_iters);
 
  private:
   void Cleanup(bool release_sv);
+  void SVCleanup();
   void RebuildIterators(bool refresh_sv);
+  void RenewIterators();
+  void BuildLevelIterators(const VersionStorageInfo* vstorage);
   void ResetIncompleteIterators();
   void SeekInternal(const Slice& internal_key, bool seek_to_first);
   void UpdateCurrent();
@@ -94,11 +100,11 @@ class ForwardIterator : public Iterator {
   MinIterHeap immutable_min_heap_;
 
   SuperVersion* sv_;
-  Iterator* mutable_iter_;
-  std::vector<Iterator*> imm_iters_;
-  std::vector<Iterator*> l0_iters_;
+  InternalIterator* mutable_iter_;
+  std::vector<InternalIterator*> imm_iters_;
+  std::vector<InternalIterator*> l0_iters_;
   std::vector<LevelIterator*> level_iters_;
-  Iterator* current_;
+  InternalIterator* current_;
   bool valid_;
 
   // Internal iterator status; set only by one of the unsupported methods.

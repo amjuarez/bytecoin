@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -82,6 +82,7 @@ class VersionBuilder::Rep {
   };
 
   const EnvOptions& env_options_;
+  Logger* info_log_;
   TableCache* table_cache_;
   VersionStorageInfo* base_vstorage_;
   LevelState* levels_;
@@ -89,9 +90,10 @@ class VersionBuilder::Rep {
   FileComparator level_nonzero_cmp_;
 
  public:
-  Rep(const EnvOptions& env_options, TableCache* table_cache,
+  Rep(const EnvOptions& env_options, Logger* info_log, TableCache* table_cache,
       VersionStorageInfo* base_vstorage)
       : env_options_(env_options),
+        info_log_(info_log),
         table_cache_(table_cache),
         base_vstorage_(base_vstorage) {
     levels_ = new LevelState[base_vstorage_->num_levels()];
@@ -134,7 +136,10 @@ class VersionBuilder::Rep {
         auto f2 = level_files[i];
         if (level == 0) {
           assert(level_zero_cmp_(f1, f2));
-          assert(f1->largest_seqno > f2->largest_seqno);
+          assert(f1->largest_seqno > f2->largest_seqno ||
+                 // We can have multiple files with seqno = 0 as a result of
+                 // using DB::AddFile()
+                 (f1->largest_seqno == 0 && f2->largest_seqno == 0));
         } else {
           assert(level_nonzero_cmp_(f1, f2));
 
@@ -160,7 +165,7 @@ class VersionBuilder::Rep {
     for (int l = 0; !found && l < base_vstorage_->num_levels(); l++) {
       const std::vector<FileMetaData*>& base_files =
           base_vstorage_->LevelFiles(l);
-      for (unsigned int i = 0; i < base_files.size(); i++) {
+      for (size_t i = 0; i < base_files.size(); i++) {
         FileMetaData* f = base_files[i];
         if (f->fd.GetNumber() == number) {
           found = true;
@@ -282,7 +287,8 @@ class VersionBuilder::Rep {
     CheckConsistency(vstorage);
   }
 
-  void LoadTableHandlers(InternalStats* internal_stats, int max_threads) {
+  void LoadTableHandlers(InternalStats* internal_stats, int max_threads,
+                         bool prefetch_index_and_filter_in_cache) {
     assert(table_cache_ != nullptr);
     // <file metadata, level>
     std::vector<std::pair<FileMetaData*, int>> files_meta;
@@ -308,7 +314,8 @@ class VersionBuilder::Rep {
                                 *(base_vstorage_->InternalComparator()),
                                 file_meta->fd, &file_meta->table_reader_handle,
                                 false /*no_io */, true /* record_read_stats */,
-                                internal_stats->GetFileReadHist(level));
+                                internal_stats->GetFileReadHist(level), false,
+                                level, prefetch_index_and_filter_in_cache);
         if (file_meta->table_reader_handle != nullptr) {
           // Load table_reader
           file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
@@ -333,17 +340,19 @@ class VersionBuilder::Rep {
 
   void MaybeAddFile(VersionStorageInfo* vstorage, int level, FileMetaData* f) {
     if (levels_[level].deleted_files.count(f->fd.GetNumber()) > 0) {
-      // File is deleted: do nothing
+      // f is to-be-delected table file
+      vstorage->RemoveCurrentStats(f);
     } else {
-      vstorage->AddFile(level, f);
+      vstorage->AddFile(level, f, info_log_);
     }
   }
 };
 
 VersionBuilder::VersionBuilder(const EnvOptions& env_options,
                                TableCache* table_cache,
-                               VersionStorageInfo* base_vstorage)
-    : rep_(new Rep(env_options, table_cache, base_vstorage)) {}
+                               VersionStorageInfo* base_vstorage,
+                               Logger* info_log)
+    : rep_(new Rep(env_options, info_log, table_cache, base_vstorage)) {}
 VersionBuilder::~VersionBuilder() { delete rep_; }
 void VersionBuilder::CheckConsistency(VersionStorageInfo* vstorage) {
   rep_->CheckConsistency(vstorage);
@@ -356,9 +365,11 @@ void VersionBuilder::Apply(VersionEdit* edit) { rep_->Apply(edit); }
 void VersionBuilder::SaveTo(VersionStorageInfo* vstorage) {
   rep_->SaveTo(vstorage);
 }
-void VersionBuilder::LoadTableHandlers(InternalStats* internal_stats,
-                                       int max_threads) {
-  rep_->LoadTableHandlers(internal_stats, max_threads);
+void VersionBuilder::LoadTableHandlers(
+    InternalStats* internal_stats, int max_threads,
+    bool prefetch_index_and_filter_in_cache) {
+  rep_->LoadTableHandlers(internal_stats, max_threads,
+                          prefetch_index_and_filter_in_cache);
 }
 void VersionBuilder::MaybeAddFile(VersionStorageInfo* vstorage, int level,
                                   FileMetaData* f) {

@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -11,14 +11,15 @@
 
 #include <inttypes.h>
 #include <string>
-#include "rocksdb/db.h"
 #include "db/memtable.h"
 #include "db/version_set.h"
+#include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
 #include "table/merger.h"
 #include "util/coding.h"
 #include "util/log_buffer.h"
+#include "util/sync_point.h"
 #include "util/thread_status_util.h"
 
 namespace rocksdb {
@@ -138,9 +139,9 @@ bool MemTableListVersion::GetFromList(std::list<MemTable*>* list,
   return false;
 }
 
-void MemTableListVersion::AddIterators(const ReadOptions& options,
-                                       std::vector<Iterator*>* iterator_list,
-                                       Arena* arena) {
+void MemTableListVersion::AddIterators(
+    const ReadOptions& options, std::vector<InternalIterator*>* iterator_list,
+    Arena* arena) {
   for (auto& m : memlist_) {
     iterator_list->push_back(m->NewIterator(options, arena));
   }
@@ -297,56 +298,81 @@ Status MemTableList::InstallMemtableFlushResults(
   // if some other thread is already committing, then return
   Status s;
   if (commit_in_progress_) {
+    TEST_SYNC_POINT("MemTableList::InstallMemtableFlushResults:InProgress");
     return s;
   }
 
   // Only a single thread can be executing this piece of code
   commit_in_progress_ = true;
 
-  // scan all memtables from the earliest, and commit those
-  // (in that order) that have finished flushing. Memetables
-  // are always committed in the order that they were created.
-  while (!current_->memlist_.empty() && s.ok()) {
-    MemTable* m = current_->memlist_.back();  // get the last element
-    if (!m->flush_completed_) {
+  // Retry until all completed flushes are committed. New flushes can finish
+  // while the current thread is writing manifest where mutex is released.
+  while (s.ok()) {
+    auto& memlist = current_->memlist_;
+    if (memlist.empty() || !memlist.back()->flush_completed_) {
       break;
     }
-
-    LogToBuffer(log_buffer, "[%s] Level-0 commit table #%" PRIu64 " started",
-                cfd->GetName().c_str(), m->file_number_);
-
-    // this can release and reacquire the mutex.
-    s = vset->LogAndApply(cfd, mutable_cf_options, &m->edit_, mu, db_directory);
-
-    // we will be changing the version in the next code path,
-    // so we better create a new one, since versions are immutable
-    InstallNewVersion();
-
-    // All the later memtables that have the same filenum
-    // are part of the same batch. They can be committed now.
-    uint64_t mem_id = 1;  // how many memtables have been flushed.
-    do {
-      if (s.ok()) { // commit new state
-        LogToBuffer(log_buffer, "[%s] Level-0 commit table #%" PRIu64
-                                ": memtable #%" PRIu64 " done",
-                    cfd->GetName().c_str(), m->file_number_, mem_id);
-        assert(m->file_number_ > 0);
-        current_->Remove(m, to_delete);
-      } else {
-        // commit failed. setup state so that we can flush again.
-        LogToBuffer(log_buffer, "Level-0 commit table #%" PRIu64
-                                ": memtable #%" PRIu64 " failed",
-                    m->file_number_, mem_id);
-        m->flush_completed_ = false;
-        m->flush_in_progress_ = false;
-        m->edit_.Clear();
-        num_flush_not_started_++;
-        m->file_number_ = 0;
-        imm_flush_needed.store(true, std::memory_order_release);
+    // scan all memtables from the earliest, and commit those
+    // (in that order) that have finished flushing. Memetables
+    // are always committed in the order that they were created.
+    uint64_t batch_file_number = 0;
+    size_t batch_count = 0;
+    autovector<VersionEdit*> edit_list;
+    // enumerate from the last (earliest) element to see how many batch finished
+    for (auto it = memlist.rbegin(); it != memlist.rend(); ++it) {
+      MemTable* m = *it;
+      if (!m->flush_completed_) {
+        break;
       }
-      ++mem_id;
-    } while (!current_->memlist_.empty() && (m = current_->memlist_.back()) &&
-             m->file_number_ == file_number);
+      if (it == memlist.rbegin() || batch_file_number != m->file_number_) {
+        batch_file_number = m->file_number_;
+        LogToBuffer(log_buffer,
+                    "[%s] Level-0 commit table #%" PRIu64 " started",
+                    cfd->GetName().c_str(), m->file_number_);
+        edit_list.push_back(&m->edit_);
+      }
+      batch_count++;
+    }
+
+    if (batch_count > 0) {
+      // this can release and reacquire the mutex.
+      s = vset->LogAndApply(cfd, mutable_cf_options, edit_list, mu,
+                            db_directory);
+
+      // we will be changing the version in the next code path,
+      // so we better create a new one, since versions are immutable
+      InstallNewVersion();
+
+      // All the later memtables that have the same filenum
+      // are part of the same batch. They can be committed now.
+      uint64_t mem_id = 1;  // how many memtables have been flushed.
+      if (s.ok()) {         // commit new state
+        while (batch_count-- > 0) {
+          MemTable* m = current_->memlist_.back();
+          LogToBuffer(log_buffer, "[%s] Level-0 commit table #%" PRIu64
+                                  ": memtable #%" PRIu64 " done",
+                      cfd->GetName().c_str(), m->file_number_, mem_id);
+          assert(m->file_number_ > 0);
+          current_->Remove(m, to_delete);
+          ++mem_id;
+        }
+      } else {
+        for (auto it = current_->memlist_.rbegin(); batch_count-- > 0; it++) {
+          MemTable* m = *it;
+          // commit failed. setup state so that we can flush again.
+          LogToBuffer(log_buffer, "Level-0 commit table #%" PRIu64
+                                  ": memtable #%" PRIu64 " failed",
+                      m->file_number_, mem_id);
+          m->flush_completed_ = false;
+          m->flush_in_progress_ = false;
+          m->edit_.Clear();
+          num_flush_not_started_++;
+          m->file_number_ = 0;
+          imm_flush_needed.store(true, std::memory_order_release);
+          ++mem_id;
+        }
+      }
+    }
   }
   commit_in_progress_ = false;
   return s;
@@ -390,6 +416,26 @@ void MemTableList::InstallNewVersion() {
     current_->Ref();
     version->Unref();
   }
+}
+
+uint64_t MemTableList::GetMinLogContainingPrepSection() {
+  uint64_t min_log = 0;
+
+  for (auto& m : current_->memlist_) {
+    // this mem has been flushed it no longer
+    // needs to hold on the its prep section
+    if (m->flush_completed_) {
+      continue;
+    }
+
+    auto log = m->GetMinLogContainingPrepSection();
+
+    if (log > 0 && (min_log == 0 || log < min_log)) {
+      min_log = log;
+    }
+  }
+
+  return min_log;
 }
 
 }  // namespace rocksdb

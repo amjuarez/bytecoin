@@ -1,4 +1,4 @@
-//  Copyright (c) 2015, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -6,6 +6,7 @@
 #pragma once
 
 #ifndef ROCKSDB_LITE
+#include "rocksdb/utilities/table_properties_collectors.h"
 namespace rocksdb {
 
 // A factory of a table property collector that marks a SST
@@ -28,7 +29,8 @@ class CompactOnDeletionCollectorFactory
 
   virtual ~CompactOnDeletionCollectorFactory() {}
 
-  virtual TablePropertiesCollector* CreateTablePropertiesCollector() override;
+  virtual TablePropertiesCollector* CreateTablePropertiesCollector(
+      TablePropertiesCollectorFactory::Context context) override;
 
   virtual const char* Name() const override {
     return "CompactOnDeletionCollector";

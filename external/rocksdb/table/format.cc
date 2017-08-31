@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -14,6 +14,8 @@
 
 #include "rocksdb/env.h"
 #include "table/block.h"
+#include "table/block_based_table_reader.h"
+#include "table/persistent_cache_helper.h"
 #include "util/coding.h"
 #include "util/compression.h"
 #include "util/crc32c.h"
@@ -21,6 +23,9 @@
 #include "util/perf_context_imp.h"
 #include "util/string_util.h"
 #include "util/xxhash.h"
+#include "util/statistics.h"
+#include "util/stop_watch.h"
+
 
 namespace rocksdb {
 
@@ -37,12 +42,16 @@ const uint64_t kPlainTableMagicNumber = 0;
 #endif
 const uint32_t DefaultStackBufferSize = 5000;
 
+bool ShouldReportDetailedTime(Env* env, Statistics* stats) {
+  return env != nullptr && stats != nullptr &&
+         stats->stats_level_ > kExceptDetailedTimers;
+}
+
 void BlockHandle::EncodeTo(std::string* dst) const {
   // Sanity check that all fields have been set
   assert(offset_ != ~static_cast<uint64_t>(0));
   assert(size_ != ~static_cast<uint64_t>(0));
-  PutVarint64(dst, offset_);
-  PutVarint64(dst, size_);
+  PutVarint64Varint64(dst, offset_, size_);
 }
 
 Status BlockHandle::DecodeFrom(Slice* input) {
@@ -59,14 +68,7 @@ std::string BlockHandle::ToString(bool hex) const {
   std::string handle_str;
   EncodeTo(&handle_str);
   if (hex) {
-    std::string result;
-    char buf[10];
-    for (size_t i = 0; i < handle_str.size(); i++) {
-      snprintf(buf, sizeof(buf), "%02X",
-               static_cast<unsigned char>(handle_str[i]));
-      result += buf;
-    }
-    return result;
+    return Slice(handle_str).ToString(true);
   } else {
     return handle_str;
   }
@@ -301,9 +303,12 @@ Status ReadBlock(RandomAccessFileReader* file, const Footer& footer,
 }  // namespace
 
 Status ReadBlockContents(RandomAccessFileReader* file, const Footer& footer,
-                         const ReadOptions& options, const BlockHandle& handle,
-                         BlockContents* contents, Env* env,
-                         bool decompression_requested) {
+                         const ReadOptions& read_options,
+                         const BlockHandle& handle, BlockContents* contents,
+                         const ImmutableCFOptions &ioptions,
+                         bool decompression_requested,
+                         const Slice& compression_dict,
+                         const PersistentCacheOptions& cache_options) {
   Status status;
   Slice slice;
   size_t n = static_cast<size_t>(handle.size());
@@ -312,17 +317,63 @@ Status ReadBlockContents(RandomAccessFileReader* file, const Footer& footer,
   char* used_buf = nullptr;
   rocksdb::CompressionType compression_type;
 
-  if (decompression_requested &&
-      n + kBlockTrailerSize < DefaultStackBufferSize) {
-    // If we've got a small enough hunk of data, read it in to the
-    // trivially allocated stack buffer instead of needing a full malloc()
-    used_buf = &stack_buf[0];
-  } else {
-    heap_buf = std::unique_ptr<char[]>(new char[n + kBlockTrailerSize]);
-    used_buf = heap_buf.get();
+  if (cache_options.persistent_cache &&
+      !cache_options.persistent_cache->IsCompressed()) {
+    status = PersistentCacheHelper::LookupUncompressedPage(cache_options,
+                                                           handle, contents);
+    if (status.ok()) {
+      // uncompressed page is found for the block handle
+      return status;
+    } else {
+      // uncompressed page is not found
+      if (ioptions.info_log && !status.IsNotFound()) {
+        assert(!status.ok());
+        Log(InfoLogLevel::INFO_LEVEL, ioptions.info_log,
+            "Error reading from persistent cache. %s",
+            status.ToString().c_str());
+      }
+    }
   }
 
-  status = ReadBlock(file, footer, options, handle, &slice, used_buf);
+  if (cache_options.persistent_cache &&
+      cache_options.persistent_cache->IsCompressed()) {
+    // lookup uncompressed cache mode p-cache
+    status = PersistentCacheHelper::LookupRawPage(
+        cache_options, handle, &heap_buf, n + kBlockTrailerSize);
+  } else {
+    status = Status::NotFound();
+  }
+
+  if (status.ok()) {
+    // cache hit
+    used_buf = heap_buf.get();
+    slice = Slice(heap_buf.get(), n);
+  } else {
+    if (ioptions.info_log && !status.IsNotFound()) {
+      assert(!status.ok());
+      Log(InfoLogLevel::INFO_LEVEL, ioptions.info_log,
+          "Error reading from persistent cache. %s", status.ToString().c_str());
+    }
+    // cache miss read from device
+    if (decompression_requested &&
+        n + kBlockTrailerSize < DefaultStackBufferSize) {
+      // If we've got a small enough hunk of data, read it in to the
+      // trivially allocated stack buffer instead of needing a full malloc()
+      used_buf = &stack_buf[0];
+    } else {
+      heap_buf = std::unique_ptr<char[]>(new char[n + kBlockTrailerSize]);
+      used_buf = heap_buf.get();
+    }
+
+    status = ReadBlock(file, footer, read_options, handle, &slice, used_buf);
+    if (status.ok() && read_options.fill_cache &&
+        cache_options.persistent_cache &&
+        cache_options.persistent_cache->IsCompressed()) {
+      // insert to raw cache
+      PersistentCacheHelper::InsertRawPage(cache_options, handle, used_buf,
+                                           n + kBlockTrailerSize);
+    }
+  }
 
   if (!status.ok()) {
     return status;
@@ -333,37 +384,45 @@ Status ReadBlockContents(RandomAccessFileReader* file, const Footer& footer,
   compression_type = static_cast<rocksdb::CompressionType>(slice.data()[n]);
 
   if (decompression_requested && compression_type != kNoCompression) {
-    return UncompressBlockContents(slice.data(), n, contents, footer.version());
-  }
-
-  if (slice.data() != used_buf) {
+    // compressed page, uncompress, update cache
+    status = UncompressBlockContents(slice.data(), n, contents,
+                                     footer.version(), compression_dict,
+                                     ioptions);
+  } else if (slice.data() != used_buf) {
+    // the slice content is not the buffer provided
     *contents = BlockContents(Slice(slice.data(), n), false, compression_type);
-    return status;
+  } else {
+    // page is uncompressed, the buffer either stack or heap provided
+    if (used_buf == &stack_buf[0]) {
+      heap_buf = std::unique_ptr<char[]>(new char[n]);
+      memcpy(heap_buf.get(), stack_buf, n);
+    }
+    *contents = BlockContents(std::move(heap_buf), n, true, compression_type);
   }
 
-  if (used_buf == &stack_buf[0]) {
-    heap_buf = std::unique_ptr<char[]>(new char[n]);
-    memcpy(heap_buf.get(), stack_buf, n);
+  if (status.ok() && read_options.fill_cache &&
+      cache_options.persistent_cache &&
+      !cache_options.persistent_cache->IsCompressed()) {
+    // insert to uncompressed cache
+    PersistentCacheHelper::InsertUncompressedPage(cache_options, handle,
+                                                  *contents);
   }
 
-  *contents = BlockContents(std::move(heap_buf), n, true, compression_type);
   return status;
 }
 
-//
-// The 'data' points to the raw block contents that was read in from file.
-// This method allocates a new heap buffer and the raw block
-// contents are uncompresed into this buffer. This
-// buffer is returned via 'result' and it is upto the caller to
-// free this buffer.
-// format_version is the block format as defined in include/rocksdb/table.h
-Status UncompressBlockContents(const char* data, size_t n,
-                               BlockContents* contents,
-                               uint32_t format_version) {
+Status UncompressBlockContentsForCompressionType(
+    const char* data, size_t n, BlockContents* contents,
+    uint32_t format_version, const Slice& compression_dict,
+    CompressionType compression_type, const ImmutableCFOptions &ioptions) {
   std::unique_ptr<char[]> ubuf;
+
+  assert(compression_type != kNoCompression && "Invalid compression type");
+
+  StopWatchNano timer(ioptions.env,
+    ShouldReportDetailedTime(ioptions.env, ioptions.statistics));
   int decompress_size = 0;
-  assert(data[n] != kNoCompression);
-  switch (data[n]) {
+  switch (compression_type) {
     case kSnappyCompression: {
       size_t ulength = 0;
       static char snappy_corrupt_msg[] =
@@ -371,7 +430,7 @@ Status UncompressBlockContents(const char* data, size_t n,
       if (!Snappy_GetUncompressedLength(data, n, &ulength)) {
         return Status::Corruption(snappy_corrupt_msg);
       }
-      ubuf = std::unique_ptr<char[]>(new char[ulength]);
+      ubuf.reset(new char[ulength]);
       if (!Snappy_Uncompress(data, n, ubuf.get())) {
         return Status::Corruption(snappy_corrupt_msg);
       }
@@ -379,9 +438,10 @@ Status UncompressBlockContents(const char* data, size_t n,
       break;
     }
     case kZlibCompression:
-      ubuf = std::unique_ptr<char[]>(Zlib_Uncompress(
+      ubuf.reset(Zlib_Uncompress(
           data, n, &decompress_size,
-          GetCompressFormatForVersion(kZlibCompression, format_version)));
+          GetCompressFormatForVersion(kZlibCompression, format_version),
+          compression_dict));
       if (!ubuf) {
         static char zlib_corrupt_msg[] =
           "Zlib not supported or corrupted Zlib compressed block contents";
@@ -391,7 +451,7 @@ Status UncompressBlockContents(const char* data, size_t n,
           BlockContents(std::move(ubuf), decompress_size, true, kNoCompression);
       break;
     case kBZip2Compression:
-      ubuf = std::unique_ptr<char[]>(BZip2_Uncompress(
+      ubuf.reset(BZip2_Uncompress(
           data, n, &decompress_size,
           GetCompressFormatForVersion(kBZip2Compression, format_version)));
       if (!ubuf) {
@@ -403,9 +463,10 @@ Status UncompressBlockContents(const char* data, size_t n,
           BlockContents(std::move(ubuf), decompress_size, true, kNoCompression);
       break;
     case kLZ4Compression:
-      ubuf = std::unique_ptr<char[]>(LZ4_Uncompress(
+      ubuf.reset(LZ4_Uncompress(
           data, n, &decompress_size,
-          GetCompressFormatForVersion(kLZ4Compression, format_version)));
+          GetCompressFormatForVersion(kLZ4Compression, format_version),
+          compression_dict));
       if (!ubuf) {
         static char lz4_corrupt_msg[] =
           "LZ4 not supported or corrupted LZ4 compressed block contents";
@@ -415,9 +476,10 @@ Status UncompressBlockContents(const char* data, size_t n,
           BlockContents(std::move(ubuf), decompress_size, true, kNoCompression);
       break;
     case kLZ4HCCompression:
-      ubuf = std::unique_ptr<char[]>(LZ4_Uncompress(
+      ubuf.reset(LZ4_Uncompress(
           data, n, &decompress_size,
-          GetCompressFormatForVersion(kLZ4HCCompression, format_version)));
+          GetCompressFormatForVersion(kLZ4HCCompression, format_version),
+          compression_dict));
       if (!ubuf) {
         static char lz4hc_corrupt_msg[] =
           "LZ4HC not supported or corrupted LZ4HC compressed block contents";
@@ -426,9 +488,18 @@ Status UncompressBlockContents(const char* data, size_t n,
       *contents =
           BlockContents(std::move(ubuf), decompress_size, true, kNoCompression);
       break;
+    case kXpressCompression:
+      ubuf.reset(XPRESS_Uncompress(data, n, &decompress_size));
+      if (!ubuf) {
+        static char xpress_corrupt_msg[] =
+          "XPRESS not supported or corrupted XPRESS compressed block contents";
+        return Status::Corruption(xpress_corrupt_msg);
+      }
+      *contents =
+        BlockContents(std::move(ubuf), decompress_size, true, kNoCompression);
+      break;
     case kZSTDNotFinalCompression:
-      ubuf =
-          std::unique_ptr<char[]>(ZSTD_Uncompress(data, n, &decompress_size));
+      ubuf.reset(ZSTD_Uncompress(data, n, &decompress_size, compression_dict));
       if (!ubuf) {
         static char zstd_corrupt_msg[] =
             "ZSTD not supported or corrupted ZSTD compressed block contents";
@@ -440,7 +511,32 @@ Status UncompressBlockContents(const char* data, size_t n,
     default:
       return Status::Corruption("bad block type");
   }
+
+  if(ShouldReportDetailedTime(ioptions.env, ioptions.statistics)){
+    MeasureTime(ioptions.statistics, DECOMPRESSION_TIMES_NANOS,
+      timer.ElapsedNanos());
+    MeasureTime(ioptions.statistics, BYTES_DECOMPRESSED, contents->data.size());
+    RecordTick(ioptions.statistics, NUMBER_BLOCK_DECOMPRESSED);
+  }
+
   return Status::OK();
+}
+
+//
+// The 'data' points to the raw block contents that was read in from file.
+// This method allocates a new heap buffer and the raw block
+// contents are uncompresed into this buffer. This
+// buffer is returned via 'result' and it is upto the caller to
+// free this buffer.
+// format_version is the block format as defined in include/rocksdb/table.h
+Status UncompressBlockContents(const char* data, size_t n,
+                               BlockContents* contents, uint32_t format_version,
+                               const Slice& compression_dict,
+                               const ImmutableCFOptions &ioptions) {
+  assert(data[n] != kNoCompression);
+  return UncompressBlockContentsForCompressionType(
+      data, n, contents, format_version, compression_dict,
+      (CompressionType)data[n], ioptions);
 }
 
 }  // namespace rocksdb

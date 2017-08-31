@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -10,7 +10,9 @@
 // Logger implementation that can be shared by all environments
 // where enough posix functionality is available.
 
-#include <stdint.h>
+#include "port/win/win_logger.h"
+#include "port/win/io_win.h"
+
 #include <algorithm>
 #include <stdio.h>
 #include <time.h>
@@ -19,13 +21,12 @@
 
 #include "rocksdb/env.h"
 
-#include <Windows.h>
-
-#include "port/win/win_logger.h"
 #include "port/sys_time.h"
 #include "util/iostats_context_imp.h"
 
 namespace rocksdb {
+
+namespace port {
 
 WinLogger::WinLogger(uint64_t (*gettid)(), Env* env, HANDLE file,
                      const InfoLogLevel log_level)
@@ -53,8 +54,9 @@ void WinLogger::close() { CloseHandle(file_); }
 void WinLogger::Flush() {
   if (flush_pending_) {
     flush_pending_ = false;
-    // With Windows API writes go to OS buffers directly so no fflush needed unlike 
-    // with C runtime API. We don't flush all the way to disk for perf reasons.
+    // With Windows API writes go to OS buffers directly so no fflush needed
+    // unlike with C runtime API. We don't flush all the way to disk
+    // for perf reasons.
   }
 
   last_flush_micros_ = env_->NowMicros();
@@ -124,15 +126,16 @@ void WinLogger::Logv(const char* format, va_list ap) {
     assert(p <= limit);
     const size_t write_size = p - base;
 
-    DWORD bytesWritten = 0;    
-    BOOL ret = WriteFile(file_, base, write_size, &bytesWritten, NULL);
+    DWORD bytesWritten = 0;
+    BOOL ret = WriteFile(file_, base, static_cast<DWORD>(write_size),
+      &bytesWritten, NULL);
     if (ret == FALSE) {
       std::string errSz = GetWindowsErrSz(GetLastError());
       fprintf(stderr, errSz.c_str());
     }
 
     flush_pending_ = true;
-    assert(bytesWritten == write_size);
+    assert((bytesWritten == write_size) || (ret == FALSE));
     if (bytesWritten > 0) {
       log_size_ += write_size;
     }
@@ -141,8 +144,9 @@ void WinLogger::Logv(const char* format, va_list ap) {
         static_cast<uint64_t>(now_tv.tv_sec) * 1000000 + now_tv.tv_usec;
     if (now_micros - last_flush_micros_ >= flush_every_seconds_ * 1000000) {
       flush_pending_ = false;
-      // With Windows API writes go to OS buffers directly so no fflush needed unlike 
-      // with C runtime API. We don't flush all the way to disk for perf reasons.
+      // With Windows API writes go to OS buffers directly so no fflush needed
+      // unlike with C runtime API. We don't flush all the way to disk
+      // for perf reasons.
       last_flush_micros_ = now_micros;
     }
     break;
@@ -150,5 +154,7 @@ void WinLogger::Logv(const char* format, va_list ap) {
 }
 
 size_t WinLogger::GetLogFileSize() const { return log_size_; }
+
+}
 
 }  // namespace rocksdb

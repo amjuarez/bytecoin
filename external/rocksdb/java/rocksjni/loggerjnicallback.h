@@ -1,4 +1,4 @@
-// Copyright (c) 2015, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -38,6 +38,12 @@ namespace rocksdb {
      JavaVM* m_jvm;
      jobject m_jLogger;
      jmethodID m_jLogMethodId;
+     jobject m_jdebug_level;
+     jobject m_jinfo_level;
+     jobject m_jwarn_level;
+     jobject m_jerror_level;
+     jobject m_jfatal_level;
+     jobject m_jheader_level;
   };
 }  // namespace rocksdb
 

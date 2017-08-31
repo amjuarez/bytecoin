@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -20,9 +20,11 @@ int main() {
 #include <gflags/gflags.h>
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
+#include "rocksdb/filter_policy.h"
 #include "rocksdb/perf_context.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/memtablerep.h"
+#include "rocksdb/table.h"
 #include "util/histogram.h"
 #include "util/stop_watch.h"
 #include "util/string_util.h"
@@ -41,9 +43,8 @@ DEFINE_int64(write_buffer_size, 33554432, "");
 DEFINE_int32(max_write_buffer_number, 2, "");
 DEFINE_int32(min_write_buffer_number_to_merge, 1, "");
 DEFINE_int32(skiplist_height, 4, "");
-DEFINE_int32(memtable_prefix_bloom_bits, 10000000, "");
-DEFINE_int32(memtable_prefix_bloom_probes, 10, "");
-DEFINE_int32(memtable_prefix_bloom_huge_page_tlb_size, 2 * 1024 * 1024, "");
+DEFINE_double(memtable_prefix_bloom_size_ratio, 0.1, "");
+DEFINE_int32(memtable_huge_page_size, 2 * 1024 * 1024, "");
 DEFINE_int32(value_size, 40, "");
 
 // Path to the database on file system
@@ -145,6 +146,35 @@ std::string Get(DB* db, const ReadOptions& read_options, uint64_t prefix,
   }
   return result;
 }
+
+class SamePrefixTransform : public SliceTransform {
+ private:
+  const Slice prefix_;
+  std::string name_;
+
+ public:
+  explicit SamePrefixTransform(const Slice& prefix)
+      : prefix_(prefix), name_("rocksdb.SamePrefix." + prefix.ToString()) {}
+
+  virtual const char* Name() const override { return name_.c_str(); }
+
+  virtual Slice Transform(const Slice& src) const override {
+    assert(InDomain(src));
+    return prefix_;
+  }
+
+  virtual bool InDomain(const Slice& src) const override {
+    if (src.size() >= prefix_.size()) {
+      return Slice(src.data(), prefix_.size()) == prefix_;
+    }
+    return false;
+  }
+
+  virtual bool InRange(const Slice& dst) const override {
+    return dst == prefix_;
+  }
+};
+
 }  // namespace
 
 class PrefixTest : public testing::Test {
@@ -158,10 +188,15 @@ class PrefixTest : public testing::Test {
     options.min_write_buffer_number_to_merge =
       FLAGS_min_write_buffer_number_to_merge;
 
-    options.memtable_prefix_bloom_bits = FLAGS_memtable_prefix_bloom_bits;
-    options.memtable_prefix_bloom_probes = FLAGS_memtable_prefix_bloom_probes;
-    options.memtable_prefix_bloom_huge_page_tlb_size =
-        FLAGS_memtable_prefix_bloom_huge_page_tlb_size;
+    options.memtable_prefix_bloom_size_ratio =
+        FLAGS_memtable_prefix_bloom_size_ratio;
+    options.memtable_huge_page_size = FLAGS_memtable_huge_page_size;
+
+    options.prefix_extractor.reset(NewFixedPrefixTransform(8));
+    BlockBasedTableOptions bbto;
+    bbto.filter_policy.reset(NewBloomFilterPolicy(10, false));
+    bbto.whole_key_filtering = false;
+    options.table_factory.reset(NewBlockBasedTableFactory(bbto));
 
     Status s = DB::Open(options, kDbName,  &db);
     EXPECT_OK(s);
@@ -219,6 +254,55 @@ class PrefixTest : public testing::Test {
   int option_config_;
   Options options;
 };
+
+TEST(SamePrefixTest, InDomainTest) {
+  DB* db;
+  Options options;
+  options.create_if_missing = true;
+  options.prefix_extractor.reset(new SamePrefixTransform("HHKB"));
+  BlockBasedTableOptions bbto;
+  bbto.filter_policy.reset(NewBloomFilterPolicy(10, false));
+  bbto.whole_key_filtering = false;
+  options.table_factory.reset(NewBlockBasedTableFactory(bbto));
+  WriteOptions write_options;
+  ReadOptions read_options;
+  {
+    ASSERT_OK(DB::Open(options, kDbName, &db));
+    ASSERT_OK(db->Put(write_options, "HHKB pro2", "Mar 24, 2006"));
+    ASSERT_OK(db->Put(write_options, "HHKB pro2 Type-S", "June 29, 2011"));
+    ASSERT_OK(db->Put(write_options, "Realforce 87u", "idk"));
+    db->Flush(FlushOptions());
+    std::string result;
+    auto db_iter = db->NewIterator(ReadOptions());
+
+    db_iter->Seek("Realforce 87u");
+    ASSERT_TRUE(db_iter->Valid());
+    ASSERT_OK(db_iter->status());
+    ASSERT_EQ(db_iter->key(), "Realforce 87u");
+    ASSERT_EQ(db_iter->value(), "idk");
+
+    delete db_iter;
+    delete db;
+    ASSERT_OK(DestroyDB(kDbName, Options()));
+  }
+
+  {
+    ASSERT_OK(DB::Open(options, kDbName, &db));
+    ASSERT_OK(db->Put(write_options, "pikachu", "1"));
+    ASSERT_OK(db->Put(write_options, "Meowth", "1"));
+    ASSERT_OK(db->Put(write_options, "Mewtwo", "idk"));
+    db->Flush(FlushOptions());
+    std::string result;
+    auto db_iter = db->NewIterator(ReadOptions());
+
+    db_iter->Seek("Mewtwo");
+    ASSERT_TRUE(db_iter->Valid());
+    ASSERT_OK(db_iter->status());
+    delete db_iter;
+    delete db;
+    ASSERT_OK(DestroyDB(kDbName, Options()));
+  }
+}
 
 TEST_F(PrefixTest, TestResult) {
   for (int num_buckets = 1; num_buckets <= 2; num_buckets++) {
@@ -389,6 +473,59 @@ TEST_F(PrefixTest, TestResult) {
       ASSERT_EQ(v16.ToString(), Get(db.get(), read_options, 1, 6));
       ASSERT_EQ(v17.ToString(), Get(db.get(), read_options, 1, 7));
       ASSERT_EQ(v18.ToString(), Get(db.get(), read_options, 1, 8));
+    }
+  }
+}
+
+// Show results in prefix
+TEST_F(PrefixTest, PrefixValid) {
+  for (int num_buckets = 1; num_buckets <= 2; num_buckets++) {
+    FirstOption();
+    while (NextOptions(num_buckets)) {
+      std::cout << "*** Mem table: " << options.memtable_factory->Name()
+                << " number of buckets: " << num_buckets << std::endl;
+      DestroyDB(kDbName, Options());
+      auto db = OpenDb();
+      WriteOptions write_options;
+      ReadOptions read_options;
+
+      // Insert keys with common prefix and one key with different
+      Slice v16("v16");
+      Slice v17("v17");
+      Slice v18("v18");
+      Slice v19("v19");
+      PutKey(db.get(), write_options, 12345, 6, v16);
+      PutKey(db.get(), write_options, 12345, 7, v17);
+      PutKey(db.get(), write_options, 12345, 8, v18);
+      PutKey(db.get(), write_options, 12345, 9, v19);
+      PutKey(db.get(), write_options, 12346, 8, v16);
+      db->Flush(FlushOptions());
+      db->Delete(write_options, TestKeyToSlice(TestKey(12346, 8)));
+      db->Flush(FlushOptions());
+      read_options.prefix_same_as_start = true;
+      std::unique_ptr<Iterator> iter(db->NewIterator(read_options));
+      SeekIterator(iter.get(), 12345, 6);
+      ASSERT_TRUE(iter->Valid());
+      ASSERT_TRUE(v16 == iter->value());
+
+      iter->Next();
+      ASSERT_TRUE(iter->Valid());
+      ASSERT_TRUE(v17 == iter->value());
+
+      iter->Next();
+      ASSERT_TRUE(iter->Valid());
+      ASSERT_TRUE(v18 == iter->value());
+
+      iter->Next();
+      ASSERT_TRUE(iter->Valid());
+      ASSERT_TRUE(v19 == iter->value());
+      iter->Next();
+      ASSERT_FALSE(iter->Valid());
+      ASSERT_EQ(kNotFoundResult, Get(db.get(), read_options, 12346, 8));
+
+      // Verify seeking past the prefix won't return a result.
+      SeekIterator(iter.get(), 12345, 10);
+      ASSERT_TRUE(!iter->Valid());
     }
   }
 }

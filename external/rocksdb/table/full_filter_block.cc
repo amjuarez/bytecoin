@@ -1,4 +1,4 @@
-//  Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -53,20 +53,22 @@ Slice FullFilterBlockBuilder::Finish() {
 }
 
 FullFilterBlockReader::FullFilterBlockReader(
-    const SliceTransform* prefix_extractor, bool whole_key_filtering,
-    const Slice& contents, FilterBitsReader* filter_bits_reader)
-    : prefix_extractor_(prefix_extractor),
-      whole_key_filtering_(whole_key_filtering),
+    const SliceTransform* prefix_extractor, bool _whole_key_filtering,
+    const Slice& contents, FilterBitsReader* filter_bits_reader,
+    Statistics* stats)
+    : FilterBlockReader(contents.size(), stats, _whole_key_filtering),
+      prefix_extractor_(prefix_extractor),
       contents_(contents) {
   assert(filter_bits_reader != nullptr);
   filter_bits_reader_.reset(filter_bits_reader);
 }
 
 FullFilterBlockReader::FullFilterBlockReader(
-    const SliceTransform* prefix_extractor, bool whole_key_filtering,
-    BlockContents&& contents, FilterBitsReader* filter_bits_reader)
-    : FullFilterBlockReader(prefix_extractor, whole_key_filtering,
-                            contents.data, filter_bits_reader) {
+    const SliceTransform* prefix_extractor, bool _whole_key_filtering,
+    BlockContents&& contents, FilterBitsReader* filter_bits_reader,
+    Statistics* stats)
+    : FullFilterBlockReader(prefix_extractor, _whole_key_filtering,
+                            contents.data, filter_bits_reader, stats) {
   block_contents_ = std::move(contents);
 }
 

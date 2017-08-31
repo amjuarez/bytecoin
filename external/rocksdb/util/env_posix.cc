@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -6,13 +6,14 @@
 // Copyright (c) 2011 The LevelDB Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
-
-#include <deque>
-#include <set>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#if defined(OS_LINUX)
+#include <linux/fs.h>
+#endif
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,25 +27,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
-#include <unistd.h>
-#if defined(OS_LINUX)
-#include <linux/fs.h>
-#endif
-#include <signal.h>
 #include <algorithm>
-#include "rocksdb/env.h"
-#include "rocksdb/slice.h"
-#include "port/port.h"
-#include "util/coding.h"
-#include "util/logging.h"
-#include "util/posix_logger.h"
-#include "util/random.h"
-#include "util/iostats_context_imp.h"
-#include "util/string_util.h"
-#include "util/sync_point.h"
-#include "util/thread_status_updater.h"
-#include "util/thread_status_util.h"
-
 // Get nano time includes
 #if defined(OS_LINUX) || defined(OS_FREEBSD)
 #elif defined(__MACH__)
@@ -53,6 +36,21 @@
 #else
 #include <chrono>
 #endif
+#include <deque>
+#include <set>
+#include "port/port.h"
+#include "rocksdb/slice.h"
+#include "util/coding.h"
+#include "util/io_posix.h"
+#include "util/threadpool.h"
+#include "util/iostats_context_imp.h"
+#include "util/logging.h"
+#include "util/posix_logger.h"
+#include "util/random.h"
+#include "util/string_util.h"
+#include "util/sync_point.h"
+#include "util/thread_local.h"
+#include "util/thread_status_updater.h"
 
 #if !defined(TMPFS_MAGIC)
 #define TMPFS_MAGIC 0x01021994
@@ -64,30 +62,9 @@
 #define EXT4_SUPER_MAGIC 0xEF53
 #endif
 
-// For non linux platform, the following macros are used only as place
-// holder.
-#if !(defined OS_LINUX) && !(defined CYGWIN)
-#define POSIX_FADV_NORMAL 0 /* [MC1] no further special treatment */
-#define POSIX_FADV_RANDOM 1 /* [MC1] expect random page refs */
-#define POSIX_FADV_SEQUENTIAL 2 /* [MC1] expect sequential page refs */
-#define POSIX_FADV_WILLNEED 3 /* [MC1] will need these pages */
-#define POSIX_FADV_DONTNEED 4 /* [MC1] dont need these pages */
-#endif
-
-
 namespace rocksdb {
 
 namespace {
-
-// A wrapper for fadvise, if the platform doesn't support fadvise,
-// it will simply return Status::NotSupport.
-int Fadvise(int fd, off_t offset, size_t len, int advice) {
-#ifdef OS_LINUX
-  return posix_fadvise(fd, offset, len, advice);
-#else
-  return 0;  // simply do nothing.
-#endif
-}
 
 ThreadStatusUpdater* CreateThreadStatusUpdater() {
   return new ThreadStatusUpdater();
@@ -96,677 +73,6 @@ ThreadStatusUpdater* CreateThreadStatusUpdater() {
 // list of pathnames that are locked
 static std::set<std::string> lockedFiles;
 static port::Mutex mutex_lockedFiles;
-
-static Status IOError(const std::string& context, int err_number) {
-  return Status::IOError(context, strerror(err_number));
-}
-
-#if defined(OS_LINUX)
-namespace {
-  static size_t GetUniqueIdFromFile(int fd, char* id, size_t max_size) {
-    if (max_size < kMaxVarint64Length*3) {
-      return 0;
-    }
-
-    struct stat buf;
-    int result = fstat(fd, &buf);
-    if (result == -1) {
-      return 0;
-    }
-
-    long version = 0;
-    result = ioctl(fd, FS_IOC_GETVERSION, &version);
-    if (result == -1) {
-      return 0;
-    }
-    uint64_t uversion = (uint64_t)version;
-
-    char* rid = id;
-    rid = EncodeVarint64(rid, buf.st_dev);
-    rid = EncodeVarint64(rid, buf.st_ino);
-    rid = EncodeVarint64(rid, uversion);
-    assert(rid >= id);
-    return static_cast<size_t>(rid-id);
-  }
-}
-#endif
-
-class PosixSequentialFile: public SequentialFile {
- private:
-  std::string filename_;
-  FILE* file_;
-  int fd_;
-  bool use_os_buffer_;
-
- public:
-  PosixSequentialFile(const std::string& fname, FILE* f,
-      const EnvOptions& options)
-      : filename_(fname), file_(f), fd_(fileno(f)),
-        use_os_buffer_(options.use_os_buffer) {
-  }
-  virtual ~PosixSequentialFile() { fclose(file_); }
-
-  virtual Status Read(size_t n, Slice* result, char* scratch) override {
-    Status s;
-    size_t r = 0;
-    do {
-      r = fread_unlocked(scratch, 1, n, file_);
-    } while (r == 0 && ferror(file_) && errno == EINTR);
-    *result = Slice(scratch, r);
-    if (r < n) {
-      if (feof(file_)) {
-        // We leave status as ok if we hit the end of the file
-        // We also clear the error so that the reads can continue
-        // if a new data is written to the file
-        clearerr(file_);
-      } else {
-        // A partial read with an error: return a non-ok status
-        s = IOError(filename_, errno);
-      }
-    }
-    if (!use_os_buffer_) {
-      // we need to fadvise away the entire range of pages because
-      // we do not want readahead pages to be cached.
-      Fadvise(fd_, 0, 0, POSIX_FADV_DONTNEED); // free OS pages
-    }
-    return s;
-  }
-
-  virtual Status Skip(uint64_t n) override {
-    if (fseek(file_, static_cast<long int>(n), SEEK_CUR)) {
-      return IOError(filename_, errno);
-    }
-    return Status::OK();
-  }
-
-  virtual Status InvalidateCache(size_t offset, size_t length) override {
-#ifndef OS_LINUX
-    return Status::OK();
-#else
-    // free OS pages
-    int ret = Fadvise(fd_, offset, length, POSIX_FADV_DONTNEED);
-    if (ret == 0) {
-      return Status::OK();
-    }
-    return IOError(filename_, errno);
-#endif
-  }
-};
-
-// pread() based random-access
-class PosixRandomAccessFile: public RandomAccessFile {
- private:
-  std::string filename_;
-  int fd_;
-  bool use_os_buffer_;
-
- public:
-  PosixRandomAccessFile(const std::string& fname, int fd,
-                        const EnvOptions& options)
-      : filename_(fname), fd_(fd), use_os_buffer_(options.use_os_buffer) {
-    assert(!options.use_mmap_reads || sizeof(void*) < 8);
-  }
-  virtual ~PosixRandomAccessFile() { close(fd_); }
-
-  virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const override {
-    Status s;
-    ssize_t r = -1;
-    size_t left = n;
-    char* ptr = scratch;
-    while (left > 0) {
-      r = pread(fd_, ptr, left, static_cast<off_t>(offset));
-
-      if (r <= 0) {
-        if (errno == EINTR) {
-          continue;
-        }
-        break;
-      }
-      ptr += r;
-      offset += r;
-      left -= r;
-    }
-
-    *result = Slice(scratch, (r < 0) ? 0 : n - left);
-    if (r < 0) {
-      // An error: return a non-ok status
-      s = IOError(filename_, errno);
-    }
-    if (!use_os_buffer_) {
-      // we need to fadvise away the entire range of pages because
-      // we do not want readahead pages to be cached.
-      Fadvise(fd_, 0, 0, POSIX_FADV_DONTNEED); // free OS pages
-    }
-    return s;
-  }
-
-#ifdef OS_LINUX
-  virtual size_t GetUniqueId(char* id, size_t max_size) const override {
-    return GetUniqueIdFromFile(fd_, id, max_size);
-  }
-#endif
-
-  virtual void Hint(AccessPattern pattern) override {
-    switch(pattern) {
-      case NORMAL:
-        Fadvise(fd_, 0, 0, POSIX_FADV_NORMAL);
-        break;
-      case RANDOM:
-        Fadvise(fd_, 0, 0, POSIX_FADV_RANDOM);
-        break;
-      case SEQUENTIAL:
-        Fadvise(fd_, 0, 0, POSIX_FADV_SEQUENTIAL);
-        break;
-      case WILLNEED:
-        Fadvise(fd_, 0, 0, POSIX_FADV_WILLNEED);
-        break;
-      case DONTNEED:
-        Fadvise(fd_, 0, 0, POSIX_FADV_DONTNEED);
-        break;
-      default:
-        assert(false);
-        break;
-    }
-  }
-
-  virtual Status InvalidateCache(size_t offset, size_t length) override {
-#ifndef OS_LINUX
-    return Status::OK();
-#else
-    // free OS pages
-    int ret = Fadvise(fd_, offset, length, POSIX_FADV_DONTNEED);
-    if (ret == 0) {
-      return Status::OK();
-    }
-    return IOError(filename_, errno);
-#endif
-  }
-};
-
-// mmap() based random-access
-class PosixMmapReadableFile: public RandomAccessFile {
- private:
-  int fd_;
-  std::string filename_;
-  void* mmapped_region_;
-  size_t length_;
-
- public:
-  // base[0,length-1] contains the mmapped contents of the file.
-  PosixMmapReadableFile(const int fd, const std::string& fname,
-                        void* base, size_t length,
-                        const EnvOptions& options)
-      : fd_(fd), filename_(fname), mmapped_region_(base), length_(length) {
-    fd_ = fd_ + 0;  // suppress the warning for used variables
-    assert(options.use_mmap_reads);
-    assert(options.use_os_buffer);
-  }
-  virtual ~PosixMmapReadableFile() {
-    int ret = munmap(mmapped_region_, length_);
-    if (ret != 0) {
-      fprintf(stdout, "failed to munmap %p length %" ROCKSDB_PRIszt " \n",
-              mmapped_region_, length_);
-    }
-  }
-
-  virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const override {
-    Status s;
-    if (offset > length_) {
-      *result = Slice();
-      return IOError(filename_, EINVAL);
-    } else if (offset + n > length_) {
-      n = length_ - offset;
-    }
-    *result = Slice(reinterpret_cast<char*>(mmapped_region_) + offset, n);
-    return s;
-  }
-  virtual Status InvalidateCache(size_t offset, size_t length) override {
-#ifndef OS_LINUX
-    return Status::OK();
-#else
-    // free OS pages
-    int ret = Fadvise(fd_, offset, length, POSIX_FADV_DONTNEED);
-    if (ret == 0) {
-      return Status::OK();
-    }
-    return IOError(filename_, errno);
-#endif
-  }
-};
-
-// We preallocate up to an extra megabyte and use memcpy to append new
-// data to the file.  This is safe since we either properly close the
-// file before reading from it, or for log files, the reading code
-// knows enough to skip zero suffixes.
-class PosixMmapFile : public WritableFile {
- private:
-  std::string filename_;
-  int fd_;
-  size_t page_size_;
-  size_t map_size_;       // How much extra memory to map at a time
-  char* base_;            // The mapped region
-  char* limit_;           // Limit of the mapped region
-  char* dst_;             // Where to write next  (in range [base_,limit_])
-  char* last_sync_;       // Where have we synced up to
-  uint64_t file_offset_;  // Offset of base_ in file
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-  bool allow_fallocate_;  // If false, fallocate calls are bypassed
-  bool fallocate_with_keep_size_;
-#endif
-
-  // Roundup x to a multiple of y
-  static size_t Roundup(size_t x, size_t y) {
-    return ((x + y - 1) / y) * y;
-  }
-
-  size_t TruncateToPageBoundary(size_t s) {
-    s -= (s & (page_size_ - 1));
-    assert((s % page_size_) == 0);
-    return s;
-  }
-
-  Status UnmapCurrentRegion() {
-    TEST_KILL_RANDOM(rocksdb_kill_odds);
-    if (base_ != nullptr) {
-      int munmap_status = munmap(base_, limit_ - base_);
-      if (munmap_status != 0) {
-        return IOError(filename_, munmap_status);
-      }
-      file_offset_ += limit_ - base_;
-      base_ = nullptr;
-      limit_ = nullptr;
-      last_sync_ = nullptr;
-      dst_ = nullptr;
-
-      // Increase the amount we map the next time, but capped at 1MB
-      if (map_size_ < (1<<20)) {
-        map_size_ *= 2;
-      }
-    }
-    return Status::OK();
-  }
-
-  Status MapNewRegion() {
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-    assert(base_ == nullptr);
-
-    TEST_KILL_RANDOM(rocksdb_kill_odds);
-    // we can't fallocate with FALLOC_FL_KEEP_SIZE here
-    if (allow_fallocate_) {
-      IOSTATS_TIMER_GUARD(allocate_nanos);
-      int alloc_status = fallocate(fd_, 0, file_offset_, map_size_);
-      if (alloc_status != 0) {
-        // fallback to posix_fallocate
-        alloc_status = posix_fallocate(fd_, file_offset_, map_size_);
-      }
-      if (alloc_status != 0) {
-        return Status::IOError("Error allocating space to file : " + filename_ +
-          "Error : " + strerror(alloc_status));
-      }
-    }
-
-    TEST_KILL_RANDOM(rocksdb_kill_odds);
-    void* ptr = mmap(nullptr, map_size_, PROT_READ | PROT_WRITE, MAP_SHARED,
-                     fd_, file_offset_);
-    if (ptr == MAP_FAILED) {
-      return Status::IOError("MMap failed on " + filename_);
-    }
-    TEST_KILL_RANDOM(rocksdb_kill_odds);
-
-    base_ = reinterpret_cast<char*>(ptr);
-    limit_ = base_ + map_size_;
-    dst_ = base_;
-    last_sync_ = base_;
-    return Status::OK();
-#else
-    return Status::NotSupported("This platform doesn't support fallocate()");
-#endif
-  }
-
-  Status Msync() {
-    if (dst_ == last_sync_) {
-      return Status::OK();
-    }
-    // Find the beginnings of the pages that contain the first and last
-    // bytes to be synced.
-    size_t p1 = TruncateToPageBoundary(last_sync_ - base_);
-    size_t p2 = TruncateToPageBoundary(dst_ - base_ - 1);
-    last_sync_ = dst_;
-    TEST_KILL_RANDOM(rocksdb_kill_odds);
-    if (msync(base_ + p1, p2 - p1 + page_size_, MS_SYNC) < 0) {
-      return IOError(filename_, errno);
-    }
-    return Status::OK();
-  }
-
- public:
-  PosixMmapFile(const std::string& fname, int fd, size_t page_size,
-                const EnvOptions& options)
-      : filename_(fname),
-        fd_(fd),
-        page_size_(page_size),
-        map_size_(Roundup(65536, page_size)),
-        base_(nullptr),
-        limit_(nullptr),
-        dst_(nullptr),
-        last_sync_(nullptr),
-        file_offset_(0) {
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-    allow_fallocate_ = options.allow_fallocate;
-    fallocate_with_keep_size_ = options.fallocate_with_keep_size;
-#endif
-    assert((page_size & (page_size - 1)) == 0);
-    assert(options.use_mmap_writes);
-  }
-
-
-  ~PosixMmapFile() {
-    if (fd_ >= 0) {
-      PosixMmapFile::Close();
-    }
-  }
-
-  virtual Status Append(const Slice& data) override {
-    const char* src = data.data();
-    size_t left = data.size();
-    while (left > 0) {
-      assert(base_ <= dst_);
-      assert(dst_ <= limit_);
-      size_t avail = limit_ - dst_;
-      if (avail == 0) {
-        Status s = UnmapCurrentRegion();
-        if (!s.ok()) {
-          return s;
-        }
-        s = MapNewRegion();
-        if (!s.ok()) {
-          return s;
-        }
-        TEST_KILL_RANDOM(rocksdb_kill_odds);
-      }
-
-      size_t n = (left <= avail) ? left : avail;
-      memcpy(dst_, src, n);
-      dst_ += n;
-      src += n;
-      left -= n;
-    }
-    return Status::OK();
-  }
-
-  // Means Close() will properly take care of truncate
-  // and it does not need any additional information
-  virtual Status Truncate(uint64_t size) override {
-    return Status::OK();
-  }
-
-  virtual Status Close() override {
-    Status s;
-    size_t unused = limit_ - dst_;
-
-    s = UnmapCurrentRegion();
-    if (!s.ok()) {
-      s = IOError(filename_, errno);
-    } else if (unused > 0) {
-      // Trim the extra space at the end of the file
-      if (ftruncate(fd_, file_offset_ - unused) < 0) {
-        s = IOError(filename_, errno);
-      }
-    }
-
-    if (close(fd_) < 0) {
-      if (s.ok()) {
-        s = IOError(filename_, errno);
-      }
-    }
-
-    fd_ = -1;
-    base_ = nullptr;
-    limit_ = nullptr;
-    return s;
-  }
-
-  virtual Status Flush() override {
-    return Status::OK();
-  }
-
-  virtual Status Sync() override {
-    if (fdatasync(fd_) < 0) {
-      return IOError(filename_, errno);
-    }
-
-    return Msync();
-  }
-
-  /**
-   * Flush data as well as metadata to stable storage.
-   */
-  virtual Status Fsync() override {
-    if (fsync(fd_) < 0) {
-      return IOError(filename_, errno);
-    }
-
-    return Msync();
-  }
-
-  /**
-   * Get the size of valid data in the file. This will not match the
-   * size that is returned from the filesystem because we use mmap
-   * to extend file by map_size every time.
-   */
-  virtual uint64_t GetFileSize() override {
-    size_t used = dst_ - base_;
-    return file_offset_ + used;
-  }
-
-  virtual Status InvalidateCache(size_t offset, size_t length) override {
-#ifndef OS_LINUX
-    return Status::OK();
-#else
-    // free OS pages
-    int ret = Fadvise(fd_, offset, length, POSIX_FADV_DONTNEED);
-    if (ret == 0) {
-      return Status::OK();
-    }
-    return IOError(filename_, errno);
-#endif
-  }
-
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-  virtual Status Allocate(off_t offset, off_t len) override {
-    TEST_KILL_RANDOM(rocksdb_kill_odds);
-    int alloc_status = 0;
-    if (allow_fallocate_) {
-      alloc_status =
-          fallocate(fd_, fallocate_with_keep_size_ ? FALLOC_FL_KEEP_SIZE : 0,
-                    offset, len);
-    }
-    if (alloc_status == 0) {
-      return Status::OK();
-    } else {
-      return IOError(filename_, errno);
-    }
-  }
-#endif
-};
-
-// Use posix write to write data to a file.
-class PosixWritableFile : public WritableFile {
- private:
-  const std::string filename_;
-  int fd_;
-  uint64_t filesize_;
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-  bool allow_fallocate_;
-  bool fallocate_with_keep_size_;
-#endif
-
- public:
-  PosixWritableFile(const std::string& fname, int fd, const EnvOptions& options)
-      : filename_(fname), fd_(fd), filesize_(0) {
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-    allow_fallocate_ = options.allow_fallocate;
-    fallocate_with_keep_size_ = options.fallocate_with_keep_size;
-#endif
-    assert(!options.use_mmap_writes);
-  }
-
-  ~PosixWritableFile() {
-    if (fd_ >= 0) {
-      PosixWritableFile::Close();
-    }
-  }
-
-  virtual Status Append(const Slice& data) override {
-    const char* src = data.data();
-    size_t left = data.size();
-    while (left != 0) {
-      ssize_t done = write(fd_, src, left);
-      if (done < 0) {
-        if (errno == EINTR) {
-          continue;
-        }
-        return IOError(filename_, errno);
-      }
-      left -= done;
-      src += done;
-    }
-    filesize_ += data.size();
-    return Status::OK();
-  }
-
-  // Means Close() will properly take care of truncate
-  // and it does not need any additional information
-  virtual Status Truncate(uint64_t size) override {
-    return Status::OK();
-  }
-
-  virtual Status Close() override {
-    Status s;
-
-    size_t block_size;
-    size_t last_allocated_block;
-    GetPreallocationStatus(&block_size, &last_allocated_block);
-    if (last_allocated_block > 0) {
-      // trim the extra space preallocated at the end of the file
-      // NOTE(ljin): we probably don't want to surface failure as an IOError,
-      // but it will be nice to log these errors.
-      int dummy __attribute__((unused));
-      dummy = ftruncate(fd_, filesize_);
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-      // in some file systems, ftruncate only trims trailing space if the
-      // new file size is smaller than the current size. Calling fallocate
-      // with FALLOC_FL_PUNCH_HOLE flag to explicitly release these unused
-      // blocks. FALLOC_FL_PUNCH_HOLE is supported on at least the following
-      // filesystems:
-      //   XFS (since Linux 2.6.38)
-      //   ext4 (since Linux 3.0)
-      //   Btrfs (since Linux 3.7)
-      //   tmpfs (since Linux 3.5)
-      // We ignore error since failure of this operation does not affect
-      // correctness.
-      IOSTATS_TIMER_GUARD(allocate_nanos);
-      if (allow_fallocate_) {
-        fallocate(fd_, FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE, filesize_,
-                  block_size * last_allocated_block - filesize_);
-      }
-#endif
-    }
-
-    if (close(fd_) < 0) {
-      s = IOError(filename_, errno);
-    }
-    fd_ = -1;
-    return s;
-  }
-
-  // write out the cached data to the OS cache
-  virtual Status Flush() override {
-    return Status::OK();
-  }
-
-  virtual Status Sync() override {
-    if (fdatasync(fd_) < 0) {
-      return IOError(filename_, errno);
-    }
-    return Status::OK();
-  }
-
-  virtual Status Fsync() override {
-    if (fsync(fd_) < 0) {
-      return IOError(filename_, errno);
-    }
-    return Status::OK();
-  }
-
-  virtual bool IsSyncThreadSafe() const override {
-    return true;
-  }
-
-  virtual uint64_t GetFileSize() override { return filesize_; }
-
-  virtual Status InvalidateCache(size_t offset, size_t length) override {
-#ifndef OS_LINUX
-    return Status::OK();
-#else
-    // free OS pages
-    int ret = Fadvise(fd_, offset, length, POSIX_FADV_DONTNEED);
-    if (ret == 0) {
-      return Status::OK();
-    }
-    return IOError(filename_, errno);
-#endif
-  }
-
-#ifdef ROCKSDB_FALLOCATE_PRESENT
-  virtual Status Allocate(off_t offset, off_t len) override {
-    TEST_KILL_RANDOM(rocksdb_kill_odds);
-    IOSTATS_TIMER_GUARD(allocate_nanos);
-    int alloc_status = 0;
-    if (allow_fallocate_) {
-      alloc_status =
-          fallocate(fd_, fallocate_with_keep_size_ ? FALLOC_FL_KEEP_SIZE : 0,
-                    offset, len);
-    }
-    if (alloc_status == 0) {
-      return Status::OK();
-    } else {
-      return IOError(filename_, errno);
-    }
-  }
-
-  virtual Status RangeSync(off_t offset, off_t nbytes) override {
-    if (sync_file_range(fd_, offset, nbytes, SYNC_FILE_RANGE_WRITE) == 0) {
-      return Status::OK();
-    } else {
-      return IOError(filename_, errno);
-    }
-  }
-  virtual size_t GetUniqueId(char* id, size_t max_size) const override {
-    return GetUniqueIdFromFile(fd_, id, max_size);
-  }
-#endif
-};
-
-class PosixDirectory : public Directory {
- public:
-  explicit PosixDirectory(int fd) : fd_(fd) {}
-  ~PosixDirectory() {
-    close(fd_);
-  }
-
-  virtual Status Fsync() override {
-    if (fsync(fd_) == -1) {
-      return IOError("directory", errno);
-    }
-    return Status::OK();
-  }
-
- private:
-  int fd_;
-};
 
 static int LockOrUnlock(const std::string& fname, int fd, bool lock) {
   mutex_lockedFiles.Lock();
@@ -812,13 +118,6 @@ class PosixFileLock : public FileLock {
   std::string filename;
 };
 
-void PthreadCall(const char* label, int result) {
-  if (result != 0) {
-    fprintf(stderr, "pthread %s: %s\n", label, strerror(result));
-    abort();
-  }
-}
-
 class PosixEnv : public Env {
  public:
   PosixEnv();
@@ -830,9 +129,13 @@ class PosixEnv : public Env {
     for (int pool_id = 0; pool_id < Env::Priority::TOTAL; ++pool_id) {
       thread_pools_[pool_id].JoinAllThreads();
     }
-    // All threads must be joined before the deletion of
-    // thread_status_updater_.
-    delete thread_status_updater_;
+    // Delete the thread_status_updater_ only when the current Env is not
+    // Env::Default().  This is to avoid the free-after-use error when
+    // Env::Default() is destructed while some other child threads are
+    // still trying to update thread status.
+    if (this != Env::Default()) {
+      delete thread_status_updater_;
+    }
   }
 
   void SetFD_CLOEXEC(int fd, const EnvOptions* options) {
@@ -853,6 +156,27 @@ class PosixEnv : public Env {
     if (f == nullptr) {
       *result = nullptr;
       return IOError(fname, errno);
+    } else if (options.use_direct_reads && !options.use_mmap_writes) {
+#ifdef OS_MACOSX
+      int flags = O_RDONLY;
+#else
+      int flags = O_RDONLY | O_DIRECT;
+      TEST_SYNC_POINT_CALLBACK("NewSequentialFile:O_DIRECT", &flags);
+#endif
+      int fd = open(fname.c_str(), flags, 0644);
+      if (fd < 0) {
+        return IOError(fname, errno);
+      }
+#ifdef OS_MACOSX
+      if (fcntl(fd, F_NOCACHE, 1) == -1) {
+        close(fd);
+        return IOError(fname, errno);
+      }
+#endif
+      std::unique_ptr<PosixDirectIOSequentialFile> file(
+          new PosixDirectIOSequentialFile(fname, fd));
+      *result = std::move(file);
+      return Status::OK();
     } else {
       int fd = fileno(f);
       SetFD_CLOEXEC(fd, &options);
@@ -890,6 +214,28 @@ class PosixEnv : public Env {
         }
       }
       close(fd);
+    } else if (options.use_direct_reads) {
+#ifdef OS_MACOSX
+      int flags = O_RDONLY;
+#else
+      int flags = O_RDONLY | O_DIRECT;
+      TEST_SYNC_POINT_CALLBACK("NewRandomAccessFile:O_DIRECT", &flags);
+#endif
+      fd = open(fname.c_str(), flags, 0644);
+      if (fd < 0) {
+        s = IOError(fname, errno);
+      } else {
+        std::unique_ptr<PosixDirectIORandomAccessFile> file(
+            new PosixDirectIORandomAccessFile(fname, fd));
+        *result = std::move(file);
+        s = Status::OK();
+#ifdef OS_MACOSX
+        if (fcntl(fd, F_NOCACHE, 1) == -1) {
+          close(fd);
+          s = IOError(fname, errno);
+        }
+#endif
+      }
     } else {
       result->reset(new PosixRandomAccessFile(fname, fd, options));
     }
@@ -910,6 +256,72 @@ class PosixEnv : public Env {
       s = IOError(fname, errno);
     } else {
       SetFD_CLOEXEC(fd, &options);
+      if (options.use_mmap_writes) {
+        if (!checkedDiskForMmap_) {
+          // this will be executed once in the program's lifetime.
+          // do not use mmapWrite on non ext-3/xfs/tmpfs systems.
+          if (!SupportsFastAllocate(fname)) {
+            forceMmapOff = true;
+          }
+          checkedDiskForMmap_ = true;
+        }
+      }
+      if (options.use_mmap_writes && !forceMmapOff) {
+        result->reset(new PosixMmapFile(fname, fd, page_size_, options));
+      } else if (options.use_direct_writes) {
+#ifdef OS_MACOSX
+        int flags = O_WRONLY | O_APPEND | O_TRUNC | O_CREAT;
+#else
+        int flags = O_WRONLY | O_APPEND | O_TRUNC | O_CREAT | O_DIRECT;
+#endif
+        TEST_SYNC_POINT_CALLBACK("NewWritableFile:O_DIRECT", &flags);
+        fd = open(fname.c_str(), flags, 0644);
+        if (fd < 0) {
+          s = IOError(fname, errno);
+        } else {
+          std::unique_ptr<PosixDirectIOWritableFile> file(
+              new PosixDirectIOWritableFile(fname, fd));
+          *result = std::move(file);
+          s = Status::OK();
+#ifdef OS_MACOSX
+          if (fcntl(fd, F_NOCACHE, 1) == -1) {
+            close(fd);
+            s = IOError(fname, errno);
+          }
+#endif
+        }
+      } else {
+        // disable mmap writes
+        EnvOptions no_mmap_writes_options = options;
+        no_mmap_writes_options.use_mmap_writes = false;
+
+        result->reset(new PosixWritableFile(fname, fd, no_mmap_writes_options));
+      }
+    }
+    return s;
+  }
+
+  virtual Status ReuseWritableFile(const std::string& fname,
+                                   const std::string& old_fname,
+                                   unique_ptr<WritableFile>* result,
+                                   const EnvOptions& options) override {
+    result->reset();
+    Status s;
+    int fd = -1;
+    do {
+      IOSTATS_TIMER_GUARD(open_nanos);
+      fd = open(old_fname.c_str(), O_RDWR, 0644);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+      s = IOError(fname, errno);
+    } else {
+      SetFD_CLOEXEC(fd, &options);
+      // rename into place
+      if (rename(old_fname.c_str(), fname.c_str()) != 0) {
+        Status r = IOError(old_fname, errno);
+        close(fd);
+        return r;
+      }
       if (options.use_mmap_writes) {
         if (!checkedDiskForMmap_) {
           // this will be executed once in the program's lifetime.
@@ -1101,7 +513,8 @@ class PosixEnv : public Env {
   }
 
   virtual void Schedule(void (*function)(void* arg1), void* arg,
-                        Priority pri = LOW, void* tag = nullptr) override;
+                        Priority pri = LOW, void* tag = nullptr,
+                        void (*unschedFunction)(void* arg) = 0) override;
 
   virtual int UnSchedule(void* arg, Priority pri) override;
 
@@ -1326,300 +739,9 @@ class PosixEnv : public Env {
 
   size_t page_size_;
 
-
-  class ThreadPool {
-   public:
-    ThreadPool()
-        : total_threads_limit_(1),
-          bgthreads_(0),
-          queue_(),
-          queue_len_(0),
-          exit_all_threads_(false),
-          low_io_priority_(false),
-          env_(nullptr) {
-      PthreadCall("mutex_init", pthread_mutex_init(&mu_, nullptr));
-      PthreadCall("cvar_init", pthread_cond_init(&bgsignal_, nullptr));
-    }
-
-    ~ThreadPool() {
-      assert(bgthreads_.size() == 0U);
-    }
-
-    void JoinAllThreads() {
-      PthreadCall("lock", pthread_mutex_lock(&mu_));
-      assert(!exit_all_threads_);
-      exit_all_threads_ = true;
-      PthreadCall("signalall", pthread_cond_broadcast(&bgsignal_));
-      PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-      for (const auto tid : bgthreads_) {
-        pthread_join(tid, nullptr);
-      }
-      bgthreads_.clear();
-    }
-
-    void SetHostEnv(Env* env) {
-      env_ = env;
-    }
-
-    void LowerIOPriority() {
-#ifdef OS_LINUX
-      PthreadCall("lock", pthread_mutex_lock(&mu_));
-      low_io_priority_ = true;
-      PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-#endif
-    }
-
-    // Return true if there is at least one thread needs to terminate.
-    bool HasExcessiveThread() {
-      return static_cast<int>(bgthreads_.size()) > total_threads_limit_;
-    }
-
-    // Return true iff the current thread is the excessive thread to terminate.
-    // Always terminate the running thread that is added last, even if there are
-    // more than one thread to terminate.
-    bool IsLastExcessiveThread(size_t thread_id) {
-      return HasExcessiveThread() && thread_id == bgthreads_.size() - 1;
-    }
-
-    // Is one of the threads to terminate.
-    bool IsExcessiveThread(size_t thread_id) {
-      return static_cast<int>(thread_id) >= total_threads_limit_;
-    }
-
-    // Return the thread priority.
-    // This would allow its member-thread to know its priority.
-    Env::Priority GetThreadPriority() {
-      return priority_;
-    }
-
-    // Set the thread priority.
-    void SetThreadPriority(Env::Priority priority) {
-      priority_ = priority;
-    }
-
-    void BGThread(size_t thread_id) {
-      bool low_io_priority = false;
-      while (true) {
-        // Wait until there is an item that is ready to run
-        PthreadCall("lock", pthread_mutex_lock(&mu_));
-        // Stop waiting if the thread needs to do work or needs to terminate.
-        while (!exit_all_threads_ && !IsLastExcessiveThread(thread_id) &&
-               (queue_.empty() || IsExcessiveThread(thread_id))) {
-          PthreadCall("wait", pthread_cond_wait(&bgsignal_, &mu_));
-        }
-        if (exit_all_threads_) { // mechanism to let BG threads exit safely
-          PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-          break;
-        }
-        if (IsLastExcessiveThread(thread_id)) {
-          // Current thread is the last generated one and is excessive.
-          // We always terminate excessive thread in the reverse order of
-          // generation time.
-          auto terminating_thread = bgthreads_.back();
-          pthread_detach(terminating_thread);
-          bgthreads_.pop_back();
-          if (HasExcessiveThread()) {
-            // There is still at least more excessive thread to terminate.
-            WakeUpAllThreads();
-          }
-          PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-          break;
-        }
-        void (*function)(void*) = queue_.front().function;
-        void* arg = queue_.front().arg;
-        queue_.pop_front();
-        queue_len_.store(static_cast<unsigned int>(queue_.size()),
-                         std::memory_order_relaxed);
-
-        bool decrease_io_priority = (low_io_priority != low_io_priority_);
-        PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-
-#ifdef OS_LINUX
-        if (decrease_io_priority) {
-          #define IOPRIO_CLASS_SHIFT               (13)
-          #define IOPRIO_PRIO_VALUE(class, data)   \
-              (((class) << IOPRIO_CLASS_SHIFT) | data)
-          // Put schedule into IOPRIO_CLASS_IDLE class (lowest)
-          // These system calls only have an effect when used in conjunction
-          // with an I/O scheduler that supports I/O priorities. As at
-          // kernel 2.6.17 the only such scheduler is the Completely
-          // Fair Queuing (CFQ) I/O scheduler.
-          // To change scheduler:
-          //  echo cfq > /sys/block/<device_name>/queue/schedule
-          // Tunables to consider:
-          //  /sys/block/<device_name>/queue/slice_idle
-          //  /sys/block/<device_name>/queue/slice_sync
-          syscall(SYS_ioprio_set,
-                  1,  // IOPRIO_WHO_PROCESS
-                  0,  // current thread
-                  IOPRIO_PRIO_VALUE(3, 0));
-          low_io_priority = true;
-        }
-#else
-        (void)decrease_io_priority; // avoid 'unused variable' error
-#endif
-        (*function)(arg);
-      }
-    }
-
-    // Helper struct for passing arguments when creating threads.
-    struct BGThreadMetadata {
-      ThreadPool* thread_pool_;
-      size_t thread_id_;  // Thread count in the thread.
-      explicit BGThreadMetadata(ThreadPool* thread_pool, size_t thread_id)
-          : thread_pool_(thread_pool), thread_id_(thread_id) {}
-    };
-
-    static void* BGThreadWrapper(void* arg) {
-      BGThreadMetadata* meta = reinterpret_cast<BGThreadMetadata*>(arg);
-      size_t thread_id = meta->thread_id_;
-      ThreadPool* tp = meta->thread_pool_;
-#if ROCKSDB_USING_THREAD_STATUS
-      // for thread-status
-      ThreadStatusUtil::RegisterThread(tp->env_,
-          (tp->GetThreadPriority() == Env::Priority::HIGH ?
-              ThreadStatus::HIGH_PRIORITY :
-              ThreadStatus::LOW_PRIORITY));
-#endif
-      delete meta;
-      tp->BGThread(thread_id);
-#if ROCKSDB_USING_THREAD_STATUS
-      ThreadStatusUtil::UnregisterThread();
-#endif
-      return nullptr;
-    }
-
-    void WakeUpAllThreads() {
-      PthreadCall("signalall", pthread_cond_broadcast(&bgsignal_));
-    }
-
-    void SetBackgroundThreadsInternal(int num, bool allow_reduce) {
-      PthreadCall("lock", pthread_mutex_lock(&mu_));
-      if (exit_all_threads_) {
-        PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-        return;
-      }
-      if (num > total_threads_limit_ ||
-          (num < total_threads_limit_ && allow_reduce)) {
-        total_threads_limit_ = std::max(1, num);
-        WakeUpAllThreads();
-        StartBGThreads();
-      }
-      PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-    }
-
-    void IncBackgroundThreadsIfNeeded(int num) {
-      SetBackgroundThreadsInternal(num, false);
-    }
-
-    void SetBackgroundThreads(int num) {
-      SetBackgroundThreadsInternal(num, true);
-    }
-
-    void StartBGThreads() {
-      // Start background thread if necessary
-      while ((int)bgthreads_.size() < total_threads_limit_) {
-        pthread_t t;
-        PthreadCall(
-            "create thread",
-            pthread_create(&t, nullptr, &ThreadPool::BGThreadWrapper,
-                           new BGThreadMetadata(this, bgthreads_.size())));
-
-        // Set the thread name to aid debugging
-#if defined(_GNU_SOURCE) && defined(__GLIBC_PREREQ)
-#if __GLIBC_PREREQ(2, 12)
-        char name_buf[16];
-        snprintf(name_buf, sizeof name_buf, "rocksdb:bg%" ROCKSDB_PRIszt,
-                 bgthreads_.size());
-        name_buf[sizeof name_buf - 1] = '\0';
-        pthread_setname_np(t, name_buf);
-#endif
-#endif
-
-        bgthreads_.push_back(t);
-      }
-    }
-
-    void Schedule(void (*function)(void* arg1), void* arg, void* tag) {
-      PthreadCall("lock", pthread_mutex_lock(&mu_));
-
-      if (exit_all_threads_) {
-        PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-        return;
-      }
-
-      StartBGThreads();
-
-      // Add to priority queue
-      queue_.push_back(BGItem());
-      queue_.back().function = function;
-      queue_.back().arg = arg;
-      queue_.back().tag = tag;
-      queue_len_.store(static_cast<unsigned int>(queue_.size()),
-                       std::memory_order_relaxed);
-
-      if (!HasExcessiveThread()) {
-        // Wake up at least one waiting thread.
-        PthreadCall("signal", pthread_cond_signal(&bgsignal_));
-      } else {
-        // Need to wake up all threads to make sure the one woken
-        // up is not the one to terminate.
-        WakeUpAllThreads();
-      }
-
-      PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-    }
-
-    int UnSchedule(void* arg) {
-      int count = 0;
-      PthreadCall("lock", pthread_mutex_lock(&mu_));
-
-      // Remove from priority queue
-      BGQueue::iterator it = queue_.begin();
-      while (it != queue_.end()) {
-        if (arg == (*it).tag) {
-          it = queue_.erase(it);
-          count++;
-        } else {
-          it++;
-        }
-      }
-      queue_len_.store(static_cast<unsigned int>(queue_.size()),
-                       std::memory_order_relaxed);
-      PthreadCall("unlock", pthread_mutex_unlock(&mu_));
-      return count;
-    }
-
-    unsigned int GetQueueLen() const {
-      return queue_len_.load(std::memory_order_relaxed);
-    }
-
-   private:
-    // Entry per Schedule() call
-    struct BGItem {
-      void* arg;
-      void (*function)(void*);
-      void* tag;
-    };
-    typedef std::deque<BGItem> BGQueue;
-
-    pthread_mutex_t mu_;
-    pthread_cond_t bgsignal_;
-    int total_threads_limit_;
-    std::vector<pthread_t> bgthreads_;
-    BGQueue queue_;
-    std::atomic_uint queue_len_;  // Queue length. Used for stats reporting
-    bool exit_all_threads_;
-    bool low_io_priority_;
-    Env::Priority priority_;
-    Env* env_;
-  };
-
   std::vector<ThreadPool> thread_pools_;
-
   pthread_mutex_t mu_;
   std::vector<pthread_t> threads_to_join_;
-
 };
 
 PosixEnv::PosixEnv()
@@ -1627,7 +749,7 @@ PosixEnv::PosixEnv()
       forceMmapOff(false),
       page_size_(getpagesize()),
       thread_pools_(Priority::TOTAL) {
-  PthreadCall("mutex_init", pthread_mutex_init(&mu_, nullptr));
+  ThreadPool::PthreadCall("mutex_init", pthread_mutex_init(&mu_, nullptr));
   for (int pool_id = 0; pool_id < Env::Priority::TOTAL; ++pool_id) {
     thread_pools_[pool_id].SetThreadPriority(
         static_cast<Env::Priority>(pool_id));
@@ -1638,9 +760,9 @@ PosixEnv::PosixEnv()
 }
 
 void PosixEnv::Schedule(void (*function)(void* arg1), void* arg, Priority pri,
-                        void* tag) {
+                        void* tag, void (*unschedFunction)(void* arg)) {
   assert(pri >= Priority::LOW && pri <= Priority::HIGH);
-  thread_pools_[pri].Schedule(function, arg, tag);
+  thread_pools_[pri].Schedule(function, arg, tag, unschedFunction);
 }
 
 int PosixEnv::UnSchedule(void* arg, Priority pri) {
@@ -1669,11 +791,11 @@ void PosixEnv::StartThread(void (*function)(void* arg), void* arg) {
   StartThreadState* state = new StartThreadState;
   state->user_function = function;
   state->arg = arg;
-  PthreadCall("start thread",
-              pthread_create(&t, nullptr,  &StartThreadWrapper, state));
-  PthreadCall("lock", pthread_mutex_lock(&mu_));
+  ThreadPool::PthreadCall(
+      "start thread", pthread_create(&t, nullptr, &StartThreadWrapper, state));
+  ThreadPool::PthreadCall("lock", pthread_mutex_lock(&mu_));
   threads_to_join_.push_back(t);
-  PthreadCall("unlock", pthread_mutex_unlock(&mu_));
+  ThreadPool::PthreadCall("unlock", pthread_mutex_unlock(&mu_));
 }
 
 void PosixEnv::WaitForJoin() {
@@ -1710,7 +832,21 @@ std::string Env::GenerateUniqueId() {
   return uuid2;
 }
 
+//
+// Default Posix Env
+//
 Env* Env::Default() {
+  // The following function call initializes the singletons of ThreadLocalPtr
+  // right before the static default_env.  This guarantees default_env will
+  // always being destructed before the ThreadLocalPtr singletons get
+  // destructed as C++ guarantees that the destructions of static variables
+  // is in the reverse order of their constructions.
+  //
+  // Since static members are destructed in the reverse order
+  // of their construction, having this call here guarantees that
+  // the destructor of static PosixEnv will go first, then the
+  // the singletons of ThreadLocalPtr.
+  ThreadLocalPtr::InitSingletons();
   static PosixEnv default_env;
   return &default_env;
 }

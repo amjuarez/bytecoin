@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -6,15 +6,16 @@
 #pragma once
 #ifndef ROCKSDB_LITE
 #include <stdint.h>
+#include <string>
 #include <vector>
 #include "rocksdb/options.h"
 #include "rocksdb/status.h"
-#include "table/table_builder.h"
-#include "table/plain_table_key_coding.h"
 #include "rocksdb/table.h"
 #include "rocksdb/table_properties.h"
 #include "table/bloom_block.h"
 #include "table/plain_table_index.h"
+#include "table/plain_table_key_coding.h"
+#include "table/table_builder.h"
 
 namespace rocksdb {
 
@@ -34,9 +35,10 @@ class PlainTableBuilder: public TableBuilder {
       const ImmutableCFOptions& ioptions,
       const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
           int_tbl_prop_collector_factories,
-      WritableFileWriter* file, uint32_t user_key_size,
-      EncodingType encoding_type, size_t index_sparseness,
-      uint32_t bloom_bits_per_key, uint32_t num_probes = 6,
+      uint32_t column_family_id, WritableFileWriter* file,
+      uint32_t user_key_size, EncodingType encoding_type,
+      size_t index_sparseness, uint32_t bloom_bits_per_key,
+      const std::string& column_family_name, uint32_t num_probes = 6,
       size_t huge_page_tlb_size = 0, double hash_table_ratio = 0,
       bool store_index_in_file = false);
 

@@ -1,16 +1,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
 #include <map>
 #include <string>
 
+#include "memtable/stl_wrappers.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "util/hash.h"
-#include "util/stl_wrappers.h"
+#include "util/kv_map.h"
 #include "util/string_util.h"
 #include "util/testharness.h"
 #include "util/testutil.h"

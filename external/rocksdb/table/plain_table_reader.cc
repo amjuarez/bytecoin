@@ -22,6 +22,7 @@
 #include "table/bloom_block.h"
 #include "table/filter_block.h"
 #include "table/format.h"
+#include "table/internal_iterator.h"
 #include "table/meta_blocks.h"
 #include "table/two_level_iterator.h"
 #include "table/plain_table_factory.h"
@@ -51,7 +52,7 @@ inline uint32_t GetFixed32Element(const char* base, size_t offset) {
 }  // namespace
 
 // Iterator to iterate IndexedTable
-class PlainTableIterator : public Iterator {
+class PlainTableIterator : public InternalIterator {
  public:
   explicit PlainTableIterator(PlainTableReader* table, bool use_prefix_seek);
   ~PlainTableIterator();
@@ -127,7 +128,7 @@ Status PlainTableReader::Open(const ImmutableCFOptions& ioptions,
 
   TableProperties* props = nullptr;
   auto s = ReadTableProperties(file.get(), file_size, kPlainTableMagicNumber,
-                               ioptions.env, ioptions.info_log, &props);
+                               ioptions, &props);
   if (!s.ok()) {
     return s;
   }
@@ -186,10 +187,11 @@ Status PlainTableReader::Open(const ImmutableCFOptions& ioptions,
 void PlainTableReader::SetupForCompaction() {
 }
 
-Iterator* PlainTableReader::NewIterator(const ReadOptions& options,
-                                        Arena* arena) {
+InternalIterator* PlainTableReader::NewIterator(const ReadOptions& options,
+                                                Arena* arena,
+                                                bool skip_filters) {
   if (options.total_order_seek && !IsTotalOrderMode()) {
-    return NewErrorIterator(
+    return NewErrorInternalIterator(
         Status::InvalidArgument("total_order_seek not supported"), arena);
   }
   if (arena == nullptr) {
@@ -291,13 +293,13 @@ Status PlainTableReader::PopulateIndex(TableProperties* props,
 
   BlockContents bloom_block_contents;
   auto s = ReadMetaBlock(file_info_.file.get(), file_size_,
-                         kPlainTableMagicNumber, ioptions_.env,
+                         kPlainTableMagicNumber, ioptions_,
                          BloomBlockBuilder::kBloomBlock, &bloom_block_contents);
   bool index_in_file = s.ok();
 
   BlockContents index_block_contents;
   s = ReadMetaBlock(
-      file_info_.file.get(), file_size_, kPlainTableMagicNumber, ioptions_.env,
+      file_info_.file.get(), file_size_, kPlainTableMagicNumber, ioptions_,
       PlainTableIndexBuilder::kPlainTableIndexBlock, &index_block_contents);
 
   index_in_file &= s.ok();
@@ -408,7 +410,8 @@ Status PlainTableReader::PopulateIndex(TableProperties* props,
   return Status::OK();
 }
 
-Status PlainTableReader::GetOffset(const Slice& target, const Slice& prefix,
+Status PlainTableReader::GetOffset(PlainTableKeyDecoder* decoder,
+                                   const Slice& target, const Slice& prefix,
                                    uint32_t prefix_hash, bool& prefix_matched,
                                    uint32_t* offset) const {
   prefix_matched = false;
@@ -434,15 +437,12 @@ Status PlainTableReader::GetOffset(const Slice& target, const Slice& prefix,
     return Status::Corruption(Slice());
   }
 
-  PlainTableKeyDecoder decoder(&file_info_, encoding_type_, user_key_len_,
-                               ioptions_.prefix_extractor);
-
   // The key is between [low, high). Do a binary search between it.
   while (high - low > 1) {
     uint32_t mid = (high + low) / 2;
     uint32_t file_offset = GetFixed32Element(base_ptr, mid);
     uint32_t tmp;
-    Status s = decoder.NextKeyNoValue(file_offset, &mid_key, nullptr, &tmp);
+    Status s = decoder->NextKeyNoValue(file_offset, &mid_key, nullptr, &tmp);
     if (!s.ok()) {
       return s;
     }
@@ -467,7 +467,7 @@ Status PlainTableReader::GetOffset(const Slice& target, const Slice& prefix,
   ParsedInternalKey low_key;
   uint32_t tmp;
   uint32_t low_key_offset = GetFixed32Element(base_ptr, low);
-  Status s = decoder.NextKeyNoValue(low_key_offset, &low_key, nullptr, &tmp);
+  Status s = decoder->NextKeyNoValue(low_key_offset, &low_key, nullptr, &tmp);
   if (!s.ok()) {
     return s;
   }
@@ -532,7 +532,7 @@ void PlainTableReader::Prepare(const Slice& target) {
 }
 
 Status PlainTableReader::Get(const ReadOptions& ro, const Slice& target,
-                             GetContext* get_context) {
+                             GetContext* get_context, bool skip_filters) {
   // Check bloom filter first.
   Slice prefix_slice;
   uint32_t prefix_hash;
@@ -558,8 +558,10 @@ Status PlainTableReader::Get(const ReadOptions& ro, const Slice& target,
   }
   uint32_t offset;
   bool prefix_match;
-  Status s =
-      GetOffset(target, prefix_slice, prefix_hash, prefix_match, &offset);
+  PlainTableKeyDecoder decoder(&file_info_, encoding_type_, user_key_len_,
+                               ioptions_.prefix_extractor);
+  Status s = GetOffset(&decoder, target, prefix_slice, prefix_hash,
+                       prefix_match, &offset);
 
   if (!s.ok()) {
     return s;
@@ -570,8 +572,6 @@ Status PlainTableReader::Get(const ReadOptions& ro, const Slice& target,
     return Status::Corruption(Slice());
   }
   Slice found_value;
-  PlainTableKeyDecoder decoder(&file_info_, encoding_type_, user_key_len_,
-                               ioptions_.prefix_extractor);
   while (offset < file_info_.data_end_offset) {
     s = Next(&decoder, &offset, &found_key, nullptr, &found_value);
     if (!s.ok()) {
@@ -661,8 +661,8 @@ void PlainTableIterator::Seek(const Slice& target) {
     }
   }
   bool prefix_match;
-  status_ = table_->GetOffset(target, prefix_slice, prefix_hash, prefix_match,
-                              &next_offset_);
+  status_ = table_->GetOffset(&decoder_, target, prefix_slice, prefix_hash,
+                              prefix_match, &next_offset_);
   if (!status_.ok()) {
     offset_ = next_offset_ = table_->file_info_.data_end_offset;
     return;

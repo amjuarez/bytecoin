@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -60,9 +60,10 @@ PlainTableBuilder::PlainTableBuilder(
     const ImmutableCFOptions& ioptions,
     const std::vector<std::unique_ptr<IntTblPropCollectorFactory>>*
         int_tbl_prop_collector_factories,
-    WritableFileWriter* file, uint32_t user_key_len, EncodingType encoding_type,
-    size_t index_sparseness, uint32_t bloom_bits_per_key, uint32_t num_probes,
-    size_t huge_page_tlb_size, double hash_table_ratio,
+    uint32_t column_family_id, WritableFileWriter* file, uint32_t user_key_len,
+    EncodingType encoding_type, size_t index_sparseness,
+    uint32_t bloom_bits_per_key, const std::string& column_family_name,
+    uint32_t num_probes, size_t huge_page_tlb_size, double hash_table_ratio,
     bool store_index_in_file)
     : ioptions_(ioptions),
       bloom_block_(num_probes),
@@ -94,6 +95,8 @@ PlainTableBuilder::PlainTableBuilder(
   // To support roll-back to previous version, now still use version 0 for
   // plain encoding.
   properties_.format_version = (encoding_type == kPlain) ? 0 : 1;
+  properties_.column_family_id = column_family_id;
+  properties_.column_family_name = column_family_name;
 
   if (ioptions_.prefix_extractor) {
     properties_.user_collected_properties
@@ -108,7 +111,7 @@ PlainTableBuilder::PlainTableBuilder(
 
   for (auto& collector_factories : *int_tbl_prop_collector_factories) {
     table_properties_collectors_.emplace_back(
-        collector_factories->CreateIntTblPropCollector());
+        collector_factories->CreateIntTblPropCollector(column_family_id));
   }
 }
 

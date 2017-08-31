@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -23,15 +23,24 @@
 
 namespace rocksdb {
 
-// The maximum length of a varint in bytes for 32 and 64 bits respectively.
-const unsigned int kMaxVarint32Length = 5;
+// The maximum length of a varint in bytes for 64-bit.
 const unsigned int kMaxVarint64Length = 10;
 
 // Standard Put... routines append to a string
 extern void PutFixed32(std::string* dst, uint32_t value);
 extern void PutFixed64(std::string* dst, uint64_t value);
 extern void PutVarint32(std::string* dst, uint32_t value);
+extern void PutVarint32Varint32(std::string* dst, uint32_t value1,
+                                uint32_t value2);
+extern void PutVarint32Varint32Varint32(std::string* dst, uint32_t value1,
+                                        uint32_t value2, uint32_t value3);
 extern void PutVarint64(std::string* dst, uint64_t value);
+extern void PutVarint64Varint64(std::string* dst, uint64_t value1,
+                                uint64_t value2);
+extern void PutVarint32Varint64(std::string* dst, uint32_t value1,
+                                uint64_t value2);
+extern void PutVarint32Varint32Varint64(std::string* dst, uint32_t value1,
+                                        uint32_t value2, uint64_t value3);
 extern void PutLengthPrefixedSlice(std::string* dst, const Slice& value);
 extern void PutLengthPrefixedSliceParts(std::string* dst,
                                         const SliceParts& slice_parts);
@@ -142,21 +151,48 @@ inline void EncodeFixed64(char* buf, uint64_t value) {
 #endif
 }
 
+// Pull the last 8 bits and cast it to a character
 inline void PutFixed32(std::string* dst, uint32_t value) {
+#if __BYTE_ORDER__ == __LITTLE_ENDIAN__
+  dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
+    sizeof(value));
+#else
   char buf[sizeof(value)];
   EncodeFixed32(buf, value);
   dst->append(buf, sizeof(buf));
+#endif
 }
 
 inline void PutFixed64(std::string* dst, uint64_t value) {
+#if __BYTE_ORDER__ == __LITTLE_ENDIAN__
+  dst->append(const_cast<const char*>(reinterpret_cast<char*>(&value)),
+    sizeof(value));
+#else
   char buf[sizeof(value)];
   EncodeFixed64(buf, value);
   dst->append(buf, sizeof(buf));
+#endif
 }
 
 inline void PutVarint32(std::string* dst, uint32_t v) {
   char buf[5];
   char* ptr = EncodeVarint32(buf, v);
+  dst->append(buf, static_cast<size_t>(ptr - buf));
+}
+
+inline void PutVarint32Varint32(std::string* dst, uint32_t v1, uint32_t v2) {
+  char buf[10];
+  char* ptr = EncodeVarint32(buf, v1);
+  ptr = EncodeVarint32(ptr, v2);
+  dst->append(buf, static_cast<size_t>(ptr - buf));
+}
+
+inline void PutVarint32Varint32Varint32(std::string* dst, uint32_t v1,
+                                        uint32_t v2, uint32_t v3) {
+  char buf[15];
+  char* ptr = EncodeVarint32(buf, v1);
+  ptr = EncodeVarint32(ptr, v2);
+  ptr = EncodeVarint32(ptr, v3);
   dst->append(buf, static_cast<size_t>(ptr - buf));
 }
 
@@ -177,6 +213,29 @@ inline void PutVarint64(std::string* dst, uint64_t v) {
   dst->append(buf, static_cast<size_t>(ptr - buf));
 }
 
+inline void PutVarint64Varint64(std::string* dst, uint64_t v1, uint64_t v2) {
+  char buf[20];
+  char* ptr = EncodeVarint64(buf, v1);
+  ptr = EncodeVarint64(ptr, v2);
+  dst->append(buf, static_cast<size_t>(ptr - buf));
+}
+
+inline void PutVarint32Varint64(std::string* dst, uint32_t v1, uint64_t v2) {
+  char buf[15];
+  char* ptr = EncodeVarint32(buf, v1);
+  ptr = EncodeVarint64(ptr, v2);
+  dst->append(buf, static_cast<size_t>(ptr - buf));
+}
+
+inline void PutVarint32Varint32Varint64(std::string* dst, uint32_t v1,
+                                        uint32_t v2, uint64_t v3) {
+  char buf[20];
+  char* ptr = EncodeVarint32(buf, v1);
+  ptr = EncodeVarint32(ptr, v2);
+  ptr = EncodeVarint64(ptr, v3);
+  dst->append(buf, static_cast<size_t>(ptr - buf));
+}
+
 inline void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
   PutVarint32(dst, static_cast<uint32_t>(value.size()));
   dst->append(value.data(), value.size());
@@ -184,11 +243,11 @@ inline void PutLengthPrefixedSlice(std::string* dst, const Slice& value) {
 
 inline void PutLengthPrefixedSliceParts(std::string* dst,
                                         const SliceParts& slice_parts) {
-  uint32_t total_bytes = 0;
+  size_t total_bytes = 0;
   for (int i = 0; i < slice_parts.num_parts; ++i) {
     total_bytes += slice_parts.parts[i].size();
   }
-  PutVarint32(dst, total_bytes);
+  PutVarint32(dst, static_cast<uint32_t>(total_bytes));
   for (int i = 0; i < slice_parts.num_parts; ++i) {
     dst->append(slice_parts.parts[i].data(), slice_parts.parts[i].size());
   }

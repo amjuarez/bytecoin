@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -12,7 +12,6 @@
 #include <string>
 #include <vector>
 
-#include "db/column_family.h"
 #include "db/log_writer.h"
 
 namespace rocksdb {
@@ -22,9 +21,9 @@ class MemTable;
 struct JobContext {
   inline bool HaveSomethingToDelete() const {
     return full_scan_candidate_files.size() || sst_delete_files.size() ||
-           log_delete_files.size() || new_superversion != nullptr ||
-           superversions_to_free.size() > 0 || memtables_to_free.size() > 0 ||
-           logs_to_free.size() > 0;
+           log_delete_files.size() || manifest_delete_files.size() ||
+           new_superversion != nullptr || superversions_to_free.size() > 0 ||
+           memtables_to_free.size() > 0 || logs_to_free.size() > 0;
   }
 
   // Structure to store information for candidate files to delete.
@@ -56,6 +55,9 @@ struct JobContext {
   // a list of log files that we need to delete
   std::vector<uint64_t> log_delete_files;
 
+  // a list of manifest files that we need to delete
+  std::vector<std::string> manifest_delete_files;
+
   // a list of memtables to be free
   autovector<MemTable*> memtables_to_free;
 
@@ -73,6 +75,9 @@ struct JobContext {
   uint64_t prev_log_number;
 
   uint64_t min_pending_output = 0;
+  uint64_t prev_total_log_size = 0;
+  size_t num_alive_log_files = 0;
+  uint64_t size_log_to_delete = 0;
 
   explicit JobContext(int _job_id, bool create_superversion = false) {
     job_id = _job_id;
