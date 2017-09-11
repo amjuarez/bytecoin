@@ -886,13 +886,15 @@ bool Core::getRandomOutputs(uint64_t amount, uint16_t count, std::vector<uint32_
     return true;
   }
 
+// Add bottomBlockLimit
+auto bottomBlockLimit = currency.mixinStartHeight();
   auto upperBlockLimit = getTopBlockIndex() - currency.minedMoneyUnlockWindow();
   if (upperBlockLimit < currency.minedMoneyUnlockWindow()) {
     logger(Logging::DEBUGGING) << "Blockchain height is less than mined unlock window";
     return false;
   }
 
-  globalIndexes = chainsLeaves[0]->getRandomOutsByAmount(amount, count, getTopBlockIndex());
+ globalIndexes = chainsLeaves[0]->getRandomOutsByAmount(amount, count, getTopBlockIndex(), bottomBlockLimit);
   if (globalIndexes.empty()) {
     return false;
   }
@@ -1247,6 +1249,12 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
                                           IBlockchainCache* cache, uint64_t& fee, uint32_t blockIndex) {
   // TransactionValidatorState currentState;
   const auto& transaction = cachedTransaction.getTransaction();
+uint8_t blockMajorVersion = getBlockMajorVersionForHeight(blockIndex);
+auto error_mixin = validateMixin(transaction, blockMajorVersion);
+if (error_mixin != error::TransactionValidationError::VALIDATION_SUCCESS) {
+  return error_mixin;
+}
+
 auto error = validateSemantic(transaction, fee, blockIndex);
   if (error != error::TransactionValidationError::VALIDATION_SUCCESS) {
     return error;
@@ -1340,6 +1348,29 @@ auto error = validateSemantic(transaction, fee, blockIndex);
     inputIndex++;
   }
 
+  return error::TransactionValidationError::VALIDATION_SUCCESS;
+}
+
+bool Core::f_getMixin(const Transaction& transaction, uint64_t& mixin) {
+  mixin = 0;
+  for (const TransactionInput& txin : transaction.inputs) {
+    if (txin.type() != typeid(KeyInput)) {
+      continue;
+    }
+    uint64_t currentMixin = boost::get<KeyInput>(txin).outputIndexes.size();
+    if (currentMixin > mixin) {
+      mixin = currentMixin;
+    }
+  }
+  return true;
+}
+
+std::error_code Core::validateMixin(const Transaction& transaction, uint8_t majorBlockVersion) {
+  uint64_t mixin = 0;
+  f_getMixin(transaction, mixin);
+  if (currency.mandatoryMixinBlockVersion() >= majorBlockVersion && mixin < currency.minMixin()) {
+    return error::TransactionValidationError::MIXIN_COUNT_TOO_SMALL;
+  }
   return error::TransactionValidationError::VALIDATION_SUCCESS;
 }
 

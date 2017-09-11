@@ -163,6 +163,8 @@ std::string m_import_new;
     std::string m_daemon_host;
     uint16_t m_daemon_port;
 uint32_t m_mandatoryTransaction;
+uint16_t m_minMixin;
+uint8_t m_mandatoryMixinBlockVersion;
 uint64_t m_maxTransactionSizeLimit;
 uint64_t m_default_fee;
 

@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -12,6 +12,8 @@
 #include "rocksdb/table_properties.h"
 #include "table/block.h"
 #include "table/format.h"
+#include "table/internal_iterator.h"
+#include "table/persistent_cache_helper.h"
 #include "table/table_properties_internal.h"
 #include "util/coding.h"
 
@@ -68,10 +70,28 @@ void PropertyBlockBuilder::AddTableProperty(const TableProperties& props) {
   Add(TablePropertiesNames::kFilterSize, props.filter_size);
   Add(TablePropertiesNames::kFormatVersion, props.format_version);
   Add(TablePropertiesNames::kFixedKeyLen, props.fixed_key_len);
+  Add(TablePropertiesNames::kColumnFamilyId, props.column_family_id);
 
   if (!props.filter_policy_name.empty()) {
-    Add(TablePropertiesNames::kFilterPolicy,
-        props.filter_policy_name);
+    Add(TablePropertiesNames::kFilterPolicy, props.filter_policy_name);
+  }
+  if (!props.comparator_name.empty()) {
+    Add(TablePropertiesNames::kComparator, props.comparator_name);
+  }
+
+  if (!props.merge_operator_name.empty()) {
+    Add(TablePropertiesNames::kMergeOperator, props.merge_operator_name);
+  }
+  if (!props.property_collectors_names.empty()) {
+    Add(TablePropertiesNames::kPropertyCollectors,
+        props.property_collectors_names);
+  }
+  if (!props.column_family_name.empty()) {
+    Add(TablePropertiesNames::kColumnFamilyName, props.column_family_name);
+  }
+
+  if (!props.compression_name.empty()) {
+    Add(TablePropertiesNames::kCompression, props.compression_name);
   }
 }
 
@@ -130,7 +150,7 @@ bool NotifyCollectTableCollectorsOnFinish(
 }
 
 Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
-                      const Footer& footer, Env* env, Logger* logger,
+                      const Footer& footer, const ImmutableCFOptions &ioptions, 
                       TableProperties** table_properties) {
   assert(table_properties);
 
@@ -145,14 +165,14 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
   read_options.verify_checksums = false;
   Status s;
   s = ReadBlockContents(file, footer, read_options, handle, &block_contents,
-                        env, false);
+                        ioptions, false /* decompress */);
 
   if (!s.ok()) {
     return s;
   }
 
   Block properties_block(std::move(block_contents));
-  std::unique_ptr<Iterator> iter(
+  std::unique_ptr<InternalIterator> iter(
       properties_block.NewIterator(BytewiseComparator()));
 
   auto new_table_properties = new TableProperties();
@@ -170,7 +190,10 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
       {TablePropertiesNames::kFormatVersion,
        &new_table_properties->format_version},
       {TablePropertiesNames::kFixedKeyLen,
-       &new_table_properties->fixed_key_len}, };
+       &new_table_properties->fixed_key_len},
+      {TablePropertiesNames::kColumnFamilyId,
+       &new_table_properties->column_family_id},
+  };
 
   std::string last_key;
   for (iter->SeekToFirst(); iter->Valid(); iter->Next()) {
@@ -196,12 +219,23 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
         auto error_msg =
           "Detect malformed value in properties meta-block:"
           "\tkey: " + key + "\tval: " + raw_val.ToString();
-        Log(InfoLogLevel::ERROR_LEVEL, logger, "%s", error_msg.c_str());
+        Log(InfoLogLevel::ERROR_LEVEL, ioptions.info_log, "%s",
+        error_msg.c_str());
         continue;
       }
       *(pos->second) = val;
     } else if (key == TablePropertiesNames::kFilterPolicy) {
       new_table_properties->filter_policy_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kColumnFamilyName) {
+      new_table_properties->column_family_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kComparator) {
+      new_table_properties->comparator_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kMergeOperator) {
+      new_table_properties->merge_operator_name = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kPropertyCollectors) {
+      new_table_properties->property_collectors_names = raw_val.ToString();
+    } else if (key == TablePropertiesNames::kCompression) {
+      new_table_properties->compression_name = raw_val.ToString();
     } else {
       // handle user-collected properties
       new_table_properties->user_collected_properties.insert(
@@ -218,8 +252,9 @@ Status ReadProperties(const Slice& handle_value, RandomAccessFileReader* file,
 }
 
 Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
-                           uint64_t table_magic_number, Env* env,
-                           Logger* info_log, TableProperties** properties) {
+                           uint64_t table_magic_number,
+                           const ImmutableCFOptions &ioptions,
+                           TableProperties** properties) {
   // -- Read metaindex block
   Footer footer;
   auto s = ReadFooterFromFile(file, file_size, &footer, table_magic_number);
@@ -232,12 +267,12 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
   ReadOptions read_options;
   read_options.verify_checksums = false;
   s = ReadBlockContents(file, footer, read_options, metaindex_handle,
-                        &metaindex_contents, env, false);
+                        &metaindex_contents, ioptions, false /* decompress */);
   if (!s.ok()) {
     return s;
   }
   Block metaindex_block(std::move(metaindex_contents));
-  std::unique_ptr<Iterator> meta_iter(
+  std::unique_ptr<InternalIterator> meta_iter(
       metaindex_block.NewIterator(BytewiseComparator()));
 
   // -- Read property block
@@ -249,8 +284,7 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
 
   TableProperties table_properties;
   if (found_properties_block == true) {
-    s = ReadProperties(meta_iter->value(), file, footer, env, info_log,
-                       properties);
+    s = ReadProperties(meta_iter->value(), file, footer, ioptions, properties);
   } else {
     s = Status::NotFound();
   }
@@ -258,7 +292,7 @@ Status ReadTableProperties(RandomAccessFileReader* file, uint64_t file_size,
   return s;
 }
 
-Status FindMetaBlock(Iterator* meta_index_iter,
+Status FindMetaBlock(InternalIterator* meta_index_iter,
                      const std::string& meta_block_name,
                      BlockHandle* block_handle) {
   meta_index_iter->Seek(meta_block_name);
@@ -272,7 +306,8 @@ Status FindMetaBlock(Iterator* meta_index_iter,
 }
 
 Status FindMetaBlock(RandomAccessFileReader* file, uint64_t file_size,
-                     uint64_t table_magic_number, Env* env,
+                     uint64_t table_magic_number,
+                     const ImmutableCFOptions &ioptions,
                      const std::string& meta_block_name,
                      BlockHandle* block_handle) {
   Footer footer;
@@ -286,20 +321,21 @@ Status FindMetaBlock(RandomAccessFileReader* file, uint64_t file_size,
   ReadOptions read_options;
   read_options.verify_checksums = false;
   s = ReadBlockContents(file, footer, read_options, metaindex_handle,
-                        &metaindex_contents, env, false);
+                        &metaindex_contents, ioptions, false /* do decompression */);
   if (!s.ok()) {
     return s;
   }
   Block metaindex_block(std::move(metaindex_contents));
 
-  std::unique_ptr<Iterator> meta_iter;
+  std::unique_ptr<InternalIterator> meta_iter;
   meta_iter.reset(metaindex_block.NewIterator(BytewiseComparator()));
 
   return FindMetaBlock(meta_iter.get(), meta_block_name, block_handle);
 }
 
 Status ReadMetaBlock(RandomAccessFileReader* file, uint64_t file_size,
-                     uint64_t table_magic_number, Env* env,
+                     uint64_t table_magic_number,
+                     const ImmutableCFOptions &ioptions,
                      const std::string& meta_block_name,
                      BlockContents* contents) {
   Status status;
@@ -315,7 +351,8 @@ Status ReadMetaBlock(RandomAccessFileReader* file, uint64_t file_size,
   ReadOptions read_options;
   read_options.verify_checksums = false;
   status = ReadBlockContents(file, footer, read_options, metaindex_handle,
-                             &metaindex_contents, env, false);
+                             &metaindex_contents, ioptions,
+                             false /* decompress */);
   if (!status.ok()) {
     return status;
   }
@@ -323,7 +360,7 @@ Status ReadMetaBlock(RandomAccessFileReader* file, uint64_t file_size,
   // Finding metablock
   Block metaindex_block(std::move(metaindex_contents));
 
-  std::unique_ptr<Iterator> meta_iter;
+  std::unique_ptr<InternalIterator> meta_iter;
   meta_iter.reset(metaindex_block.NewIterator(BytewiseComparator()));
 
   BlockHandle block_handle;
@@ -335,7 +372,7 @@ Status ReadMetaBlock(RandomAccessFileReader* file, uint64_t file_size,
 
   // Reading metablock
   return ReadBlockContents(file, footer, read_options, block_handle, contents,
-                           env, false);
+                           ioptions, false /* decompress */);
 }
 
 }  // namespace rocksdb

@@ -86,15 +86,28 @@ bool PaymentGateService::init(int argc, char** argv) {
   currencyBuilder.genesisCoinbaseTxHex(config.coinBaseConfig.GENESIS_COINBASE_TX_HEX);
   currencyBuilder.publicAddressBase58Prefix(config.coinBaseConfig.CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
   currencyBuilder.moneySupply(config.coinBaseConfig.MONEY_SUPPLY);
+  currencyBuilder.buggedZawyDifficultyBlockIndex(config.coinBaseConfig.BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX);
   currencyBuilder.zawyDifficultyBlockIndex(config.coinBaseConfig.ZAWY_DIFFICULTY_BLOCK_INDEX);
   currencyBuilder.zawyDifficultyV2(config.coinBaseConfig.ZAWY_DIFFICULTY_V2);
-  currencyBuilder.zawyDifficultyV3(config.coinBaseConfig.ZAWY_DIFFICULTY_V3);
-  currencyBuilder.zawyDifficultyV4(config.coinBaseConfig.ZAWY_DIFFICULTY_V4);
+//uint8_t recognized as char
+  if (config.coinBaseConfig.ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION == 0) {
+    currencyBuilder.zawyDifficultyBlockVersion(config.coinBaseConfig.ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION);
+  } else {
+    currencyBuilder.zawyDifficultyBlockVersion(config.coinBaseConfig.ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION - '0');
+  }
   currencyBuilder.genesisBlockReward(config.coinBaseConfig.GENESIS_BLOCK_REWARD);
   currencyBuilder.cryptonoteCoinVersion(config.coinBaseConfig.CRYPTONOTE_COIN_VERSION);
   currencyBuilder.tailEmissionReward(config.coinBaseConfig.TAIL_EMISSION_REWARD);
   currencyBuilder.killHeight(config.coinBaseConfig.KILL_HEIGHT);
   currencyBuilder.mandatoryTransaction(config.coinBaseConfig.MANDATORY_TRANSACTION);
+  currencyBuilder.mixinStartHeight(config.coinBaseConfig.MIXIN_START_HEIGHT);
+  currencyBuilder.minMixin(config.coinBaseConfig.MIN_MIXIN);
+//uint8_t recognized as char
+  if (config.coinBaseConfig.MANDATORY_MIXIN_BLOCK_VERSION == 0) {
+    currencyBuilder.mandatoryMixinBlockVersion(config.coinBaseConfig.MANDATORY_MIXIN_BLOCK_VERSION);
+  } else {
+    currencyBuilder.mandatoryMixinBlockVersion(config.coinBaseConfig.MANDATORY_MIXIN_BLOCK_VERSION - '0');
+  }
   currencyBuilder.emissionSpeedFactor(config.coinBaseConfig.EMISSION_SPEED_FACTOR);
   currencyBuilder.blockGrantedFullRewardZone(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE);
   currencyBuilder.blockGrantedFullRewardZoneV1(config.coinBaseConfig.CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1);

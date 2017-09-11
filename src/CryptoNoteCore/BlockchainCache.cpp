@@ -828,6 +828,10 @@ ExtractOutputKeysResult BlockchainCache::extractKeyOutputKeys(uint64_t amount,
 }
 
 std::vector<uint32_t> BlockchainCache::getRandomOutsByAmount(Amount amount, size_t count, uint32_t blockIndex) const {
+  return getRandomOutsByAmount(amount, count, blockIndex, 0);
+}
+
+std::vector<uint32_t> BlockchainCache::getRandomOutsByAmount(Amount amount, size_t count, uint32_t blockIndex, uint32_t startBlockIndex) const {
   std::vector<uint32_t> offs;
   auto it = keyOutputsGlobalIndexes.find(amount);
   if (it == keyOutputsGlobalIndexes.end()) {
@@ -844,10 +848,12 @@ std::vector<uint32_t> BlockchainCache::getRandomOutsByAmount(Amount amount, size
   while (dist--) {
     auto offset = generator();
     auto& outIndex = it->second.outputs[offset];
+if (outIndex.blockIndex >= startBlockIndex) {
     auto transactionIterator = transactions.get<TransactionInBlockTag>().find(
         boost::make_tuple<uint32_t, uint32_t>(outIndex.blockIndex, outIndex.transactionIndex));
     if (isTransactionSpendTimeUnlocked(transactionIterator->unlockTime, blockIndex)) {
       offs.push_back(it->second.startIndex + offset);
+}
     }
   }
 

@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -7,7 +7,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
-#ifndef ROCKSDB_LITE
+#ifndef NDEBUG
 
 #include "db/db_impl.h"
 #include "util/thread_status_updater.h"
@@ -17,23 +17,6 @@ namespace rocksdb {
 uint64_t DBImpl::TEST_GetLevel0TotalSize() {
   InstrumentedMutexLock l(&mutex_);
   return default_cf_handle_->cfd()->current()->storage_info()->NumLevelBytes(0);
-}
-
-Iterator* DBImpl::TEST_NewInternalIterator(Arena* arena,
-                                           ColumnFamilyHandle* column_family) {
-  ColumnFamilyData* cfd;
-  if (column_family == nullptr) {
-    cfd = default_cf_handle_->cfd();
-  } else {
-    auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
-    cfd = cfh->cfd();
-  }
-
-  mutex_.Lock();
-  SuperVersion* super_version = cfd->GetSuperVersion()->Ref();
-  mutex_.Unlock();
-  ReadOptions roptions;
-  return NewInternalIterator(roptions, cfd, super_version, arena);
 }
 
 int64_t DBImpl::TEST_MaxNextLevelOverlappingBytes(
@@ -87,14 +70,21 @@ Status DBImpl::TEST_CompactRange(int level, const Slice* begin,
        cfd->ioptions()->compaction_style == kCompactionStyleFIFO)
           ? level
           : level + 1;
-  return RunManualCompaction(cfd, level, output_level, 0, begin, end,
+  return RunManualCompaction(cfd, level, output_level, 0, begin, end, true,
                              disallow_trivial_move);
 }
 
-Status DBImpl::TEST_FlushMemTable(bool wait) {
+Status DBImpl::TEST_FlushMemTable(bool wait, ColumnFamilyHandle* cfh) {
   FlushOptions fo;
   fo.wait = wait;
-  return FlushMemTable(default_cf_handle_->cfd(), fo);
+  ColumnFamilyData* cfd;
+  if (cfh == nullptr) {
+    cfd = default_cf_handle_->cfd();
+  } else {
+    auto cfhi = reinterpret_cast<ColumnFamilyHandleImpl*>(cfh);
+    cfd = cfhi->cfd();
+  }
+  return FlushMemTable(cfd, fo);
 }
 
 Status DBImpl::TEST_WaitForFlushMemTable(ColumnFamilyHandle* column_family) {
@@ -152,5 +142,41 @@ uint64_t DBImpl::TEST_LogfileNumber() {
   return logfile_number_;
 }
 
+Status DBImpl::TEST_GetAllImmutableCFOptions(
+    std::unordered_map<std::string, const ImmutableCFOptions*>* iopts_map) {
+  std::vector<std::string> cf_names;
+  std::vector<const ImmutableCFOptions*> iopts;
+  {
+    InstrumentedMutexLock l(&mutex_);
+    for (auto cfd : *versions_->GetColumnFamilySet()) {
+      cf_names.push_back(cfd->GetName());
+      iopts.push_back(cfd->ioptions());
+    }
+  }
+  iopts_map->clear();
+  for (size_t i = 0; i < cf_names.size(); ++i) {
+    iopts_map->insert({cf_names[i], iopts[i]});
+  }
+
+  return Status::OK();
+}
+
+uint64_t DBImpl::TEST_FindMinLogContainingOutstandingPrep() {
+  return FindMinLogContainingOutstandingPrep();
+}
+
+uint64_t DBImpl::TEST_FindMinPrepLogReferencedByMemTable() {
+  return FindMinPrepLogReferencedByMemTable();
+}
+
+Status DBImpl::TEST_GetLatestMutableCFOptions(
+    ColumnFamilyHandle* column_family, MutableCFOptions* mutable_cf_options) {
+  InstrumentedMutexLock l(&mutex_);
+
+  auto cfh = reinterpret_cast<ColumnFamilyHandleImpl*>(column_family);
+  *mutable_cf_options = *cfh->cfd()->GetLatestMutableCFOptions();
+  return Status::OK();
+}
+
 }  // namespace rocksdb
-#endif  // ROCKSDB_LITE
+#endif  // NDEBUG

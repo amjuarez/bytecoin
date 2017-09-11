@@ -42,6 +42,7 @@ unity.a
 tags
 rocksdb_dump
 rocksdb_undump
+db_test2
 
 java/out
 java/target
@@ -63,3 +64,7 @@ java/javadoc
 scan_build_report/
 t
 LOG
+
+db_logs/
+tp2/
+fbcode/

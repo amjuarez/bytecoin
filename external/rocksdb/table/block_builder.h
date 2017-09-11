@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -20,7 +20,8 @@ class BlockBuilder {
   BlockBuilder(const BlockBuilder&) = delete;
   void operator=(const BlockBuilder&) = delete;
 
-  explicit BlockBuilder(int block_restart_interval);
+  explicit BlockBuilder(int block_restart_interval,
+                        bool use_delta_encoding = true);
 
   // Reset the contents as if the BlockBuilder was just constructed.
   void Reset();
@@ -36,7 +37,7 @@ class BlockBuilder {
 
   // Returns an estimate of the current (uncompressed) size of the block
   // we are building.
-  size_t CurrentSizeEstimate() const;
+  inline size_t CurrentSizeEstimate() const { return estimate_; }
 
   // Returns an estimated block size after appending key and value.
   size_t EstimateSizeAfterKV(const Slice& key, const Slice& value) const;
@@ -48,9 +49,11 @@ class BlockBuilder {
 
  private:
   const int          block_restart_interval_;
+  const bool         use_delta_encoding_;
 
   std::string           buffer_;    // Destination buffer
   std::vector<uint32_t> restarts_;  // Restart points
+  size_t                estimate_;
   int                   counter_;   // Number of entries emitted since restart
   bool                  finished_;  // Has Finish() been called?
   std::string           last_key_;

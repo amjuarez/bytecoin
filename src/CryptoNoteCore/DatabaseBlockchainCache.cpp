@@ -1708,6 +1708,11 @@ std::vector<Crypto::Hash> DatabaseBlockchainCache::getTransactionHashes() const 
 
 std::vector<uint32_t> DatabaseBlockchainCache::getRandomOutsByAmount(uint64_t amount, size_t count,
                                                                      uint32_t blockIndex) const {
+  return getRandomOutsByAmount(amount, count, blockIndex, 0);
+}
+
+std::vector<uint32_t> DatabaseBlockchainCache::getRandomOutsByAmount(uint64_t amount, size_t count,
+                                             uint32_t blockIndex, uint32_t startBlockIndex) const {
   auto batch = BlockchainReadBatch().requestKeyOutputGlobalIndexesCountForAmount(amount);
   auto result = readDatabase(batch);
   auto outputsCount = result.getKeyOutputGlobalIndexesCountForAmounts();
@@ -1723,7 +1728,27 @@ std::vector<uint32_t> DatabaseBlockchainCache::getRandomOutsByAmount(uint64_t am
     globalIndexes.reserve(outputsToPick);
 
     try {
-      for (uint32_t i = 0; i < outputsToPick; ++i, globalIndexes.push_back(generator())) { }
+      for (uint32_t i = 0, j = 0; i < outputsToPick; )  {
+        globalIndexes.push_back(generator());
+        std::vector<uint32_t> lastIndexVector;
+        lastIndexVector.push_back(globalIndexes.back());
+        std::vector<PackedOutIndex> outputs;
+        if (extractKeyOtputIndexes(amount, Common::ArrayView<uint32_t>(lastIndexVector.data(), lastIndexVector.size()), outputs) != ExtractOutputKeysResult::SUCCESS) {
+        logger(Logging::DEBUGGING) << "getRandomOutsByAmount: failed to extract key output indexes";
+          throw std::runtime_error("Invalid output index"); //TODO: make error code
+        }
+
+        std::vector<ExtendedTransactionInfo> transactions;
+        if (!requestExtendedTransactionInfos(outputs, database, transactions)) {
+          logger(Logging::TRACE) << "getRandomOutsByAmount: requestExtendedTransactionInfos failed";
+          throw std::runtime_error("Error while requesting transactions"); //TODO: make error code
+        }
+        if (startBlockIndex >= transactions[0].blockIndex) {
+          globalIndexes.pop_back();
+        } else {
+          ++i;
+        }
+      }
       //std::generate_n(std::back_inserter(globalIndexes), outputsToPick, generator);
     } catch (const SequenceEnded&) {
       logger(Logging::TRACE) << "getRandomOutsByAmount: generator reached sequence end";

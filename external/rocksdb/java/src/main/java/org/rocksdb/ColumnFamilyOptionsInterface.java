@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -231,7 +231,7 @@ public interface ColumnFamilyOptionsInterface {
 
 
   /**
-   * Same as fixed length prefix extractor, except that when slice is 
+   * Same as fixed length prefix extractor, except that when slice is
    * shorter than the fixed length, it will use the full key.
    *
    * @param n use the first n bytes of a key as its prefix.
@@ -753,7 +753,7 @@ public interface ColumnFamilyOptionsInterface {
    * If &le; 0, a proper value is automatically calculated (usually 1/10 of
    * writer_buffer_size).
    *
-   * There are two additonal restriction of the The specified size:
+   * There are two additional restriction of the The specified size:
    * (1) size should be in the range of [4096, 2 &lt;&lt; 30] and
    * (2) be the multiple of the CPU word (which helps with the memory
    * alignment).
@@ -774,7 +774,7 @@ public interface ColumnFamilyOptionsInterface {
    * If &le; 0, a proper value is automatically calculated (usually 1/10 of
    * writer_buffer_size).
    *
-   * There are two additonal restriction of the The specified size:
+   * There are two additional restriction of the The specified size:
    * (1) size should be in the range of [4096, 2 &lt;&lt; 30] and
    * (2) be the multiple of the CPU word (which helps with the memory
    * alignment).
@@ -880,29 +880,6 @@ public interface ColumnFamilyOptionsInterface {
    * @return true if compaction verifies checksum on every read.
    */
   boolean verifyChecksumsInCompaction();
-
-  /**
-   * Use KeyMayExist API to filter deletes when this is true.
-   * If KeyMayExist returns false, i.e. the key definitely does not exist, then
-   * the delete is a noop. KeyMayExist only incurs in-memory look up.
-   * This optimization avoids writing the delete to storage when appropriate.
-   * Default: false
-   *
-   * @param filterDeletes true if filter-deletes behavior is on.
-   * @return the reference to the current option.
-   */
-  Object setFilterDeletes(boolean filterDeletes);
-
-  /**
-   * Use KeyMayExist API to filter deletes when this is true.
-   * If KeyMayExist returns false, i.e. the key definitely does not exist, then
-   * the delete is a noop. KeyMayExist only incurs in-memory look up.
-   * This optimization avoids writing the delete to storage when appropriate.
-   * Default: false
-   *
-   * @return true if filter-deletes behavior is on.
-   */
-  boolean filterDeletes();
 
   /**
    * An iteration-&gt;Next() sequentially skips over keys with the same
@@ -1011,15 +988,15 @@ public interface ColumnFamilyOptionsInterface {
   long inplaceUpdateNumLocks();
 
   /**
-   * Sets the number of bits used in the prefix bloom filter.
+   * Sets the size ratio of the memtable used in the prefix bloom filter.
    *
    * This value will be used only when a prefix-extractor is specified.
    *
-   * @param memtablePrefixBloomBits the number of bits used in the
+   * @param memtablePrefixBloomSizeRatio the number of bits used in the
    *     prefix bloom filter.
    * @return the reference to the current option.
    */
-  Object setMemtablePrefixBloomBits(int memtablePrefixBloomBits);
+  Object setMemtablePrefixBloomSizeRatio(double memtablePrefixBloomSizeRatio);
 
   /**
    * Returns the number of bits used in the prefix bloom filter.
@@ -1029,22 +1006,7 @@ public interface ColumnFamilyOptionsInterface {
    * @return the number of bloom-bits.
    * @see #useFixedLengthPrefixExtractor(int)
    */
-  int memtablePrefixBloomBits();
-
-  /**
-   * The number of hash probes per key used in the mem-table.
-   *
-   * @param memtablePrefixBloomProbes the number of hash probes per key.
-   * @return the reference to the current option.
-   */
-  Object setMemtablePrefixBloomProbes(int memtablePrefixBloomProbes);
-
-  /**
-   * The number of hash probes per key used in the mem-table.
-   *
-   * @return the number of hash probes per key.
-   */
-  int memtablePrefixBloomProbes();
+  double memtablePrefixBloomSizeRatio();
 
   /**
    * Control locality of bloom filter probes to improve cache miss rate.
@@ -1074,7 +1036,7 @@ public interface ColumnFamilyOptionsInterface {
    * Default: 0
    *
    * @return the level of locality of bloom-filter probes.
-   * @see #setMemtablePrefixBloomProbes(int)
+   * @see #setBloomLocality(int)
    */
   int bloomLocality();
 

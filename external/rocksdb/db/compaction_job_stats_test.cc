@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -27,6 +27,7 @@
 #include "db/job_context.h"
 #include "db/version_set.h"
 #include "db/write_batch_internal.h"
+#include "memtable/hash_linklist_rep.h"
 #include "port/stack_trace.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/compaction_filter.h"
@@ -47,14 +48,13 @@
 #include "table/block_based_table_factory.h"
 #include "table/mock_table.h"
 #include "table/plain_table_factory.h"
+#include "table/scoped_arena_iterator.h"
 #include "util/compression.h"
 #include "util/hash.h"
-#include "util/hash_linklist_rep.h"
 #include "util/logging.h"
 #include "util/mock_env.h"
 #include "util/mutexlock.h"
 #include "util/rate_limiter.h"
-#include "util/scoped_arena_iterator.h"
 #include "util/statistics.h"
 #include "util/string_util.h"
 #include "util/sync_point.h"
@@ -64,7 +64,7 @@
 #include "util/xfunc.h"
 #include "utilities/merge_operators.h"
 
-#if !defined(IOS_CROSS_COMPILE) && (!defined(NDEBUG) || !defined(OS_WIN))
+#if !defined(IOS_CROSS_COMPILE)
 #ifndef ROCKSDB_LITE
 namespace rocksdb {
 
@@ -551,8 +551,9 @@ uint64_t EstimatedFileSize(
   const size_t kFooterSize = 512;
 
   uint64_t data_size =
+    static_cast<uint64_t>(
       num_records * (key_size + value_size * compression_ratio +
-                     kPerKeyOverhead);
+                     kPerKeyOverhead));
 
   return data_size + kFooterSize
          + num_records * bloom_bits_per_key / 8      // filter block
@@ -623,7 +624,10 @@ CompressionType GetAnyCompression() {
     return kBZip2Compression;
   } else if (LZ4_Supported()) {
     return kLZ4Compression;
+  } else if (XPRESS_Supported()) {
+    return kXpressCompression;
   }
+
   return kNoCompression;
 }
 
@@ -659,7 +663,7 @@ TEST_P(CompactionJobStatsTest, CompactionJobStatsTest) {
   options.max_subcompactions = max_subcompactions_;
   options.bytes_per_sync = 512 * 1024;
 
-  options.compaction_measure_io_stats = true;
+  options.report_bg_io_stats = true;
   for (int test = 0; test < 2; ++test) {
     DestroyAndReopen(options);
     CreateAndReopenWithCF({"pikachu"}, options);

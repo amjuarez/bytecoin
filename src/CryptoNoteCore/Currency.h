@@ -50,13 +50,16 @@ public:
   size_t cryptonoteCoinVersion() const { return m_cryptonoteCoinVersion; }
 
   size_t rewardBlocksWindow() const { return m_rewardBlocksWindow; }
+  size_t minMixin() const { return m_minMixin; }
+  uint8_t mandatoryMixinBlockVersion() const { return m_mandatoryMixinBlockVersion; }
+  uint32_t mixinStartHeight() const { return m_mixinStartHeight; }
   uint32_t mandatoryTransaction() const { return m_mandatoryTransaction; }
   uint32_t killHeight() const { return m_killHeight; }
   uint64_t tailEmissionReward() const { return m_tailEmissionReward; }
   uint32_t zawyDifficultyBlockIndex() const { return m_zawyDifficultyBlockIndex; }
   size_t zawyDifficultyV2() const { return m_zawyDifficultyV2; }
-  size_t zawyDifficultyV3() const { return m_zawyDifficultyV3; }
-  size_t zawyDifficultyV4() const { return m_zawyDifficultyV4; }
+  uint8_t zawyDifficultyBlockVersion() const { return m_zawyDifficultyBlockVersion; }
+  uint32_t buggedZawyDifficultyBlockIndex() const { return m_buggedZawyDifficultyBlockIndex; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
   uint64_t expectedNumberOfBlocksPerDay() const { return m_expectedNumberOfBlocksPerDay; }
   size_t blockGrantedFullRewardZoneV1() const { return m_blockGrantedFullRewardZoneV1; }
@@ -177,13 +180,16 @@ private:
   size_t m_cryptonoteCoinVersion;
 
   size_t m_rewardBlocksWindow;
+  size_t m_minMixin;
+  uint8_t m_mandatoryMixinBlockVersion;
+  uint32_t m_mixinStartHeight;
   uint32_t m_mandatoryTransaction;
   uint32_t m_killHeight;
   uint64_t m_tailEmissionReward;
   uint32_t m_zawyDifficultyBlockIndex;
   size_t m_zawyDifficultyV2;
-  size_t m_zawyDifficultyV3;
-  size_t m_zawyDifficultyV4;
+  uint8_t m_zawyDifficultyBlockVersion;
+  uint32_t m_buggedZawyDifficultyBlockIndex;
   size_t m_blockGrantedFullRewardZone;
   uint64_t m_expectedNumberOfBlocksPerDay;
   size_t m_blockGrantedFullRewardZoneV1;
@@ -277,13 +283,16 @@ public:
   CurrencyBuilder& cryptonoteCoinVersion(size_t val) { m_currency.m_cryptonoteCoinVersion = val; return *this; }
 
   CurrencyBuilder& rewardBlocksWindow(size_t val) { m_currency.m_rewardBlocksWindow = val; return *this; }
+  CurrencyBuilder& minMixin(size_t val) { m_currency.m_minMixin = val; return *this; }
+  CurrencyBuilder& mandatoryMixinBlockVersion(uint8_t val) { m_currency.m_mandatoryMixinBlockVersion = val; return *this; }
+  CurrencyBuilder& mixinStartHeight(uint32_t val) { m_currency.m_mixinStartHeight = val; return *this; }
   CurrencyBuilder& mandatoryTransaction(uint8_t val) { m_currency.m_mandatoryTransaction = val; return *this; }
   CurrencyBuilder& killHeight(uint32_t val) { m_currency.m_killHeight = val; return *this; }
   CurrencyBuilder& tailEmissionReward(uint64_t val) { m_currency.m_tailEmissionReward = val; return *this; }
   CurrencyBuilder& zawyDifficultyBlockIndex(uint32_t val) { m_currency.m_zawyDifficultyBlockIndex = val; return *this; }
   CurrencyBuilder& zawyDifficultyV2(size_t val) { m_currency.m_zawyDifficultyV2 = val; return *this; }
-  CurrencyBuilder& zawyDifficultyV3(size_t val) { m_currency.m_zawyDifficultyV3 = val; return *this; }
-  CurrencyBuilder& zawyDifficultyV4(size_t val) { m_currency.m_zawyDifficultyV4 = val; return *this; }
+  CurrencyBuilder& zawyDifficultyBlockVersion(uint8_t val) { m_currency.m_zawyDifficultyBlockVersion = val; return *this; }
+  CurrencyBuilder& buggedZawyDifficultyBlockIndex(uint32_t val) { m_currency.m_buggedZawyDifficultyBlockIndex = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
   CurrencyBuilder& expectedNumberOfBlocksPerDay(uint64_t val) { m_currency.m_expectedNumberOfBlocksPerDay = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZoneV1(size_t val) { m_currency.m_blockGrantedFullRewardZoneV1 = val; return *this; }

@@ -1,6 +1,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -13,6 +13,7 @@
 
 #include "db/compaction.h"
 #include "db/merge_helper.h"
+#include "db/pinned_iterators_manager.h"
 #include "rocksdb/compaction_filter.h"
 #include "util/log_buffer.h"
 
@@ -37,13 +38,16 @@ struct CompactionIteratorStats {
 
 class CompactionIterator {
  public:
-  CompactionIterator(Iterator* input, const Comparator* cmp,
+  CompactionIterator(InternalIterator* input, const Comparator* cmp,
                      MergeHelper* merge_helper, SequenceNumber last_sequence,
-                     std::vector<SequenceNumber>* snapshots, Env* env,
+                     std::vector<SequenceNumber>* snapshots,
+                     SequenceNumber earliest_write_conflict_snapshot, Env* env,
                      bool expect_valid_internal_key,
-                     Compaction* compaction = nullptr,
+                     const Compaction* compaction = nullptr,
                      const CompactionFilter* compaction_filter = nullptr,
                      LogBuffer* log_buffer = nullptr);
+
+  ~CompactionIterator();
 
   void ResetRecordCounts();
 
@@ -84,13 +88,14 @@ class CompactionIterator {
   inline SequenceNumber findEarliestVisibleSnapshot(
       SequenceNumber in, SequenceNumber* prev_snapshot);
 
-  Iterator* input_;
+  InternalIterator* input_;
   const Comparator* cmp_;
   MergeHelper* merge_helper_;
   const std::vector<SequenceNumber>* snapshots_;
+  const SequenceNumber earliest_write_conflict_snapshot_;
   Env* env_;
   bool expect_valid_internal_key_;
-  Compaction* compaction_;
+  const Compaction* compaction_;
   const CompactionFilter* compaction_filter_;
   LogBuffer* log_buffer_;
   bool bottommost_level_;
@@ -98,6 +103,7 @@ class CompactionIterator {
   SequenceNumber visible_at_tip_;
   SequenceNumber earliest_snapshot_;
   SequenceNumber latest_snapshot_;
+  bool ignore_snapshots_;
 
   // State
   //
@@ -124,7 +130,18 @@ class CompactionIterator {
   Slice current_user_key_;
   SequenceNumber current_user_key_sequence_;
   SequenceNumber current_user_key_snapshot_;
+
+  // True if the iterator has already returned a record for the current key.
+  bool has_outputted_key_ = false;
+
+  // truncated the value of the next key and output it without applying any
+  // compaction rules.  This is used for outputting a put after a single delete.
+  bool clear_and_output_next_key_ = false;
+
   MergeOutputIterator merge_out_iter_;
+  // PinnedIteratorsManager used to pin input_ Iterator blocks while reading
+  // merge operands and then releasing them after consuming them.
+  PinnedIteratorsManager pinned_iters_mgr_;
   std::string compaction_filter_value_;
   // "level_ptrs" holds indices that remember which file of an associated
   // level we were last checking during the last call to compaction->

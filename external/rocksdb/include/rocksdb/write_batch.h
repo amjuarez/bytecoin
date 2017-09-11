@@ -1,4 +1,4 @@
-// Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -25,6 +25,7 @@
 #ifndef STORAGE_ROCKSDB_INCLUDE_WRITE_BATCH_H_
 #define STORAGE_ROCKSDB_INCLUDE_WRITE_BATCH_H_
 
+#include <atomic>
 #include <stack>
 #include <string>
 #include <stdint.h>
@@ -71,8 +72,7 @@ class WriteBatch : public WriteBatchBase {
   void Delete(const SliceParts& key) override { Delete(nullptr, key); }
 
   using WriteBatchBase::SingleDelete;
-  // If the database contains a mapping for "key", erase it. Expects that the
-  // key was not overwritten. Else do nothing.
+  // WriteBatch implementation of DB::SingleDelete().  See db.h.
   void SingleDelete(ColumnFamilyHandle* column_family,
                     const Slice& key) override;
   void SingleDelete(const Slice& key) override { SingleDelete(nullptr, key); }
@@ -125,7 +125,7 @@ class WriteBatch : public WriteBatchBase {
   // most recent call to SetSavePoint() and removes the most recent save point.
   // If there is no previous call to SetSavePoint(), Status::NotFound()
   // will be returned.
-  // Oterwise returns Status::OK().
+  // Otherwise returns Status::OK().
   Status RollbackToSavePoint() override;
 
   // Support for iterating over the contents of a batch.
@@ -147,7 +147,7 @@ class WriteBatch : public WriteBatchBase {
       return Status::InvalidArgument(
           "non-default column family and PutCF not implemented");
     }
-    virtual void Put(const Slice& key, const Slice& value) {}
+    virtual void Put(const Slice& /*key*/, const Slice& /*value*/) {}
 
     virtual Status DeleteCF(uint32_t column_family_id, const Slice& key) {
       if (column_family_id == 0) {
@@ -157,7 +157,7 @@ class WriteBatch : public WriteBatchBase {
       return Status::InvalidArgument(
           "non-default column family and DeleteCF not implemented");
     }
-    virtual void Delete(const Slice& key) {}
+    virtual void Delete(const Slice& /*key*/) {}
 
     virtual Status SingleDeleteCF(uint32_t column_family_id, const Slice& key) {
       if (column_family_id == 0) {
@@ -167,7 +167,7 @@ class WriteBatch : public WriteBatchBase {
       return Status::InvalidArgument(
           "non-default column family and SingleDeleteCF not implemented");
     }
-    virtual void SingleDelete(const Slice& key) {}
+    virtual void SingleDelete(const Slice& /*key*/) {}
 
     // Merge and LogData are not pure virtual. Otherwise, we would break
     // existing clients of Handler on a source code level. The default
@@ -181,10 +181,27 @@ class WriteBatch : public WriteBatchBase {
       return Status::InvalidArgument(
           "non-default column family and MergeCF not implemented");
     }
-    virtual void Merge(const Slice& key, const Slice& value) {}
+    virtual void Merge(const Slice& /*key*/, const Slice& /*value*/) {}
 
     // The default implementation of LogData does nothing.
     virtual void LogData(const Slice& blob);
+
+    virtual Status MarkBeginPrepare() {
+      return Status::InvalidArgument("MarkBeginPrepare() handler not defined.");
+    }
+
+    virtual Status MarkEndPrepare(const Slice& xid) {
+      return Status::InvalidArgument("MarkEndPrepare() handler not defined.");
+    }
+
+    virtual Status MarkRollback(const Slice& xid) {
+      return Status::InvalidArgument(
+          "MarkRollbackPrepare() handler not defined.");
+    }
+
+    virtual Status MarkCommit(const Slice& xid) {
+      return Status::InvalidArgument("MarkCommit() handler not defined.");
+    }
 
     // Continue is called by WriteBatch::Iterate. If it returns false,
     // iteration is halted. Otherwise, it continues iterating. The default
@@ -202,16 +219,50 @@ class WriteBatch : public WriteBatchBase {
   // Returns the number of updates in the batch
   int Count() const;
 
+  // Returns true if PutCF will be called during Iterate
+  bool HasPut() const;
+
+  // Returns true if DeleteCF will be called during Iterate
+  bool HasDelete() const;
+
+  // Returns true if SingleDeleteCF will be called during Iterate
+  bool HasSingleDelete() const;
+
+  // Returns trie if MergeCF will be called during Iterate
+  bool HasMerge() const;
+
+  // Returns true if MarkBeginPrepare will be called during Iterate
+  bool HasBeginPrepare() const;
+
+  // Returns true if MarkEndPrepare will be called during Iterate
+  bool HasEndPrepare() const;
+
+  // Returns trie if MarkCommit will be called during Iterate
+  bool HasCommit() const;
+
+  // Returns trie if MarkRollback will be called during Iterate
+  bool HasRollback() const;
+
   using WriteBatchBase::GetWriteBatch;
   WriteBatch* GetWriteBatch() override { return this; }
 
   // Constructor with a serialized string object
-  explicit WriteBatch(const std::string& rep)
-      : save_points_(nullptr), rep_(rep) {}
+  explicit WriteBatch(const std::string& rep);
+
+  WriteBatch(const WriteBatch& src);
+  WriteBatch(WriteBatch&& src);
+  WriteBatch& operator=(const WriteBatch& src);
+  WriteBatch& operator=(WriteBatch&& src);
 
  private:
   friend class WriteBatchInternal;
   SavePoints* save_points_;
+
+  // For HasXYZ.  Mutable to allow lazy computation of results
+  mutable std::atomic<uint32_t> content_flags_;
+
+  // Performs deferred computation of content_flags if necessary
+  uint32_t ComputeContentFlags() const;
 
  protected:
   std::string rep_;  // See comment in write_batch.cc for the format of rep_

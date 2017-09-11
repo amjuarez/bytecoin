@@ -1,4 +1,4 @@
-//  Copyright (c) 2015, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -57,7 +57,8 @@ class SstFileWriter::SstFileWriterPropertiesCollectorFactory
   explicit SstFileWriterPropertiesCollectorFactory(int32_t version)
       : version_(version) {}
 
-  virtual IntTblPropCollector* CreateIntTblPropCollector() override {
+  virtual IntTblPropCollector* CreateIntTblPropCollector(
+      uint32_t column_family_id) override {
     return new SstFileWriterPropertiesCollector(version_);
   }
 
@@ -70,24 +71,28 @@ class SstFileWriter::SstFileWriterPropertiesCollectorFactory
 };
 
 struct SstFileWriter::Rep {
-  Rep(const EnvOptions& _env_options, const ImmutableCFOptions& _ioptions,
+  Rep(const EnvOptions& _env_options, const Options& options,
       const Comparator* _user_comparator)
       : env_options(_env_options),
-        ioptions(_ioptions),
+        ioptions(options),
+        mutable_cf_options(options, ioptions),
         internal_comparator(_user_comparator) {}
 
   std::unique_ptr<WritableFileWriter> file_writer;
   std::unique_ptr<TableBuilder> builder;
   EnvOptions env_options;
   ImmutableCFOptions ioptions;
+  MutableCFOptions mutable_cf_options;
   InternalKeyComparator internal_comparator;
   ExternalSstFileInfo file_info;
+  std::string column_family_name;
+  InternalKey ikey;
 };
 
 SstFileWriter::SstFileWriter(const EnvOptions& env_options,
-                             const ImmutableCFOptions& ioptions,
+                             const Options& options,
                              const Comparator* user_comparator)
-    : rep_(new Rep(env_options, ioptions, user_comparator)) {}
+    : rep_(new Rep(env_options, options, user_comparator)) {}
 
 SstFileWriter::~SstFileWriter() { delete rep_; }
 
@@ -100,10 +105,14 @@ Status SstFileWriter::Open(const std::string& file_path) {
     return s;
   }
 
-  CompressionType compression_type = r->ioptions.compression;
-  if (!r->ioptions.compression_per_level.empty()) {
+  CompressionType compression_type;
+  if (r->ioptions.bottommost_compression != kDisableCompressionOption) {
+    compression_type = r->ioptions.bottommost_compression;
+  } else if (!r->ioptions.compression_per_level.empty()) {
     // Use the compression of the last level if we have per level compression
     compression_type = *(r->ioptions.compression_per_level.rbegin());
+  } else {
+    compression_type = r->mutable_cf_options.compression;
   }
 
   std::vector<std::unique_ptr<IntTblPropCollectorFactory>>
@@ -113,11 +122,15 @@ Status SstFileWriter::Open(const std::string& file_path) {
 
   TableBuilderOptions table_builder_options(
       r->ioptions, r->internal_comparator, &int_tbl_prop_collector_factories,
-      compression_type, r->ioptions.compression_opts, false);
+      compression_type, r->ioptions.compression_opts,
+      nullptr /* compression_dict */, false /* skip_filters */,
+      r->column_family_name);
   r->file_writer.reset(
       new WritableFileWriter(std::move(sst_file), r->env_options));
   r->builder.reset(r->ioptions.table_factory->NewTableBuilder(
-      table_builder_options, r->file_writer.get()));
+      table_builder_options,
+      TablePropertiesCollectorFactory::Context::kUnknownColumnFamily,
+      r->file_writer.get()));
 
   r->file_info.file_path = file_path;
   r->file_info.file_size = 0;
@@ -134,7 +147,7 @@ Status SstFileWriter::Add(const Slice& user_key, const Slice& value) {
   }
 
   if (r->file_info.num_entries == 0) {
-    r->file_info.smallest_key = user_key.ToString();
+    r->file_info.smallest_key.assign(user_key.data(), user_key.size());
   } else {
     if (r->internal_comparator.user_comparator()->Compare(
             user_key, r->file_info.largest_key) <= 0) {
@@ -145,12 +158,12 @@ Status SstFileWriter::Add(const Slice& user_key, const Slice& value) {
 
   // update file info
   r->file_info.num_entries++;
-  r->file_info.largest_key = user_key.ToString();
+  r->file_info.largest_key.assign(user_key.data(), user_key.size());
   r->file_info.file_size = r->builder->FileSize();
 
-  InternalKey ikey(user_key, 0 /* Sequence Number */,
-                   ValueType::kTypeValue /* Put */);
-  r->builder->Add(ikey.Encode(), value);
+  r->ikey.Set(user_key, 0 /* Sequence Number */,
+              ValueType::kTypeValue /* Put */);
+  r->builder->Add(r->ikey.Encode(), value);
 
   return Status::OK();
 }
@@ -159,6 +172,9 @@ Status SstFileWriter::Finish(ExternalSstFileInfo* file_info) {
   Rep* r = rep_;
   if (!r->builder) {
     return Status::InvalidArgument("File is not opened");
+  }
+  if (r->file_info.num_entries == 0) {
+    return Status::InvalidArgument("Cannot create sst file with no entries");
   }
 
   Status s = r->builder->Finish();

@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -11,17 +11,19 @@
 
 #include <vector>
 
+#include "db/pinned_iterators_manager.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/options.h"
+#include "table/internal_iterator.h"
 #include "table/iter_heap.h"
 #include "table/iterator_wrapper.h"
 #include "util/arena.h"
+#include "util/autovector.h"
 #include "util/heap.h"
+#include "util/perf_context_imp.h"
 #include "util/stop_watch.h"
 #include "util/sync_point.h"
-#include "util/perf_context_imp.h"
-#include "util/autovector.h"
 
 namespace rocksdb {
 // Without anonymous namespace here, we fail the warning -Wmissing-prototypes
@@ -32,15 +34,16 @@ typedef BinaryHeap<IteratorWrapper*, MinIteratorComparator> MergerMinIterHeap;
 
 const size_t kNumIterReserve = 4;
 
-class MergingIterator : public Iterator {
+class MergingIterator : public InternalIterator {
  public:
-  MergingIterator(const Comparator* comparator, Iterator** children, int n,
-                  bool is_arena_mode)
+  MergingIterator(const Comparator* comparator, InternalIterator** children,
+                  int n, bool is_arena_mode)
       : is_arena_mode_(is_arena_mode),
         comparator_(comparator),
         current_(nullptr),
         direction_(kForward),
-        minHeap_(comparator_) {
+        minHeap_(comparator_),
+        pinned_iters_mgr_(nullptr) {
     children_.resize(n);
     for (int i = 0; i < n; i++) {
       children_[i].Set(children[i]);
@@ -53,9 +56,12 @@ class MergingIterator : public Iterator {
     current_ = CurrentForward();
   }
 
-  virtual void AddIterator(Iterator* iter) {
+  virtual void AddIterator(InternalIterator* iter) {
     assert(direction_ == kForward);
     children_.emplace_back(iter);
+    if (pinned_iters_mgr_) {
+      iter->SetPinnedItersMgr(pinned_iters_mgr_);
+    }
     auto new_wrapper = children_.back();
     if (new_wrapper.Valid()) {
       minHeap_.push(&new_wrapper);
@@ -237,6 +243,26 @@ class MergingIterator : public Iterator {
     return s;
   }
 
+  virtual void SetPinnedItersMgr(
+      PinnedIteratorsManager* pinned_iters_mgr) override {
+    pinned_iters_mgr_ = pinned_iters_mgr;
+    for (auto& child : children_) {
+      child.SetPinnedItersMgr(pinned_iters_mgr);
+    }
+  }
+
+  virtual bool IsKeyPinned() const override {
+    assert(Valid());
+    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
+           current_->IsKeyPinned();
+  }
+
+  virtual bool IsValuePinned() const override {
+    assert(Valid());
+    return pinned_iters_mgr_ && pinned_iters_mgr_->PinningEnabled() &&
+           current_->IsValuePinned();
+  }
+
  private:
   // Clears heaps for both directions, used when changing direction or seeking
   void ClearHeaps();
@@ -262,6 +288,7 @@ class MergingIterator : public Iterator {
   // Max heap is used for reverse iteration, which is way less common than
   // forward.  Lazily initialize it to save memory.
   std::unique_ptr<MergerMaxIterHeap> maxHeap_;
+  PinnedIteratorsManager* pinned_iters_mgr_;
 
   IteratorWrapper* CurrentForward() const {
     assert(direction_ == kForward);
@@ -288,11 +315,12 @@ void MergingIterator::InitMaxHeap() {
   }
 }
 
-Iterator* NewMergingIterator(const Comparator* cmp, Iterator** list, int n,
-                             Arena* arena) {
+InternalIterator* NewMergingIterator(const Comparator* cmp,
+                                     InternalIterator** list, int n,
+                                     Arena* arena) {
   assert(n >= 0);
   if (n == 0) {
-    return NewEmptyIterator(arena);
+    return NewEmptyInternalIterator(arena);
   } else if (n == 1) {
     return list[0];
   } else {
@@ -313,7 +341,7 @@ MergeIteratorBuilder::MergeIteratorBuilder(const Comparator* comparator,
   merge_iter = new (mem) MergingIterator(comparator, nullptr, 0, true);
 }
 
-void MergeIteratorBuilder::AddIterator(Iterator* iter) {
+void MergeIteratorBuilder::AddIterator(InternalIterator* iter) {
   if (!use_merging_iter && first_iter != nullptr) {
     merge_iter->AddIterator(first_iter);
     use_merging_iter = true;
@@ -325,7 +353,7 @@ void MergeIteratorBuilder::AddIterator(Iterator* iter) {
   }
 }
 
-Iterator* MergeIteratorBuilder::Finish() {
+InternalIterator* MergeIteratorBuilder::Finish() {
   if (!use_merging_iter) {
     return first_iter;
   } else {

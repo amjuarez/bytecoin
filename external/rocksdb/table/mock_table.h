@@ -1,6 +1,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -14,13 +14,14 @@
 #include <string>
 #include <utility>
 
+#include "util/kv_map.h"
 #include "port/port.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/table.h"
+#include "table/internal_iterator.h"
 #include "table/table_builder.h"
 #include "table/table_reader.h"
 #include "util/mutexlock.h"
-#include "util/stl_wrappers.h"
 #include "util/testharness.h"
 #include "util/testutil.h"
 
@@ -39,10 +40,11 @@ class MockTableReader : public TableReader {
  public:
   explicit MockTableReader(const stl_wrappers::KVMap& table) : table_(table) {}
 
-  Iterator* NewIterator(const ReadOptions&, Arena* arena) override;
+  InternalIterator* NewIterator(const ReadOptions&, Arena* arena,
+                                bool skip_filters = false) override;
 
-  Status Get(const ReadOptions&, const Slice& key,
-             GetContext* get_context) override;
+  Status Get(const ReadOptions&, const Slice& key, GetContext* get_context,
+             bool skip_filters = false) override;
 
   uint64_t ApproximateOffsetOf(const Slice& key) override { return 0; }
 
@@ -58,7 +60,7 @@ class MockTableReader : public TableReader {
   const stl_wrappers::KVMap& table_;
 };
 
-class MockTableIterator : public Iterator {
+class MockTableIterator : public InternalIterator {
  public:
   explicit MockTableIterator(const stl_wrappers::KVMap& table) : table_(table) {
     itr_ = table_.end();
@@ -145,13 +147,14 @@ class MockTableFactory : public TableFactory {
  public:
   MockTableFactory();
   const char* Name() const override { return "MockTable"; }
-  Status NewTableReader(const TableReaderOptions& table_reader_options,
-                        unique_ptr<RandomAccessFileReader>&& file,
-                        uint64_t file_size,
-                        unique_ptr<TableReader>* table_reader) const override;
+  Status NewTableReader(
+      const TableReaderOptions& table_reader_options,
+      unique_ptr<RandomAccessFileReader>&& file, uint64_t file_size,
+      unique_ptr<TableReader>* table_reader,
+      bool prefetch_index_and_filter_in_cache = true) const override;
   TableBuilder* NewTableBuilder(
       const TableBuilderOptions& table_builder_options,
-      WritableFileWriter* file) const override;
+      uint32_t column_familly_id, WritableFileWriter* file) const override;
 
   // This function will directly create mock table instead of going through
   // MockTableBuilder. file_contents has to have a format of <internal_key,
@@ -175,7 +178,7 @@ class MockTableFactory : public TableFactory {
   void AssertLatestFile(const stl_wrappers::KVMap& file_contents);
 
  private:
-  uint32_t GetAndWriteNextID(WritableFile* file) const;
+  uint32_t GetAndWriteNextID(WritableFileWriter* file) const;
   uint32_t GetIDFromFile(RandomAccessFileReader* file) const;
 
   mutable MockTableFileSystem file_system_;

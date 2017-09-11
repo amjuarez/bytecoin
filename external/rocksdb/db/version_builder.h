@@ -1,4 +1,4 @@
-//  Copyright (c) 2013, Facebook, Inc.  All rights reserved.
+//  Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 //  This source code is licensed under the BSD-style license found in the
 //  LICENSE file in the root directory of this source tree. An additional grant
 //  of patent rights can be found in the PATENTS file in the same directory.
@@ -24,14 +24,15 @@ class InternalStats;
 class VersionBuilder {
  public:
   VersionBuilder(const EnvOptions& env_options, TableCache* table_cache,
-                 VersionStorageInfo* base_vstorage);
+                 VersionStorageInfo* base_vstorage, Logger* info_log = nullptr);
   ~VersionBuilder();
   void CheckConsistency(VersionStorageInfo* vstorage);
   void CheckConsistencyForDeletes(VersionEdit* edit, uint64_t number,
                                   int level);
   void Apply(VersionEdit* edit);
   void SaveTo(VersionStorageInfo* vstorage);
-  void LoadTableHandlers(InternalStats* internal_stats, int max_threads = 1);
+  void LoadTableHandlers(InternalStats* internal_stats, int max_threads,
+                         bool prefetch_index_and_filter_in_cache);
   void MaybeAddFile(VersionStorageInfo* vstorage, int level, FileMetaData* f);
 
  private:

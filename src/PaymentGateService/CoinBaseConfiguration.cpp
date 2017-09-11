@@ -43,15 +43,18 @@ CoinBaseConfiguration::CoinBaseConfiguration() {
     GENESIS_COINBASE_TX_HEX=CryptoNote::parameters::GENESIS_COINBASE_TX_HEX;
     CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX=CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     MONEY_SUPPLY=CryptoNote::parameters::MONEY_SUPPLY;
+    BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX=CryptoNote::parameters::BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX;
     ZAWY_DIFFICULTY_BLOCK_INDEX=CryptoNote::parameters::ZAWY_DIFFICULTY_BLOCK_INDEX;
     ZAWY_DIFFICULTY_V2=CryptoNote::parameters::ZAWY_DIFFICULTY_V2;
-    ZAWY_DIFFICULTY_V3=CryptoNote::parameters::ZAWY_DIFFICULTY_V3;
-    ZAWY_DIFFICULTY_V4=CryptoNote::parameters::ZAWY_DIFFICULTY_V4;
+    ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION=CryptoNote::parameters::ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION;
     GENESIS_BLOCK_REWARD=CryptoNote::parameters::GENESIS_BLOCK_REWARD;
     CRYPTONOTE_COIN_VERSION=CryptoNote::parameters::CRYPTONOTE_COIN_VERSION;
     TAIL_EMISSION_REWARD=CryptoNote::parameters::TAIL_EMISSION_REWARD;
     KILL_HEIGHT=CryptoNote::parameters::KILL_HEIGHT;
     MANDATORY_TRANSACTION=CryptoNote::parameters::MANDATORY_TRANSACTION;
+    MIXIN_START_HEIGHT=CryptoNote::parameters::MIXIN_START_HEIGHT;
+    MIN_MIXIN=CryptoNote::parameters::MIN_MIXIN;
+    MANDATORY_MIXIN_BLOCK_VERSION=CryptoNote::parameters::MANDATORY_MIXIN_BLOCK_VERSION;
     EMISSION_SPEED_FACTOR=CryptoNote::parameters::EMISSION_SPEED_FACTOR;
     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE=CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1=CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
@@ -84,15 +87,18 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("GENESIS_COINBASE_TX_HEX", po::value<std::string>()->default_value(CryptoNote::parameters::GENESIS_COINBASE_TX_HEX), "Genesis transaction hex")
     ("CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX), "uint64_t")
     ("MONEY_SUPPLY", po::value<uint64_t>()->default_value(CryptoNote::parameters::MONEY_SUPPLY), "uint64_t")
+    ("BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("ZAWY_DIFFICULTY_BLOCK_INDEX", po::value<uint32_t>()->default_value(0), "uint32_t")
-    ("ZAWY_DIFFICULTY_V2", po::value<bool>()->default_value(0), "size_t")
-    ("ZAWY_DIFFICULTY_V3", po::value<bool>()->default_value(0), "size_t")
-    ("ZAWY_DIFFICULTY_V4", po::value<bool>()->default_value(0), "size_t")
+    ("ZAWY_DIFFICULTY_V2", po::value<size_t>()->default_value(0), "size_t")
+    ("ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION", po::value<uint8_t>()->default_value(0), "uint8_t")
     ("GENESIS_BLOCK_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("CRYPTONOTE_COIN_VERSION", po::value<size_t>()->default_value(0), "size_t")
     ("TAIL_EMISSION_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("KILL_HEIGHT", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("MANDATORY_TRANSACTION", po::value<uint32_t>()->default_value(0), "uint32_t")
+    ("MIXIN_START_HEIGHT", po::value<uint32_t>()->default_value(0), "uint32_t")
+    ("MIN_MIXIN", po::value<uint16_t>()->default_value(0), "uint16_t")
+    ("MANDATORY_MIXIN_BLOCK_VERSION", po::value<uint8_t>()->default_value(0), "uint8_t")
     ("EMISSION_SPEED_FACTOR", po::value<unsigned>()->default_value(CryptoNote::parameters::EMISSION_SPEED_FACTOR), "unsigned")
     ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE", po::value<size_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE), "size_t")
     ("CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1", po::value<size_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1), "size_t")
@@ -134,6 +140,15 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
   if (options.count("MONEY_SUPPLY")) {
     MONEY_SUPPLY = options["MONEY_SUPPLY"].as<uint64_t>();
   }
+  if (options.count("MIN_MIXIN")) {
+    MIN_MIXIN = options["MIN_MIXIN"].as<uint16_t>();
+  }
+  if (options.count("MANDATORY_MIXIN_BLOCK_VERSION")) {
+    MANDATORY_MIXIN_BLOCK_VERSION = options["MANDATORY_MIXIN_BLOCK_VERSION"].as<uint8_t>();
+  }
+  if (options.count("MIXIN_START_HEIGHT")) {
+    MIXIN_START_HEIGHT = options["MIXIN_START_HEIGHT"].as<uint32_t>();
+  }
   if (options.count("MANDATORY_TRANSACTION")) {
     MANDATORY_TRANSACTION = options["MANDATORY_TRANSACTION"].as<uint32_t>();
   }
@@ -155,11 +170,11 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
   if (options.count("ZAWY_DIFFICULTY_V2")) {
     ZAWY_DIFFICULTY_V2 = options["ZAWY_DIFFICULTY_V2"].as<size_t>();
   }
-  if (options.count("ZAWY_DIFFICULTY_V3")) {
-    ZAWY_DIFFICULTY_V3 = options["ZAWY_DIFFICULTY_V3"].as<size_t>();
+  if (options.count("ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION")) {
+    ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION = options["ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION"].as<uint8_t>();
   }
-  if (options.count("ZAWY_DIFFICULTY_V4")) {
-    ZAWY_DIFFICULTY_V4 = options["ZAWY_DIFFICULTY_V4"].as<size_t>();
+  if (options.count("BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX")) {
+    BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX = options["BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX"].as<uint32_t>();
   }
   if (options.count("EMISSION_SPEED_FACTOR")) {
     EMISSION_SPEED_FACTOR = options["EMISSION_SPEED_FACTOR"].as<unsigned>();

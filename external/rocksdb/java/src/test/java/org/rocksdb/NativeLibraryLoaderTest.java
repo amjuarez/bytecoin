@@ -1,4 +1,4 @@
-// Copyright (c) 2014, Facebook, Inc.  All rights reserved.
+// Copyright (c) 2011-present, Facebook, Inc.  All rights reserved.
 // This source code is licensed under the BSD-style license found in the
 // LICENSE file in the root directory of this source tree. An additional grant
 // of patent rights can be found in the PATENTS file in the same directory.
@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.rocksdb.util.Environment;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 
@@ -21,11 +22,20 @@ public class NativeLibraryLoaderTest {
 
   @Test
   public void tempFolder() throws IOException {
-    NativeLibraryLoader.getInstance().loadLibraryFromJar(
+    NativeLibraryLoader.getInstance().loadLibraryFromJarToTemp(
         temporaryFolder.getRoot().getAbsolutePath());
-    Path path = Paths.get(temporaryFolder.getRoot().getAbsolutePath(),
+    final Path path = Paths.get(temporaryFolder.getRoot().getAbsolutePath(),
         Environment.getJniLibraryFileName("rocksdb"));
     assertThat(Files.exists(path)).isTrue();
     assertThat(Files.isReadable(path)).isTrue();
+  }
+
+  @Test
+  public void overridesExistingLibrary() throws IOException {
+    File first = NativeLibraryLoader.getInstance().loadLibraryFromJarToTemp(
+        temporaryFolder.getRoot().getAbsolutePath());
+    NativeLibraryLoader.getInstance().loadLibraryFromJarToTemp(
+        temporaryFolder.getRoot().getAbsolutePath());
+    assertThat(first.exists()).isTrue();
   }
 }
