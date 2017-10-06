@@ -121,6 +121,8 @@ const char     P2P_STAT_TRUSTED_PUB_KEY[]                    = "";
 
 const char* const SEED_NODES[] = { "139.59.106.117:39567", "139.59.102.179:39567", };
 
+const char GENESIS_COINBASE_TX_HEX = "010e01ff00018b8af2ffa08d01029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd088071210184a32f1433d49a10016ee0d8b70a3457b16dac4b892739c673f7c6b77112fc7b";
+
 
 struct CheckpointData {
   uint32_t index;
