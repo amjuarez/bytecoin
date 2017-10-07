@@ -103,6 +103,9 @@ const size_t   COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT         =  1000;
 
 const int      P2P_DEFAULT_PORT                              =  39567;
 const int      RPC_DEFAULT_PORT                              =  39548;
+  
+  //Dollarydoos Network Identifier: 12345678-1100-0101-1011-090090055555
+  //Dollarydoos Genesis Tx Hash: 010501ff00018b8af2ffa08d01029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd0880712101c0774a2baef8cd0889dfe9417f8170912d82adfe8e9c844ef3648c6c32b3a583
 
 const size_t   P2P_LOCAL_WHITE_PEERLIST_LIMIT                =  1000;
 const size_t   P2P_LOCAL_GRAY_PEERLIST_LIMIT                 =  5000;
