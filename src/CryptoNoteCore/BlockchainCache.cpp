@@ -100,15 +100,6 @@ void OutputGlobalIndexesForAmount::serialize(ISerializer& s) {
   s(outputs, "outputs");
 }
 
-void MultisignatureOutputState::serialize(ISerializer& s) {
-  s(output, "output");
-}
-
-void MultisignatureIndexes::serialize(ISerializer& s) {
-  s(startIndex, "start_index");
-  s(outputs, "outputs");
-}
-
 void PaymentIdTransactionHashPair::serialize(ISerializer& s) {
   s(paymentId, "payment_id");
   s(transactionHash, "transaction_hash");
@@ -206,17 +197,6 @@ void BlockchainCache::doPushBlock(const CachedBlock& cachedBlock,
 
   logger(Logging::DEBUGGING) << "Added " << validatorState.spentKeyImages.size() << " spent key images";
 
-  if (!validatorState.spentMultisignatureGlobalIndexes.empty()) {
-    auto& array = spentMultisigOutputsByBlock[blockIndex];
-    array.reserve(array.size() + validatorState.spentMultisignatureGlobalIndexes.size());
-  }
-
-  for (const auto& multisignature : validatorState.spentMultisignatureGlobalIndexes) {
-    addSpentMultisignature(multisignature.first, multisignature.second, blockIndex);
-  }
-
-  logger(Logging::DEBUGGING) << "Added " << validatorState.spentMultisignatureGlobalIndexes.size() << " spent multisignatures";
-
   assert(cachedTransactions.size() <= std::numeric_limits<uint16_t>::max());
 
   auto transactionBlockIndex = 0;
@@ -286,7 +266,6 @@ std::unique_ptr<IBlockchainCache> BlockchainCache::split(uint32_t splitBlockInde
   splitTransactions(*newCache, splitBlockIndex);
   splitBlocks(*newCache, splitBlockIndex);
   splitKeyOutputsGlobalIndexes(*newCache, splitBlockIndex);
-  splitMultiSignatureOutputsGlobalIndexes(*newCache, splitBlockIndex);
 
   fixChildrenParent(newCache.get());
   newCache->children = children;
@@ -355,42 +334,12 @@ void BlockchainCache::splitKeyOutputsGlobalIndexes(BlockchainCache& newCache, ui
   logger(Logging::DEBUGGING) << "Key output global indexes split successfully completed";
 }
 
-void BlockchainCache::splitMultiSignatureOutputsGlobalIndexes(BlockchainCache& newCache, uint32_t splitBlockIndex) {
-  auto lowerBoundFunction = [](std::vector<MultisignatureOutputState>::iterator begin,
-                               std::vector<MultisignatureOutputState>::iterator end,
-                               uint32_t splitBlockIndex) -> std::vector<MultisignatureOutputState>::iterator {
-    return std::lower_bound(begin, end, splitBlockIndex,
-                            [](MultisignatureOutputState outputState, uint32_t splitIndex) {
-                              // all outputs in it->second.outputs are sorted according to blockIndex + transactionIndex
-                              return outputState.output.blockIndex < splitIndex;
-                            });
-  };
-
-  splitGlobalIndexes(multisignatureStorage, newCache.multisignatureStorage, splitBlockIndex, lowerBoundFunction);
-
-  // move spent mutisig by block
-  auto it = spentMultisigOutputsByBlock.lower_bound(splitBlockIndex);
-  std::move(it, spentMultisigOutputsByBlock.end(),
-            std::inserter(newCache.spentMultisigOutputsByBlock, newCache.spentMultisigOutputsByBlock.end()));
-
-  logger(Logging::DEBUGGING) << "Multisignature output global indexes split successfully completed";
-}
-
 void BlockchainCache::addSpentKeyImage(const Crypto::KeyImage& keyImage, uint32_t blockIndex) {
   assert(!checkIfSpent(keyImage, blockIndex - 1)); //Changed from "assert(!checkIfSpent(keyImage, blockIndex));"
                                                    //to prevent fail when pushing block from DatabaseBlockchainCache.
                                                    //In case of pushing external block double spend within block
                                                    //should be checked by Core.
   spentKeyImages.get<BlockIndexTag>().emplace(SpentKeyImage{blockIndex, keyImage});
-}
-
-void BlockchainCache::addSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) {
-  assert(!checkIfSpentMultisignature(amount, globalIndex, blockIndex - 1)); //Changed from "assert(!checkIfSpentMultisignature(amount, globalIndex, blockIndex))"
-                                                                            //to prevent fail when pushing block from DatabaseBlockchainCache.
-                                                                            //In case of pushing external block double spend within block
-                                                                            //should be checked by Core.
-  spentMultisigOutputsByBlock[blockIndex].push_back({amount, globalIndex});
-  spentMultisigOutputs.insert({amount, globalIndex});
 }
 
 std::vector<Crypto::Hash> BlockchainCache::getTransactionHashes() const {
@@ -434,8 +383,6 @@ void BlockchainCache::pushTransaction(const CachedTransaction& cachedTransaction
 
     if (output.target.type() == typeid(KeyOutput)) {
       transactionCacheInfo.globalIndexes.push_back(insertKeyOutputToGlobalIndex(output.amount, poi, blockIndex));
-    } else if (output.target.type() == typeid(MultisignatureOutput)) {
-      transactionCacheInfo.globalIndexes.push_back(insertMultisignatureToGlobalIndex(output.amount, poi, blockIndex));
     }
   }
 
@@ -462,18 +409,6 @@ uint32_t BlockchainCache::insertKeyOutputToGlobalIndex(uint64_t amount, PackedOu
   if (pair.second && parent != nullptr) {
     indexEntry.startIndex = static_cast<uint32_t>(parent->getKeyOutputsCountForAmount(amount, blockIndex));
     logger(Logging::DEBUGGING) << "Key output count for amount " << amount << " requested from parent. Returned count: " << indexEntry.startIndex;
-  }
-
-  return indexEntry.startIndex + static_cast<uint32_t>(indexEntry.outputs.size()) - 1;
-}
-
-uint32_t BlockchainCache::insertMultisignatureToGlobalIndex(uint64_t amount, PackedOutIndex output, uint32_t blockIndex) {
-  auto pair = multisignatureStorage.emplace(amount, MultisignatureIndexes{});
-  auto& indexEntry = pair.first->second;
-  indexEntry.outputs.push_back({output});
-  if (pair.second && parent != nullptr) {
-    indexEntry.startIndex = static_cast<uint32_t>(parent->getMultisignatureCountForAmount(amount, blockIndex));
-    logger(Logging::DEBUGGING) << "Multisignature output count for amount " << amount << " requested from parent. Returned count: " << indexEntry.startIndex;
   }
 
   return indexEntry.startIndex + static_cast<uint32_t>(indexEntry.outputs.size()) - 1;
@@ -518,26 +453,6 @@ uint32_t BlockchainCache::getBlockIndex(const Crypto::Hash& blockHash) const {
 
   const auto rndIt = blockInfos.project<BlockIndexTag>(hashIt);
   return static_cast<uint32_t>(std::distance(blockInfos.get<BlockIndexTag>().begin(), rndIt)) + startIndex;
-}
-
-BlockchainCache::OutputSearchResult
-BlockchainCache::findPackedOutForMultisignatureInCurrentSegment(uint64_t amount, uint32_t globalIndex,
-                                                                PackedOutIndex& packedOut) const {
-  auto outputGlobalIndexesIterator = multisignatureStorage.find(amount);
-
-  if (outputGlobalIndexesIterator != multisignatureStorage.end() &&
-      outputGlobalIndexesIterator->second.startIndex <= globalIndex) {
-
-    auto& globalIndexesVector = outputGlobalIndexesIterator->second.outputs;
-    if (globalIndex - outputGlobalIndexesIterator->second.startIndex >= globalIndexesVector.size()) {
-      return OutputSearchResult::INVALID_ARGUMENT;
-    }
-
-    packedOut = globalIndexesVector[globalIndex - outputGlobalIndexesIterator->second.startIndex].output;
-    return OutputSearchResult::FOUND;
-  }
-
-  return OutputSearchResult::NOT_FOUND;
 }
 
 Crypto::Hash BlockchainCache::getBlockHash(uint32_t blockIndex) const {
@@ -595,23 +510,6 @@ size_t BlockchainCache::getKeyOutputsCountForAmount(uint64_t amount, uint32_t bl
 
   auto lowerBound = std::lower_bound(it->second.outputs.begin(), it->second.outputs.end(), blockIndex, [] (const PackedOutIndex& output, uint32_t blockIndex) {
     return output.blockIndex < blockIndex;
-  });
-
-  return it->second.startIndex + static_cast<size_t>(std::distance(it->second.outputs.begin(), lowerBound));
-}
-
-size_t BlockchainCache::getMultisignatureCountForAmount(uint64_t amount, uint32_t blockIndex) const {
-  auto it = multisignatureStorage.find(amount);
-  if (it == multisignatureStorage.end()) {
-    if (parent == nullptr) {
-      return 0;
-    }
-
-    return parent->getMultisignatureCountForAmount(amount, blockIndex);
-  }
-
-  auto lowerBound = std::lower_bound(it->second.outputs.begin(), it->second.outputs.end(), blockIndex, [] (const MultisignatureOutputState& output, uint32_t blockIndex) {
-    return output.output.blockIndex < blockIndex;
   });
 
   return it->second.startIndex + static_cast<size_t>(std::distance(it->second.outputs.begin(), lowerBound));
@@ -752,13 +650,11 @@ void BlockchainCache::serialize(ISerializer& s) {
     writeSequence<PaymentIdTransactionHashPair>(paymentIds.begin(), paymentIds.end(), "payment_id_indexes", s);
 
     s(keyOutputsGlobalIndexes, "key_outputs_global_indexes");
-    s(multisignatureStorage, "multisignature_storage");
   } else {
     TransactionsCacheContainer restoredTransactions;
     SpentKeyImagesContainer restoredSpentKeyImages;
     BlockInfoContainer restoredBlockHashIndex;
     OutputsGlobalIndexesContainer restoredKeyOutputsGlobalIndexes;
-    MultisignaturesContainer restoredMultisignatureContainer;
     PaymentIdContainer restoredPaymentIds;
 
     readSequence<CachedTransactionInfo>(std::inserter(restoredTransactions, restoredTransactions.end()), "transactions", s);
@@ -767,11 +663,9 @@ void BlockchainCache::serialize(ISerializer& s) {
     readSequence<PaymentIdTransactionHashPair>(std::inserter(restoredPaymentIds, restoredPaymentIds.end()), "payment_id_indexes", s);
 
     s(restoredKeyOutputsGlobalIndexes, "key_outputs_global_indexes");
-    s(restoredMultisignatureContainer, "multisignature_storage");
 
     transactions = std::move(restoredTransactions);
     spentKeyImages = std::move(restoredSpentKeyImages);
-    multisignatureStorage = std::move(restoredMultisignatureContainer);
     blockInfos = std::move(restoredBlockHashIndex);
     keyOutputsGlobalIndexes = std::move(restoredKeyOutputsGlobalIndexes);
     paymentIds = std::move(restoredPaymentIds);
@@ -792,19 +686,6 @@ void BlockchainCache::load() {
   CryptoNote::BinaryInputStreamSerializer s(stream);
 
   serialize(s);
-}
-
-// output must exist
-bool BlockchainCache::checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex) const {
-  if (spentMultisigOutputs.count({amount, globalIndex})) {
-    return true;
-  }
-
-  return parent != nullptr ? parent->checkIfSpentMultisignature(amount, globalIndex) : false;
-}
-
-bool BlockchainCache::checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) const {
-  return checkIfSpentMultisignature(amount, globalIndex);
 }
 
 bool BlockchainCache::isTransactionSpendTimeUnlocked(uint64_t unlockTime) const {
@@ -1007,63 +888,6 @@ ExtractOutputKeysResult BlockchainCache::extractKeyOtputIndexes(uint64_t amount,
                            });
 }
 
-bool BlockchainCache::getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex,
-                                                      MultisignatureOutput& output, uint64_t& unlockTime) const {
-  return getMultisignatureOutputIfExists(amount, globalIndex, getTopBlockIndex(), output, unlockTime);
-}
-
-bool BlockchainCache::getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex,
-                                                      MultisignatureOutput& output, uint64_t& unlockTime) const {
-  PackedOutIndex packedOut;
-  auto searchResult = findPackedOutForMultisignatureInCurrentSegment(amount, globalIndex, packedOut);
-
-  if (searchResult == OutputSearchResult::INVALID_ARGUMENT) {
-    return false;
-  } else if (searchResult == OutputSearchResult::NOT_FOUND) {
-    if (parent != nullptr) {
-      return parent->getMultisignatureOutputIfExists(amount, globalIndex, blockIndex, output, unlockTime);
-    }
-
-    return false;
-  }
-
-  if (packedOut.blockIndex > blockIndex) {
-    return false;
-  }
-
-  assert(packedOut.blockIndex >= startIndex);
-  assert(packedOut.blockIndex <= getTopBlockIndex());
-
-  auto transactionIt = transactions.get<TransactionInBlockTag>().find(
-      boost::make_tuple<uint32_t, uint32_t>(packedOut.blockIndex, packedOut.transactionIndex));
-  assert(transactionIt != transactions.get<TransactionInBlockTag>().end());
-
-  unlockTime = transactionIt->unlockTime;
-  assert(transactionIt->outputs[packedOut.outputIndex].type() == typeid(MultisignatureOutput));
-  output = boost::get<MultisignatureOutput>(transactionIt->outputs[packedOut.outputIndex]);
-
-  return true;
-}
-
-std::pair<Crypto::Hash, size_t> BlockchainCache::getMultisignatureOutputReference(uint64_t amount,
-                                                                                  uint32_t globalIndex) const {
-  PackedOutIndex packedOut;
-  auto searchResult = findPackedOutForMultisignatureInCurrentSegment(amount, globalIndex, packedOut);
-
-  assert(searchResult != OutputSearchResult::INVALID_ARGUMENT);
-  if (searchResult == OutputSearchResult::NOT_FOUND) {
-    assert(parent != nullptr);
-    return parent->getMultisignatureOutputReference(amount, globalIndex);
-  }
-
-  assert(packedOut.blockIndex >= startIndex);
-  assert(packedOut.blockIndex <= getTopBlockIndex());
-  auto transactionIt = transactions.get<TransactionInBlockTag>().find(
-      boost::make_tuple<uint32_t, uint32_t>(packedOut.blockIndex, packedOut.transactionIndex));
-  assert(transactionIt != transactions.get<TransactionInBlockTag>().end());
-  return std::make_pair(transactionIt->transactionHash, packedOut.outputIndex);
-}
-
 uint32_t BlockchainCache::getTopBlockIndex() const {
   assert(!blockInfos.empty());
   return startIndex + static_cast<uint32_t>(blockInfos.size()) - 1;
@@ -1179,12 +1003,6 @@ TransactionValidatorState BlockchainCache::fillOutputsSpentByBlock(uint32_t bloc
   auto range = keyImagesIndex.equal_range(blockIndex);
   for (auto it = range.first; it != range.second; ++it) {
     spentOutputs.spentKeyImages.insert(it->keyImage);
-  }
-
-  auto it = spentMultisigOutputsByBlock.find(blockIndex);
-  if (it != spentMultisigOutputsByBlock.end()) {
-    std::copy(it->second.begin(), it->second.end(), std::inserter(spentOutputs.spentMultisignatureGlobalIndexes,
-                                                                  spentOutputs.spentMultisignatureGlobalIndexes.end()));
   }
 
   return spentOutputs;

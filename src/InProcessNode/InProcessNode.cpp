@@ -753,33 +753,6 @@ std::error_code InProcessNode::doGetPoolSymmetricDifference(std::vector<Crypto::
   return ec;
 }
 
-void InProcessNode::getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t gindex, MultisignatureOutput& out,
-                                                         const Callback& callback) {
-  std::unique_lock<std::mutex> lock(mutex);
-  if (state != INITIALIZED) {
-    lock.unlock();
-    callback(make_error_code(CryptoNote::error::NOT_INITIALIZED));
-    return;
-  }
-
-  executeInDispatcherThread([=, &out] () {
-    auto ec = doGetOutputByMultisigGlobalIndex(amount, gindex, out);
-    executeInRemoteThread([callback, ec] () { callback(ec); });
-  });
-}
-
-std::error_code InProcessNode::doGetOutputByMultisigGlobalIndex(uint64_t amount, uint32_t gindex, MultisignatureOutput& out) {
-  std::error_code ec = std::error_code();
-  auto result = core.getMultisignatureOutput(amount, gindex);
-  if (!result) {
-    ec = make_error_code(std::errc::invalid_argument);
-    return ec;
-  }
-
-  out = result->first;
-  return ec;
-}
-
 void InProcessNode::getBlocks(const std::vector<uint32_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks,
                               const Callback& callback) {
   std::unique_lock<std::mutex> lock(mutex);

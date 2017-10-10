@@ -117,7 +117,7 @@ const uint32_t P2P_DEFAULT_CONNECTION_TIMEOUT                = 5000;          //
 const uint32_t P2P_DEFAULT_PING_CONNECTION_TIMEOUT           = 2000;          // 2 seconds
 const uint64_t P2P_DEFAULT_INVOKE_TIMEOUT                    = 60 * 2 * 1000; // 2 minutes
 const size_t   P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT          = 5000;          // 5 seconds
-const char     P2P_STAT_TRUSTED_PUB_KEY[] = "93467628927eaa0b13a4e52e61864a75aa475e67f6b5748eb3fc1d2fe468aed4";
+const char     P2P_STAT_TRUSTED_PUB_KEY[] = "E29507CA55455F37A3B783EE2C5123B8B6A34A0C5CAAE050922C6254161480C1";
 
 const char* const SEED_NODES[] = {
   "seed.bytecoin.org:8080",
@@ -191,7 +191,8 @@ const CheckpointData CHECKPOINTS[] = {
   {1283000, "826043db95e9801f038f254d223ce0d0912da269dcce1461b5f0f05ddfae9e1c"},
   {1324000, "981e6f6871a7c295b56c5ce544adb5a7d52540ee23e15474b4357c7728952fef"},
   {1329000, "b88ed8dfe95a19bd6377f77c01d87df9cf7bd14cd6de7ec616beca95deb1fc85"},
-  {1343000, "1696231b026b4e10412b16d65ba036c9750d287ab76da7e25efd4ba3fa9ed999"}
+  {1343000, "1696231b026b4e10412b16d65ba036c9750d287ab76da7e25efd4ba3fa9ed999"},
+  {1372000, "55e02f544df808a12d3c2809b8c7490f8b0729aef196745240e94522c69a7181"}
 };
 } // CryptoNote
 

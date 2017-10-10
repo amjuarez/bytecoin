@@ -279,22 +279,6 @@ uint32_t requestKeyOutputGlobalIndexesCountForAmount(IBlockchainCache::Amount am
   }
 }
 
-uint32_t requestMultisignatureOutputGlobalIndexesCountForAmount(IBlockchainCache::Amount amount, IDataBase& database) {
-  auto batch = BlockchainReadBatch().requestMultisignatureOutputGlobalIndexesCountForAmount(amount);
-  auto dbError = database.read(batch);
-  if (dbError) {
-    throw std::system_error(dbError, "Cannot perform requestMultisignatureOutputGlobalIndexesCountForAmount query");
-  }
-
-  auto result = batch.extractResult();
-
-  if (result.getMultisignatureOutputGlobalIndexesCountForAmounts().count(amount) != 0) {
-    return result.getMultisignatureOutputGlobalIndexesCountForAmounts().at(amount);
-  } else {
-    return 0;
-  }
-}
-
 class DbOutputConstIterator: public boost::iterator_facade<DbOutputConstIterator, const PackedOutIndex, boost::random_access_traversal_tag /*boost::forward_traversal_tag*/> {
 public:
   DbOutputConstIterator(std::function<PackedOutIndex (IBlockchainCache::Amount amount, uint32_t globalOutputIndex)> retriever_,
@@ -345,22 +329,6 @@ PackedOutIndex retrieveKeyOutput(IBlockchainCache::Amount amount, uint32_t globa
   } catch (std::exception&) {
     assert(false);
     throw std::runtime_error("Couldn't find key output for amount " + std::to_string(amount) + " with global output index " + std::to_string(globalOutputIndex));
-  }
-}
-
-PackedOutIndex retrieveMultisignatureOutput(IBlockchainCache::Amount amount, uint32_t globalOutputIndex, IDataBase& database) {
-  BlockchainReadBatch batch;
-  auto dbError = database.read(batch.requestMultisignatureOutputGlobalIndexForAmount(amount, globalOutputIndex));
-  if (dbError) {
-    throw std::system_error(dbError, "Error during retrieving multisignature output by global output index");
-  }
-
-  auto result = batch.extractResult();
-  try {
-    return result.getMultisignatureOutputGlobalIndexesForAmounts().at(std::make_pair(amount, globalOutputIndex));
-  } catch (std::exception&) {
-    assert(false);
-    throw std::runtime_error("Couldn't find multisignature output for amount " + std::to_string(amount) + " with global output index " + std::to_string(globalOutputIndex));
   }
 }
 
@@ -590,17 +558,13 @@ std::unique_ptr<IBlockchainCache> DatabaseBlockchainCache::split(uint32_t splitB
   }
 
   std::map<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex> keyIndexSplitBoundaries;
-  std::map<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex> multisigIndexSplitBoundaries;
   for (const auto& transaction: extendedTransactions) {
     auto txkeyBoundaries = getMinGlobalIndexesByAmount(transaction.amountToKeyIndexes);
-    auto txMultisigBoundaries = getMinGlobalIndexesByAmount(transaction.amountToMultiIndexes);
 
     mergeOutputsSplitBoundaries(keyIndexSplitBoundaries, txkeyBoundaries);
-    mergeOutputsSplitBoundaries(multisigIndexSplitBoundaries, txMultisigBoundaries);
   }
 
   requestDeleteKeyOutputs(writeBatch, keyIndexSplitBoundaries);
-  requestDeleteMultisignatureOutputs(writeBatch, multisigIndexSplitBoundaries);
 
   deleteClosestTimestampBlockIndex(writeBatch, splitBlockIndex);
 
@@ -706,14 +670,9 @@ void DatabaseBlockchainCache::requestDeletePaymentId(BlockchainWriteBatch& write
 void DatabaseBlockchainCache::requestDeleteSpentOutputs(BlockchainWriteBatch& writeBatch, uint32_t blockIndex, const TransactionValidatorState& spentOutputs) {
   logger(Logging::DEBUGGING) << "Deleting spent outputs for block index " << blockIndex;
 
-  std::vector<std::pair<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex>> spentMultisigs(
-        spentOutputs.spentMultisignatureGlobalIndexes.begin(),
-        spentOutputs.spentMultisignatureGlobalIndexes.end());
-
   std::vector<Crypto::KeyImage> spentKeys(spentOutputs.spentKeyImages.begin(), spentOutputs.spentKeyImages.end());
 
-  writeBatch.removeSpentKeyImages(blockIndex, spentKeys)
-      .removeSpentMultisignatureOutputGlobalIndexes(blockIndex, spentMultisigs);
+  writeBatch.removeSpentKeyImages(blockIndex, spentKeys);
 }
 
 void DatabaseBlockchainCache::requestDeleteKeyOutputs(BlockchainWriteBatch& writeBatch,
@@ -749,34 +708,6 @@ void DatabaseBlockchainCache::requestDeleteKeyOutputsAmount(BlockchainWriteBatch
   }
 
   updateKeyOutputCount(amount, boundary - outputsCount);
-}
-
-void DatabaseBlockchainCache::requestDeleteMultisignatureOutputs(BlockchainWriteBatch& writeBatch,
-                                                                 const std::map<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex>& boundaries) {
-  if (boundaries.empty()) {
-    logger(Logging::DEBUGGING) << "No multisignature output amounts...";
-    return;
-  }
-
-  BlockchainReadBatch readBatch;
-  for (auto kv: boundaries) {
-    readBatch.requestMultisignatureOutputGlobalIndexesCountForAmount(kv.first);
-  }
-
-  std::unordered_map<IBlockchainCache::Amount, uint32_t> amountCounts = readDatabase(readBatch).getMultisignatureOutputGlobalIndexesCountForAmounts();
-
-  for (const auto& kv: amountCounts) {
-    auto it = boundaries.find(kv.first);
-    requestDeleteMultisignatureOutputsAmount(writeBatch, kv.first, it->second, kv.second);
-  }
-}
-
-void DatabaseBlockchainCache::requestDeleteMultisignatureOutputsAmount(BlockchainWriteBatch& writeBatch, IBlockchainCache::Amount amount,
-                                                                       IBlockchainCache::GlobalOutputIndex boundary, uint32_t outputsCount) {
-  logger(Logging::DEBUGGING) << "Requesting delete for multisignature output amount " << amount <<
-                                " starting from global index " << boundary << " to " << (outputsCount - 1);
-  writeBatch.removeKeyOutputGlobalIndexes(amount, outputsCount - boundary, boundary);
-  updateMultiOutputCount(amount, boundary - outputsCount);
 }
 
 void DatabaseBlockchainCache::requestRemoveTimestamp(BlockchainWriteBatch& batch, uint64_t timestamp, const Crypto::Hash& blockHash) {
@@ -820,10 +751,8 @@ void DatabaseBlockchainCache::pushTransaction(const CachedTransaction& cachedTra
   transactionCacheInfo.outputs.reserve(tx.outputs.size());
   auto outputCount = 0;
   std::unordered_map<Amount, std::vector<PackedOutIndex>> keyIndexes;
-  std::unordered_map<Amount, std::vector<PackedOutIndex>> multiIndexes;
 
   std::set<Amount> newKeyAmounts;
-  std::set<Amount> newMultisignatureAmounts;
 
   for (auto& output : tx.outputs) {
     transactionCacheInfo.outputs.push_back(output.target);
@@ -853,17 +782,6 @@ void DatabaseBlockchainCache::pushTransaction(const CachedTransaction& cachedTra
       outputInfo.outputIndex = poi.outputIndex;
 
       batch.insertKeyOutputInfo(output.amount, globalIndex, outputInfo);
-    } else if (output.target.type() == typeid(MultisignatureOutput)) {
-      multiIndexes[output.amount].push_back(poi);
-      auto outputCountForAmount = updateMultiOutputCount(output.amount, 1);
-      if (outputCountForAmount == 1) {
-        newMultisignatureAmounts.insert(output.amount);
-      }
-
-      assert(outputCountForAmount > 0);
-      transactionCacheInfo.globalIndexes.push_back(outputCountForAmount - 1);
-      //output global index:
-      transactionCacheInfo.amountToMultiIndexes[output.amount].push_back(outputCountForAmount - 1);
     }
   }
 
@@ -872,19 +790,9 @@ void DatabaseBlockchainCache::pushTransaction(const CachedTransaction& cachedTra
                                        updateKeyOutputCount(amountToOutputs.first, 0)); //Size already updated.
   }
 
-  for (auto& amountToMultisigs : multiIndexes) {
-    batch.insertMultisignatureOutputGlobalIndexes(amountToMultisigs.first, amountToMultisigs.second,
-                                                  updateMultiOutputCount(amountToMultisigs.first, 0)); //Size already updated.
-  }
-
   if (!newKeyAmounts.empty()) {
     assert(keyOutputAmountsCount.is_initialized());
     batch.insertKeyOutputAmounts(newKeyAmounts, *keyOutputAmountsCount);
-  }
-  
-  if (!newMultisignatureAmounts.empty()) {
-    assert(multiOutputAmountsCount.is_initialized());
-    batch.insertMultisignatureOutputAmounts(newMultisignatureAmounts, *multiOutputAmountsCount);
   }
 
   Crypto::Hash paymentId;
@@ -921,37 +829,6 @@ uint32_t DatabaseBlockchainCache::updateKeyOutputCount(Amount amount, int32_t di
     auto result = readDatabase(BlockchainReadBatch().requestKeyOutputAmountsCount());
     keyOutputAmountsCount = result.getKeyOutputAmountsCount();
   }
-
-  it->second += diff;
-  assert(it->second >= 0);
-  return it->second;
-}
-
-uint32_t DatabaseBlockchainCache::updateMultiOutputCount(Amount amount, int32_t diff) const {
-  auto it = multiOutputCountsForAmounts.find(amount);
-  if (it == multiOutputCountsForAmounts.end()) {
-    logger(Logging::TRACE) << "updateMultiOutputCount: failed to found key for amount, request database";
-
-    BlockchainReadBatch batch;
-    auto result = readDatabase(batch.requestMultisignatureOutputGlobalIndexesCountForAmount(amount));
-    auto found = result.getMultisignatureOutputGlobalIndexesCountForAmounts().find(amount);
-    auto val = found != result.getMultisignatureOutputGlobalIndexesCountForAmounts().end() ? found->second : 0;
-    it = multiOutputCountsForAmounts.insert({ amount, val }).first;
-    logger(Logging::TRACE) << "updateMultiOutputCount: database replied: amount " << amount << " value " << val;
-
-    if (val == 0) {
-      if (!multiOutputAmountsCount) {
-        auto result = readDatabase(batch.requestMultisignatureOutputAmountsCount());
-        multiOutputAmountsCount = result.getMultisignatureOutputAmountsCount();
-      }
-
-      multiOutputAmountsCount = *multiOutputAmountsCount + 1;
-    }
-  } else if (!multiOutputAmountsCount) {
-    auto result = readDatabase(BlockchainReadBatch().requestMultisignatureOutputAmountsCount());
-    multiOutputAmountsCount = result.getMultisignatureOutputAmountsCount();
-  }
-
 
   it->second += diff;
   assert(it->second >= 0);
@@ -1011,8 +888,7 @@ void DatabaseBlockchainCache::pushBlock(const CachedBlock& cachedBlock,
   blockInfo.timestamp = cachedBlock.getBlock().timestamp;
 
   batch.insertSpentKeyImages(getTopBlockIndex() + 1, validatorState.spentKeyImages);
-  batch.insertSpentMultisignatureOutputGlobalIndexes(getTopBlockIndex() + 1,
-                                                     validatorState.spentMultisignatureGlobalIndexes);
+
   auto txHashes = cachedBlock.getBlock().transactionHashes;
   auto baseTransaction = cachedBlock.getBlock().baseTransaction;
   auto cachedBaseTransaction = CachedTransaction{std::move(baseTransaction)};
@@ -1080,17 +956,6 @@ bool DatabaseBlockchainCache::checkIfSpent(const Crypto::KeyImage& keyImage) con
   return checkIfSpent(keyImage, getTopBlockIndex());
 }
 
-bool DatabaseBlockchainCache::checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex) const {
-  return checkIfSpentMultisignature(amount, globalIndex, getTopBlockIndex());
-}
-
-bool DatabaseBlockchainCache::checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex,
-                                                         uint32_t blockIndex) const {
-  auto batch = BlockchainReadBatch().requestMultisignatureOutputSpendingStatus(amount, globalIndex);
-  auto res = database.read(batch);
-  return !res && batch.extractResult().getMultisignatureOutputsSpendingStatuses().count({ amount, globalIndex }) > 0;
-}
-
 bool DatabaseBlockchainCache::isTransactionSpendTimeUnlocked(uint64_t unlockTime) const {
   return isTransactionSpendTimeUnlocked(unlockTime, getTopBlockIndex());
 }
@@ -1149,77 +1014,6 @@ ExtractOutputKeysResult DatabaseBlockchainCache::extractKeyOtputReferences(
     outputReferences.push_back(std::make_pair(info.transactionHash, index.outputIndex));
     return ExtractOutputKeysResult::SUCCESS;
   });
-}
-
-bool DatabaseBlockchainCache::getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex,
-                                                              MultisignatureOutput& output,
-                                                              uint64_t& unlockTime) const {
-  return getMultisignatureOutputIfExists(amount, globalIndex, getTopBlockIndex(), output, unlockTime);
-}
-
-bool DatabaseBlockchainCache::getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex,
-                                                              uint32_t blockIndex, MultisignatureOutput& output,
-                                                              uint64_t& unlockTime) const {
-  return doGetMultisignatureOutputIfExists(amount, globalIndex, blockIndex, [&output, &unlockTime] (const CachedTransactionInfo& transaction, PackedOutIndex packedOutput) {
-    unlockTime = transaction.unlockTime;
-    auto& transactionOutput = transaction.outputs[packedOutput.outputIndex];
-
-    assert(transactionOutput.type() == typeid(MultisignatureOutput));
-    output = boost::get<MultisignatureOutput>(transactionOutput);
-  });
-}
-
-std::pair<Crypto::Hash, size_t> DatabaseBlockchainCache::getMultisignatureOutputReference(uint64_t amount,
-                                                                                          uint32_t globalIndex) const {
-  std::pair<Crypto::Hash, size_t> outputReference;
-
-  bool res = doGetMultisignatureOutputIfExists(amount, globalIndex, getTopBlockIndex(), [&outputReference] (const CachedTransactionInfo& transaction, PackedOutIndex packedOutput) {
-    outputReference.first = transaction.transactionHash;
-    outputReference.second = packedOutput.outputIndex;
-  });
-
-  if (!res) {
-    logger(Logging::DEBUGGING) << "getMultisignatureOutputReference failed: output not found";
-    throw std::runtime_error("Output not found");
-  }
-
-  return outputReference;
-}
-
-bool DatabaseBlockchainCache::doGetMultisignatureOutputIfExists(
-  uint64_t amount,
-  uint32_t globalIndex,
-  uint32_t blockIndex,
-  std::function<void (const CachedTransactionInfo& transaction, PackedOutIndex packedOutput)> extractor) const {
-
-  auto batch = BlockchainReadBatch().requestMultisignatureOutputGlobalIndexForAmount(amount, globalIndex);
-  auto result = database.read(batch);
-  if (result) {
-    logger(Logging::ERROR) << "doGetMultisignatureOutputIfExists failed: request to database failed";
-    return false;
-  }
-
-  auto readResult = batch.extractResult();
-  auto it = readResult.getMultisignatureOutputGlobalIndexesForAmounts().find({ amount, globalIndex });
-  if (it == readResult.getMultisignatureOutputGlobalIndexesForAmounts().end()) {
-    logger(Logging::DEBUGGING) << "doGetMultisignatureOutputIfExists failed: output not found";
-    return false;
-  }
-
-  auto packedOut = it->second;
-  if (packedOut.blockIndex > blockIndex) {
-    logger(Logging::ERROR) << "doGetMultisignatureOutputIfExists failed: output block index in future";
-    return false;
-  }
-
-  std::vector<CachedTransactionInfo> transactions;
-  if (!requestCachedTransactionInfos({packedOut}, database, transactions)) {
-    logger(Logging::DEBUGGING) << "doGetMultisignatureOutputIfExists failed: requestCachedTransactionInfos failed";
-    return false;
-  }
-
-  extractor(transactions[0], packedOut);
-  return true;
 }
 
 uint32_t DatabaseBlockchainCache::getTopBlockIndex() const {
@@ -1542,23 +1336,6 @@ size_t DatabaseBlockchainCache::getKeyOutputsCountForAmount(uint64_t amount, uin
   return result;
 }
 
-size_t DatabaseBlockchainCache::getMultisignatureCountForAmount(uint64_t amount, uint32_t blockIndex) const {
-  uint32_t outputsCount = requestMultisignatureOutputGlobalIndexesCountForAmount(amount, database);
-
-  auto getOutput = std::bind(retrieveMultisignatureOutput, std::placeholders::_1, std::placeholders::_2, std::ref(database));
-  auto begin = DbOutputConstIterator(getOutput, amount, 0);
-  auto end = DbOutputConstIterator(getOutput, amount, outputsCount);
-
-  auto it = std::lower_bound(begin, end, blockIndex, [] (const PackedOutIndex& output, uint32_t blockIndex) {
-    return output.blockIndex < blockIndex;
-  });
-
-  size_t result = static_cast<size_t>(std::distance(begin, it));
-  logger(Logging::DEBUGGING) << "Multisignature outputs count for amount " << amount << " is " << result << " by block index " << blockIndex;
-
-  return result;
-}
-
 uint32_t DatabaseBlockchainCache::getTimestampLowerBoundBlockIndex(uint64_t timestamp) const {
   auto midnight = roundToMidnight(timestamp);
 
@@ -1602,10 +1379,6 @@ bool DatabaseBlockchainCache::getTransactionGlobalIndexes(const Crypto::Hash& tr
 
 size_t DatabaseBlockchainCache::getTransactionCount() const {
   return static_cast<size_t>(getCachedTransactionsCount());
-}
-
-void DatabaseBlockchainCache::addSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) {
-  database.write(BlockchainWriteBatch().insertSpentMultisignatureOutputGlobalIndexes(blockIndex, {{amount, globalIndex}}));
 }
 
 uint32_t DatabaseBlockchainCache::getBlockIndexContainingTx(const Crypto::Hash& transactionHash) const {
@@ -1834,8 +1607,7 @@ DatabaseBlockchainCache::ExtendedPushedBlockInfo DatabaseBlockchainCache::getExt
   auto batch = BlockchainReadBatch()
     .requestRawBlock(blockIndex)
     .requestCachedBlock(blockIndex)
-    .requestSpentKeyImagesByBlock(blockIndex)
-    .requestSpentMultisignatureOutputGlobalIndexesByBlock(blockIndex);
+    .requestSpentKeyImagesByBlock(blockIndex);
 
   if (blockIndex > 0) {
     batch.requestCachedBlock(blockIndex - 1);
@@ -1853,10 +1625,8 @@ DatabaseBlockchainCache::ExtendedPushedBlockInfo DatabaseBlockchainCache::getExt
   extendedInfo.pushedBlockInfo.generatedCoins = blockInfo.alreadyGeneratedCoins - previousBlockInfo.alreadyGeneratedCoins;
 
   const auto& spentKeyImages = dbResult.getSpentKeyImagesByBlock().at(blockIndex);
-  const auto& spentMultisignatures = dbResult.getSpentMultisignatureOutputGlobalIndexesByBlocks().at(blockIndex);
 
   extendedInfo.pushedBlockInfo.validatorState.spentKeyImages.insert(spentKeyImages.begin(), spentKeyImages.end());
-  extendedInfo.pushedBlockInfo.validatorState.spentMultisignatureGlobalIndexes.insert(spentMultisignatures.begin(), spentMultisignatures.end());
 
   extendedInfo.timestamp = blockInfo.timestamp;
 

@@ -63,9 +63,6 @@ public:
   bool checkIfSpent(const Crypto::KeyImage& keyImage, uint32_t blockIndex) const override;
   bool checkIfSpent(const Crypto::KeyImage& keyImage) const override;
 
-  bool checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex) const override;
-  bool checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) const override;
-
   bool isTransactionSpendTimeUnlocked(uint64_t unlockTime) const override;
   bool isTransactionSpendTimeUnlocked(uint64_t unlockTime, uint32_t blockIndex) const override;
 
@@ -80,13 +77,6 @@ public:
   ExtractOutputKeysResult
   extractKeyOtputReferences(uint64_t amount, Common::ArrayView<uint32_t> globalIndexes,
                             std::vector<std::pair<Crypto::Hash, size_t>>& outputReferences) const override;
-
-  bool getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex, MultisignatureOutput& output,
-                                       uint64_t& unlockTime) const override;
-  bool getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex,
-                                       MultisignatureOutput& output, uint64_t& unlockTime) const override;
-  std::pair<Crypto::Hash, size_t> getMultisignatureOutputReference(uint64_t amount,
-                                                                   uint32_t globalIndex) const override;
 
   uint32_t getTopBlockIndex() const override;
   const Crypto::Hash& getTopBlockHash() const override;
@@ -126,13 +116,11 @@ public:
   virtual uint32_t getStartBlockIndex() const override;
 
   virtual size_t getKeyOutputsCountForAmount(uint64_t amount, uint32_t blockIndex) const override;
-  virtual size_t getMultisignatureCountForAmount(uint64_t amount, uint32_t blockIndex) const override;
 
   virtual uint32_t getTimestampLowerBoundBlockIndex(uint64_t timestamp) const override;
   virtual bool getTransactionGlobalIndexes(const Crypto::Hash& transactionHash,
                                            std::vector<uint32_t>& globalIndexes) const override;
   virtual size_t getTransactionCount() const override;
-  virtual void addSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) override;
   virtual uint32_t getBlockIndexContainingTx(const Crypto::Hash& transactionHash) const override;
 
   virtual size_t getChildCount() const override;
@@ -177,9 +165,7 @@ private:
   mutable boost::optional<Crypto::Hash> topBlockHash;
   mutable boost::optional<uint64_t> transactionsCount;
   mutable boost::optional<uint32_t> keyOutputAmountsCount;
-  mutable boost::optional<uint32_t> multiOutputAmountsCount;
   mutable std::unordered_map<Amount, int32_t> keyOutputCountsForAmounts;
-  mutable std::unordered_map<Amount, int32_t> multiOutputCountsForAmounts;
   std::vector<IBlockchainCache*> children;
   Logging::LoggerRef logger;
   std::deque<CachedBlockInfo> unitsCache;
@@ -199,9 +185,7 @@ private:
                        BlockchainWriteBatch& batch);
 
   uint32_t insertKeyOutputToGlobalIndex(uint64_t amount, PackedOutIndex output); //TODO not implemented. Should it be removed?
-  uint32_t insertMultisignatureToGlobalIndex(uint64_t amount, PackedOutIndex output);
   uint32_t updateKeyOutputCount(Amount amount, int32_t diff) const;
-  uint32_t updateMultiOutputCount(Amount amount, int32_t diff) const;
   void insertPaymentId(BlockchainWriteBatch& batch, const Crypto::Hash& transactionHash, const Crypto::Hash& paymentId);
   void insertBlockTimestamp(BlockchainWriteBatch& batch, uint64_t timestamp, const Crypto::Hash& blockHash);
 
@@ -209,15 +193,7 @@ private:
 
   enum class OutputSearchResult : uint8_t { FOUND, NOT_FOUND, INVALID_ARGUMENT };
 
-  OutputSearchResult findPackedOutForMultisignatureInCurrentSegment(uint64_t amount, uint32_t globalIndex,
-                                                                    PackedOutIndex& packedOut) const;
   TransactionValidatorState fillOutputsSpentByBlock(uint32_t blockIndex) const;
-
-  bool doGetMultisignatureOutputIfExists(
-    uint64_t amount,
-    uint32_t globalIndex,
-    uint32_t blockIndex,
-    std::function<void (const CachedTransactionInfo& transaction, PackedOutIndex packedOutput)> extractor) const;
 
   Crypto::Hash pushBlockToAnotherCache(IBlockchainCache& segment, PushedBlockInfo&& pushedBlockInfo);
   void requestDeleteSpentOutputs(BlockchainWriteBatch& writeBatch, uint32_t splitBlockIndex, const TransactionValidatorState& spentOutputs);
@@ -227,9 +203,6 @@ private:
   void requestDeletePaymentId(BlockchainWriteBatch& writeBatch, const Crypto::Hash& paymentId, size_t toDelete);
   void requestDeleteKeyOutputs(BlockchainWriteBatch& writeBatch, const std::map<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex>& boundaries);
   void requestDeleteKeyOutputsAmount(BlockchainWriteBatch& writeBatch, IBlockchainCache::Amount amount, IBlockchainCache::GlobalOutputIndex boundary, uint32_t outputsCount);
-  void requestDeleteMultisignatureOutputs(BlockchainWriteBatch& writeBatch, const std::map<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex>& boundaries);
-  void requestDeleteMultisignatureOutputsAmount(BlockchainWriteBatch& writeBatch, IBlockchainCache::Amount amount,
-                                                IBlockchainCache::GlobalOutputIndex boundary, uint32_t outputsCount);
   void requestRemoveTimestamp(BlockchainWriteBatch& batch, uint64_t timestamp, const Crypto::Hash& blockHash);
 
   uint64_t getCachedTransactionsCount() const;

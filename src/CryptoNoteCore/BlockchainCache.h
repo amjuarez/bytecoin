@@ -78,21 +78,6 @@ struct OutputGlobalIndexesForAmount {
   void serialize(ISerializer& s);
 };
 
-struct MultisignatureOutputState {
-  PackedOutIndex output;
-  void serialize(ISerializer& s);
-};
-
-struct MultisignatureIndexes {
-  uint32_t startIndex = 0;
-
-  // 1. This container must be sorted by PackedOutIndex::blockIndex and PackedOutIndex::transactionIndex
-  // 2. GlobalOutputIndex for particular output is calculated as following: startIndex + index in vector
-  std::vector<MultisignatureOutputState> outputs;
-
-  void serialize(ISerializer& s);
-};
-
 struct PaymentIdTransactionHashPair {
   Crypto::Hash paymentId;
   Crypto::Hash transactionHash;
@@ -122,9 +107,6 @@ public:
   virtual PushedBlockInfo getPushedBlockInfo(uint32_t index) const override;
   bool checkIfSpent(const Crypto::KeyImage& keyImage, uint32_t blockIndex) const override;
   bool checkIfSpent(const Crypto::KeyImage& keyImage) const override;
-
-  bool checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex) const override;
-  bool checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) const override;
   
   bool isTransactionSpendTimeUnlocked(uint64_t unlockTime) const override;
   bool isTransactionSpendTimeUnlocked(uint64_t unlockTime, uint32_t blockIndex) const override;
@@ -134,10 +116,6 @@ public:
 
   ExtractOutputKeysResult extractKeyOtputIndexes(uint64_t amount, Common::ArrayView<uint32_t> globalIndexes, std::vector<PackedOutIndex>& outIndexes) const override;
   ExtractOutputKeysResult extractKeyOtputReferences(uint64_t amount, Common::ArrayView<uint32_t> globalIndexes, std::vector<std::pair<Crypto::Hash, size_t>>& outputReferences) const override;
-  
-  bool getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex, MultisignatureOutput& output, uint64_t& unlockTime) const override;
-  bool getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex, MultisignatureOutput& output, uint64_t& unlockTime) const override;
-  std::pair<Crypto::Hash, size_t> getMultisignatureOutputReference(uint64_t amount, uint32_t globalIndex) const override;
 
   uint32_t getTopBlockIndex() const override;
   const Crypto::Hash& getTopBlockHash() const override;
@@ -176,12 +154,10 @@ public:
   virtual uint32_t getStartBlockIndex() const override;
 
   virtual size_t getKeyOutputsCountForAmount(uint64_t amount, uint32_t blockIndex) const override;
-  virtual size_t getMultisignatureCountForAmount(uint64_t amount, uint32_t blockIndex) const override;
 
   virtual uint32_t getTimestampLowerBoundBlockIndex(uint64_t timestamp) const override;
   virtual bool getTransactionGlobalIndexes(const Crypto::Hash& transactionHash, std::vector<uint32_t>& globalIndexes) const override;
   virtual size_t getTransactionCount() const override;
-  virtual void addSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) override;
   virtual uint32_t getBlockIndexContainingTx(const Crypto::Hash& transactionHash) const override;
 
   virtual size_t getChildCount() const override;
@@ -288,7 +264,6 @@ private:
   > PaymentIdContainer;
 
   typedef std::map<uint64_t, OutputGlobalIndexesForAmount> OutputsGlobalIndexesContainer;
-  typedef std::map<uint64_t, MultisignatureIndexes> MultisignaturesContainer;
   typedef std::map<BlockIndex, std::vector<std::pair<Amount, GlobalOutputIndex>>> OutputSpentInBlock;
   typedef std::set<std::pair<Amount, GlobalOutputIndex>> SpentOutputsOnAmount;
 
@@ -304,10 +279,7 @@ private:
   SpentKeyImagesContainer spentKeyImages;
   BlockInfoContainer blockInfos;
   OutputsGlobalIndexesContainer keyOutputsGlobalIndexes;
-  MultisignaturesContainer multisignatureStorage;
   PaymentIdContainer paymentIds;
-  OutputSpentInBlock spentMultisigOutputsByBlock;
-  SpentOutputsOnAmount spentMultisigOutputs;
   std::unique_ptr<BlockchainStorage> storage;
 
   std::vector<IBlockchainCache*> children;
@@ -321,11 +293,9 @@ private:
   void splitTransactions(BlockchainCache& newCache, uint32_t splitBlockIndex);
   void splitBlocks(BlockchainCache& newCache, uint32_t splitBlockIndex);
   void splitKeyOutputsGlobalIndexes(BlockchainCache& newCache, uint32_t splitBlockIndex);
-  void splitMultiSignatureOutputsGlobalIndexes(BlockchainCache& newCache, uint32_t splitBlockIndex);
   void removePaymentId(const Crypto::Hash& transactionHash, BlockchainCache& newCache);
 
   uint32_t insertKeyOutputToGlobalIndex(uint64_t amount, PackedOutIndex output, uint32_t blockIndex);
-  uint32_t insertMultisignatureToGlobalIndex(uint64_t amount, PackedOutIndex output, uint32_t blockIndex);
 
   enum class OutputSearchResult : uint8_t {
     FOUND,
@@ -333,7 +303,6 @@ private:
     INVALID_ARGUMENT
   };
 
-  OutputSearchResult findPackedOutForMultisignatureInCurrentSegment(uint64_t amount, uint32_t globalIndex, PackedOutIndex& packedOut) const;
   TransactionValidatorState fillOutputsSpentByBlock(uint32_t blockIndex) const;
 
   void fixChildrenParent(IBlockchainCache* p);

@@ -72,26 +72,6 @@ BlockchainReadBatch& BlockchainReadBatch::requestKeyOutputGlobalIndexForAmount(I
   return *this;
 }
 
-BlockchainReadBatch& BlockchainReadBatch::requestMultisignatureOutputGlobalIndexesCountForAmount(IBlockchainCache::Amount amount) {
-  state.multisignatureOutputGlobalIndexesCountForAmounts.emplace(amount, 0);
-  return *this;
-}
-
-BlockchainReadBatch& BlockchainReadBatch::requestMultisignatureOutputGlobalIndexForAmount(IBlockchainCache::Amount amount, uint32_t outputIndexWithinAmout) {
-  state.multisignatureOutputGlobalIndexesForAmounts.emplace(std::make_pair(amount, outputIndexWithinAmout), PackedOutIndex());
-  return *this;
-}
-
-BlockchainReadBatch& BlockchainReadBatch::requestSpentMultisignatureOutputGlobalIndexesByBlock(uint32_t blockIndex) {
-  state.spentMultisignatureOutputGlobalIndexesByBlocks.insert({blockIndex, {}});
-  return *this;
-}
-
-BlockchainReadBatch& BlockchainReadBatch::requestMultisignatureOutputSpendingStatus(IBlockchainCache::Amount amount, IBlockchainCache::GlobalOutputIndex index) {
-  state.multisignatureOutputsSpendingStatuses.emplace(std::make_pair(amount, index), false);
-  return *this;
-}
-
 BlockchainReadBatch& BlockchainReadBatch::requestRawBlock(uint32_t blockIndex) {
   state.rawBlocks.emplace(blockIndex, RawBlock());
   return *this;
@@ -112,18 +92,8 @@ BlockchainReadBatch& BlockchainReadBatch::requestKeyOutputAmountsCount() {
   return *this;
 }
 
-BlockchainReadBatch& BlockchainReadBatch::requestMultisignatureOutputAmountsCount() {
-  state.multisignatureOutputAmountsCount.second = true;
-  return *this;
-}
-
 BlockchainReadBatch& BlockchainReadBatch::requestKeyOutputAmount(uint32_t index) {
   state.keyOutputAmounts.emplace(index, 0);
-  return *this;
-}
-
-BlockchainReadBatch& BlockchainReadBatch::requestMultisignatureOutputAmount(uint32_t index) {
-  state.multisignatureOutputAmounts.emplace(index, 0);
   return *this;
 }
 
@@ -157,7 +127,6 @@ BlockchainReadResult BlockchainReadBatch::extractResult() {
   auto st = std::move(state);
   state.lastBlockIndex = {0, false};
   state.keyOutputAmountsCount = {{}, false};
-  state.multisignatureOutputAmountsCount = {{}, false};
 
   resultSubmitted = false;
   return BlockchainReadResult(st);
@@ -175,14 +144,9 @@ std::vector<std::string> BlockchainReadBatch::getRawKeys() const {
   DB::serializeKeys(rawKeys, DB::BLOCK_HASH_TO_BLOCK_INDEX_PREFIX, state.blockIndexesByBlockHashes);
   DB::serializeKeys(rawKeys, DB::KEY_OUTPUT_AMOUNT_PREFIX, state.keyOutputGlobalIndexesCountForAmounts);
   DB::serializeKeys(rawKeys, DB::KEY_OUTPUT_AMOUNT_PREFIX, state.keyOutputGlobalIndexesForAmounts);
-  DB::serializeKeys(rawKeys, DB::MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX, state.multisignatureOutputGlobalIndexesCountForAmounts);
-  DB::serializeKeys(rawKeys, DB::MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX, state.multisignatureOutputGlobalIndexesForAmounts);
-  DB::serializeKeys(rawKeys, DB::BLOCK_INDEX_TO_SPENT_MULTISIGNATURE_PREFIX, state.spentMultisignatureOutputGlobalIndexesByBlocks);
-  DB::serializeKeys(rawKeys, DB::SPENT_MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX, state.multisignatureOutputsSpendingStatuses);
   DB::serializeKeys(rawKeys, DB::BLOCK_INDEX_TO_RAW_BLOCK_PREFIX, state.rawBlocks);
   DB::serializeKeys(rawKeys, DB::CLOSEST_TIMESTAMP_BLOCK_INDEX_PREFIX, state.closestTimestampBlockIndex);
   DB::serializeKeys(rawKeys, DB::KEY_OUTPUT_AMOUNTS_COUNT_PREFIX, state.keyOutputAmounts);
-  DB::serializeKeys(rawKeys, DB::MULTISIGNATURE_OUTPUT_AMOUNTS_COUNT_PREFIX, state.multisignatureOutputAmounts);
   DB::serializeKeys(rawKeys, DB::PAYMENT_ID_TO_TX_HASH_PREFIX, state.transactionCountsByPaymentIds);
   DB::serializeKeys(rawKeys, DB::PAYMENT_ID_TO_TX_HASH_PREFIX, state.transactionHashesByPaymentIds);
   DB::serializeKeys(rawKeys, DB::TIMESTAMP_TO_BLOCKHASHES_PREFIX, state.blockHashesByTimestamp);
@@ -194,10 +158,6 @@ std::vector<std::string> BlockchainReadBatch::getRawKeys() const {
 
   if (state.keyOutputAmountsCount.second) {
     rawKeys.emplace_back(DB::serializeKey(DB::KEY_OUTPUT_AMOUNTS_COUNT_PREFIX, DB::KEY_OUTPUT_AMOUNTS_COUNT_KEY));
-  }
-
-  if (state.multisignatureOutputAmountsCount.second) {
-    rawKeys.emplace_back(DB::serializeKey(DB::MULTISIGNATURE_OUTPUT_AMOUNTS_COUNT_PREFIX, DB::MULTISIGNATURE_OUTPUT_AMOUNTS_COUNT_KEY));
   }
 
   if (state.transactionsCount.second) {
@@ -248,22 +208,6 @@ const std::unordered_map<std::pair<IBlockchainCache::Amount, uint32_t>, PackedOu
   return state.keyOutputGlobalIndexesForAmounts;
 }
 
-const std::unordered_map<IBlockchainCache::Amount, uint32_t>& BlockchainReadResult::getMultisignatureOutputGlobalIndexesCountForAmounts() const {
-  return state.multisignatureOutputGlobalIndexesCountForAmounts;
-}
-
-const std::unordered_map<std::pair<IBlockchainCache::Amount, uint32_t>, PackedOutIndex>& BlockchainReadResult::getMultisignatureOutputGlobalIndexesForAmounts() const {
-  return state.multisignatureOutputGlobalIndexesForAmounts;
-}
-
-const std::unordered_map<uint32_t, std::vector<std::pair<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex>>>& BlockchainReadResult::getSpentMultisignatureOutputGlobalIndexesByBlocks() const {
-  return state.spentMultisignatureOutputGlobalIndexesByBlocks;
-}
-
-const std::unordered_map<std::pair<IBlockchainCache::Amount, IBlockchainCache::GlobalOutputIndex>, bool>& BlockchainReadResult::getMultisignatureOutputsSpendingStatuses() const {
-  return state.multisignatureOutputsSpendingStatuses;
-}
-
 const std::unordered_map<uint32_t, RawBlock>& BlockchainReadResult::getRawBlocks() const {
   return state.rawBlocks;
 }
@@ -280,16 +224,8 @@ uint32_t BlockchainReadResult::getKeyOutputAmountsCount() const {
   return state.keyOutputAmountsCount.first;
 }
 
-uint32_t BlockchainReadResult::getMultisignatureOutputAmountsCount() const {
-  return state.multisignatureOutputAmountsCount.first;
-}
-
 const std::unordered_map<uint32_t, IBlockchainCache::Amount>& BlockchainReadResult::getKeyOutputAmounts() const {
   return state.keyOutputAmounts;
-}
-
-const std::unordered_map<uint32_t, IBlockchainCache::Amount>& BlockchainReadResult::getMultisignatureOutputAmounts() const {
-  return state.multisignatureOutputAmounts;
 }
 
 const std::unordered_map<Crypto::Hash, uint32_t>& BlockchainReadResult::getTransactionCountByPaymentIds() const {
@@ -326,14 +262,9 @@ void BlockchainReadBatch::submitRawResult(const std::vector<std::string>& values
   DB::deserializeValues(state.blockIndexesByBlockHashes, iter, DB::BLOCK_HASH_TO_BLOCK_INDEX_PREFIX);
   DB::deserializeValues(state.keyOutputGlobalIndexesCountForAmounts, iter, DB::KEY_OUTPUT_AMOUNT_PREFIX);
   DB::deserializeValues(state.keyOutputGlobalIndexesForAmounts, iter, DB::KEY_OUTPUT_AMOUNT_PREFIX);
-  DB::deserializeValues(state.multisignatureOutputGlobalIndexesCountForAmounts, iter, DB::MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX);
-  DB::deserializeValues(state.multisignatureOutputGlobalIndexesForAmounts, iter, DB::MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX);
-  DB::deserializeValues(state.spentMultisignatureOutputGlobalIndexesByBlocks, iter, DB::BLOCK_INDEX_TO_SPENT_MULTISIGNATURE_PREFIX);
-  DB::deserializeValues(state.multisignatureOutputsSpendingStatuses, iter, DB::SPENT_MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX);
   DB::deserializeValues(state.rawBlocks, iter, DB::BLOCK_INDEX_TO_RAW_BLOCK_PREFIX);
   DB::deserializeValues(state.closestTimestampBlockIndex, iter, DB::CLOSEST_TIMESTAMP_BLOCK_INDEX_PREFIX);
   DB::deserializeValues(state.keyOutputAmounts, iter, DB::KEY_OUTPUT_AMOUNTS_COUNT_PREFIX);
-  DB::deserializeValues(state.multisignatureOutputAmounts, iter, DB::MULTISIGNATURE_OUTPUT_AMOUNTS_COUNT_PREFIX);
   DB::deserializeValues(state.transactionCountsByPaymentIds, iter, DB::PAYMENT_ID_TO_TX_HASH_PREFIX);
   DB::deserializeValues(state.transactionHashesByPaymentIds, iter, DB::PAYMENT_ID_TO_TX_HASH_PREFIX);
   DB::deserializeValues(state.blockHashesByTimestamp, iter, DB::TIMESTAMP_TO_BLOCKHASHES_PREFIX);
@@ -341,7 +272,6 @@ void BlockchainReadBatch::submitRawResult(const std::vector<std::string>& values
 
   DB::deserializeValue(state.lastBlockIndex, iter, DB::BLOCK_INDEX_TO_BLOCK_HASH_PREFIX);
   DB::deserializeValue(state.keyOutputAmountsCount, iter, DB::KEY_OUTPUT_AMOUNTS_COUNT_PREFIX);
-  DB::deserializeValue(state.multisignatureOutputAmountsCount, iter, DB::MULTISIGNATURE_OUTPUT_AMOUNTS_COUNT_PREFIX);
   DB::deserializeValue(state.transactionsCount, iter, DB::TRANSACTION_HASH_TO_TRANSACTION_INFO_PREFIX);
 
   assert(iter == range.end());
@@ -358,19 +288,13 @@ cachedBlocks(std::move(state.cachedBlocks)),
 blockIndexesByBlockHashes(std::move(state.blockIndexesByBlockHashes)),
 keyOutputGlobalIndexesCountForAmounts(std::move(state.keyOutputGlobalIndexesCountForAmounts)),
 keyOutputGlobalIndexesForAmounts(std::move(state.keyOutputGlobalIndexesForAmounts)),
-multisignatureOutputGlobalIndexesCountForAmounts(std::move(state.multisignatureOutputGlobalIndexesCountForAmounts)),
-multisignatureOutputGlobalIndexesForAmounts(std::move(state.multisignatureOutputGlobalIndexesForAmounts)),
-spentMultisignatureOutputGlobalIndexesByBlocks(std::move(state.spentMultisignatureOutputGlobalIndexesByBlocks)),
-multisignatureOutputsSpendingStatuses(std::move(state.multisignatureOutputsSpendingStatuses)),
 rawBlocks(std::move(state.rawBlocks)),
 blockHashesByTimestamp(std::move(state.blockHashesByTimestamp)),
 keyOutputKeys(std::move(state.keyOutputKeys)),
 closestTimestampBlockIndex(std::move(state.closestTimestampBlockIndex)),
 lastBlockIndex(std::move(state.lastBlockIndex)),
 keyOutputAmountsCount(std::move(state.keyOutputAmountsCount)),
-multisignatureOutputAmountsCount(std::move(state.multisignatureOutputAmountsCount)),
 keyOutputAmounts(std::move(state.keyOutputAmounts)),
-multisignatureOutputAmounts(std::move(state.multisignatureOutputAmounts)),
 transactionCountsByPaymentIds(std::move(state.transactionCountsByPaymentIds)),
 transactionHashesByPaymentIds(std::move(state.transactionHashesByPaymentIds)),
 transactionsCount(std::move(state.transactionsCount)) {
@@ -385,21 +309,15 @@ size_t BlockchainReadState::size() const {
     blockIndexesByBlockHashes.size() +
     keyOutputGlobalIndexesCountForAmounts.size() +
     keyOutputGlobalIndexesForAmounts.size() +
-    multisignatureOutputGlobalIndexesCountForAmounts.size() +
-    multisignatureOutputGlobalIndexesForAmounts.size() +
-    spentMultisignatureOutputGlobalIndexesByBlocks.size() +
-    multisignatureOutputsSpendingStatuses.size() +
     rawBlocks.size() +
     closestTimestampBlockIndex.size() +
     keyOutputAmounts.size() +
-    multisignatureOutputAmounts.size() +
     transactionCountsByPaymentIds.size() +
     transactionHashesByPaymentIds.size() +
     blockHashesByTimestamp.size() +
     keyOutputKeys.size() +
     (lastBlockIndex.second ? 1 : 0) +
     (keyOutputAmountsCount.second ? 1 : 0) +
-    (multisignatureOutputAmountsCount.second ? 1 : 0) +
     (transactionsCount.second ? 1 : 0);
 }
 

@@ -105,8 +105,6 @@ public:
   virtual uint64_t getTotalGeneratedAmount() const override;
   virtual std::vector<BlockTemplate> getAlternativeBlocks() const override;
   virtual std::vector<Transaction> getPoolTransactions() const override;
-  boost::optional<std::pair<MultisignatureOutput, uint64_t>>
-  getMultisignatureOutput(uint64_t amount, uint32_t globalIndex) const override;
 
   const Currency& getCurrency() const;
 

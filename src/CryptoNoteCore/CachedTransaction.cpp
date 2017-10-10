@@ -74,8 +74,6 @@ uint64_t CachedTransaction::getTransactionFee() const {
     for (auto& in : transaction.inputs) {
       if (in.type() == typeid(KeyInput)) {
         summaryInputAmount += boost::get<KeyInput>(in).amount;
-      } else if (in.type() == typeid(MultisignatureInput)) {
-        summaryInputAmount += boost::get<MultisignatureInput>(in).amount;
       } else if (in.type() == typeid(BaseInput)) {
         return 0;
       } else {
