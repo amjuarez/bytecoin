@@ -128,30 +128,6 @@
 //  fillData(reinterpret_cast<char *>(&sig), sizeof(Crypto::Signature), startByte);
 //}
 //
-//void fillTransactionOutputMultisignature(CryptoNote::TransactionOutputMultisignature& s) {
-//  Crypto::PublicKey key;
-//  fillPublicKey(key, 0);
-//  s.keys.push_back(key);
-//
-//  char start = 120;
-//
-//  fillPublicKey(key, start++);
-//  s.keys.push_back(key);
-//
-//  fillPublicKey(key, start++);
-//  s.keys.push_back(key);
-//
-//  fillPublicKey(key, start++);
-//  s.keys.push_back(key);
-//
-//  fillPublicKey(key, start++);
-//  s.keys.push_back(key);
-//
-//  fillPublicKey(key, start++);
-//  s.keys.push_back(key);
-//
-//  s.requiredSignatures = 12;
-//}
 //
 //void fillTransaction(CryptoNote::Transaction& tx) {
 //  tx.version = 1;
@@ -166,12 +142,6 @@
 //  key.keyOffsets = {12,3323,0x7f0000000000, std::numeric_limits<uint64_t>::max(), 0};
 //  fillKeyImage(key.keyImage);
 //  tx.vin.push_back(key);
-//
-//  CryptoNote::TransactionInputMultisignature multisig;
-//  multisig.amount = 490000000;
-//  multisig.outputIndex = 424242;
-//  multisig.signatures = 4;
-//  tx.vin.push_back(multisig);
 //
 //  CryptoNote::TransactionOutput txOutput;
 //  txOutput.amount = 0xfff000ffff778822;
@@ -188,12 +158,6 @@
 //    Crypto::Signature sig;
 //    fillSignature(sig, static_cast<char>(i));
 //    tx.signatures[1].push_back(sig);
-//  }
-//
-//  for (size_t i = 0; i < boost::get<CryptoNote::TransactionInputMultisignature>(tx.vin[2]).signatures; ++i) {
-//    Crypto::Signature sig;
-//    fillSignature(sig, static_cast<char>(i + 120));
-//    tx.signatures[2].push_back(sig);
 //  }
 //}
 //
@@ -242,14 +206,6 @@
 //  header.majorVersion = 2;
 //}
 //
-//TEST(BinarySerializationCompatibility, TransactionOutputMultisignature) {
-//  CryptoNote::TransactionOutputMultisignature s;
-//
-//  fillTransactionOutputMultisignature(s);
-//
-//  checkCompatibility(s);
-//}
-//
 //TEST(BinarySerializationCompatibility, TransactionInputGenerate) {
 //  CryptoNote::TransactionInputGenerate s;
 //  s.height = 0x80000001;
@@ -272,32 +228,12 @@
 //  checkCompatibility(s);
 //}
 //
-//TEST(BinarySerializationCompatibility, TransactionInputMultisignature) {
-//  CryptoNote::TransactionInputMultisignature s;
-//  s.amount = 0xfff000ffff778822;
-//  s.signatures = 0x7f259200;
-//  s.outputIndex = 0;
-//
-//  checkCompatibility(s);
-//}
-//
 //TEST(BinarySerializationCompatibility, TransactionOutput_TransactionOutputToKey) {
 //  CryptoNote::TransactionOutput s;
 //  s.amount = 0xfff000ffff778822;
 //
 //  CryptoNote::TransactionOutputToKey out;
 //  fillPublicKey(out.key);
-//  s.target = out;
-//
-//  checkCompatibility(s);
-//}
-//
-//TEST(BinarySerializationCompatibility, TransactionOutput_TransactionOutputMultisignature) {
-//  CryptoNote::TransactionOutput s;
-//  s.amount = 0xfff000ffff778822;
-//
-//  CryptoNote::TransactionOutputMultisignature out;
-//  fillTransactionOutputMultisignature(out);
 //  s.target = out;
 //
 //  checkCompatibility(s);

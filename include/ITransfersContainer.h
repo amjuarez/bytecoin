@@ -54,10 +54,7 @@ struct TransactionOutputInformation {
   Crypto::Hash transactionHash;
   Crypto::PublicKey transactionPublicKey;
 
-  union {
-    Crypto::PublicKey outputKey;         // Type: Key 
-    uint32_t requiredSignatures; // Type: Multisignature
-  };
+  Crypto::PublicKey outputKey;
 };
 
 struct TransactionSpentOutputInformation: public TransactionOutputInformation {
@@ -78,7 +75,6 @@ public:
     IncludeStateSpent = 0x08,
     // output type
     IncludeTypeKey = 0x100,
-    IncludeTypeMultisignature = 0x200,
     // combinations
     IncludeStateAll = 0xff,
     IncludeTypeAll = 0xff00,

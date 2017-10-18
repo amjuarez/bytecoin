@@ -33,7 +33,6 @@ enum class TransactionValidationError {
   INPUT_IDENTICAL_KEYIMAGES,
   INPUT_IDENTICAL_OUTPUT_INDEXES,
   INPUT_KEYIMAGE_ALREADY_SPENT,
-  INPUT_MULTISIGNATURE_ALREADY_SPENT,
   INPUT_INVALID_GLOBAL_INDEX,
   INPUT_SPEND_LOCKED_OUT,
   INPUT_INVALID_SIGNATURES,
@@ -45,7 +44,6 @@ enum class TransactionValidationError {
   OUTPUT_ZERO_AMOUNT,
   OUTPUT_INVALID_KEY,
   OUTPUT_INVALID_REQUIRED_SIGNATURES_COUNT,
-  OUTPUT_INVALID_MULTISIGNATURE_KEY,
   OUTPUT_UNKNOWN_TYPE,
   OUTPUTS_AMOUNT_OVERFLOW,
   WRONG_AMOUNT,
@@ -78,7 +76,6 @@ public:
       case TransactionValidationError::INPUT_IDENTICAL_KEYIMAGES: return "Transaction has identical key images";
       case TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES: return "Transaction has identical output indexes";
       case TransactionValidationError::INPUT_KEYIMAGE_ALREADY_SPENT: return "Transaction uses spent key image";
-      case TransactionValidationError::INPUT_MULTISIGNATURE_ALREADY_SPENT: return "Transaction uses spent multisignature";
       case TransactionValidationError::INPUT_INVALID_GLOBAL_INDEX: return "Transaction has input with invalid global index";
       case TransactionValidationError::INPUT_SPEND_LOCKED_OUT: return "Transaction uses locked input";
       case TransactionValidationError::INPUT_INVALID_SIGNATURES: return "Transaction has input with invalid signature";
@@ -90,7 +87,6 @@ public:
       case TransactionValidationError::OUTPUT_ZERO_AMOUNT: return "Transaction has zero output amount";
       case TransactionValidationError::OUTPUT_INVALID_KEY: return "Transaction has output with invalid key";
       case TransactionValidationError::OUTPUT_INVALID_REQUIRED_SIGNATURES_COUNT: return "Transaction has output with invalid signatures count";
-      case TransactionValidationError::OUTPUT_INVALID_MULTISIGNATURE_KEY: return "Transaction has output with invalid multisignature key";
       case TransactionValidationError::OUTPUT_UNKNOWN_TYPE: return "Transaction has unknown output type";
       case TransactionValidationError::OUTPUTS_AMOUNT_OVERFLOW: return "Transaction has outputs amount overflow";
       case TransactionValidationError::WRONG_AMOUNT: return "Transaction wrong amount";

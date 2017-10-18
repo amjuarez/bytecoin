@@ -25,7 +25,6 @@ namespace CryptoNote {
 void ExtendedTransactionInfo::serialize(CryptoNote::ISerializer& s) {
   s(static_cast<CachedTransactionInfo&>(*this), "cached_transaction");
   s(amountToKeyIndexes, "key_indexes");
-  s(amountToMultiIndexes, "multi_indexes");
 }
 
 void KeyOutputInfo::serialize(ISerializer& s) {

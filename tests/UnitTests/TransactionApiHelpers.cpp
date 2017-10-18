@@ -21,15 +21,6 @@
 using namespace CryptoNote;
 using namespace Crypto;
 
-namespace {
-
-  const std::vector<AccountBase>& getMsigAccounts() {
-    static std::vector<AccountBase> msigAccounts = { generateAccount(), generateAccount() };
-    return msigAccounts;
-  }
-
-}
-
 TestTransactionBuilder::TestTransactionBuilder() {
   tx = createTransaction();
 }
@@ -123,32 +114,6 @@ void TestTransactionBuilder::addInput(const AccountKeys& senderKeys, const Trans
   keys[idx] = std::make_pair(info, ephKeys);
 }
 
-void TestTransactionBuilder::addTestMultisignatureInput(uint64_t amount, const TransactionOutputInformation& t) {
-  MultisignatureInput input;
-  input.amount = amount;
-  input.outputIndex = t.globalOutputIndex;
-  input.signatureCount = t.requiredSignatures;
-  size_t idx = tx->addInput(input);
- 
-  msigInputs[idx] = MsigInfo{ t.transactionPublicKey, t.outputInTransaction, getMsigAccounts() };
-}
-
-size_t TestTransactionBuilder::addFakeMultisignatureInput(uint64_t amount, uint32_t globalOutputIndex, size_t signatureCount) {
-  MultisignatureInput input;
-  input.amount = amount;
-  input.outputIndex = globalOutputIndex;
-  input.signatureCount = static_cast<uint8_t>(signatureCount);
-  size_t idx = tx->addInput(input);
-
-  std::vector<AccountBase> accs;
-  for (size_t i = 0; i < signatureCount; ++i) {
-    accs.push_back(generateAccount());
-  }
-
-  msigInputs[idx] = MsigInfo{ Crypto::rand<PublicKey>(), 0, std::move(accs) };
-  return idx;
-}
-
 TransactionOutputInformationIn TestTransactionBuilder::addTestKeyOutput(uint64_t amount, uint32_t globalOutputIndex, const AccountKeys& senderKeys) {
   uint32_t index = static_cast<uint32_t>(tx->addOutput(amount, senderKeys.address));
 
@@ -168,34 +133,6 @@ TransactionOutputInformationIn TestTransactionBuilder::addTestKeyOutput(uint64_t
   return outputInfo;
 }
 
-TransactionOutputInformationIn TestTransactionBuilder::addTestMultisignatureOutput(uint64_t amount, std::vector<AccountPublicAddress>& addresses, uint32_t globalOutputIndex) {
-  uint32_t index = static_cast<uint32_t>(tx->addOutput(amount, addresses, static_cast<uint32_t>(addresses.size())));
-
-  uint64_t _amount;
-  MultisignatureOutput output;
-  tx->getOutput(index, output, _amount);
-
-  TransactionOutputInformationIn outputInfo;
-  outputInfo.type = TransactionTypes::OutputType::Multisignature;
-  outputInfo.amount = _amount;
-  outputInfo.globalOutputIndex = globalOutputIndex;
-  outputInfo.outputInTransaction = index;
-  outputInfo.transactionPublicKey = tx->getTransactionPublicKey();
-  // Doesn't used in multisignature output, so can contain garbage
-  outputInfo.keyImage = generateKeyImage();
-  outputInfo.requiredSignatures = output.requiredSignatureCount;
-  return outputInfo;
-}
-
-TransactionOutputInformationIn TestTransactionBuilder::addTestMultisignatureOutput(uint64_t amount, uint32_t globalOutputIndex) {
-  std::vector<AccountPublicAddress> multisigAddresses;
-  for (const auto& acc : getMsigAccounts()) {
-    multisigAddresses.push_back(acc.getAccountKeys().address);
-  }
-
-  return addTestMultisignatureOutput(amount, multisigAddresses, globalOutputIndex);
-}
-
 size_t TestTransactionBuilder::addOutput(uint64_t amount, const AccountPublicAddress& to) {
   return tx->addOutput(amount, to);
 }
@@ -204,19 +141,9 @@ size_t TestTransactionBuilder::addOutput(uint64_t amount, const KeyOutput& out) 
   return tx->addOutput(amount, out);
 }
 
-size_t TestTransactionBuilder::addOutput(uint64_t amount, const MultisignatureOutput& out) {
-  return tx->addOutput(amount, out);
-}
-
 std::unique_ptr<ITransactionReader> TestTransactionBuilder::build() {
   for (const auto& kv : keys) {
     tx->signInputKey(kv.first, kv.second.first, kv.second.second);
-  }
-
-  for (const auto& kv : msigInputs) {
-    for (const auto& acc : kv.second.accounts) {
-      tx->signInputMultisignature(kv.first, kv.second.transactionKey, kv.second.outputIndex, acc.getAccountKeys());
-    }
   }
 
   transactionHash = tx->getTransactionHash();

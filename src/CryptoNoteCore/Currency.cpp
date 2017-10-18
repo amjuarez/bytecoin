@@ -610,7 +610,6 @@ std::vector<uint64_t> cumulativeDifficulties_o(cumulativeDifficulties);
 
 
   if (m_buggedZawyDifficultyBlockIndex && m_buggedZawyDifficultyBlockIndex <= blockIndex) {
-std::cout << "m_buggedZawyDifficultyBlockIndex" << std::endl;
     if (high != 0) {
       return 0;
     }
@@ -873,6 +872,7 @@ fusionTxMaxSize(parameters::MAX_TRANSACTION_SIZE_LIMIT * 30 / 100);
   fusionTxMinInOutCountRatio(parameters::FUSION_TX_MIN_IN_OUT_COUNT_RATIO);
 
     keyImageCheckingBlockIndex(parameters::KEY_IMAGE_CHECKING_BLOCK_INDEX);
+  upgradeHeightV2(parameters::UPGRADE_HEIGHT_V2);
   upgradeHeightV3(parameters::UPGRADE_HEIGHT_V3);
   upgradeVotingThreshold(parameters::UPGRADE_VOTING_THRESHOLD);
   upgradeVotingWindow(parameters::UPGRADE_VOTING_WINDOW);

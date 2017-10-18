@@ -320,10 +320,6 @@ void TestBlockchainGenerator::addTx(const CryptoNote::Transaction& tx) {
       auto& keyOutsContainer = keyOutsIndex[out.amount];
       globalIndexes.push_back(static_cast<uint32_t>(keyOutsContainer.size()));
       keyOutsContainer.push_back({ txHash, outIndex });
-    } else if (out.target.type() == typeid(MultisignatureOutput)) {
-      auto& msigOutsContainer = multisignatureOutsIndex[out.amount];
-      globalIndexes.push_back(static_cast<uint32_t>(msigOutsContainer.size()));
-      msigOutsContainer.push_back({ txHash, outIndex });
     }
   }
 }
@@ -335,24 +331,6 @@ bool TestBlockchainGenerator::getTransactionGlobalIndexesByHash(const Crypto::Ha
   }
 
   globalIndexes = globalIndexesIt->second;
-  return true;
-}
-
-bool TestBlockchainGenerator::getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t globalIndex, MultisignatureOutput& out) {
-  auto it = multisignatureOutsIndex.find(amount);
-  if (it == multisignatureOutsIndex.end()) {
-    return false;
-  }
-
-  if (it->second.size() <= globalIndex) {
-    return false;
-  }
-
-  MultisignatureOutEntry entry = it->second[globalIndex];
-  const auto& tx = m_txs[entry.transactionHash];
-  assert(tx.outputs.size() > entry.indexOut);
-  assert(tx.outputs[entry.indexOut].target.type() == typeid(MultisignatureOutput));
-  out = boost::get<MultisignatureOutput>(tx.outputs[entry.indexOut].target);
   return true;
 }
 

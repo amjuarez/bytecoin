@@ -80,9 +80,6 @@ public:
   virtual void getTransactions(const std::vector<Crypto::Hash>& transactionHashes, std::vector<CryptoNote::TransactionDetails>& transactions,
     const Callback& callback) override { }
 
-  virtual void getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t gindex, CryptoNote::MultisignatureOutput& out,
-    const Callback& callback) override { }
-
   virtual void isSynchronized(bool& syncStatus, const Callback& callback) override { }
 
 };

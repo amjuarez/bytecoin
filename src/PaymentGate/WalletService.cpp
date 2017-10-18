@@ -245,7 +245,6 @@ std::vector<PaymentService::TransactionOutputInformationSerialized> convertWalle
     rpcOutput.transactionHash = output.transactionHash;
     rpcOutput.transactionPublicKey = output.transactionPublicKey;
     rpcOutput.outputKey = output.outputKey;
-    rpcOutput.requiredSignatures = output.requiredSignatures;
 
     rpcOutputs.push_back(std::move(rpcOutput));
   }

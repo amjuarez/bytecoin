@@ -338,15 +338,14 @@ namespace Crypto {
 #ifdef _MSC_VER
 #pragma warning(disable: 4200)
 #endif
-
-    struct ec_point_pair {
+  struct ec_point_pair {
     EllipticCurvePoint a, b;
   };
   struct rs_comm {
     Hash h;
     struct ec_point_pair ab[];
-  };
 
+  };
 
   static inline size_t rs_comm_size(size_t pubs_count) {
      return sizeof(rs_comm) + pubs_count * sizeof(ec_point_pair);
