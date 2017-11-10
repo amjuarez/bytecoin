@@ -1,3 +1,12 @@
+DOO Release 0.2
+
+- Updated names
+- Added additional seed nodes
+
+dollarydoos release 0.1
+
+- Forked Bytecoin
+
 Release notes 2.1.1
 
 - Updated RocksDB to release 4.11.2
