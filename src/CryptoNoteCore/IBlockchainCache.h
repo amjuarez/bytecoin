@@ -98,9 +98,6 @@ public:
   virtual bool checkIfSpent(const Crypto::KeyImage& keyImage, uint32_t blockIndex) const = 0;
   virtual bool checkIfSpent(const Crypto::KeyImage& keyImage) const = 0;
 
-  virtual bool checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex) const = 0;
-  virtual bool checkIfSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) const = 0;
-
   virtual bool isTransactionSpendTimeUnlocked(uint64_t unlockTime) const = 0;
   virtual bool isTransactionSpendTimeUnlocked(uint64_t unlockTime, uint32_t blockIndex) const = 0;
 
@@ -113,11 +110,6 @@ public:
   virtual ExtractOutputKeysResult extractKeyOutputs(
       uint64_t amount, uint32_t blockIndex, Common::ArrayView<uint32_t> globalIndexes,
       std::function<ExtractOutputKeysResult(const CachedTransactionInfo& info, PackedOutIndex index, uint32_t globalIndex)> pred) const = 0;
-
-  virtual bool getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex, MultisignatureOutput& output, uint64_t& unlockTime) const = 0;
-  virtual bool getMultisignatureOutputIfExists(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex, MultisignatureOutput& output, uint64_t& unlockTime) const = 0;
-
-  virtual std::pair<Crypto::Hash, size_t> getMultisignatureOutputReference(uint64_t amount, uint32_t globalIndex) const = 0;
 
   virtual uint32_t getTopBlockIndex() const = 0;
   virtual const Crypto::Hash& getTopBlockHash() const = 0;
@@ -155,10 +147,8 @@ public:
   virtual uint32_t getStartBlockIndex() const = 0;
 
   virtual size_t getKeyOutputsCountForAmount(uint64_t amount, uint32_t blockIndex) const = 0;
-  virtual size_t getMultisignatureCountForAmount(uint64_t amount, uint32_t blockIndex) const = 0;
 
   virtual uint32_t getTimestampLowerBoundBlockIndex(uint64_t timestamp) const = 0;
-  virtual void addSpentMultisignature(uint64_t amount, uint32_t globalIndex, uint32_t blockIndex) = 0;
 
   //NOTE: shouldn't be recursive otherwise we'll get quadratic complexity
   virtual void getRawTransactions(const std::vector<Crypto::Hash>& transactions,

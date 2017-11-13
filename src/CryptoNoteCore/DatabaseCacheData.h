@@ -35,7 +35,6 @@ struct KeyOutputInfo {
 struct ExtendedTransactionInfo : CachedTransactionInfo {
   //CachedTransactionInfo tx;
   std::map<IBlockchainCache::Amount, std::vector<IBlockchainCache::GlobalOutputIndex>> amountToKeyIndexes; //global key output indexes spawned in this transaction
-  std::map<IBlockchainCache::Amount, std::vector<IBlockchainCache::GlobalOutputIndex>> amountToMultiIndexes; //global multisignature output indexes spawned in this transaction
   void serialize(ISerializer& s);
 };
 

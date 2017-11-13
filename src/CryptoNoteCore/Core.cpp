@@ -65,13 +65,6 @@ public:
         if (!inserted.second) {
           return true;
         }
-      } else if (input.type() == typeid(MultisignatureInput)) {
-        const auto& multisignature = boost::get<MultisignatureInput>(input);
-        auto inserted =
-            alreadySpentMultisignatures.insert(std::make_pair(multisignature.amount, multisignature.outputIndex));
-        if (!inserted.second) {
-          return true;
-        }
       }
     }
 
@@ -80,7 +73,6 @@ public:
 
 private:
   std::unordered_set<Crypto::KeyImage> alreadSpentKeyImages;
-  std::set<std::pair<uint64_t, uint64_t>> alreadySpentMultisignatures;
 };
 
 inline IBlockchainCache* findIndexInChain(IBlockchainCache* blockSegment, const Crypto::Hash& blockHash) {
@@ -138,10 +130,6 @@ TransactionValidatorState extractSpentOutputs(const CachedTransaction& transacti
     if (input.type() == typeid(KeyInput)) {
       const KeyInput& in = boost::get<KeyInput>(input);
       bool r = spentOutputs.spentKeyImages.insert(in.keyImage).second;
-      assert(r);
-    } else if (input.type() == typeid(MultisignatureInput)) {
-      const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
-      bool r = spentOutputs.spentMultisignatureGlobalIndexes.insert(std::make_pair(in.amount, in.outputIndex)).second;
       assert(r);
     } else {
       assert(false);
@@ -513,12 +501,14 @@ Difficulty Core::getDifficultyForNextBlock() const {
 
   uint32_t topBlockIndex = mainChain->getTopBlockIndex();
 
-  size_t blocksCount = std::min(static_cast<size_t>(topBlockIndex), currency.difficultyBlocksCount());
+  uint8_t nextBlockMajorVersion = getBlockMajorVersionForHeight(topBlockIndex);
+
+  size_t blocksCount = std::min(static_cast<size_t>(topBlockIndex), currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion));
 
   auto timestamps = mainChain->getLastTimestamps(blocksCount);
   auto difficulties = mainChain->getLastCumulativeDifficulties(blocksCount);
 
-  return currency.nextDifficulty(timestamps, difficulties);
+  return currency.nextDifficulty(nextBlockMajorVersion, topBlockIndex, timestamps, difficulties);
 }
 
 std::vector<Crypto::Hash> Core::findBlockchainSupplement(const std::vector<Crypto::Hash>& remoteBlockIds,
@@ -964,18 +954,6 @@ bool Core::isTransactionValidForPool(const CachedTransaction& cachedTransaction,
   return true;
 }
 
-boost::optional<std::pair<MultisignatureOutput, uint64_t>> Core::getMultisignatureOutput(uint64_t amount,
-                                                                                         uint32_t globalIndex) const {
-  throwIfNotInitialized();
-
-  MultisignatureOutput output;
-  uint64_t unlockTime;
-  if (chainsLeaves[0]->getMultisignatureOutputIfExists(amount, globalIndex, output, unlockTime)) {
-    return {{output, unlockTime}};
-  }
-  return {};
-}
-
 std::vector<Crypto::Hash> Core::getPoolTransactionHashes() const {
   throwIfNotInitialized();
 
@@ -1224,7 +1202,7 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
                                           IBlockchainCache* cache, uint64_t& fee, uint32_t blockIndex) {
   // TransactionValidatorState currentState;
   const auto& transaction = cachedTransaction.getTransaction();
-  auto error = validateSemantic(transaction, fee);
+auto error = validateSemantic(transaction, fee, blockIndex);
   if (error != error::TransactionValidationError::VALIDATION_SUCCESS) {
     return error;
   }
@@ -1270,45 +1248,6 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
         }
       }
 
-    } else if (input.type() == typeid(MultisignatureInput)) {
-      const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
-      MultisignatureOutput output;
-      uint64_t unlockTime = 0;
-      if (!state.spentMultisignatureGlobalIndexes.insert(std::make_pair(in.amount, in.outputIndex)).second) {
-        return error::TransactionValidationError::INPUT_MULTISIGNATURE_ALREADY_SPENT;
-      }
-
-      if (!cache->getMultisignatureOutputIfExists(in.amount, in.outputIndex, blockIndex, output, unlockTime)) {
-        return error::TransactionValidationError::INPUT_INVALID_GLOBAL_INDEX;
-      }
-
-      if (cache->checkIfSpentMultisignature(in.amount, in.outputIndex, blockIndex)) {
-        return error::TransactionValidationError::INPUT_MULTISIGNATURE_ALREADY_SPENT;
-      }
-
-      if (!cache->isTransactionSpendTimeUnlocked(unlockTime, blockIndex)) {
-        return error::TransactionValidationError::INPUT_SPEND_LOCKED_OUT;
-      }
-
-      if (output.requiredSignatureCount != in.signatureCount) {
-        return error::TransactionValidationError::INPUT_WRONG_SIGNATURES_COUNT;
-      }
-
-      size_t inputSignatureIndex = 0;
-      size_t outputKeyIndex = 0;
-      while (inputSignatureIndex < in.signatureCount) {
-        if (outputKeyIndex == output.keys.size()) {
-          return error::TransactionValidationError::INPUT_INVALID_SIGNATURES;
-        }
-
-        if (Crypto::check_signature(cachedTransaction.getTransactionPrefixHash(), output.keys[outputKeyIndex],
-                                    transaction.signatures[inputIndex][inputSignatureIndex])) {
-          ++inputSignatureIndex;
-        }
-
-        ++outputKeyIndex;
-      }
-
     } else {
       assert(false);
       return error::TransactionValidationError::INPUT_UNKNOWN_TYPE;
@@ -1320,7 +1259,7 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
   return error::TransactionValidationError::VALIDATION_SUCCESS;
 }
 
-std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t& fee) {
+std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t& fee, uint32_t blockIndex) {
   if (transaction.inputs.empty()) {
     return error::TransactionValidationError::EMPTY_INPUTS;
   }
@@ -1335,17 +1274,6 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
       if (!check_key(boost::get<KeyOutput>(output.target).key)) {
         return error::TransactionValidationError::OUTPUT_INVALID_KEY;
       }
-    } else if (output.target.type() == typeid(MultisignatureOutput)) {
-      const MultisignatureOutput& multisignatureOutput = ::boost::get<MultisignatureOutput>(output.target);
-      if (multisignatureOutput.requiredSignatureCount > multisignatureOutput.keys.size()) {
-        return error::TransactionValidationError::OUTPUT_INVALID_REQUIRED_SIGNATURES_COUNT;
-      }
-
-      for (const PublicKey& key : multisignatureOutput.keys) {
-        if (!check_key(key)) {
-          return error::TransactionValidationError::OUTPUT_INVALID_MULTISIGNATURE_KEY;
-        }
-      }
     } else {
       return error::TransactionValidationError::OUTPUT_UNKNOWN_TYPE;
     }
@@ -1356,6 +1284,11 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
 
     summaryOutputAmount += output.amount;
   }
+
+    // parameters used for the additional key_image check
+    static const Crypto::KeyImage Z = { {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+    static const Crypto::KeyImage I = { {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+    static const Crypto::KeyImage L = { {0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10 } };
 
   uint64_t summaryInputAmount = 0;
   std::unordered_set<Crypto::KeyImage> ki;
@@ -1375,13 +1308,12 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
 
       // outputIndexes are packed here, first is absolute, others are offsets to previous,
       // so first can be zero, others can't
+  // Fix discovered by Monero Lab and suggested by "fluffypony" (bitcointalk.org)
+  if (!(scalarmultKey(in.keyImage, L) == I) && blockIndex > parameters::KEY_IMAGE_CHECKING_BLOCK_INDEX) {
+    return error::TransactionValidationError::INPUT_INVALID_DOMAIN_KEYIMAGES;
+  }
+
       if (std::find(++std::begin(in.outputIndexes), std::end(in.outputIndexes), 0) != std::end(in.outputIndexes)) {
-        return error::TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES;
-      }
-    } else if (input.type() == typeid(MultisignatureInput)) {
-      const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
-      amount = in.amount;
-      if (!outputsUsage.insert(std::make_pair(in.amount, in.outputIndex)).second) {
         return error::TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES;
       }
     } else {
@@ -1480,17 +1412,6 @@ std::error_code Core::validateBlock(const CachedBlock& cachedBlock, IBlockchainC
     if (output.target.type() == typeid(KeyOutput)) {
       if (!check_key(boost::get<KeyOutput>(output.target).key)) {
         return error::TransactionValidationError::OUTPUT_INVALID_KEY;
-      }
-    } else if (output.target.type() == typeid(MultisignatureOutput)) {
-      const MultisignatureOutput& multisignatureOutput = ::boost::get<MultisignatureOutput>(output.target);
-      if (multisignatureOutput.requiredSignatureCount > multisignatureOutput.keys.size()) {
-        return error::TransactionValidationError::OUTPUT_INVALID_REQUIRED_SIGNATURES_COUNT;
-      }
-
-      for (const PublicKey& key : multisignatureOutput.keys) {
-        if (!check_key(key)) {
-          return error::TransactionValidationError::OUTPUT_INVALID_MULTISIGNATURE_KEY;
-        }
       }
     } else {
       return error::TransactionValidationError::OUTPUT_UNKNOWN_TYPE;
@@ -2176,14 +2097,6 @@ TransactionDetails Core::getTransactionDetails(const Crypto::Hash& transactionHa
       txInToKeyDetails.output.number = outputReferences.back().second;
       txInToKeyDetails.output.transactionHash = outputReferences.back().first;
       txInDetails = txInToKeyDetails;
-    } else if (transaction->getInputType(i) == TransactionTypes::InputType::Multisignature) {
-      MultisignatureInputDetails txInMultisigDetails;
-      txInMultisigDetails.input = boost::get<MultisignatureInput>(rawTransaction.inputs[i]);
-      std::pair<Crypto::Hash, size_t> outputReference = segment->getMultisignatureOutputReference(txInMultisigDetails.input.amount, txInMultisigDetails.input.outputIndex);
-      
-      txInMultisigDetails.output.number = outputReference.second;
-      txInMultisigDetails.output.transactionHash = outputReference.first;
-      txInDetails = txInMultisigDetails;
     }
 
     assert(!txInDetails.empty());

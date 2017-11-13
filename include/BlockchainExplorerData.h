@@ -55,12 +55,8 @@ struct KeyInputDetails {
   TransactionOutputReferenceDetails output;
 };
 
-struct MultisignatureInputDetails {
-  MultisignatureInput input;
-  TransactionOutputReferenceDetails output;
-};
 
-typedef boost::variant<BaseInputDetails, KeyInputDetails, MultisignatureInputDetails> TransactionInputDetails;
+typedef boost::variant<BaseInputDetails, KeyInputDetails> TransactionInputDetails;
 
 struct TransactionExtraDetails {
   Crypto::PublicKey publicKey; 

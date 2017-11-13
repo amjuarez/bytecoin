@@ -26,7 +26,6 @@ namespace CryptoNote {
 
 struct TransactionValidatorState {
   std::unordered_set<Crypto::KeyImage> spentKeyImages;
-  std::set<std::pair<uint64_t, uint32_t>> spentMultisignatureGlobalIndexes;
 };
 
 void mergeStates(TransactionValidatorState& destionation, const TransactionValidatorState& source);

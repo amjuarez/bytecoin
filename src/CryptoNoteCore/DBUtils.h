@@ -33,7 +33,6 @@ namespace DB {
   const std::string BLOCK_INDEX_TO_KEY_IMAGE_PREFIX = "0";
   const std::string BLOCK_INDEX_TO_TX_HASHES_PREFIX = "1";
   const std::string BLOCK_INDEX_TO_TRANSACTION_INFO_PREFIX = "2";
-  const std::string BLOCK_INDEX_TO_SPENT_MULTISIGNATURE_PREFIX = "3";
   const std::string BLOCK_INDEX_TO_RAW_BLOCK_PREFIX = "4";
 
   const std::string BLOCK_HASH_TO_BLOCK_INDEX_PREFIX = "5";
@@ -45,8 +44,6 @@ namespace DB {
   const std::string TRANSACTION_HASH_TO_TRANSACTION_INFO_PREFIX = "a";
 
   const std::string KEY_OUTPUT_AMOUNT_PREFIX = "b";
-  const std::string MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX = "c";
-  const std::string SPENT_MULTISIGNATURE_OUTPUT_AMOUNT_PREFIX = "d";
 
   const std::string CLOSEST_TIMESTAMP_BLOCK_INDEX_PREFIX = "e";
 
@@ -55,12 +52,10 @@ namespace DB {
   const std::string TIMESTAMP_TO_BLOCKHASHES_PREFIX = "g";
 
   const std::string KEY_OUTPUT_AMOUNTS_COUNT_PREFIX = "h";
-  const std::string MULTISIGNATURE_OUTPUT_AMOUNTS_COUNT_PREFIX = "i";
 
   const std::string LAST_BLOCK_INDEX_KEY = "last_block_index";
 
   const std::string KEY_OUTPUT_AMOUNTS_COUNT_KEY = "key_amounts_count";
-  const std::string MULTISIGNATURE_OUTPUT_AMOUNTS_COUNT_KEY = "multisignature_amounts_count";
 
   const std::string TRANSACTIONS_COUNT_KEY = "txs_count";
 

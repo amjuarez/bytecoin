@@ -124,8 +124,6 @@ bool init_output_indices(map_output_idx_t& outs, std::map<uint64_t, std::vector<
           }
 
           ++keyIndex;
-        } else if (out.target.type() == typeid(MultisignatureOutput)) {
-          keyIndex += boost::get<MultisignatureOutput>(out.target).keys.size();
         }
       }
     }
@@ -158,7 +156,6 @@ bool init_spent_output_indices(map_output_idx_t& outs, const map_output_t& outs_
               oi.spent = true;
             }
           }
-          // TODO: multisig?
         }
       }
     }

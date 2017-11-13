@@ -122,36 +122,3 @@ struct GenerateTransactionWithZeroFee : public get_tx_validation_base
 {
   bool generate(std::vector<test_event_entry>& events) const;
 };
-
-// MultiSignature
-
-class TestGenerator;
-
-struct MultiSigTx_OutputSignatures : public get_tx_validation_base {
-  MultiSigTx_OutputSignatures(size_t givenKeys, uint32_t requiredSignatures, bool shouldSucceed);
-
-  bool generate(std::vector<test_event_entry>& events) const;
-  bool generate(TestGenerator& generator) const;
-
-  const size_t m_givenKeys;
-  const uint32_t m_requiredSignatures;
-  const bool m_shouldSucceed;
-  std::vector<CryptoNote::AccountBase> m_outputAccounts;
-};
-
-struct MultiSigTx_InvalidOutputSignature : public get_tx_validation_base {
-  bool generate(std::vector<test_event_entry>& events) const;
-};
-
-struct MultiSigTx_Input : public MultiSigTx_OutputSignatures {
-  MultiSigTx_Input(size_t givenKeys, uint32_t requiredSignatures, uint32_t givenSignatures, bool shouldSucceed);
-  bool generate(std::vector<test_event_entry>& events) const;
-
-  const bool m_inputShouldSucceed;
-  const uint32_t m_givenSignatures;
-};
-
-struct MultiSigTx_BadInputSignature : public MultiSigTx_OutputSignatures {
-  MultiSigTx_BadInputSignature();
-  bool generate(std::vector<test_event_entry>& events) const;
-};

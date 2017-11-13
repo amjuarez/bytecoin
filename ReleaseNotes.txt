@@ -1,11 +1,7 @@
-DOO Release 0.2
+Release notes 2.1.2
 
-- Updated names
-- Added additional seed nodes
-
-dollarydoos release 0.1
-
-- Forked Bytecoin
+- Updated crawler public key
+- Daemon stability improvements
 
 Release notes 2.1.1
 

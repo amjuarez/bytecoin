@@ -35,7 +35,12 @@ const size_t   BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW             = 60;
 
 // MONEY_SUPPLY - total number coins to be generated
 const uint64_t MONEY_SUPPLY                                  = UINT64_C(2544674407370955161);
+const uint64_t TAIL_EMISSION_REWARD                          = 0;
+const uint32_t ZAWY_DIFFICULTY_BLOCK_INDEX                 = 0;
+const size_t ZAWY_DIFFICULTY_V2                          = 0;
+const uint8_t ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION   = 0;
 const unsigned EMISSION_SPEED_FACTOR                         = 19;
+const uint64_t GENESIS_BLOCK_REWARD                          = 0;
 static_assert(EMISSION_SPEED_FACTOR <= 8 * sizeof(uint64_t), "Bad EMISSION_SPEED_FACTOR");
 
 const size_t   CRYPTONOTE_REWARD_BLOCKS_WINDOW               = 100;
@@ -47,12 +52,19 @@ const size_t   CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE        = 600;
 const size_t   CRYPTONOTE_DISPLAY_DECIMAL_POINT              = 11;
 const uint64_t MINIMUM_FEE                                   = UINT64_C(1000000);
 const uint64_t DEFAULT_DUST_THRESHOLD                        = UINT64_C(1000000);
+const uint64_t DEFAULT_FEE                          = MINIMUM_FEE;
 
 const uint64_t DIFFICULTY_TARGET                             = 90; // seconds
 const uint64_t EXPECTED_NUMBER_OF_BLOCKS_PER_DAY             = 24 * 60 * 60 / 90;
 const size_t   DIFFICULTY_WINDOW                             = EXPECTED_NUMBER_OF_BLOCKS_PER_DAY; // blocks
+const size_t   DIFFICULTY_WINDOW_V1                          = DIFFICULTY_WINDOW;
+const size_t   DIFFICULTY_WINDOW_V2                          = DIFFICULTY_WINDOW;
 const size_t   DIFFICULTY_CUT                                = 60;  // timestamps to cut after sorting
+const size_t   DIFFICULTY_CUT_V1                             = DIFFICULTY_CUT;
+const size_t   DIFFICULTY_CUT_V2                             = DIFFICULTY_CUT;
 const size_t   DIFFICULTY_LAG                                = 15;  // !!!
+const size_t   DIFFICULTY_LAG_V1                             = DIFFICULTY_LAG;
+const size_t   DIFFICULTY_LAG_V2                             = DIFFICULTY_LAG;
 static_assert(2 * DIFFICULTY_CUT <= DIFFICULTY_WINDOW - 2, "Bad DIFFICULTY_WINDOW or DIFFICULTY_CUT");
 
 const size_t   MAX_BLOCK_SIZE_INITIAL                        = 25 * 1024;
@@ -103,9 +115,6 @@ const size_t   COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT         =  1000;
 
 const int      P2P_DEFAULT_PORT                              =  39567;
 const int      RPC_DEFAULT_PORT                              =  39548;
-  
-  //Dollarydoos Network Identifier: 12345678-1100-0101-1011-090090055555
-  //Dollarydoos Genesis Tx Hash: 010501ff00018b8af2ffa08d01029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd0880712101c0774a2baef8cd0889dfe9417f8170912d82adfe8e9c844ef3648c6c32b3a583
 
 const size_t   P2P_LOCAL_WHITE_PEERLIST_LIMIT                =  1000;
 const size_t   P2P_LOCAL_GRAY_PEERLIST_LIMIT                 =  5000;
@@ -135,3 +144,6 @@ const std::initializer_list<CheckpointData> CHECKPOINTS = {  };
 } // CryptoNote
 
 #define ALLOW_DEBUG_COMMANDS
+
+
+

@@ -96,8 +96,6 @@ public:
 
   void setPoolTxVerificationResult(bool result);
   void setPoolChangesResult(bool result);
-  boost::optional<std::pair<CryptoNote::MultisignatureOutput, uint64_t>>
-  getMultisignatureOutput(uint64_t amount, uint32_t globalIndex) const override { return {}; }
 
   virtual bool hasTransaction(const Crypto::Hash& transactionHash) const override;
   virtual CryptoNote::BlockDetails getBlockDetails(const Crypto::Hash& blockHash) const override;

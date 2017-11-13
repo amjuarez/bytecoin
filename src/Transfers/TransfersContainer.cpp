@@ -111,9 +111,6 @@ SpentOutputDescriptor::SpentOutputDescriptor(const TransactionOutputInformationI
     m_globalOutputIndex(0) {
   if (m_type == TransactionTypes::OutputType::Key) {
     m_keyImage = &transactionInfo.keyImage;
-  } else if (m_type == TransactionTypes::OutputType::Multisignature) {
-    m_amount = transactionInfo.amount;
-    m_globalOutputIndex = transactionInfo.globalOutputIndex;
   } else {
     assert(false);
   }
@@ -123,19 +120,9 @@ SpentOutputDescriptor::SpentOutputDescriptor(const KeyImage* keyImage) {
   assign(keyImage);
 }
 
-SpentOutputDescriptor::SpentOutputDescriptor(uint64_t amount, uint32_t globalOutputIndex) {
-  assign(amount, globalOutputIndex);
-}
-
 void SpentOutputDescriptor::assign(const KeyImage* keyImage) {
   m_type = TransactionTypes::OutputType::Key;
   m_keyImage = keyImage;
-}
-
-void SpentOutputDescriptor::assign(uint64_t amount, uint32_t globalOutputIndex) {
-  m_type = TransactionTypes::OutputType::Multisignature;
-  m_amount = amount;
-  m_globalOutputIndex = globalOutputIndex;
 }
 
 bool SpentOutputDescriptor::isValid() const {
@@ -145,8 +132,6 @@ bool SpentOutputDescriptor::isValid() const {
 bool SpentOutputDescriptor::operator==(const SpentOutputDescriptor& other) const {
   if (m_type == TransactionTypes::OutputType::Key) {
     return other.m_type == m_type && *other.m_keyImage == *m_keyImage;
-  } else if (m_type == TransactionTypes::OutputType::Multisignature) {
-    return other.m_type == m_type && other.m_amount == m_amount && other.m_globalOutputIndex == m_globalOutputIndex;
   } else {
     assert(false);
     return false;
@@ -157,10 +142,6 @@ size_t SpentOutputDescriptor::hash() const {
   if (m_type == TransactionTypes::OutputType::Key) {
     static_assert(sizeof(size_t) < sizeof(*m_keyImage), "sizeof(size_t) < sizeof(*m_keyImage)");
     return *reinterpret_cast<const size_t*>(m_keyImage->data);
-  } else if (m_type == TransactionTypes::OutputType::Multisignature) {
-    size_t hashValue = boost::hash_value(m_amount);
-    boost::hash_combine(hashValue, m_globalOutputIndex);
-    return hashValue;
   } else {
     assert(false);
     return 0;
@@ -299,14 +280,6 @@ bool TransfersContainer::addTransactionOutputs(const TransactionBlockInfo& block
             ", key image " << info.keyImage;
           throw std::runtime_error(message);
         }
-      } else if (info.type == TransactionTypes::OutputType::Multisignature) {
-        SpentOutputDescriptor descriptor(transfer);
-        if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
-            m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
-          auto message = "Failed to add transaction output: multisignature output already exists";
-          m_logger(ERROR, BRIGHT_RED) << message << ", amount " << m_currency.formatAmount(info.amount) << ", global index " << info.globalOutputIndex;
-          throw std::runtime_error(message);
-        }
       }
 
       auto result = m_availableTransfers.emplace(std::move(info));
@@ -398,19 +371,6 @@ bool TransfersContainer::addTransactionInputs(const TransactionBlockInfo& block,
       updateTransfersVisibility(input.keyImage);
 
       inputsAdded = true;
-    } else if (inputType == TransactionTypes::InputType::Multisignature) {
-      MultisignatureInput input;
-      tx.getInput(i, input);
-
-      auto& outputDescriptorIndex = m_availableTransfers.get<SpentOutputDescriptorIndex>();
-      auto availableOutputIt = outputDescriptorIndex.find(SpentOutputDescriptor(input.amount, input.outputIndex));
-      if (availableOutputIt != outputDescriptorIndex.end()) {
-        copyToSpent(block, tx, i, *availableOutputIt);
-        // erase from available outputs
-        outputDescriptorIndex.erase(availableOutputIt);
-
-        inputsAdded = true;
-      }
     } else {
       assert(inputType == TransactionTypes::InputType::Generating);
     }
@@ -473,17 +433,6 @@ bool TransfersContainer::markTransactionConfirmed(const TransactionBlockInfo& bl
       transfer.blockHeight = block.height;
       transfer.transactionIndex = block.transactionIndex;
       transfer.globalOutputIndex = globalIndices[transfer.outputInTransaction];
-
-      if (transfer.type == TransactionTypes::OutputType::Multisignature) {
-        SpentOutputDescriptor descriptor(transfer);
-        if (m_availableTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0 ||
-            m_spentTransfers.get<SpentOutputDescriptorIndex>().count(descriptor) > 0) {
-          // This exception breaks TransfersContainer consistency
-          auto message = "Failed to confirm transaction: multisignature output already exists";
-          m_logger(ERROR, BRIGHT_RED) << message << ", amount " << m_currency.formatAmount(transfer.amount) << ", global index " << transfer.globalOutputIndex;
-          throw std::runtime_error(message);
-        }
-      }
 
       auto result = m_availableTransfers.emplace(std::move(transfer));
       (void)result; // Disable unused warning
@@ -1063,8 +1012,7 @@ bool TransfersContainer::isIncluded(TransactionTypes::OutputType type, uint32_t 
   return
     // filter by type
     (
-    ((flags & IncludeTypeKey) != 0            && type == TransactionTypes::OutputType::Key) ||
-    ((flags & IncludeTypeMultisignature) != 0 && type == TransactionTypes::OutputType::Multisignature)
+    ((flags & IncludeTypeKey) != 0 && type == TransactionTypes::OutputType::Key)
     )
     &&
     // filter by state
