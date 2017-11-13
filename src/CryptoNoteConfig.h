@@ -129,6 +129,7 @@ const uint32_t P2P_DEFAULT_CONNECTION_TIMEOUT                = 5000;          //
 const uint32_t P2P_DEFAULT_PING_CONNECTION_TIMEOUT           = 2000;          // 2 seconds
 const uint64_t P2P_DEFAULT_INVOKE_TIMEOUT                    = 60 * 2 * 1000; // 2 minutes
 const size_t   P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT          = 5000;          // 5 seconds
+
 const char     P2P_STAT_TRUSTED_PUB_KEY[]                    = "";
 
 const char* const SEED_NODES[] = { "139.59.102.179:39567", "139.59.106.177:39567", "128.199.164.5:39567", "165.227.91.32:39567", "192.243.100.139:39567" };
@@ -138,10 +139,6 @@ struct CheckpointData {
   uint32_t index;
   const char* blockId;
 };
-
-const std::initializer_list<CheckpointData> CHECKPOINTS = {  };
-
-} // CryptoNote
 
 #define ALLOW_DEBUG_COMMANDS
 
