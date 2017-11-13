@@ -111,6 +111,7 @@ public:
   virtual std::error_code cancelTransaction(size_t transferId) = 0;
 
   virtual void getAccountKeys(AccountKeys& keys) = 0;
+  virtual void syncAll(bool syncWalletFromZero = 0) = 0;
 };
 
 }

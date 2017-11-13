@@ -42,6 +42,7 @@ namespace PaymentService {
 struct WalletConfiguration {
   std::string walletFile;
   std::string walletPassword;
+  bool syncFromZero;
 };
 
 void generateNewWallet(const CryptoNote::Currency& currency, const WalletConfiguration& conf, Logging::ILogger& logger, System::Dispatcher& dispatcher);

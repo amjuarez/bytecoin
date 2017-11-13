@@ -84,6 +84,7 @@ public:
   virtual TransactionId sendTransaction(const std::vector<WalletLegacyTransfer>& transfers, uint64_t fee, const std::string& extra = "", uint64_t mixIn = 0, uint64_t unlockTimestamp = 0) override;
   virtual std::error_code cancelTransaction(size_t transactionId) override;
 
+  void syncAll(bool syncWalletFromZero) override;
   virtual void getAccountKeys(AccountKeys& keys) override;
 
 private:
@@ -140,6 +141,7 @@ private:
   Tools::ObserverManager<CryptoNote::IWalletLegacyObserver> m_observerManager;
 
   std::unique_ptr<SyncStarter> m_onInitSyncStarter;
+bool m_syncAll = 0;
 };
 
 } //namespace CryptoNote

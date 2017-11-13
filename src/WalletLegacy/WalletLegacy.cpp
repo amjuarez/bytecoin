@@ -203,6 +203,9 @@ void WalletLegacy::initSync() {
   sub.transactionSpendableAge = 1;
   sub.syncStart.height = 0;
   sub.syncStart.timestamp = m_account.get_createtime() - ACCOUN_CREATE_TIME_ACCURACY;
+  if (m_syncAll == 1)
+    sub.syncStart.timestamp = 0;
+  std::cout << "Sync from timestamp: " << sub.syncStart.timestamp << std::endl;
   
   auto& subObject = m_transfersSync.addSubscription(sub);
   m_transferDetails = &subObject.getContainer();
@@ -595,6 +598,9 @@ void WalletLegacy::notifyIfBalanceChanged() {
 
 }
 
+void WalletLegacy::syncAll(bool syncWalletFromZero) {
+  m_syncAll = syncWalletFromZero;
+}
 void WalletLegacy::getAccountKeys(AccountKeys& keys) {
   if (m_state == NOT_INITIALIZED) {
     throw std::system_error(make_error_code(CryptoNote::error::NOT_INITIALIZED));
