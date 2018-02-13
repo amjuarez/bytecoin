@@ -116,7 +116,7 @@ std::error_code PaymentServiceJsonRpcServer::handleCreateAddress(const CreateAdd
   if (request.spendSecretKey.empty() && request.spendPublicKey.empty()) {
     return service.createAddress(response.address);
   } else if (!request.spendSecretKey.empty()) {
-    return service.createAddress(request.spendSecretKey, response.address);
+    return service.createAddress(request.spendSecretKey, request.reset, response.address);
   } else {
     return service.createTrackingAddress(request.spendPublicKey, response.address);
   }

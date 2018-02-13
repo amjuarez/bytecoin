@@ -58,7 +58,7 @@ public:
   virtual KeyPair getAddressSpendKey(const std::string& address) const override;
   virtual KeyPair getViewKey() const override;
   virtual std::string createAddress() override;
-  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) override;
+  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey, bool reset = true) override;
   virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) override;
   virtual std::vector<std::string> createAddressList(const std::vector<Crypto::SecretKey>& spendSecretKeys) override;
   virtual void deleteAddress(const std::string& address) override;

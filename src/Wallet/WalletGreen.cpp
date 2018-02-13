@@ -946,14 +946,15 @@ std::string WalletGreen::createAddress() {
   return doCreateAddress(spendKey.publicKey, spendKey.secretKey, creationTimestamp);
 }
 
-std::string WalletGreen::createAddress(const Crypto::SecretKey& spendSecretKey) {
+std::string WalletGreen::createAddress(const Crypto::SecretKey& spendSecretKey, bool reset) {
   Crypto::PublicKey spendPublicKey;
   if (!Crypto::secret_key_to_public_key(spendSecretKey, spendPublicKey)) {
     m_logger(ERROR, BRIGHT_RED) << "createAddress(" << spendSecretKey << ") Failed to convert secret key to public key";
     throw std::system_error(make_error_code(CryptoNote::error::KEY_GENERATION_ERROR));
   }
+  uint64_t creationTimestamp = reset ? 0 : static_cast<uint64_t>(time(nullptr));
 
-  return doCreateAddress(spendPublicKey, spendSecretKey, 0);
+  return doCreateAddress(spendPublicKey, spendSecretKey, creationTimestamp);
 }
 
 std::string WalletGreen::createAddress(const Crypto::PublicKey& spendPublicKey) {

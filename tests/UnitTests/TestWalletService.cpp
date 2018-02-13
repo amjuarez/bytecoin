@@ -68,7 +68,7 @@ struct IWalletBaseStub : public CryptoNote::IWallet, public CryptoNote::IFusionM
   virtual KeyPair getAddressSpendKey(const std::string& address) const override { return KeyPair(); }
   virtual KeyPair getViewKey() const override { return KeyPair(); }
   virtual std::string createAddress() override { return ""; }
-  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) override { return ""; }
+  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey, bool reset) override { return ""; }
   virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) override { return ""; }
   virtual std::vector<std::string> createAddressList(const std::vector<Crypto::SecretKey>& spendSecretKeys) override { return std::vector<std::string>(); }
   virtual void deleteAddress(const std::string& address) override { }
@@ -205,7 +205,7 @@ struct WalletCreateAddressStub: public IWalletBaseStub {
   WalletCreateAddressStub(System::Dispatcher& d) : IWalletBaseStub(d) {}
 
   virtual std::string createAddress() override { return address; }
-  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) override { return address; }
+  virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey, bool reset) override { return address; }
   virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) override { return address; }
 
   std::string address = "correctAddress";
@@ -226,7 +226,7 @@ TEST_F(WalletServiceTest_createAddress, invalidSecretKey) {
   std::unique_ptr<WalletService> service = createWalletService();
 
   std::string address;
-  std::error_code ec = service->createAddress("wrong key", address);
+  std::error_code ec = service->createAddress("wrong key", true, address);
   ASSERT_EQ(make_error_code(CryptoNote::error::WalletServiceErrorCode::WRONG_KEY_FORMAT), ec);
 }
 
@@ -247,7 +247,7 @@ TEST_F(WalletServiceTest_createAddress, correctSecretKey) {
   std::unique_ptr<WalletService> service = createWalletService(wallet);
 
   std::string address;
-  std::error_code ec = service->createAddress(Common::podToHex(sec), address);
+  std::error_code ec = service->createAddress(Common::podToHex(sec), true, address);
 
   ASSERT_FALSE(ec);
   ASSERT_EQ(wallet.address, address);
