@@ -340,6 +340,8 @@ void Dispatcher::yield() {
           contextPair->readContext->context->interruptProcedure = nullptr;
           pushContext(contextPair->readContext->context);
           contextPair->readContext->events = events[i].events;
+        } else if ((events[i].events & (EPOLLERR | EPOLLHUP)) != 0) {
+          throw std::runtime_error("Dispatcher::dispatch, events & (EPOLLERR | EPOLLHUP) != 0");
         } else {
           continue;
         }
