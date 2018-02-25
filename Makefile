@@ -26,6 +26,7 @@ all-release: build-release
 
 clean:
 	rm -rf build
+	cd external/rocksdb && make clean && cd ../../
 
 tags:
 	ctags -R --sort=1 --c++-kinds=+p --fields=+iaS --extra=+q --language-force=C++ src contrib tests/gtest
