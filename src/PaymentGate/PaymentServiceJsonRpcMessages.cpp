@@ -313,32 +313,6 @@ void SendDelayedTransaction::Request::serialize(CryptoNote::ISerializer& seriali
 void SendDelayedTransaction::Response::serialize(CryptoNote::ISerializer& serializer) {
 }
 
-void GetUnspendOuts::Request::serialize(CryptoNote::ISerializer& serializer) {
-  if (!serializer(address, "address")) {
-    throw RequestSerializationError();
-  }
-
-  serializer(viewKey, "viewKey");
-  serializer(amount, "amount");
-  serializer(mixIn, "mixIn");
-  serializer(useDust, "useDust");
-  serializer(dustThreshold, "dustThreshold");
-}
-
-void GetUnspendOuts::Response::serialize(CryptoNote::ISerializer& serializer) {
-  serializer(outputs, "outputs");
-}
-
-void TransactionOutputInformationSerialized::serialize(CryptoNote::ISerializer& serializer) {
-  serializer(type, "type");
-  serializer(amount, "amount");
-  serializer(globalOutputIndex, "globalOutputIndex");
-  serializer(outputInTransaction, "outputInTransaction");
-  serializer(transactionHash, "transactionHash");
-  serializer(transactionPublicKey, "transactionPublicKey");
-  serializer(outputKey, "outputKey");
-}
-
 void SendFusionTransaction::Request::serialize(CryptoNote::ISerializer& serializer) {
   if (!serializer(threshold, "threshold")) {
     throw RequestSerializationError();

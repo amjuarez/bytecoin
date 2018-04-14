@@ -230,28 +230,6 @@ PaymentService::TransactionRpcInfo convertTransactionWithTransfersToTransactionR
   return transactionInfo;
 }
 
-std::vector<PaymentService::TransactionOutputInformationSerialized> convertWalletOutputsToTransactionOutputInformationSerialized(
-  const std::vector<CryptoNote::WalletOutput>& outputs) {
-
-  std::vector<PaymentService::TransactionOutputInformationSerialized> rpcOutputs;
-  rpcOutputs.reserve(outputs.size());
-  for (const auto& output: outputs) {
-    PaymentService::TransactionOutputInformationSerialized rpcOutput;
-
-    rpcOutput.type = output.type;
-    rpcOutput.amount = output.amount;
-    rpcOutput.globalOutputIndex = output.globalOutputIndex;
-    rpcOutput.outputInTransaction = output.outputInTransaction;
-    rpcOutput.transactionHash = output.transactionHash;
-    rpcOutput.transactionPublicKey = output.transactionPublicKey;
-    rpcOutput.outputKey = output.outputKey;
-
-    rpcOutputs.push_back(std::move(rpcOutput));
-  }
-
-  return rpcOutputs;
-}
-
 std::vector<PaymentService::TransactionsInBlockRpcInfo> convertTransactionsInBlockInfoToTransactionsInBlockRpcInfo(
   const std::vector<CryptoNote::TransactionsInBlockInfo>& blocks) {
 
@@ -1027,28 +1005,6 @@ std::error_code WalletService::getUnconfirmedTransactionHashes(const std::vector
     return x.code();
   } catch (std::exception& x) {
     logger(Logging::WARNING, Logging::BRIGHT_YELLOW) << "Error while getting unconfirmed transaction hashes: " << x.what();
-    return make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR);
-  }
-
-  return std::error_code();
-}
-
-std::error_code WalletService::getUnspendOuts(const GetUnspendOuts::Request& request, std::vector<TransactionOutputInformationSerialized>& outputs) {
-  try {
-    System::EventLock lk(readyEvent);
-
-    if (!CryptoNote::validateAddress(request.address, currency)) {
-      logger(Logging::WARNING, Logging::BRIGHT_YELLOW) << "Can't validate address " << request.address;
-      throw std::system_error(make_error_code(CryptoNote::error::BAD_ADDRESS));
-    }
-
-    auto outs = wallet.getAddressOutputs(request.address);
-
-    outputs = convertWalletOutputsToTransactionOutputInformationSerialized(outs);
-
-    logger(Logging::DEBUGGING) << "Got unspend outs for address " << request.address;
-  } catch (std::exception& x) {
-    logger(Logging::WARNING, Logging::BRIGHT_YELLOW) << "Error while getting unspend outs: " << x.what();
     return make_error_code(CryptoNote::error::INTERNAL_WALLET_ERROR);
   }
 

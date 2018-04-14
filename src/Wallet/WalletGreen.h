@@ -61,7 +61,6 @@ public:
   virtual std::string createAddress(const Crypto::SecretKey& spendSecretKey) override;
   virtual std::string createAddress(const Crypto::PublicKey& spendPublicKey) override;
   virtual std::vector<std::string> createAddressList(const std::vector<Crypto::SecretKey>& spendSecretKeys) override;
-  virtual std::vector<WalletOutput> getAddressOutputs(const std::string& address) const override;
   virtual void deleteAddress(const std::string& address) override;
 
   virtual uint64_t getActualBalance() const override;

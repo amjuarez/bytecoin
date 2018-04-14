@@ -378,40 +378,6 @@ struct SendDelayedTransaction {
   };
 };
 
-struct TransactionOutputInformationSerialized {
-  // output info
-  uint8_t type;
-  uint64_t amount;
-  uint32_t globalOutputIndex;
-  uint32_t outputInTransaction;
-
-  // transaction info
-  std::string transactionHash;
-  std::string transactionPublicKey;
-  std::string outputKey;         // Type: Key 
-
-  void serialize(CryptoNote::ISerializer& serializer);
-};
-
-struct GetUnspendOuts {
-  struct Request {
-    std::string address;
-    std::string viewKey;
-    uint64_t amount;
-    uint32_t mixIn;
-    bool useDust;
-    uint64_t dustThreshold;
-
-    void serialize(CryptoNote::ISerializer& serializer);
-  };
-
-  struct Response {
-    std::vector<TransactionOutputInformationSerialized> outputs;
-
-    void serialize(CryptoNote::ISerializer& serializer);
-  };
-};
-
 struct SendFusionTransaction {
   struct Request {
     uint64_t threshold;

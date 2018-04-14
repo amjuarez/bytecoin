@@ -567,6 +567,11 @@ bool RpcServer::on_stop_daemon(const COMMAND_RPC_STOP_DAEMON::request& req, COMM
 // JSON RPC methods
 //------------------------------------------------------------------------------------------------------------------------------
 bool RpcServer::f_on_blocks_list_json(const F_COMMAND_RPC_GET_BLOCKS_LIST::request& req, F_COMMAND_RPC_GET_BLOCKS_LIST::response& res) {
+  // check if blockchain explorer RPC is enabled
+  if (m_core.getCurrency().isBlockexplorer() == false) {
+    return false;
+  }
+
   if (m_core.getTopBlockIndex() + 1 <= req.height) {
     throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
       std::string("To big height: ") + std::to_string(req.height) + ", current blockchain height = " + std::to_string(m_core.getTopBlockIndex() + 1) };
@@ -606,6 +611,11 @@ bool RpcServer::f_on_blocks_list_json(const F_COMMAND_RPC_GET_BLOCKS_LIST::reque
 }
 
 bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& req, F_COMMAND_RPC_GET_BLOCK_DETAILS::response& res) {
+  // check if blockchain explorer RPC is enabled
+  if (m_core.getCurrency().isBlockexplorer() == false) {
+    return false;
+  }
+
   Hash hash;
 
   try {
@@ -699,6 +709,11 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
 }
 
 bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAILS::request& req, F_COMMAND_RPC_GET_TRANSACTION_DETAILS::response& res) {
+  // check if blockchain explorer RPC is enabled
+  if (m_core.getCurrency().isBlockexplorer() == false) {
+    return false;
+  }
+
   Hash hash;
 
   if (!parse_hash256(req.hash, hash)) {
@@ -778,6 +793,11 @@ bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAIL
 
 
 bool RpcServer::f_on_transactions_pool_json(const F_COMMAND_RPC_GET_POOL::request& req, F_COMMAND_RPC_GET_POOL::response& res) {
+  // check if blockchain explorer RPC is enabled
+  if (m_core.getCurrency().isBlockexplorer() == false) {
+    return false;
+  }
+
   auto pool = m_core.getPoolTransactions();
   for (const Transaction tx : pool) {
     f_transaction_short_response transaction_short;
@@ -843,9 +863,11 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
     m_core.getCurrency().difficultyCutByBlockVersion(1) != m_core.getCurrency().difficultyCutByBlockVersion(2) || m_core.getCurrency().difficultyCutByBlockVersion(1) != m_core.getCurrency().difficultyCutByBlockVersion(3)) {
     res.extensions.push_back("versionized-parameters.json");
   }
-  if (m_core.getCurrency().zawyDifficultyV2() != 0 || m_core.getCurrency().zawyDifficultyBlockVersion() != 0 ||
-       m_core.getCurrency().zawyDifficultyBlockIndex() != 0 ) {
+  if (m_core.getCurrency().zawyDifficultyBlockIndex() != 0 ) {
     res.extensions.push_back("zawy-difficulty-algorithm.json");
+  }
+  if (m_core.getCurrency().zawyLWMADifficultyBlockIndex() != 0 ) {
+    res.extensions.push_back("zawy-lwma-difficulty-algorithm.json");
   }
   if (m_core.getCurrency().buggedZawyDifficultyBlockIndex() != 0 ) {
     res.extensions.push_back("bugged-zawy-difficulty-algorithm.json");
@@ -890,8 +912,10 @@ bool RpcServer::f_on_get_blockchain_settings(const F_COMMAND_RPC_GET_BLOCKCHAIN_
   res.core.DIFFICULTY_LAG_V1 = m_core.getCurrency().difficultyLagV1();
   res.core.DIFFICULTY_LAG_V2 = m_core.getCurrency().difficultyLagV2();
   res.core.ZAWY_DIFFICULTY_BLOCK_INDEX = m_core.getCurrency().zawyDifficultyBlockIndex();
-  res.core.ZAWY_DIFFICULTY_V2 = m_core.getCurrency().zawyDifficultyV2();
-  res.core.ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION = m_core.getCurrency().zawyDifficultyBlockVersion();
+  res.core.ZAWY_DIFFICULTY_LAST_BLOCK = m_core.getCurrency().zawyDifficultyLastBlock();
+  res.core.ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX = m_core.getCurrency().zawyLWMADifficultyBlockIndex();
+  res.core.ZAWY_LWMA_DIFFICULTY_LAST_BLOCK = m_core.getCurrency().zawyLWMADifficultyLastBlock();
+  res.core.ZAWY_LWMA_DIFFICULTY_N = m_core.getCurrency().zawyLWMADifficultyN();
   res.core.BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX = m_core.getCurrency().buggedZawyDifficultyBlockIndex();
   res.core.P2P_DEFAULT_PORT = m_p2p.get_this_peer_port();
   // Not real. Change
@@ -1121,15 +1145,15 @@ bool RpcServer::on_get_block_header_by_hash(const COMMAND_RPC_GET_BLOCK_HEADER_B
 }
 
 bool RpcServer::on_get_block_header_by_height(const COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::request& req, COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT::response& res) {
-  if (m_core.getTopBlockIndex() < req.height) {
+  if (m_core.getTopBlockIndex() + 1 < req.height) {
     throw JsonRpc::JsonRpcError{ CORE_RPC_ERROR_CODE_TOO_BIG_HEIGHT,
-      std::string("To big height: ") + std::to_string(req.height) + ", current blockchain height = " + std::to_string(m_core.getTopBlockIndex()) };
+      std::string("To big height: ") + std::to_string(req.height) + ", current blockchain height = " + std::to_string(m_core.getTopBlockIndex() + 1) };
   }
 
-uint32_t index = static_cast<uint32_t>(req.height);
+  uint32_t index = static_cast<uint32_t>(req.height) - 1;
   auto block = m_core.getBlockByIndex(index);
   CachedBlock cachedBlock(block);
-assert(cachedBlock.getBlockIndex() == req.height);
+  assert(cachedBlock.getBlockIndex() == req.height - 1);
   fill_block_header_response(block, false, index, cachedBlock.getBlockHash(), res.block_header);
   res.status = CORE_RPC_STATUS_OK;
   return true;

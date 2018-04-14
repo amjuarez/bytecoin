@@ -69,6 +69,7 @@ namespace
   const command_line::arg_descriptor<std::string> arg_set_fee_address = { "fee-address", "Sets fee address for light wallets to the daemon's RPC responses.", "" };
   const command_line::arg_descriptor<bool>        arg_print_genesis_tx = { "print-genesis-tx", "Prints genesis' block tx hex to insert it to config and exits" };
   const command_line::arg_descriptor<std::vector<std::string>> arg_genesis_block_reward_address = { "genesis-block-reward-address", "" };
+  const command_line::arg_descriptor<bool> arg_blockexplorer_on = {"enable-blockexplorer", "Enable blockchain explorer RPC", false};
   const command_line::arg_descriptor<std::vector<std::string>>        arg_enable_cors = { "enable-cors", "Adds header 'Access-Control-Allow-Origin' to the daemon's RPC responses. Uses the value as domain. Use * for all" };
   const command_line::arg_descriptor<std::string> arg_GENESIS_COINBASE_TX_HEX  = {"GENESIS_COINBASE_TX_HEX", "Genesis transaction hex", CryptoNote::parameters::GENESIS_COINBASE_TX_HEX};  
   const command_line::arg_descriptor<uint64_t>    arg_CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX  = {"CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX", "uint64_t", CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX};
@@ -99,9 +100,11 @@ namespace
   const command_line::arg_descriptor<std::string> arg_CRYPTONOTE_NAME  = {"CRYPTONOTE_NAME", "Cryptonote name. Used for storage directory", ""};
   const command_line::arg_descriptor< std::vector<std::string> > arg_CHECKPOINT  = {"CHECKPOINT", "Checkpoints. Format: HEIGHT:HASH"};
   const command_line::arg_descriptor<uint32_t>    arg_BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX  = {"BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX", "uint32_t", 0};
+  const command_line::arg_descriptor<uint32_t>    arg_ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX = {"ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX", "uint32_t", 0};
+  const command_line::arg_descriptor<uint32_t>    arg_ZAWY_LWMA_DIFFICULTY_LAST_BLOCK  = {"ZAWY_LWMA_DIFFICULTY_LAST_BLOCK", "uint32_t", 0};
+  const command_line::arg_descriptor<size_t>    arg_ZAWY_LWMA_DIFFICULTY_N  = {"ZAWY_LWMA_DIFFICULTY_N", "size_t", 0};
   const command_line::arg_descriptor<uint32_t>    arg_ZAWY_DIFFICULTY_BLOCK_INDEX  = {"ZAWY_DIFFICULTY_BLOCK_INDEX", "uint32_t", 0};
-  const command_line::arg_descriptor<size_t>    arg_ZAWY_DIFFICULTY_V2  = {"ZAWY_DIFFICULTY_V2", "size_t", 0};
-  const command_line::arg_descriptor<uint8_t>    arg_ZAWY_DIFFICULTY_BLOCK_VERSION  = {"ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION", "uint8_t", 0};
+  const command_line::arg_descriptor<uint32_t>    arg_ZAWY_DIFFICULTY_LAST_BLOCK  = {"ZAWY_DIFFICULTY_LAST_BLOCK", "uint32_t", 0};
   const command_line::arg_descriptor<uint64_t>    arg_GENESIS_BLOCK_REWARD  = {"GENESIS_BLOCK_REWARD", "uint64_t", 0};
   const command_line::arg_descriptor<size_t>    arg_CRYPTONOTE_COIN_VERSION  = {"CRYPTONOTE_COIN_VERSION", "size_t", 0};
   const command_line::arg_descriptor<uint64_t>    arg_TAIL_EMISSION_REWARD  = {"TAIL_EMISSION_REWARD", "uint64_t", 0};
@@ -187,6 +190,8 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   currencyBuilder.difficultyLagV2(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V2));
   currencyBuilder.difficultyCutV1(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V1));
   currencyBuilder.difficultyCutV2(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V2));
+bool blockexplorer_mode = command_line::get_arg(vm, arg_blockexplorer_on);
+currencyBuilder.isBlockexplorer(blockexplorer_mode);
   CryptoNote::Currency currency = currencyBuilder.currency();
   for (const auto& address_string : genesis_block_reward_addresses) {
      CryptoNote::AccountPublicAddress address;
@@ -340,9 +345,11 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_CRYPTONOTE_NAME);
     command_line::add_arg(desc_cmd_sett, arg_CHECKPOINT);
     command_line::add_arg(desc_cmd_sett, arg_BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX);
+    command_line::add_arg(desc_cmd_sett, arg_ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX);
+    command_line::add_arg(desc_cmd_sett, arg_ZAWY_LWMA_DIFFICULTY_LAST_BLOCK);
+    command_line::add_arg(desc_cmd_sett, arg_ZAWY_LWMA_DIFFICULTY_N);
     command_line::add_arg(desc_cmd_sett, arg_ZAWY_DIFFICULTY_BLOCK_INDEX);
-    command_line::add_arg(desc_cmd_sett, arg_ZAWY_DIFFICULTY_V2);
-    command_line::add_arg(desc_cmd_sett, arg_ZAWY_DIFFICULTY_BLOCK_VERSION);
+    command_line::add_arg(desc_cmd_sett, arg_ZAWY_DIFFICULTY_LAST_BLOCK);
     command_line::add_arg(desc_cmd_sett, arg_GENESIS_BLOCK_REWARD);
     command_line::add_arg(desc_cmd_sett, arg_CRYPTONOTE_COIN_VERSION);
     command_line::add_arg(desc_cmd_sett, arg_TAIL_EMISSION_REWARD);
@@ -352,6 +359,7 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_MIN_MIXIN);
     command_line::add_arg(desc_cmd_sett, arg_MANDATORY_MIXIN_BLOCK_VERSION);
 command_line::add_arg(desc_cmd_sett, arg_enable_cors);
+    command_line::add_arg(desc_cmd_sett, arg_blockexplorer_on);
 command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
   command_line::add_arg(desc_cmd_sett, arg_genesis_block_reward_address);
 
@@ -512,19 +520,18 @@ command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
   currencyBuilder.difficultyLagV2(command_line::get_arg(vm, arg_DIFFICULTY_LAG_V2));
   currencyBuilder.difficultyCutV1(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V1));
   currencyBuilder.difficultyCutV2(command_line::get_arg(vm, arg_DIFFICULTY_CUT_V2));
+bool blockexplorer_mode = command_line::get_arg(vm, arg_blockexplorer_on);
+currencyBuilder.isBlockexplorer(blockexplorer_mode);
     currencyBuilder.mixinStartHeight(command_line::get_arg(vm, arg_MIXIN_START_HEIGHT));
     currencyBuilder.killHeight(command_line::get_arg(vm, arg_KILL_HEIGHT));
     currencyBuilder.tailEmissionReward(command_line::get_arg(vm, arg_TAIL_EMISSION_REWARD));
     currencyBuilder.cryptonoteCoinVersion(command_line::get_arg(vm, arg_CRYPTONOTE_COIN_VERSION));
     currencyBuilder.genesisBlockReward(command_line::get_arg(vm, arg_GENESIS_BLOCK_REWARD));
     currencyBuilder.zawyDifficultyBlockIndex(command_line::get_arg(vm, arg_ZAWY_DIFFICULTY_BLOCK_INDEX));
-    currencyBuilder.zawyDifficultyV2(command_line::get_arg(vm, arg_ZAWY_DIFFICULTY_V2));
-//uint8_t recognized as char
-    if (command_line::get_arg(vm, arg_ZAWY_DIFFICULTY_BLOCK_VERSION) == 0) {
-      currencyBuilder.zawyDifficultyBlockVersion(command_line::get_arg(vm, arg_ZAWY_DIFFICULTY_BLOCK_VERSION));
-    } else {
-      currencyBuilder.zawyDifficultyBlockVersion(command_line::get_arg(vm, arg_ZAWY_DIFFICULTY_BLOCK_VERSION) - '0');
-    }
+    currencyBuilder.zawyDifficultyLastBlock(command_line::get_arg(vm, arg_ZAWY_DIFFICULTY_LAST_BLOCK));
+    currencyBuilder.zawyLWMADifficultyBlockIndex(command_line::get_arg(vm, arg_ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX));
+    currencyBuilder.zawyLWMADifficultyLastBlock(command_line::get_arg(vm, arg_ZAWY_LWMA_DIFFICULTY_LAST_BLOCK));
+    currencyBuilder.zawyLWMADifficultyN(command_line::get_arg(vm, arg_ZAWY_LWMA_DIFFICULTY_N));
     currencyBuilder.buggedZawyDifficultyBlockIndex(command_line::get_arg(vm, arg_BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX));
     currencyBuilder.testnet(testnet_mode);
     try {

@@ -44,9 +44,11 @@ CoinBaseConfiguration::CoinBaseConfiguration() {
     CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX=CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     MONEY_SUPPLY=CryptoNote::parameters::MONEY_SUPPLY;
     BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX=CryptoNote::parameters::BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX;
+    ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX=CryptoNote::parameters::ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX;
+    ZAWY_LWMA_DIFFICULTY_LAST_BLOCK=CryptoNote::parameters::ZAWY_LWMA_DIFFICULTY_LAST_BLOCK;
+    ZAWY_LWMA_DIFFICULTY_N=CryptoNote::parameters::ZAWY_LWMA_DIFFICULTY_N;
     ZAWY_DIFFICULTY_BLOCK_INDEX=CryptoNote::parameters::ZAWY_DIFFICULTY_BLOCK_INDEX;
-    ZAWY_DIFFICULTY_V2=CryptoNote::parameters::ZAWY_DIFFICULTY_V2;
-    ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION=CryptoNote::parameters::ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION;
+    ZAWY_DIFFICULTY_LAST_BLOCK=CryptoNote::parameters::ZAWY_DIFFICULTY_LAST_BLOCK;
     GENESIS_BLOCK_REWARD=CryptoNote::parameters::GENESIS_BLOCK_REWARD;
     CRYPTONOTE_COIN_VERSION=CryptoNote::parameters::CRYPTONOTE_COIN_VERSION;
     TAIL_EMISSION_REWARD=CryptoNote::parameters::TAIL_EMISSION_REWARD;
@@ -88,9 +90,11 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX", po::value<uint64_t>()->default_value(CryptoNote::parameters::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX), "uint64_t")
     ("MONEY_SUPPLY", po::value<uint64_t>()->default_value(CryptoNote::parameters::MONEY_SUPPLY), "uint64_t")
     ("BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX", po::value<uint32_t>()->default_value(0), "uint32_t")
+    ("ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX", po::value<uint32_t>()->default_value(0), "uint32_t")
+    ("ZAWY_LWMA_DIFFICULTY_LAST_BLOCK", po::value<uint32_t>()->default_value(0), "uint32_t")
+    ("ZAWY_LWMA_DIFFICULTY_N", po::value<size_t>()->default_value(0), "size_t")
     ("ZAWY_DIFFICULTY_BLOCK_INDEX", po::value<uint32_t>()->default_value(0), "uint32_t")
-    ("ZAWY_DIFFICULTY_V2", po::value<size_t>()->default_value(0), "size_t")
-    ("ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION", po::value<uint8_t>()->default_value(0), "uint8_t")
+    ("ZAWY_DIFFICULTY_LAST_BLOCK", po::value<uint32_t>()->default_value(0), "uint32_t")
     ("GENESIS_BLOCK_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("CRYPTONOTE_COIN_VERSION", po::value<size_t>()->default_value(0), "size_t")
     ("TAIL_EMISSION_REWARD", po::value<uint64_t>()->default_value(0), "uint64_t")
@@ -120,7 +124,7 @@ void CoinBaseConfiguration::initOptions(boost::program_options::options_descript
     ("DIFFICULTY_CUT_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT_V2), "size_t")
     ("DIFFICULTY_LAG_V1", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG_V1), "size_t")
     ("DIFFICULTY_LAG_V2", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG_V2), "size_t")
-("MAX_TRANSACTION_SIZE_LIMIT", po::value<uint64_t>()->default_value(CryptoNote::parameters::MAX_TRANSACTION_SIZE_LIMIT), "uint64_t")
+("MAX_TRANSACTION_SIZE_LIMIT", po::value<uint64_t>()->default_value(0), "uint64_t")
     ("DIFFICULTY_CUT", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_CUT), "size_t")
     ("DIFFICULTY_LAG", po::value<size_t>()->default_value(CryptoNote::parameters::DIFFICULTY_LAG), "size_t")
     ;
@@ -167,11 +171,17 @@ void CoinBaseConfiguration::init(const boost::program_options::variables_map& op
   if (options.count("ZAWY_DIFFICULTY_BLOCK_INDEX")) {
     ZAWY_DIFFICULTY_BLOCK_INDEX = options["ZAWY_DIFFICULTY_BLOCK_INDEX"].as<uint32_t>();
   }
-  if (options.count("ZAWY_DIFFICULTY_V2")) {
-    ZAWY_DIFFICULTY_V2 = options["ZAWY_DIFFICULTY_V2"].as<size_t>();
+  if (options.count("ZAWY_DIFFICULTY_LAST_BLOCK")) {
+    ZAWY_DIFFICULTY_LAST_BLOCK = options["ZAWY_DIFFICULTY_LAST_BLOCK"].as<uint32_t>();
   }
-  if (options.count("ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION")) {
-    ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION = options["ZAWY_DIFFICULTY_DIFFICULTY_BLOCK_VERSION"].as<uint8_t>();
+  if (options.count("ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX")) {
+    ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX = options["ZAWY_LWMA_DIFFICULTY_BLOCK_INDEX"].as<uint32_t>();
+  }
+  if (options.count("ZAWY_LWMA_DIFFICULTY_LAST_BLOCK")) {
+    ZAWY_LWMA_DIFFICULTY_LAST_BLOCK = options["ZAWY_LWMA_DIFFICULTY_LAST_BLOCK"].as<uint32_t>();
+  }
+  if (options.count("ZAWY_LWMA_DIFFICULTY_N")) {
+    ZAWY_LWMA_DIFFICULTY_N = options["ZAWY_LWMA_DIFFICULTY_N"].as<size_t>();
   }
   if (options.count("BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX")) {
     BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX = options["BUGGED_ZAWY_DIFFICULTY_BLOCK_INDEX"].as<uint32_t>();

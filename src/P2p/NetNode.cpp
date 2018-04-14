@@ -345,6 +345,69 @@ std::string print_peerlist_to_string(const std::list<PeerlistEntry>& pl) {
   
   //-----------------------------------------------------------------------------------
   
+bool NodeServer::block_host(const uint32_t address_ip, time_t seconds)
+{
+  std::unique_lock<std::mutex> lock(mutex);
+  m_blocked_hosts[address_ip] = time(nullptr) + seconds;
+
+  // drop any connection to that IP
+  std::list<boost::uuids::uuid> conns;
+  forEachConnection([&](P2pConnectionContext& cntxt) {
+    if (cntxt.m_remote_ip == address_ip)
+    {
+      conns.push_back(cntxt.m_connection_id);
+    }
+    return true;
+  });
+  for (const auto &c_id: conns) {
+    auto c = m_connections.find(c_id);
+    if (c != m_connections.end())
+      c->second.m_state = CryptoNoteConnectionContext::state_shutdown;
+  }
+
+  logger(INFO) << "Host " << Common::ipAddressToString(address_ip) << " blocked.";
+  return true;
+}
+//-----------------------------------------------------------------------------------
+bool NodeServer::unblock_host(const uint32_t address_ip)
+{
+  std::unique_lock<std::mutex> lock(mutex);
+  auto i = m_blocked_hosts.find(address_ip);
+  if (i == m_blocked_hosts.end())
+    return false;
+  m_blocked_hosts.erase(i);
+  logger(INFO) << "Host " << Common::ipAddressToString(address_ip) << " unblocked.";
+  return true;
+}
+//-----------------------------------------------------------------------------------
+bool NodeServer::add_host_fail(const uint32_t address_ip)
+{
+  std::unique_lock<std::mutex> lock(mutex);
+  uint64_t fails = ++m_host_fails_score[address_ip];
+  logger(DEBUGGING) << "Host " << Common::ipAddressToString(address_ip) << " fail score=" << fails;
+  if(fails > P2P_IP_FAILS_BEFORE_BLOCK)
+  {
+    auto it = m_host_fails_score.find(address_ip);
+    if (it == m_host_fails_score.end()) {
+      logger(DEBUGGING) << "Internal error (add_host_fail)" << fails;
+      return false;
+    }
+    it->second = P2P_IP_FAILS_BEFORE_BLOCK/2;
+    block_host(address_ip);
+  }
+  return true;
+}
+
+//-----------------------------------------------------------------------------------
+void  NodeServer::drop_connection(CryptoNoteConnectionContext& context, bool add_fail)
+{
+  if (add_fail)
+    add_host_fail(context.m_remote_ip);
+
+  context.m_state = CryptoNoteConnectionContext::state_shutdown;
+}
+
+//-----------------------------------------------------------------------------------
   bool NodeServer::handle_command_line(const boost::program_options::variables_map& vm)
   {
     m_bind_ip = command_line::get_arg(vm, arg_p2p_bind_ip);
@@ -590,6 +653,7 @@ std::string print_peerlist_to_string(const std::list<PeerlistEntry>& pl) {
     }
 
     if (!handle_remote_peerlist(rsp.local_peerlist, rsp.node_data.local_time, context)) {
+        add_host_fail(context.m_remote_ip);
       logger(Logging::ERROR) << context << "COMMAND_HANDSHAKE: failed to handle_remote_peerlist(...), closing connection.";
       return false;
     }
@@ -1145,12 +1209,14 @@ std::string print_peerlist_to_string(const std::list<PeerlistEntry>& pl) {
     context.version = arg.node_data.version;
 
     if (arg.node_data.network_id != m_network_id) {
+        add_host_fail(context.m_remote_ip);
       logger(Logging::INFO) << context << "WRONG NETWORK AGENT CONNECTED! id=" << arg.node_data.network_id;
       context.m_state = CryptoNoteConnectionContext::state_shutdown;
       return 1;
     }
 
     if(!context.m_is_income) {
+        add_host_fail(context.m_remote_ip);
       logger(Logging::ERROR) << context << "COMMAND_HANDSHAKE came not from incoming connection";
       context.m_state = CryptoNoteConnectionContext::state_shutdown;
       return 1;

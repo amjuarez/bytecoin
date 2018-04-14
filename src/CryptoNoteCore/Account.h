@@ -31,6 +31,7 @@ namespace CryptoNote {
   public:
     AccountBase();
     void generate();
+static void generateViewFromSpend(Crypto::SecretKey &, Crypto::SecretKey &, Crypto::PublicKey &);
 
     const AccountKeys& getAccountKeys() const;
     void setAccountKeys(const AccountKeys& keys);
